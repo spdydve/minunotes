@@ -9,6 +9,11 @@ Build a simple unauthenticated note-taking MVP with folders and notes.
 - Creating a note opens/loads an editor page with an untitled note.
 - Users can retitle notes inside the editor.
 - Authentication is deferred; schema can leave room for future Better-Auth ownership fields.
+- Note content is plain text for MVP.
+- Notes use explicit saving via save button and `Ctrl/Cmd+S`; autosave is deferred.
+- Folders and notes can be deleted after a confirmation modal requiring the user to type `delete`.
+- Folders are ordered alphabetically.
+- LibSQL starts as a local development database; hosted Turso is a fast-follow.
 
 ## Proposed Architecture
 
@@ -55,12 +60,13 @@ Build a simple unauthenticated note-taking MVP with folders and notes.
 - `GET /folders` — list folders
 - `POST /folders` — create folder with title
 - `GET /folders/:folderId/notes` — list notes in folder
+- `DELETE /folders/:folderId` — delete folder and all child notes after confirmation in UI
 
 ### Notes
 - `POST /folders/:folderId/notes` — create untitled note in folder
 - `GET /notes/:noteId` — get note editor payload
 - `PATCH /notes/:noteId` — update title/content
-- `DELETE /notes/:noteId` — optional MVP stretch
+- `DELETE /notes/:noteId` — delete note after confirmation in UI
 
 ## Routes / Screens
 
@@ -108,74 +114,80 @@ Build a simple unauthenticated note-taking MVP with folders and notes.
 ## Implementation Checklist
 
 ### Phase 1 — Project Setup
-- [ ] Add frontend, backend, ORM, and tooling dependencies.
-- [ ] Add Vite, Tailwind, and shadcn-compatible config.
-- [ ] Add Drizzle config and environment example.
-- [ ] Update SST config for API and frontend.
+- [x] Add frontend, backend, ORM, and tooling dependencies.
+- [x] Add Vite, Tailwind, and shadcn-compatible config.
+- [x] Add Drizzle config and environment example.
+- [x] Update SST config for API and frontend.
 
 Verification:
-- [ ] `npm install` succeeds.
-- [ ] TypeScript config resolves frontend/backend imports.
-- [ ] SST synth/dev command starts without config errors.
+- [x] `pnpm install` succeeds.
+- [x] TypeScript config resolves frontend/backend imports.
+- [x] SST dev starts API Gateway/Lambda and Vite.
 
 ### Phase 2 — Database
-- [ ] Define `folders` schema.
-- [ ] Define `notes` schema.
-- [ ] Generate initial migration.
+- [x] Define `folders` schema.
+- [x] Define `notes` schema.
+- [x] Generate initial migration.
 
 Verification:
-- [ ] Migration applies to local/remote LibSQL database.
-- [ ] Drizzle schema type-checks.
+- [x] Migration applies to local LibSQL database.
+- [x] Drizzle schema type-checks.
 
 ### Phase 3 — Backend API
-- [ ] Implement Hono app and Lambda adapter.
-- [ ] Implement folder routes.
-- [ ] Implement note routes.
-- [ ] Add basic request validation.
-- [ ] Add consistent JSON error responses.
+- [x] Implement Hono app and Lambda adapter.
+- [x] Implement folder routes.
+- [x] Implement note routes.
+- [x] Add basic request validation.
+- [x] Add consistent JSON error responses.
 
 Verification:
-- [ ] API can create/list folders.
-- [ ] API can create/list/update notes.
-- [ ] Invalid inputs return 400-level responses.
+- [x] API can create/list folders.
+- [x] API can create/list/update notes.
+- [x] Invalid inputs return 400-level responses.
 
 ### Phase 4 — Frontend Shell
-- [ ] Implement app shell with sidebar dashboard layout.
-- [ ] Implement folder sidebar query.
-- [ ] Implement create-folder modal with TanStack Form.
-- [ ] Implement empty states.
+- [x] Implement app shell with sidebar dashboard layout.
+- [x] Implement folder sidebar query.
+- [x] Implement create-folder modal with TanStack Form.
+- [x] Implement empty states.
 
 Verification:
-- [ ] Dashboard loads with no authentication.
-- [ ] Folder creation updates sidebar.
-- [ ] Layout works in light/dark themes.
+- [x] Dashboard loads with no authentication.
+- [x] Folder creation updates sidebar.
+- [x] Layout works in light/dark themes.
 
 ### Phase 5 — Notes Views
-- [ ] Implement folder notes table with TanStack Table.
-- [ ] Implement create-note action that navigates to editor.
-- [ ] Implement note editor route.
-- [ ] Implement note title editing.
-- [ ] Implement note content editing with autosave or explicit save.
+- [x] Implement folder notes table with TanStack Table.
+- [x] Implement create-note action that navigates to editor.
+- [x] Implement note editor route.
+- [x] Implement note title editing.
+- [x] Implement note content editing with explicit save button.
+- [x] Implement `Ctrl/Cmd+S` keyboard shortcut for saving notes.
+- [x] Implement delete note confirmation dialog requiring `delete`.
 
 Verification:
-- [ ] Clicking a folder shows its notes.
-- [ ] Creating a note opens an untitled note editor.
-- [ ] Retitling a note persists and updates table/sidebar state.
+- [x] Clicking a folder shows its notes.
+- [x] Creating a note opens an untitled note editor.
+- [x] Retitling a note persists and updates table/sidebar state.
+- [x] Saving with the button persists note title/content.
+- [x] Saving with `Ctrl/Cmd+S` persists note title/content.
+- [x] Deleting a note requires typing `delete` and removes the note.
 
 ### Phase 6 — Polish
-- [ ] Apply simple flat shadcn/Tailwind styling.
-- [ ] Add loading, error, and empty states.
-- [ ] Add minimal responsive behavior.
+- [x] Apply simple flat shadcn/Tailwind styling.
+- [x] Add loading, error, and empty states.
+- [x] Add delete folder confirmation dialog requiring `delete` and warning all folder notes will be lost.
+- [x] Add minimal responsive behavior.
 
 Verification:
-- [ ] `npm run typecheck` passes.
-- [ ] `npm run build` passes.
-- [ ] Manual MVP flow passes: create folder → create note → rename note → return to folder table.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [x] Manual MVP flow passes: create folder → create note → rename/save note → delete note → delete folder.
 
-## Follow-up Decisions Needed
+## Confirmed MVP Decisions
 
-1. Should note content support plain textarea only for MVP, or Markdown editing/preview?
-2. Should note saving be autosave, explicit save button, or both?
-3. Should deleting folders/notes be included in MVP or deferred?
-4. Should folders be manually sortable, alphabetic, or newest-first?
-5. Which LibSQL target should be used first: local file DB for dev, Turso remote, or both?
+1. Note content is plain text only for MVP; richer editor support is deferred.
+2. Saving uses an explicit save button plus `Ctrl/Cmd+S`; autosave is deferred.
+3. Folder and note deletion are included in MVP with a destructive confirmation modal requiring the user to type `delete`.
+4. Folders are sorted alphabetically.
+5. LibSQL uses a local development database first; hosted Turso is a fast-follow.

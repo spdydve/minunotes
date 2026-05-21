@@ -1,18 +1,46 @@
 {
   "name": "notes-2",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "type": "module",
+  "packageManager": "pnpm@8.15.3",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "LIBSQL_URL=file:$PWD/local.db sst dev --mode=mono",
+    "dev:sst": "LIBSQL_URL=file:$PWD/local.db sst dev",
+    "dev:web": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "sst": "4.14.3"
+    "@hono/node-server": "^2.0.3",
+    "@libsql/client": "latest",
+    "@tanstack/react-form": "latest",
+    "@tanstack/react-query": "latest",
+    "@tanstack/react-router": "latest",
+    "@tanstack/react-table": "latest",
+    "class-variance-authority": "latest",
+    "clsx": "latest",
+    "drizzle-orm": "latest",
+    "hono": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "sst": "4.14.3",
+    "tailwind-merge": "latest"
   },
   "devDependencies": {
-    "@types/aws-lambda": "8.10.161"
+    "@tailwindcss/vite": "latest",
+    "@types/aws-lambda": "8.10.161",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "drizzle-kit": "latest",
+    "tailwindcss": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest"
   }
 }
