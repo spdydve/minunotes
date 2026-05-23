@@ -17,14 +17,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
 export type Note = { id: string; folderId: string; title: string; content: string; createdAt: string; updatedAt: string };
+export type SearchNote = Note & { folderTitle: string };
 
 export const api = {
   folders: () => request<{ folders: Folder[] }>("/folders"),
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),
+  renameFolder: (folderId: string, title: string) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify({ title }) }),
   deleteFolder: (folderId: string) => request<{ ok: true }>(`/folders/${folderId}`, { method: "DELETE" }),
   notes: (folderId: string) => request<{ notes: Note[] }>(`/folders/${folderId}/notes`),
   createNote: (folderId: string) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST" }),
   note: (noteId: string) => request<{ note: Note }>(`/notes/${noteId}`),
   saveNote: (noteId: string, data: Pick<Note, "title" | "content">) => request<{ note: Note }>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  moveNote: (noteId: string, folderId: string) => request<{ note: Note }>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
+  searchNotes: (q: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}`),
   deleteNote: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}`, { method: "DELETE" }),
 };

@@ -1,5 +1,107 @@
 # Notes MVP Implementation Plan
 
+## Folder Management + Search Plan
+
+### Goal
+Add practical folder management and note search improvements after the editor integration.
+
+### Scope
+- Add folder rename support.
+- Add note move support between folders.
+- Add search across notes by title and content.
+- Keep delete confirmation behavior unchanged.
+- Keep folders sorted alphabetically after rename.
+- Keep unauthenticated MVP model unchanged.
+
+### Files To Modify / Create
+- `src/api/routes/folders.ts` — add folder rename endpoint.
+- `src/api/routes/notes.ts` — add note move support and search endpoint.
+- `src/frontend/lib/api.ts` — add API client methods for folder rename, note move, and search.
+- `src/frontend/components/folder-sidebar.tsx` — expose folder rename action/UI.
+- `src/frontend/components/notes-table.tsx` — add note move action and/or search-aware display if needed.
+- `src/frontend/components/note-editor.tsx` — optionally expose selected folder/move UI if note move belongs in editor.
+- `src/frontend/routes/folders.$folderId.tsx` — wire folder-scoped actions and optional local folder note filter.
+- `src/frontend/routes/notes.$noteId.tsx` — wire note move if implemented in editor.
+- `src/frontend/routes/__root.tsx` or `src/frontend/components/app-shell.tsx` — add global search UI/route entry point.
+- Optional: `src/frontend/components/search-dialog.tsx` — reusable command/search modal.
+- Optional: `src/frontend/routes/search.tsx` — dedicated search results route if not using a dialog.
+
+### Proposed API Changes
+- `PATCH /folders/:folderId` — update folder title.
+- `PATCH /notes/:noteId` — extend existing update to optionally accept `folderId` for moving notes.
+- `GET /notes/search?q=...` — search notes by title/content, returning id, title, folder id/title, and updated date.
+
+### Implementation Checklist
+- [x] Confirm UX: global search dialog vs dedicated search results page.
+- [x] Confirm UX: folder rename inline in sidebar vs modal/popover.
+- [x] Confirm UX: note move from notes table, editor, or both.
+- [x] Add backend validation for rename/search/move inputs.
+- [x] Add folder rename endpoint and keep alphabetical ordering on refetch.
+- [x] Extend note update or add move endpoint for changing `folderId`.
+- [x] Add note search query with title/content matching.
+- [x] Add frontend API client methods.
+- [x] Add folder rename UI and mutation invalidation.
+- [x] Add note move UI and mutation invalidation.
+- [x] Add search UI and results navigation.
+- [x] Preserve existing delete confirmations and save behavior.
+
+### Verification
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [ ] Manual test: rename folder → sidebar updates alphabetically → reload persists.
+- [ ] Manual test: move note to another folder → old folder loses note → new folder shows note.
+- [ ] Manual test: search by note title returns expected note.
+- [ ] Manual test: search by note content returns expected note.
+- [ ] Manual test: clicking search result opens the note.
+- [ ] Manual test: existing create/delete/save flows still work.
+
+---
+
+## Editor Integration Plan — `@dpklabs/minueditor`
+
+Branch: `editor-integration`
+
+### Goal
+Replace the plain textarea note body with `@dpklabs/minueditor` while keeping the existing MVP save behavior.
+
+### Scope
+- Keep note title editing unchanged.
+- Replace body textarea in `src/frontend/components/note-editor.tsx` with MinuEditor.
+- Continue storing editor output in the existing `notes.content` text column.
+- Continue explicit save via save button and `Ctrl/Cmd+S`.
+- Do not add autosave yet.
+- Preserve delete note confirmation behavior.
+
+### Files To Modify
+- `package.json` — add `@dpklabs/minueditor` dependency.
+- `pnpm-lock.yaml` — dependency lockfile update.
+- `src/frontend/components/note-editor.tsx` — swap textarea for MinuEditor.
+- `src/frontend/routes/notes.$noteId.tsx` — adjust content state handlers if MinuEditor uses a different value/change API.
+- `src/frontend/styles.css` — add any editor-specific styling/imports if required.
+
+### Implementation Checklist
+- [x] Inspect `@dpklabs/minueditor` exports and usage API from installed package.
+- [x] Determine whether editor value is plain text, Markdown, HTML, or structured JSON.
+- [x] Confirm the existing `notes.content` text column can store the editor value without migration.
+- [x] Replace textarea with MinuEditor in the reusable `NoteEditor` component.
+- [x] Wire editor changes into existing `content` state.
+- [x] Confirm save button persists editor content.
+- [x] Confirm `Ctrl/Cmd+S` persists editor content.
+- [x] Add minimal styling so the editor fits the existing flat dashboard design.
+- [x] Keep an empty-state/placeholder experience for new untitled notes.
+
+### Verification
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [x] Manual test: existing Markdown headings render before clicking into the editor.
+- [x] Manual test: editor enters edit mode when clicked.
+- [x] Manual test: create note → type editor content → save → leave note → reopen note → content persists.
+- [x] Manual test: `Ctrl/Cmd+S` saves editor content.
+- [x] Manual test: delete note flow still works.
+
+---
+
+
 ## Scope
 Build a simple unauthenticated note-taking MVP with folders and notes.
 

@@ -21,6 +21,20 @@ folderRoutes.post("/", async (c) => {
   return c.json({ folder }, 201);
 });
 
+folderRoutes.patch("/:folderId", async (c) => {
+  const body = await c.req.json().catch(() => null) as { title?: string } | null;
+  const title = body?.title?.trim();
+  if (!title) return c.json({ error: "Folder title is required" }, 400);
+
+  const [folder] = await db.update(folders)
+    .set({ title, updatedAt: new Date() })
+    .where(eq(folders.id, c.req.param("folderId")))
+    .returning();
+
+  if (!folder) return c.json({ error: "Folder not found" }, 404);
+  return c.json({ folder });
+});
+
 folderRoutes.get("/:folderId/notes", async (c) => {
   const folderId = c.req.param("folderId");
   const rows = await db.select().from(notes).where(eq(notes.folderId, folderId)).orderBy(asc(notes.title));
