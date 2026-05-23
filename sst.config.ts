@@ -17,7 +17,7 @@ export default $config({
         allowOrigins: isLocal ? ["http://localhost:5173"] : ["*"],
         allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allowHeaders: ["Content-Type", "Authorization"],
-        allowCredentials: false,
+        allowCredentials: true,
       },
     });
 

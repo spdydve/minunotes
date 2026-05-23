@@ -15,6 +15,8 @@ export default defineConfig(async ({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
   const apiTarget = env.VITE_API_PROXY_TARGET || await getSstApiUrl();
 
+  console.log(`[vite] Proxy target: ${apiTarget}`);
+
   return {
     plugins: [react(), tailwindcss()],
     server: {
@@ -23,7 +25,7 @@ export default defineConfig(async ({ mode }) => {
             "/api": {
               target: apiTarget.replace(/\/$/, ""),
               changeOrigin: true,
-              rewrite: (path: string) => path.replace(/^\/api/, ""),
+              secure: true,
             },
           }
         : undefined,

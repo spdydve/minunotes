@@ -3,8 +3,9 @@ import { rootRoute } from "./routes/__root";
 import { indexRoute } from "./routes/index";
 import { folderRoute } from "./routes/folders.$folderId";
 import { noteRoute } from "./routes/notes.$noteId";
+import { authRoute } from "./routes/auth";
 
-const routeTree = rootRoute.addChildren([indexRoute, folderRoute, noteRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, folderRoute, noteRoute, authRoute]);
 
 export const router = createRouter({ routeTree });
 

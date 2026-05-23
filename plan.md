@@ -1,5 +1,79 @@
 # Notes MVP Implementation Plan
 
+## Auth Integration Plan — Better Auth
+
+### Goal
+Add authentication using the provided `react-hono-sst` template as a reference, then scope all folders and notes to the authenticated user. Existing local notes/folders can be reset.
+
+### Reference Template
+- `/Users/davidkennedy/Workspaces/dpklabs/templates/react-hono-sst`
+- Relevant files reviewed:
+  - `packages/api/src/lib/auth.ts`
+  - `packages/api/src/routes/auth.ts`
+  - `packages/api/src/middlewares/authentication.ts`
+  - `packages/web/src/lib/auth-client.ts`
+  - `packages/web/src/routes/auth.tsx`
+  - `packages/core/src/db/schema/auth.ts`
+  - `packages/core/src/db/migrations/0000_military_valkyrie.sql`
+
+### MVP Auth Decisions
+- Use Better Auth with email OTP, matching the template.
+- Log OTP codes to the Lambda/dev console for MVP; real email delivery later.
+- Require auth for all folders/notes APIs.
+- Reset local notes/folders instead of backfilling existing data.
+- Add `user_id` to folders and notes so data is user-scoped.
+- Use same-origin `/api/auth` in the browser via existing Vite proxy.
+
+### Files To Modify / Create
+- `package.json` — add `better-auth` dependency.
+- `pnpm-lock.yaml` — lockfile update.
+- `src/api/db/schema.ts` — add Better Auth tables and `userId` ownership columns.
+- `drizzle/*` — create/reset migrations for auth + ownership schema.
+- `src/api/lib/auth.ts` — Better Auth server config.
+- `src/api/routes/auth.ts` — auth handler route.
+- `src/api/middleware/authentication.ts` — session/user middleware.
+- `src/api/index.ts` — mount `/api/auth` and wire auth variables/middleware.
+- `src/api/routes/folders.ts` — require user and scope list/create/rename/delete to user.
+- `src/api/routes/notes.ts` — require user and scope get/update/move/delete/search to user.
+- `src/frontend/lib/auth-client.ts` — Better Auth React client.
+- `src/frontend/routes/auth.tsx` — email/OTP sign-in page.
+- `src/frontend/routes/__root.tsx` or router setup — session loading/redirect handling if needed.
+- `src/frontend/components/app-shell.tsx` — auth gate or logout UI.
+- `src/frontend/components/folder-sidebar.tsx` — logout button/current user display if desired.
+- `src/frontend/lib/api.ts` — handle 401s consistently.
+- Optional: `.env.example` — document `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` if needed.
+
+### Implementation Checklist
+- [x] Install Better Auth.
+- [x] Add Better Auth schema tables: `user`, `session`, `account`, `verification`.
+- [x] Add `user_id` ownership columns to `folders` and `notes`.
+- [x] Reset/regenerate local migration for the new schema.
+- [x] Add Better Auth server config with Drizzle/LibSQL adapter.
+- [x] Add `/api/auth/*` handler route.
+- [x] Add auth middleware that sets `user` and `session` from request headers.
+- [x] Protect folder routes and scope every query/mutation by `user.id`.
+- [x] Protect note routes and scope every query/mutation by `user.id` through folder ownership.
+- [x] Add frontend auth client.
+- [x] Add email OTP sign-in page.
+- [x] Add logout action.
+- [x] Redirect unauthenticated users to auth UI.
+- [x] Ensure Vite proxy and API auth paths work with cookies locally.
+- [x] Reset local DB and apply migrations.
+
+### Verification
+- [x] `pnpm install` / dependency install succeeds.
+- [x] `pnpm db:migrate` succeeds on reset local DB.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [x] Manual test: unauthenticated user sees auth page or receives 401/redirect.
+- [x] Manual test: email OTP flow signs in using console OTP.
+- [x] Manual test: signed-in user can create folders/notes.
+- [x] Manual test: signed-in user can rename folder, move note, search notes.
+- [x] Manual test: logout blocks access to notes.
+- [ ] Manual test: separate users do not see each other’s folders/notes.
+
+---
+
 ## Folder Management + Search Plan
 
 ### Goal

@@ -1,5 +1,14 @@
 const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -9,7 +18,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? await res.json() : null;
 
-  if (!res.ok) throw new Error(data?.error ?? "Request failed");
+  if (!res.ok) throw new ApiError(data?.error ?? "Request failed", res.status);
   if (!data) throw new Error("API did not return JSON. Check VITE_API_URL.");
 
   return data as T;
