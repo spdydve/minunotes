@@ -29,6 +29,10 @@ export default $config({
       environment: {
         LIBSQL_URL: process.env.LIBSQL_URL ?? "file:local.db",
         LIBSQL_AUTH_TOKEN: process.env.LIBSQL_AUTH_TOKEN ?? "",
+        BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-me",
+        BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? "http://localhost:5173/api/auth",
+        FRONTEND_URL: process.env.FRONTEND_URL ?? "http://localhost:5173",
+        COOKIE_DOMAIN: process.env.COOKIE_DOMAIN ?? "",
       },
     });
 

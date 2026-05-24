@@ -367,3 +367,80 @@ Verification:
 3. Folder and note deletion are included in MVP with a destructive confirmation modal requiring the user to type `delete`.
 4. Folders are sorted alphabetically.
 5. LibSQL uses a local development database first; hosted Turso is a fast-follow.
+
+## Next Steps
+
+### Auth Follow-up
+- [ ] Add production auth env config: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, cookie/domain settings.
+- [ ] Replace console OTP logging with real email delivery. (deferred)
+- [ ] Add auth UX polish: resend code, change email, clearer loading/error states.
+- [ ] Verify deployed session persistence, cookie behavior, and logout flow.
+- [ ] Add nicer full-page 404/empty states for inaccessible or missing resources.
+- [ ] Prepare merge/release notes for auth integration.
+
+### Next Implementation — Auth UX Polish
+
+Files to modify:
+- `src/frontend/routes/auth.tsx`
+- `plan.md`
+
+Checklist:
+- [x] Add resend code action on the OTP step.
+- [x] Add change email action from the OTP step.
+- [x] Add clearer success/loading/error feedback during send/verify flows.
+- [x] Keep single-OTP sign-in behavior unchanged.
+
+Verification:
+- [x] Manual test: send code transitions to OTP step.
+- [x] Manual test: resend code works and shows updated feedback.
+- [x] Manual test: change email returns to email entry step.
+- [x] Manual test: invalid OTP shows a clear error.
+- [x] Manual test: valid OTP still redirects into the app.
+
+### Next Implementation — Deploy/Auth Hardening + Resource States
+
+Files to modify:
+- `plan.md`
+- `.env.example`
+- `sst.config.ts`
+- `src/api/lib/auth.ts`
+- `src/frontend/routes/folders.$folderId.tsx`
+- `src/frontend/routes/notes.$noteId.tsx`
+
+Checklist:
+- [x] Add/document production auth env config: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `COOKIE_DOMAIN`, `FRONTEND_URL`.
+- [x] Update auth server config to use deploy-safe cookie/domain settings.
+- [x] Keep localhost behavior working unchanged.
+- [x] Upgrade folder missing state to a fuller page state.
+- [x] Upgrade note missing state to a fuller page state.
+
+Verification:
+- [x] `pnpm typecheck` passes.
+- [x] Manual test: localhost auth flow still works.
+- [x] Manual test: missing/inaccessible note shows full-page state.
+- [x] Manual test: missing/inaccessible folder shows full-page state.
+- [ ] Manual test: deployed session survives refresh and logout clears session.
+
+### Next Implementation — Editor Width + Sidebar Auth Footer
+
+Files to modify:
+- `plan.md`
+- `src/frontend/components/note-editor.tsx`
+- `src/frontend/components/folder-sidebar.tsx`
+- `src/frontend/components/ui/popover.tsx` or existing popover usage
+- `src/frontend/components/app-shell.tsx` if layout adjustment is needed
+
+Checklist:
+- [ ] Make the note editor use more of the available content width.
+- [ ] Add the signed-in user email to the bottom of the sidebar.
+- [ ] Add a cog icon button in the sidebar footer.
+- [ ] Open a small popup menu from the cog button.
+- [ ] Move logout action into the popup menu.
+- [ ] Keep dark mode styling consistent.
+
+Verification:
+- [ ] Manual test: note editor appears closer to full width in the content area.
+- [ ] Manual test: user email is visible in the sidebar footer.
+- [ ] Manual test: clicking the cog opens the popup.
+- [ ] Manual test: logout works from the popup.
+- [ ] Manual test: layout remains usable in light/dark themes.
