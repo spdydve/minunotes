@@ -22,14 +22,14 @@ export function NoteEditor({
   const [editingBody, setEditingBody] = useState(false);
   const titleValue = title === "Untitled note" ? "" : title;
 
-  return <section className="mx-auto max-w-4xl">
+  return <section className="mx-auto w-full max-w-6xl">
     <div className="mb-4 flex justify-end gap-2">
       <Button onClick={onSave} disabled={saving}>Save</Button>
       {deleteAction}
     </div>
     <input className="mb-4 w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
     <div
-      className="rounded-lg border bg-white dark:border-slate-800 dark:bg-slate-950"
+      className="border-t bg-white dark:border-slate-800 dark:bg-slate-950"
       onPointerDownCapture={() => setEditingBody(true)}
       onFocusCapture={() => setEditingBody(true)}
     >

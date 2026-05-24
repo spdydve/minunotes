@@ -41,6 +41,7 @@ textarea {
     --me-font-code:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --me-font-size: 12px;
+    --me-content-padding: 0;
 }
 .notes-minu-editor .cm-editor {
     border-radius: 0.5rem;
@@ -50,6 +51,8 @@ textarea {
     font-family:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 12px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 .notes-minu-editor .cm-line {
     font-size: 12px;

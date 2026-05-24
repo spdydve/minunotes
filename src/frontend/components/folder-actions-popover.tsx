@@ -1,3 +1,4 @@
+import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import type { Folder } from "../lib/api";
 import { RenameFolderDialog } from "./rename-folder-dialog";
@@ -11,7 +12,7 @@ export function FolderActionsPopover({ folder }: { folder: Folder }) {
   return <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button aria-label={`Actions for ${folder.title}`}>⋯</Button>
+        <Button className="border-0 px-2 shadow-none hover:bg-slate-200 dark:hover:bg-slate-800" aria-label={`Actions for ${folder.title}`}><MoreHorizontal className="h-4 w-4" /></Button>
       </PopoverTrigger>
       <PopoverContent align="end">
         <Button className="w-full justify-start" onClick={() => { setOpen(false); setRenameOpen(true); }}>Rename</Button>

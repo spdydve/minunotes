@@ -429,18 +429,48 @@ Files to modify:
 - `src/frontend/components/folder-sidebar.tsx`
 - `src/frontend/components/ui/popover.tsx` or existing popover usage
 - `src/frontend/components/app-shell.tsx` if layout adjustment is needed
+- `src/frontend/components/folder-actions-popover.tsx`
+- `src/frontend/styles.css`
 
 Checklist:
-- [ ] Make the note editor use more of the available content width.
-- [ ] Add the signed-in user email to the bottom of the sidebar.
-- [ ] Add a cog icon button in the sidebar footer.
-- [ ] Open a small popup menu from the cog button.
-- [ ] Move logout action into the popup menu.
-- [ ] Keep dark mode styling consistent.
+- [x] Make the note editor use more of the available content width.
+- [x] Add the signed-in user email to the bottom of the sidebar.
+- [x] Add a cog icon button in the sidebar footer.
+- [x] Open a small popup menu from the cog button.
+- [x] Move logout action into the popup menu.
+- [x] Keep dark mode styling consistent.
+- [x] Replace gear/ellipsis text buttons with Lucide icons.
+- [x] Remove borders from sidebar/footer icon buttons.
+- [x] Remove left/right editor content padding.
 
 Verification:
-- [ ] Manual test: note editor appears closer to full width in the content area.
-- [ ] Manual test: user email is visible in the sidebar footer.
-- [ ] Manual test: clicking the cog opens the popup.
-- [ ] Manual test: logout works from the popup.
-- [ ] Manual test: layout remains usable in light/dark themes.
+- [x] Manual test: note editor appears closer to full width in the content area.
+- [x] Manual test: user email is visible in the sidebar footer.
+- [x] Manual test: clicking the cog opens the popup.
+- [x] Manual test: logout works from the popup.
+- [x] Manual test: layout remains usable in light/dark themes.
+
+### Next Implementation — Autosave + Dirty Flows
+
+Files to modify:
+- `plan.md`
+- `src/frontend/routes/notes.$noteId.tsx`
+- `src/frontend/components/note-editor.tsx`
+- `src/frontend/lib/api.ts` if save handling changes
+- optionally `src/frontend/components/app-shell.tsx` if route-leave UX needs shared handling
+
+Checklist:
+- [ ] Add autosave for note title/content changes.
+- [ ] Debounce autosave to avoid saving on every keystroke.
+- [ ] Track dirty state for unsaved local edits.
+- [ ] Show clear save status: saved, saving, unsaved changes, save error.
+- [ ] Keep explicit save shortcut/button working.
+- [ ] Prevent stale query refetches from overwriting in-progress local edits.
+- [ ] Add route/browser leave warning when there are unsaved changes or a save is in flight.
+
+Verification:
+- [ ] Manual test: editing a note autosaves after a short pause.
+- [ ] Manual test: save status updates correctly while typing/saving.
+- [ ] Manual test: `Ctrl/Cmd+S` still saves immediately.
+- [ ] Manual test: refresh/navigation warns when unsaved changes exist.
+- [ ] Manual test: reopening a note shows the latest saved content.
