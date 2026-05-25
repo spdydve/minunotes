@@ -460,17 +460,68 @@ Files to modify:
 - optionally `src/frontend/components/app-shell.tsx` if route-leave UX needs shared handling
 
 Checklist:
-- [ ] Add autosave for note title/content changes.
-- [ ] Debounce autosave to avoid saving on every keystroke.
-- [ ] Track dirty state for unsaved local edits.
-- [ ] Show clear save status: saved, saving, unsaved changes, save error.
-- [ ] Keep explicit save shortcut/button working.
-- [ ] Prevent stale query refetches from overwriting in-progress local edits.
-- [ ] Add route/browser leave warning when there are unsaved changes or a save is in flight.
+- [x] Add autosave for note title/content changes.
+- [x] Debounce autosave to avoid saving on every keystroke.
+- [x] Track dirty state for unsaved local edits.
+- [x] Show clear save status: saved, saving, unsaved changes, save error.
+- [x] Keep explicit save shortcut/button working.
+- [x] Prevent stale query refetches from overwriting in-progress local edits.
+- [x] Add route/browser leave warning when there are unsaved changes or a save is in flight.
 
 Verification:
-- [ ] Manual test: editing a note autosaves after a short pause.
-- [ ] Manual test: save status updates correctly while typing/saving.
-- [ ] Manual test: `Ctrl/Cmd+S` still saves immediately.
-- [ ] Manual test: refresh/navigation warns when unsaved changes exist.
-- [ ] Manual test: reopening a note shows the latest saved content.
+- [x] Manual test: editing a note autosaves after a short pause.
+- [x] Manual test: save status updates correctly while typing/saving.
+- [x] Manual test: `Ctrl/Cmd+S` still saves immediately.
+- [x] Manual test: refresh/navigation warns when unsaved changes exist.
+- [x] Manual test: reopening a note shows the latest saved content.
+
+### Next Implementation — Note Actions Menu
+
+Files to modify:
+- `plan.md`
+- `src/frontend/components/note-editor.tsx`
+- `src/frontend/routes/notes.$noteId.tsx`
+- `src/frontend/components/notes-table.tsx`
+- `src/frontend/components/move-note-dialog.tsx`
+- `src/frontend/components/delete-confirm-dialog.tsx`
+- create `src/frontend/components/note-actions-popover.tsx`
+
+Checklist:
+- [x] Remove the visible Save button from the editor header.
+- [x] Add an editor note actions menu for move/delete/future actions.
+- [x] Add a matching note actions menu in the notes table.
+- [x] Keep move note action available from both editor and table.
+- [x] Keep delete confirmation flow unchanged inside the new menu.
+- [x] Keep autosave and `Ctrl/Cmd+S` working.
+- [x] Center move/delete modals on screen using portal rendering.
+- [x] Style delete actions as destructive.
+
+Verification:
+- [x] Manual test: no Save button is shown.
+- [x] Manual test: autosave still persists note changes.
+- [x] Manual test: `Ctrl/Cmd+S` still saves immediately.
+- [x] Manual test: editor actions menu supports move and delete.
+- [x] Manual test: notes table actions menu supports move and delete.
+
+### Next Implementation — Reusable Action Menu Styling
+
+Files to modify:
+- `plan.md`
+- create `src/frontend/components/ui/action-menu.tsx`
+- `src/frontend/components/folder-actions-popover.tsx`
+- `src/frontend/components/note-actions-popover.tsx`
+- `src/frontend/components/folder-sidebar.tsx`
+
+Checklist:
+- [ ] Add reusable action menu trigger styling.
+- [ ] Add reusable action menu item styling with destructive variant.
+- [ ] Refactor folder actions popover to use shared action menu styles.
+- [ ] Refactor note actions popover to use shared action menu styles.
+- [ ] Refactor sidebar settings popover to use shared action menu styles where appropriate.
+- [ ] Keep icon button styling consistent across popovers.
+
+Verification:
+- [ ] `pnpm typecheck` passes.
+- [ ] Manual test: folder actions menu matches note actions styling.
+- [ ] Manual test: note actions menu still works.
+- [ ] Manual test: sidebar settings menu matches shared styling.

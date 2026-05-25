@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Settings } from "lucide-react";
 import { api } from "../lib/api";
 import { authClient } from "../lib/auth-client";
 import { CreateFolderDialog } from "./create-folder-dialog";
 import { FolderActionsPopover } from "./folder-actions-popover";
 import { SearchDialog } from "./search-dialog";
+import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
@@ -27,10 +27,10 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
         </div>
         <Popover>
           <PopoverTrigger asChild>
-            <button className="rounded-md p-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-900" aria-label="Open settings"><Settings className="h-4 w-4" /></button>
+            <ActionMenuIconButton icon="settings" aria-label="Open settings" />
           </PopoverTrigger>
           <PopoverContent align="end" className="w-40 p-1">
-            <button className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-900" onClick={() => authClient.signOut()}>Logout</button>
+            <ActionMenuButton onClick={() => authClient.signOut()}>Logout</ActionMenuButton>
           </PopoverContent>
         </Popover>
       </div>

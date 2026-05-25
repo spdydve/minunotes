@@ -1,31 +1,30 @@
 import { MarkdownEditor } from "@dpklabs/minueditor";
 import { useState, type ReactNode } from "react";
-import { Button } from "./ui/button";
 
 export function NoteEditor({
   title,
   content,
-  saving,
+  saveState,
   onTitleChange,
   onContentChange,
-  onSave,
-  deleteAction,
+  actions,
 }: {
   title: string;
   content: string;
-  saving?: boolean;
+  saveState?: "saved" | "saving" | "unsaved" | "error";
   onTitleChange: (value: string) => void;
   onContentChange: (value: string) => void;
-  onSave: () => void;
-  deleteAction: ReactNode;
+  actions: ReactNode;
 }) {
   const [editingBody, setEditingBody] = useState(false);
   const titleValue = title === "Untitled note" ? "" : title;
 
+  const saveLabel = saveState === "saving" ? "Saving..." : saveState === "unsaved" ? "Unsaved changes" : saveState === "error" ? "Save failed" : "Saved";
+
   return <section className="mx-auto w-full max-w-6xl">
-    <div className="mb-4 flex justify-end gap-2">
-      <Button onClick={onSave} disabled={saving}>Save</Button>
-      {deleteAction}
+    <div className="mb-4 flex items-center justify-between gap-2">
+      <p className="text-xs text-slate-500">{saveLabel}</p>
+      <div className="flex justify-end gap-2">{actions}</div>
     </div>
     <input className="mb-4 w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
     <div
