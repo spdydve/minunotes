@@ -211,6 +211,37 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Session Harness API v0
+Goal: expose a stable harness route surface for external helpers while still using the existing Better Auth user session. API keys and folder permissions remain deferred.
+
+Files to create/modify:
+- `src/api/routes/harness.ts` — session-authenticated harness endpoints.
+- `src/api/index.ts` — mount `/api/harness` with auth middleware.
+- `plan.md` — track completion.
+
+Endpoints:
+- `GET /api/harness/folders`
+- `GET /api/harness/notes/search?q=`
+- `GET /api/harness/notes/:noteId`
+- `GET /api/harness/notes/:noteId/outline`
+- `GET /api/harness/notes/:noteId/sections/:sectionId`
+- `POST /api/harness/notes`
+- `POST /api/harness/notes/:noteId/edit`
+
+Checklist:
+- [x] Add harness routes file.
+- [x] Reuse existing harness commands.
+- [x] Keep routes session-authenticated.
+- [x] Create notes with folder/title/content payload.
+- [x] Edit notes with patch-style edits and optional `baseHash`.
+- [x] Return content hashes from read/create/edit endpoints.
+- [x] Avoid adding API keys/permissions in this slice.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.

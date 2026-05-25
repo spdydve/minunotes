@@ -5,6 +5,7 @@ import { auth } from "./lib/auth";
 import { authenticationMiddleware } from "./middleware/authentication";
 import { authRoutes } from "./routes/auth";
 import { folderRoutes } from "./routes/folders";
+import { harnessRoutes } from "./routes/harness";
 import { noteRoutes } from "./routes/notes";
 
 const app = new Hono<{
@@ -19,8 +20,10 @@ app.get("/health", (c) => c.json({ ok: true }));
 app.route("/api/auth", authRoutes);
 app.use("/api/folders/*", authenticationMiddleware);
 app.use("/api/notes/*", authenticationMiddleware);
+app.use("/api/harness/*", authenticationMiddleware);
 app.route("/api/folders", folderRoutes);
 app.route("/api/notes", noteRoutes);
+app.route("/api/harness", harnessRoutes);
 
 export default app;
 export const handler = handle(app);
