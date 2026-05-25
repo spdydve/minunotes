@@ -3,6 +3,7 @@ import { and, asc, eq, like, or } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes } from "../db/schema";
 import { readDocument, updateDocument } from "../harness/commands";
+import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
 type Variables = {
@@ -52,6 +53,41 @@ noteRoutes.get("/:noteId", async (c) => {
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value);
+});
+
+noteRoutes.get("/:noteId/outline", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  return c.json({
+    noteId: result.value.note.id,
+    contentHash: result.value.contentHash,
+    sections: parseSections(result.value.note.content),
+  });
+});
+
+noteRoutes.get("/:noteId/sections/:sectionId", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  const section = findSection(result.value.note.content, c.req.param("sectionId"));
+  if (!section) return c.json({ error: "Section not found" }, 404);
+
+  return c.json({
+    noteId: result.value.note.id,
+    contentHash: result.value.contentHash,
+    section: {
+      ...section,
+      markdown: result.value.note.content.slice(section.from, section.to),
+      content: result.value.note.content.slice(section.contentFrom, section.contentTo),
+    },
+  });
 });
 
 noteRoutes.patch("/:noteId", async (c) => {

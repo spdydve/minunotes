@@ -40,6 +40,41 @@ Add a minimal internal document-command seam so future agent/harness APIs can sh
 
 ---
 
+## Agent Harness Sections v0
+
+### Goal
+Add read-only markdown section awareness so future agent/harness commands can inspect document structure without adding mutation behavior, snapshots, versions, operations, suggestions, or database changes.
+
+### Scope
+- Derive sections from markdown headings on demand.
+- Do not persist sections.
+- Expose outline and section read APIs through existing note routes.
+- Keep current note editing/autosave behavior unchanged.
+
+### Files Modified / Created
+- `src/api/harness/sections.ts` — markdown heading parser and section lookup helper.
+- `src/api/routes/notes.ts` — read-only outline and section endpoints.
+- `src/frontend/lib/api.ts` — API client types/helpers for outline and section reads.
+
+### Implementation Checklist
+- [x] Add `DocumentSection` type.
+- [x] Parse ATX markdown headings (`#` through `######`).
+- [x] Generate stable slug-style section IDs with duplicate suffixes.
+- [x] Compute section heading and content ranges.
+- [x] Add `GET /notes/:noteId/outline`.
+- [x] Add `GET /notes/:noteId/sections/:sectionId`.
+- [x] Include `contentHash` in outline/section responses.
+- [x] Add frontend API types/helpers.
+
+### Verification
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [ ] Manual test: outline returns expected headings for markdown note.
+- [ ] Manual test: duplicate headings receive unique IDs.
+- [ ] Manual test: section endpoint returns heading markdown and body content.
+
+---
+
 ## Auth Integration Plan — Better Auth
 
 ### Goal
