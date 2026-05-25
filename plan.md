@@ -63,7 +63,7 @@ Completed:
 Commit:
 - `998eaf5 Add read-only document section endpoints`
 
-### Next Slice — Agent Discovery Commands
+### Completed Slice 3 — Agent Discovery Commands
 Goal: let agents find candidate notes using existing folder/note data without adding new persistence, semantic/vector search, or mutation behavior.
 
 Files to modify:
@@ -86,11 +86,42 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+Commit:
+- `9b184b4 Add harness discovery commands and tests`
+
+### Completed Slice 4 — Stale Document Detection
+Goal: detect when a note open in the editor has changed elsewhere, without WebSockets/SSE or realtime collaboration.
+
+Files changed:
+- `src/api/routes/notes.ts`
+- `src/frontend/lib/api.ts`
+- `src/frontend/routes/notes.$noteId.tsx`
+- `src/frontend/components/note-editor.tsx`
+
+Completed:
+- [x] Add `GET /notes/:noteId/status`.
+- [x] Add `api.noteStatus(noteId)` client helper.
+- [x] Track last known `contentHash` in the note editor route.
+- [x] Update last known hash after successful save.
+- [x] Send `baseHash` with note save requests.
+- [x] Poll status while note is open and tab is visible.
+- [x] Detect external hash mismatch.
+- [x] Show stale document banner.
+- [x] Prevent autosave while stale.
+- [x] Add reload action.
+- [x] Avoid WebSockets/SSE for MVP.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
 - Public `/harness/*` routes.
 - Agent/API-key permission model.
+- Agent create/append write commands.
 - Snapshots/restore.
 - Event/audit log.
 - Suggestions/review flow.
@@ -105,7 +136,7 @@ Before adding any mutation capability for agents, decide this first:
 
 Recommended answer for now:
 - Keep only read-only harness capabilities merged.
-- Next phase should be a design-only plan for agent permissions and snapshots, not more mutation code.
+- Next implementation phase should likely be agent create/append write commands, with ownership rules for agent-created documents.
 
 ---
 

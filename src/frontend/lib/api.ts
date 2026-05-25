@@ -27,6 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
 export type Note = { id: string; folderId: string; title: string; content: string; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
+export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type DocumentSection = { id: string; heading: string; level: number; from: number; to: number; contentFrom: number; contentTo: number };
 export type SectionResponse = { noteId: string; contentHash: string; section: DocumentSection & { markdown: string; content: string } };
 export type SearchNote = Note & { folderTitle: string };
@@ -39,6 +40,7 @@ export const api = {
   notes: (folderId: string) => request<{ notes: Note[] }>(`/folders/${folderId}/notes`),
   createNote: (folderId: string) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST" }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
+  noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
   saveNote: (noteId: string, data: Pick<Note, "title" | "content"> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),

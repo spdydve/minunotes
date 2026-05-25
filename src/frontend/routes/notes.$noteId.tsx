@@ -10,7 +10,7 @@ function NoteView() {
   const { noteId } = noteRoute.useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
-  const { data, error, isLoading } = useQuery({
+  const { data, error, isLoading, refetch } = useQuery({
     queryKey: ["note", noteId],
     queryFn: () => api.note(noteId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
@@ -18,8 +18,10 @@ function NoteView() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saveError, setSaveError] = useState(false);
+  const [isStale, setIsStale] = useState(false);
   const hydratedNoteId = useRef<string | null>(null);
   const lastSaved = useRef({ title: "", content: "" });
+  const lastKnownHash = useRef<string | null>(null);
 
   useEffect(() => {
     if (!data?.note || hydratedNoteId.current === noteId) return;
@@ -27,18 +29,25 @@ function NoteView() {
     setTitle(data.note.title);
     setContent(data.note.content);
     lastSaved.current = { title: data.note.title, content: data.note.content };
+    lastKnownHash.current = data.contentHash;
     setSaveError(false);
+    setIsStale(false);
   }, [data, noteId]);
 
   const save = useMutation({
-    mutationFn: (next: { title: string; content: string }) => api.saveNote(noteId, next),
-    onSuccess: ({ note }) => {
+    mutationFn: (next: { title: string; content: string }) => api.saveNote(noteId, { ...next, baseHash: lastKnownHash.current ?? undefined }),
+    onSuccess: ({ note, contentHash }) => {
       lastSaved.current = { title: note.title, content: note.content };
+      lastKnownHash.current = contentHash;
       setSaveError(false);
-      qc.setQueryData(["note", noteId], { note });
+      setIsStale(false);
+      qc.setQueryData(["note", noteId], { note, contentHash });
       qc.invalidateQueries({ queryKey: ["notes", note.folderId] });
     },
-    onError: () => setSaveError(true),
+    onError: (error) => {
+      setSaveError(true);
+      if (error instanceof ApiError && error.status === 409) setIsStale(true);
+    },
   });
 
   const remove = useMutation({ mutationFn: () => api.deleteNote(noteId), onSuccess: () => nav({ to: "/folders/$folderId", params: { folderId: data!.note.folderId } }) });
@@ -58,15 +67,22 @@ function NoteView() {
   }, [isDirty, isSaving, saveError]);
 
   const saveNow = () => {
-    if (!isDirty || save.isPending) return;
+    if (!isDirty || save.isPending || isStale) return;
     save.mutate({ title, content });
   };
 
+  const reloadLatest = async () => {
+    hydratedNoteId.current = null;
+    setIsStale(false);
+    setSaveError(false);
+    await refetch();
+  };
+
   useEffect(() => {
-    if (!hydratedNoteId.current || !isDirty || save.isPending) return;
+    if (!hydratedNoteId.current || !isDirty || save.isPending || isStale) return;
     const timer = window.setTimeout(() => save.mutate({ title, content }), 800);
     return () => window.clearTimeout(timer);
-  }, [title, content, isDirty, save]);
+  }, [title, content, isDirty, isStale, save]);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
@@ -78,6 +94,18 @@ function NoteView() {
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
   }, [title, content, isDirty, save.isPending]);
+
+  useEffect(() => {
+    if (!hydratedNoteId.current || save.isPending || isStale) return;
+    const checkStatus = async () => {
+      if (document.visibilityState !== "visible" || save.isPending || isStale) return;
+      const status = await api.noteStatus(noteId).catch(() => null);
+      if (!status || !lastKnownHash.current) return;
+      if (status.contentHash !== lastKnownHash.current) setIsStale(true);
+    };
+    const timer = window.setInterval(checkStatus, 20_000);
+    return () => window.clearInterval(timer);
+  }, [noteId, save.isPending, isStale]);
 
   useEffect(() => {
     if (blocker.status !== "blocked") return;
@@ -109,6 +137,7 @@ function NoteView() {
     saveState={saveState}
     onTitleChange={setTitle}
     onContentChange={setContent}
+    staleNotice={isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
     actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} />}
   />;
 }
