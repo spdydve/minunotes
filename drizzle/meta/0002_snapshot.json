@@ -152,8 +152,22 @@
           "notNull": true,
           "autoincrement": false
         },
-        "key_hash": {
-          "name": "key_hash",
+        "uid": {
+          "name": "uid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hash": {
+          "name": "hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "salt": {
+          "name": "salt",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -161,6 +175,14 @@
         },
         "created_at": {
           "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -183,10 +205,10 @@
         }
       },
       "indexes": {
-        "agent_api_keys_key_hash_unique": {
-          "name": "agent_api_keys_key_hash_unique",
+        "agent_api_keys_uid_unique": {
+          "name": "agent_api_keys_uid_unique",
           "columns": [
-            "key_hash"
+            "uid"
           ],
           "isUnique": true
         },

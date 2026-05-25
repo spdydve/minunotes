@@ -27,6 +27,7 @@ agentKeyRoutes.get("/", async (c) => {
   const keys = await db.select({
     id: agentApiKeys.id,
     name: agentApiKeys.name,
+    uid: agentApiKeys.uid,
     createdAt: agentApiKeys.createdAt,
     lastUsedAt: agentApiKeys.lastUsedAt,
     revokedAt: agentApiKeys.revokedAt,
@@ -43,19 +44,23 @@ agentKeyRoutes.post("/", async (c) => {
   const name = body?.name?.trim();
   if (!name) return c.json({ error: "API key name is required" }, 400);
 
-  const key = generateApiKey();
+  const { key, uid } = generateApiKey();
+  const { hash, salt } = hashApiKey(key);
   const apiKey = {
     id: createId("agent_key"),
     userId: user.id,
     name,
-    keyHash: hashApiKey(key),
+    uid,
+    hash,
+    salt,
     createdAt: new Date(),
+    updatedAt: new Date(),
     lastUsedAt: null,
     revokedAt: null,
   };
 
   await db.insert(agentApiKeys).values(apiKey);
-  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt } }, 201);
+  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt } }, 201);
 });
 
 agentKeyRoutes.delete("/:keyId", async (c) => {

@@ -59,8 +59,11 @@ export const agentApiKeys = sqliteTable("agent_api_keys", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  keyHash: text("key_hash").notNull().unique(),
+  uid: text("uid").notNull().unique(),
+  hash: text("hash").notNull(),
+  salt: text("salt").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
   revokedAt: integer("revoked_at", { mode: "timestamp" }),
 }, (table) => [index("agent_api_keys_user_id_idx").on(table.userId)]);

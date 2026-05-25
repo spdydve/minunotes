@@ -281,6 +281,42 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — API Key Security Refactor
+Goal: upgrade agent API keys to a readable UID + secret format with salted scrypt hashes and timing-safe verification.
+
+Decisions:
+- Key format: `ntak_<uid>_<secret>`.
+- `uid` is an 8-character lookup identifier.
+- `secret` is a longer random secret.
+- Store `uid`, `hash`, and `salt`; never store raw keys.
+- Verify with `scrypt` and `timingSafeEqual`.
+- Support both `Authorization: Bearer <key>` and `x-api-key: <key>`.
+
+Files to modify:
+- `src/api/db/schema.ts` — replace `keyHash` with `uid`, `hash`, `salt`, and `updatedAt`.
+- `drizzle/*` — add migration.
+- `src/api/lib/api-keys.ts` — key parsing/generation/hash/verify helpers.
+- `src/api/middleware/authentication.ts` — lookup by `uid`, verify hash.
+- `src/api/routes/agent-keys.ts` — return `uid`/safe metadata.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add `uid`, `hash`, `salt`, `updated_at` fields.
+- [x] Generate migration.
+- [x] Generate keys as `ntak_<uid>_<secret>`.
+- [x] Hash full API key with scrypt + random salt.
+- [x] Verify with timing-safe compare.
+- [x] Lookup API key by `uid`.
+- [x] Support `Authorization: Bearer`.
+- [x] Support `x-api-key`.
+- [x] Return raw key only once at creation.
+- [x] Never return hash/salt.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
