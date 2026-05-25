@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { applyDocumentEdits } from "../src/api/harness/edits";
 import { hashMarkdown } from "../src/api/harness/hash";
 import { findSection, parseSections } from "../src/api/harness/sections";
 
@@ -7,6 +8,42 @@ describe("hashMarkdown", () => {
     expect(hashMarkdown("# Hello")).toBe(hashMarkdown("# Hello"));
     expect(hashMarkdown("# Hello")).not.toBe(hashMarkdown("# Goodbye"));
     expect(hashMarkdown("# Hello")).toHaveLength(64);
+  });
+});
+
+describe("applyDocumentEdits", () => {
+  it("appends text to the document", () => {
+    expect(applyDocumentEdits("# Log\n", [{ type: "append", text: "\nEntry" }])).toEqual({ ok: true, markdown: "# Log\n\nEntry" });
+  });
+
+  it("replaces exact text that appears once", () => {
+    expect(applyDocumentEdits("Hello world", [{ type: "replace_text", oldText: "world", newText: "Pi" }])).toEqual({ ok: true, markdown: "Hello Pi" });
+  });
+
+  it("rejects exact text that appears more than once", () => {
+    expect(applyDocumentEdits("TODO\nTODO", [{ type: "replace_text", oldText: "TODO", newText: "Done" }])).toEqual({ ok: false, error: "replace_text oldText must match exactly once" });
+  });
+
+  it("replaces valid character ranges", () => {
+    expect(applyDocumentEdits("abcdef", [{ type: "replace_range", from: 2, to: 4, text: "XX" }])).toEqual({ ok: true, markdown: "abXXef" });
+  });
+
+  it("rejects invalid ranges", () => {
+    expect(applyDocumentEdits("abc", [{ type: "replace_range", from: 2, to: 5, text: "x" }])).toEqual({ ok: false, error: "replace_range bounds are invalid" });
+  });
+
+  it("rejects overlapping range edits", () => {
+    expect(applyDocumentEdits("abcdef", [
+      { type: "replace_range", from: 1, to: 4, text: "X" },
+      { type: "replace_range", from: 3, to: 5, text: "Y" },
+    ])).toEqual({ ok: false, error: "edits must not overlap" });
+  });
+
+  it("applies multiple edits from right to left", () => {
+    expect(applyDocumentEdits("abcdef", [
+      { type: "replace_range", from: 0, to: 1, text: "A" },
+      { type: "replace_range", from: 5, to: 6, text: "F" },
+    ])).toEqual({ ok: true, markdown: "AbcdeF" });
   });
 });
 

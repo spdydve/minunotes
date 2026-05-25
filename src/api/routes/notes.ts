@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { notes } from "../db/schema";
-import { readDocument, searchDocuments, updateDocument } from "../harness/commands";
+import { editDocument, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
@@ -81,6 +81,26 @@ noteRoutes.get("/:noteId/sections/:sectionId", async (c) => {
       content: result.value.note.content.slice(section.contentFrom, section.contentTo),
     },
   });
+});
+
+noteRoutes.post("/:noteId/edit", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { edits?: DocumentEdit[]; baseHash?: string } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  if (!Array.isArray(body.edits) || body.edits.length === 0) return c.json({ error: "At least one edit is required" }, 400);
+
+  const result = await editDocument({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    edits: body.edits,
+    baseHash: body.baseHash,
+    actorType: "user",
+  });
+
+  if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);
+  return c.json(result.value);
 });
 
 noteRoutes.patch("/:noteId", async (c) => {

@@ -116,6 +116,44 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Patch-Style Document Edits
+Goal: support terminal-like markdown edits for agents without adding versions, snapshots, suggestions, or section-specific mutation APIs.
+
+Files to modify/create:
+- `src/api/harness/edits.ts` — pure edit validation/application helpers.
+- `src/api/harness/commands.ts` — add `editDocument()` command.
+- `src/api/routes/notes.ts` — add note-native edit endpoint.
+- `src/frontend/lib/api.ts` — add API helper/types.
+- `tests/harness.test.ts` — add pure edit tests.
+
+Edit primitives:
+- `append` — append markdown to the end of the document.
+- `replace_text` — replace exact text that must match exactly once.
+- `replace_range` — replace a valid character range.
+
+Safety rules:
+- `baseHash` supported for conflict detection.
+- all edits validate before application.
+- multiple range edits must not overlap.
+- failed validation applies no edits.
+
+Checklist:
+- [x] Add `DocumentEdit` types.
+- [x] Add `applyDocumentEdits()` helper.
+- [x] Validate `replace_text` matches exactly once.
+- [x] Validate `replace_range` bounds.
+- [x] Validate range edits do not overlap.
+- [x] Apply multiple edits deterministically.
+- [x] Add `editDocument()` harness command.
+- [x] Add `POST /notes/:noteId/edit` endpoint.
+- [x] Add frontend API helper.
+- [x] Add tests for edit helper.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.

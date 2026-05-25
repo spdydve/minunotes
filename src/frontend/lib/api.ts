@@ -28,6 +28,10 @@ export type Folder = { id: string; title: string; createdAt: string; updatedAt: 
 export type Note = { id: string; folderId: string; title: string; content: string; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
+export type DocumentEdit =
+  | { type: "append"; text: string }
+  | { type: "replace_text"; oldText: string; newText: string }
+  | { type: "replace_range"; from: number; to: number; text: string };
 export type DocumentSection = { id: string; heading: string; level: number; from: number; to: number; contentFrom: number; contentTo: number };
 export type SectionResponse = { noteId: string; contentHash: string; section: DocumentSection & { markdown: string; content: string } };
 export type SearchNote = Note & { folderTitle: string };
@@ -43,6 +47,7 @@ export const api = {
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
+  editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),
   saveNote: (noteId: string, data: Pick<Note, "title" | "content"> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
   searchNotes: (q: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}`),

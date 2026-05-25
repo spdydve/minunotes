@@ -1,12 +1,14 @@
 import { and, asc, desc, eq, like, or } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes } from "../db/schema";
+import { applyDocumentEdits, type DocumentEdit } from "./edits";
 import { hashMarkdown } from "./hash";
 
 export type ActorType = "user" | "agent" | "system";
 
 export type DocumentCommandResult<T> =
   | { ok: true; value: T }
+  | { ok: false; status: 400; error: string }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 409; error: string; currentHash: string };
 
@@ -66,7 +68,7 @@ export async function readDocument(input: { documentId: string; userId: string }
   } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
 }
 
-export async function updateDocument(input: {
+export interface UpdateDocumentInput {
   documentId: string;
   userId: string;
   title?: string;
@@ -75,7 +77,9 @@ export async function updateDocument(input: {
   baseHash?: string;
   actorType?: ActorType;
   actorId?: string;
-}) {
+}
+
+export async function updateDocument(input: UpdateDocumentInput) {
   const current = await readDocument({ documentId: input.documentId, userId: input.userId });
   if (!current.ok) return current;
 
@@ -102,3 +106,22 @@ export async function updateDocument(input: {
   if (!note) return { ok: false, status: 404, error: "Note not found" } satisfies DocumentCommandResult<never>;
   return { ok: true, value: { note, contentHash: hashMarkdown(note.content) } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
 }
+
+export async function editDocument(input: Omit<UpdateDocumentInput, "title" | "markdown" | "folderId"> & { edits: DocumentEdit[] }) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+
+  const result = applyDocumentEdits(current.value.note.content, input.edits);
+  if (!result.ok) return { ok: false, status: 400, error: result.error } satisfies DocumentCommandResult<never>;
+
+  return updateDocument({
+    documentId: input.documentId,
+    userId: input.userId,
+    markdown: result.markdown,
+    baseHash: input.baseHash,
+    actorType: input.actorType,
+    actorId: input.actorId,
+  });
+}
+
+export type { DocumentEdit };
