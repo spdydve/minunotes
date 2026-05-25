@@ -107,7 +107,7 @@ noteRoutes.patch("/:noteId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string; baseHash?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string; isAgentEditable?: boolean; baseHash?: string } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const title = body.title?.trim();
@@ -119,6 +119,7 @@ noteRoutes.patch("/:noteId", async (c) => {
     title,
     markdown: body.content,
     folderId: body.folderId,
+    isAgentEditable: body.isAgentEditable,
     baseHash: body.baseHash,
     actorType: "user",
   });

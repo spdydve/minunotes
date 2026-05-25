@@ -10,6 +10,7 @@ export type ActorType = "user" | "agent" | "system";
 export type DocumentCommandResult<T> =
   | { ok: true; value: T }
   | { ok: false; status: 400; error: string }
+  | { ok: false; status: 403; error: string }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 409; error: string; currentHash: string };
 
@@ -101,6 +102,7 @@ export interface UpdateDocumentInput {
   title?: string;
   markdown?: string;
   folderId?: string;
+  isAgentEditable?: boolean;
   baseHash?: string;
   actorType?: ActorType;
   actorId?: string;
@@ -111,6 +113,11 @@ export async function updateDocument(input: UpdateDocumentInput) {
   if (!current.ok) return current;
 
   const currentHash = current.value.contentHash;
+  const isAgentMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isAgentEditable !== undefined);
+  if (isAgentMutation && !current.value.note.isAgentEditable) {
+    return { ok: false, status: 403, error: "Document is not editable by agents" } satisfies DocumentCommandResult<never>;
+  }
+
   if (input.baseHash && input.baseHash !== currentHash) {
     return { ok: false, status: 409, error: "Document has changed since it was read", currentHash } satisfies DocumentCommandResult<never>;
   }
@@ -125,6 +132,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.markdown !== undefined ? { content: input.markdown } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
+      ...(input.isAgentEditable !== undefined ? { isAgentEditable: input.isAgentEditable } : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(notes.id, input.documentId), eq(notes.userId, input.userId)))

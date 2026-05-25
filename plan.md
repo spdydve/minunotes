@@ -176,6 +176,41 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Agent Editable Document Guard
+Goal: add a simple per-document flag that lets users keep normal app editing while preventing agent/API edits to sensitive notes.
+
+Decision:
+- Use `is_agent_editable` instead of a full lock.
+- User/app edits are still allowed.
+- Agent edits are rejected when `is_agent_editable = false`.
+- Folder/API-key permissions can layer on top later.
+
+Files to modify/create:
+- `src/api/db/schema.ts` — add `notes.isAgentEditable`.
+- `drizzle/*` — add migration.
+- `src/api/harness/commands.ts` — enforce flag for `actorType: "agent"` mutations.
+- `src/api/routes/notes.ts` — allow user/app to update the flag.
+- `src/frontend/lib/api.ts` — expose field/type in `Note`.
+- `src/frontend/components/note-actions-popover.tsx` — add note action to toggle agent editability.
+- `src/frontend/routes/notes.$noteId.tsx` — wire toggle mutation.
+- `plan.md` — track implementation.
+
+Checklist:
+- [x] Add `is_agent_editable` column defaulting to true.
+- [x] Regenerate/add Drizzle migration.
+- [x] Include `isAgentEditable` in frontend `Note` type.
+- [x] Allow `PATCH /notes/:noteId` to update `isAgentEditable`.
+- [x] Reject agent content/title/move edits when `isAgentEditable` is false.
+- [x] Keep normal app/user edits working regardless of this flag.
+- [x] Add note action to enable/disable agent edits.
+- [x] Avoid adding folder permissions/API keys in this slice.
+
+Verification:
+- [x] `pnpm db:generate` or migration creation succeeds.
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
