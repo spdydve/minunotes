@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq, like, or } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes } from "../db/schema";
 import { hashMarkdown } from "./hash";
@@ -9,6 +9,52 @@ export type DocumentCommandResult<T> =
   | { ok: true; value: T }
   | { ok: false; status: 404; error: string }
   | { ok: false; status: 409; error: string; currentHash: string };
+
+export async function listFolders(input: { userId: string }) {
+  const rows = await db.select().from(folders).where(eq(folders.userId, input.userId)).orderBy(asc(folders.title));
+  return { ok: true, value: { folders: rows } } satisfies DocumentCommandResult<{ folders: typeof rows }>;
+}
+
+export async function listDocuments(input: { userId: string; folderId?: string }) {
+  const where = input.folderId
+    ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId))
+    : eq(notes.userId, input.userId);
+  const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title));
+  return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
+}
+
+export async function searchDocuments(input: { userId: string; query: string; limit?: number }) {
+  const query = input.query.trim();
+  if (!query) return { ok: true, value: { documents: [] } } satisfies DocumentCommandResult<{ documents: Array<{
+    id: string;
+    folderId: string;
+    userId: string;
+    title: string;
+    content: string;
+    createdAt: Date;
+    updatedAt: Date;
+    folderTitle: string;
+  }> }>;
+
+  const pattern = `%${query}%`;
+  const rows = await db.select({
+    id: notes.id,
+    folderId: notes.folderId,
+    userId: notes.userId,
+    title: notes.title,
+    content: notes.content,
+    createdAt: notes.createdAt,
+    updatedAt: notes.updatedAt,
+    folderTitle: folders.title,
+  })
+    .from(notes)
+    .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
+    .where(and(eq(notes.userId, input.userId), or(like(notes.title, pattern), like(notes.content, pattern))))
+    .orderBy(desc(notes.updatedAt), asc(notes.title))
+    .limit(input.limit ?? 25);
+
+  return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
+}
 
 export async function readDocument(input: { documentId: string; userId: string }) {
   const [note] = await db.select().from(notes).where(and(eq(notes.id, input.documentId), eq(notes.userId, input.userId))).limit(1);

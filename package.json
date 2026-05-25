@@ -9,6 +9,7 @@
     "dev:web": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
@@ -44,6 +45,7 @@
     "tailwindcss": "latest",
     "tsx": "latest",
     "typescript": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "vitest": "^4.1.7"
   }
 }

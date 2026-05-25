@@ -1,8 +1,8 @@
 import { Hono, type Context } from "hono";
-import { and, asc, eq, like, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { folders, notes } from "../db/schema";
-import { readDocument, updateDocument } from "../harness/commands";
+import { notes } from "../db/schema";
+import { readDocument, searchDocuments, updateDocument } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
@@ -26,24 +26,8 @@ noteRoutes.get("/search", async (c) => {
   const q = c.req.query("q")?.trim();
   if (!q) return c.json({ notes: [] });
 
-  const pattern = `%${q}%`;
-  const rows = await db.select({
-    id: notes.id,
-    folderId: notes.folderId,
-    userId: notes.userId,
-    title: notes.title,
-    content: notes.content,
-    createdAt: notes.createdAt,
-    updatedAt: notes.updatedAt,
-    folderTitle: folders.title,
-  })
-    .from(notes)
-    .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, user.id)))
-    .where(and(eq(notes.userId, user.id), or(like(notes.title, pattern), like(notes.content, pattern))))
-    .orderBy(asc(notes.title))
-    .limit(25);
-
-  return c.json({ notes: rows });
+  const result = await searchDocuments({ userId: user.id, query: q, limit: 25 });
+  return c.json({ notes: result.value.documents });
 });
 
 noteRoutes.get("/:noteId", async (c) => {

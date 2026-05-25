@@ -1,7 +1,8 @@
 import { Hono, type Context } from "hono";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes } from "../db/schema";
+import { listDocuments, listFolders } from "../harness/commands";
 import { createId } from "../lib/id";
 import { auth } from "../lib/auth";
 
@@ -22,8 +23,8 @@ folderRoutes.get("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const rows = await db.select().from(folders).where(eq(folders.userId, user.id)).orderBy(asc(folders.title));
-  return c.json({ folders: rows });
+  const result = await listFolders({ userId: user.id });
+  return c.json(result.value);
 });
 
 folderRoutes.post("/", async (c) => {
@@ -60,9 +61,8 @@ folderRoutes.get("/:folderId/notes", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const folderId = c.req.param("folderId");
-  const rows = await db.select().from(notes).where(and(eq(notes.folderId, folderId), eq(notes.userId, user.id))).orderBy(asc(notes.title));
-  return c.json({ notes: rows });
+  const result = await listDocuments({ userId: user.id, folderId: c.req.param("folderId") });
+  return c.json({ notes: result.value.documents });
 });
 
 folderRoutes.post("/:folderId/notes", async (c) => {

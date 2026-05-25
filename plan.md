@@ -63,6 +63,29 @@ Completed:
 Commit:
 - `998eaf5 Add read-only document section endpoints`
 
+### Next Slice — Agent Discovery Commands
+Goal: let agents find candidate notes using existing folder/note data without adding new persistence, semantic/vector search, or mutation behavior.
+
+Files to modify:
+- `src/api/harness/commands.ts` — add folder/document discovery commands.
+- `src/api/routes/folders.ts` — optionally reuse `listFolders()` command.
+- `src/api/routes/notes.ts` — optionally reuse `searchDocuments()` command.
+- `src/frontend/lib/api.ts` — no changes expected unless response shapes change.
+- `tests/harness.test.ts` — keep pure helper coverage; DB-backed command tests are deferred.
+
+Checklist:
+- [x] Add `listFolders()` harness command.
+- [x] Add `listDocuments()` harness command with optional `folderId`.
+- [x] Add `searchDocuments()` harness command using title/content matching.
+- [x] Preserve existing folder/note API response shapes.
+- [x] Keep discovery read-only.
+- [x] Avoid DB/schema changes.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
