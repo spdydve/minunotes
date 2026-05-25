@@ -1,77 +1,88 @@
 # Notes MVP Implementation Plan
 
-## Agent Harness Foundation v0
+## Agent Harness Direction
 
-### Goal
-Add a minimal internal document-command seam so future agent/harness APIs can share the same mutation path as the app without introducing versions, operations, suggestions, snapshots, or public harness routes yet.
+### Current Decision
+Keep the harness intentionally small. The app remains a normal notes app with MinuEditor and autosave. The harness is only a thin internal seam around document reads/writes plus read-only markdown structure helpers.
 
-### Scope
-- Keep existing app note APIs and UX unchanged.
-- Keep `notes.content` as canonical markdown.
-- Treat `documentId` internally as the current `noteId`.
-- Add a content hash helper for future conflict detection.
-- Route note reads/updates through harness command functions.
-- Return `contentHash` from note read/update responses.
-- Do not add database schema changes.
+### MVP Principles
+- `notes.content` remains the canonical markdown document.
+- The app's existing note APIs remain app-native and optimized for UI/autosave.
+- Harness logic starts as internal backend functions, not a separate product surface.
+- Public agent/harness mutation APIs are deferred until permissions, snapshots, and conflict behavior are clearer.
+- No document versions for now.
+- No operation history for now.
+- No suggestions/review workflow for now.
+- No snapshots until direct agent mutation is actually introduced.
+- Sections are derived from markdown on demand; they are not persisted.
 
-### Files Modified / Created
-- `src/api/harness/hash.ts` — markdown content hashing helper.
-- `src/api/harness/commands.ts` — internal read/update document commands.
-- `src/api/routes/notes.ts` — call harness commands from existing note read/update endpoints.
-- `src/frontend/lib/api.ts` — type note read/update responses with `contentHash`.
+### Completed Slice 1 — Internal Document Command Seam
+Goal: create one shared backend path for note/document reads and updates without changing product behavior.
 
-### Implementation Checklist
-- [x] Create `hashMarkdown()` helper.
-- [x] Create `readDocument()` command.
-- [x] Create `updateDocument()` command.
-- [x] Support optional `baseHash` conflict checks in the command layer.
-- [x] Refactor `GET /notes/:noteId` to use `readDocument()`.
-- [x] Refactor `PATCH /notes/:noteId` to use `updateDocument()`.
-- [x] Keep existing autosave behavior unchanged.
-- [x] Keep move note behavior routed through the shared update command.
-- [x] Add frontend API typing for `contentHash`.
+Files changed:
+- `src/api/harness/hash.ts`
+- `src/api/harness/commands.ts`
+- `src/api/routes/notes.ts`
+- `src/frontend/lib/api.ts`
 
-### Verification
+Completed:
+- [x] Add `hashMarkdown()` helper.
+- [x] Add `readDocument()` command.
+- [x] Add `updateDocument()` command.
+- [x] Route `GET /notes/:noteId` through `readDocument()`.
+- [x] Route `PATCH /notes/:noteId` through `updateDocument()`.
+- [x] Return `contentHash` from note read/update responses.
+- [x] Keep current autosave behavior unchanged.
+- [x] Avoid DB/schema changes.
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
-- [ ] Manual test: open a note and confirm it loads normally.
-- [ ] Manual test: edit note title/content and confirm autosave still persists.
-- [ ] Manual test: move note and confirm it still moves correctly.
 
----
+Commit:
+- `b8dadff Add minimal document harness commands`
 
-## Agent Harness Sections v0
+### Completed Slice 2 — Read-Only Section Awareness
+Goal: let future agents inspect markdown structure without enabling new mutation paths.
 
-### Goal
-Add read-only markdown section awareness so future agent/harness commands can inspect document structure without adding mutation behavior, snapshots, versions, operations, suggestions, or database changes.
+Files changed:
+- `src/api/harness/sections.ts`
+- `src/api/routes/notes.ts`
+- `src/frontend/lib/api.ts`
 
-### Scope
-- Derive sections from markdown headings on demand.
-- Do not persist sections.
-- Expose outline and section read APIs through existing note routes.
-- Keep current note editing/autosave behavior unchanged.
-
-### Files Modified / Created
-- `src/api/harness/sections.ts` — markdown heading parser and section lookup helper.
-- `src/api/routes/notes.ts` — read-only outline and section endpoints.
-- `src/frontend/lib/api.ts` — API client types/helpers for outline and section reads.
-
-### Implementation Checklist
+Completed:
 - [x] Add `DocumentSection` type.
 - [x] Parse ATX markdown headings (`#` through `######`).
-- [x] Generate stable slug-style section IDs with duplicate suffixes.
-- [x] Compute section heading and content ranges.
+- [x] Generate slug-style section IDs with duplicate suffixes.
+- [x] Compute heading/content ranges.
 - [x] Add `GET /notes/:noteId/outline`.
 - [x] Add `GET /notes/:noteId/sections/:sectionId`.
 - [x] Include `contentHash` in outline/section responses.
 - [x] Add frontend API types/helpers.
-
-### Verification
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
-- [ ] Manual test: outline returns expected headings for markdown note.
-- [ ] Manual test: duplicate headings receive unique IDs.
-- [ ] Manual test: section endpoint returns heading markdown and body content.
+
+Commit:
+- `998eaf5 Add read-only document section endpoints`
+
+### Deferred Work
+Do not implement these until explicitly planned:
+- Direct section mutation endpoints.
+- Public `/harness/*` routes.
+- Agent/API-key permission model.
+- Snapshots/restore.
+- Event/audit log.
+- Suggestions/review flow.
+- Operation records/replay.
+- Document version history.
+- MCP adapter.
+
+### Next Planning Question
+Before adding any mutation capability for agents, decide this first:
+
+> Should trusted agents be allowed to directly edit documents, and if so, do direct agent edits require an automatic pre-edit snapshot?
+
+Recommended answer for now:
+- Keep only read-only harness capabilities merged.
+- Next phase should be a design-only plan for agent permissions and snapshots, not more mutation code.
 
 ---
 
