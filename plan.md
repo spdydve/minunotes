@@ -317,6 +317,38 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — API Key Folder Permissions v0
+Goal: constrain API-key harness access to explicitly allowed folders and actions, without adding workspaces yet.
+
+Scope:
+- Session users keep full access to their own data.
+- API keys are limited by folder permissions.
+- Permissions: `can_read`, `can_create`, `can_edit`.
+- `is_agent_editable` still blocks API-key edits even when `can_edit` is true.
+
+Files to modify:
+- `src/api/db/schema.ts` — add folder permission table.
+- `drizzle/*` — add migration.
+- `src/api/routes/agent-keys.ts` — accept/list key permissions.
+- `src/api/routes/harness.ts` — enforce permissions for bearer-auth harness requests.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add `agent_api_key_folder_permissions` table.
+- [x] Generate migration.
+- [x] Accept permissions at API key creation.
+- [x] Return permissions when listing keys.
+- [x] Restrict `/api/harness/folders` for API keys.
+- [x] Enforce `can_read` for read/search/outline/section.
+- [x] Enforce `can_create` for note creation.
+- [x] Enforce `can_edit` for patch edits.
+- [x] Preserve full session-user harness behavior.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.

@@ -68,6 +68,17 @@ export const agentApiKeys = sqliteTable("agent_api_keys", {
   revokedAt: integer("revoked_at", { mode: "timestamp" }),
 }, (table) => [index("agent_api_keys_user_id_idx").on(table.userId)]);
 
+export const agentApiKeyFolderPermissions = sqliteTable("agent_api_key_folder_permissions", {
+  id: text("id").primaryKey(),
+  apiKeyId: text("api_key_id").notNull().references(() => agentApiKeys.id, { onDelete: "cascade" }),
+  folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
+  canRead: integer("can_read", { mode: "boolean" }).notNull().default(false),
+  canCreate: integer("can_create", { mode: "boolean" }).notNull().default(false),
+  canEdit: integer("can_edit", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("agent_api_key_folder_permissions_api_key_id_idx").on(table.apiKeyId), index("agent_api_key_folder_permissions_folder_id_idx").on(table.folderId)]);
+
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
   folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
@@ -100,8 +111,14 @@ export const folderRelations = relations(folders, ({ many, one }) => ({
   notes: many(notes),
 }));
 
-export const agentApiKeyRelations = relations(agentApiKeys, ({ one }) => ({
+export const agentApiKeyRelations = relations(agentApiKeys, ({ many, one }) => ({
   user: one(user, { fields: [agentApiKeys.userId], references: [user.id] }),
+  folderPermissions: many(agentApiKeyFolderPermissions),
+}));
+
+export const agentApiKeyFolderPermissionRelations = relations(agentApiKeyFolderPermissions, ({ one }) => ({
+  apiKey: one(agentApiKeys, { fields: [agentApiKeyFolderPermissions.apiKeyId], references: [agentApiKeys.id] }),
+  folder: one(folders, { fields: [agentApiKeyFolderPermissions.folderId], references: [folders.id] }),
 }));
 
 export const noteRelations = relations(notes, ({ one }) => ({
@@ -112,3 +129,4 @@ export const noteRelations = relations(notes, ({ one }) => ({
 export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type AgentApiKey = typeof agentApiKeys.$inferSelect;
+export type AgentApiKeyFolderPermission = typeof agentApiKeyFolderPermissions.$inferSelect;

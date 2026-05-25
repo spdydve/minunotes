@@ -1,5 +1,7 @@
 import { Hono, type Context } from "hono";
-import { type AgentApiKey } from "../db/schema";
+import { and, eq } from "drizzle-orm";
+import { db } from "../db/client";
+import { agentApiKeyFolderPermissions, type AgentApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, readDocument, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
@@ -23,12 +25,35 @@ function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType;
   return key ? { actorType: "agent", actorId: key.id } : { actorType: "user" };
 }
 
+async function hasFolderPermission(c: Context<{ Variables: Variables }>, folderId: string, permission: "read" | "create" | "edit") {
+  const key = c.get("agentApiKey");
+  if (!key) return true;
+
+  const [row] = await db.select().from(agentApiKeyFolderPermissions)
+    .where(and(eq(agentApiKeyFolderPermissions.apiKeyId, key.id), eq(agentApiKeyFolderPermissions.folderId, folderId)))
+    .limit(1);
+  if (!row) return false;
+  if (permission === "read") return row.canRead;
+  if (permission === "create") return row.canCreate;
+  return row.canEdit;
+}
+
+async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
+  const key = c.get("agentApiKey");
+  if (!key) return null;
+  const rows = await db.select().from(agentApiKeyFolderPermissions)
+    .where(and(eq(agentApiKeyFolderPermissions.apiKeyId, key.id), eq(agentApiKeyFolderPermissions.canRead, true)));
+  return new Set(rows.map((row) => row.folderId));
+}
+
 harnessRoutes.get("/folders", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const result = await listFolders({ userId: user.id });
-  return c.json(result.value);
+  const readableFolderIds = await getReadableFolderIds(c);
+  if (!readableFolderIds) return c.json(result.value);
+  return c.json({ folders: result.value.folders.filter((folder) => readableFolderIds.has(folder.id)) });
 });
 
 harnessRoutes.get("/notes/search", async (c) => {
@@ -39,7 +64,9 @@ harnessRoutes.get("/notes/search", async (c) => {
   if (!q) return c.json({ notes: [] });
 
   const result = await searchDocuments({ userId: user.id, query: q, limit: 25 });
-  return c.json({ notes: result.value.documents });
+  const readableFolderIds = await getReadableFolderIds(c);
+  if (!readableFolderIds) return c.json({ notes: result.value.documents });
+  return c.json({ notes: result.value.documents.filter((note) => readableFolderIds.has(note.folderId)) });
 });
 
 harnessRoutes.post("/notes", async (c) => {
@@ -49,6 +76,8 @@ harnessRoutes.post("/notes", async (c) => {
   const body = await c.req.json().catch(() => null) as { folderId?: string; title?: string; content?: string } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
   if (!body.folderId) return c.json({ error: "Folder id is required" }, 400);
+
+  if (!(await hasFolderPermission(c, body.folderId, "create"))) return c.json({ error: "Forbidden" }, 403);
 
   const actor = getActor(c);
   const result = await createDocument({
@@ -70,6 +99,7 @@ harnessRoutes.get("/notes/:noteId", async (c) => {
 
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
+  if (!(await hasFolderPermission(c, result.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
   return c.json(result.value);
 });
 
@@ -79,6 +109,7 @@ harnessRoutes.get("/notes/:noteId/outline", async (c) => {
 
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
+  if (!(await hasFolderPermission(c, result.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
   return c.json({ noteId: result.value.note.id, contentHash: result.value.contentHash, sections: parseSections(result.value.note.content) });
 });
 
@@ -88,6 +119,7 @@ harnessRoutes.get("/notes/:noteId/sections/:sectionId", async (c) => {
 
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
+  if (!(await hasFolderPermission(c, result.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
 
   const section = findSection(result.value.note.content, c.req.param("sectionId"));
   if (!section) return c.json({ error: "Section not found" }, 404);
@@ -110,6 +142,10 @@ harnessRoutes.post("/notes/:noteId/edit", async (c) => {
   const body = await c.req.json().catch(() => null) as { edits?: DocumentEdit[]; baseHash?: string } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
   if (!Array.isArray(body.edits) || body.edits.length === 0) return c.json({ error: "At least one edit is required" }, 400);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "edit"))) return c.json({ error: "Forbidden" }, 403);
 
   const actor = getActor(c);
   const result = await editDocument({
