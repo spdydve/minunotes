@@ -1,5 +1,45 @@
 # Notes MVP Implementation Plan
 
+## Agent Harness Foundation v0
+
+### Goal
+Add a minimal internal document-command seam so future agent/harness APIs can share the same mutation path as the app without introducing versions, operations, suggestions, snapshots, or public harness routes yet.
+
+### Scope
+- Keep existing app note APIs and UX unchanged.
+- Keep `notes.content` as canonical markdown.
+- Treat `documentId` internally as the current `noteId`.
+- Add a content hash helper for future conflict detection.
+- Route note reads/updates through harness command functions.
+- Return `contentHash` from note read/update responses.
+- Do not add database schema changes.
+
+### Files Modified / Created
+- `src/api/harness/hash.ts` — markdown content hashing helper.
+- `src/api/harness/commands.ts` — internal read/update document commands.
+- `src/api/routes/notes.ts` — call harness commands from existing note read/update endpoints.
+- `src/frontend/lib/api.ts` — type note read/update responses with `contentHash`.
+
+### Implementation Checklist
+- [x] Create `hashMarkdown()` helper.
+- [x] Create `readDocument()` command.
+- [x] Create `updateDocument()` command.
+- [x] Support optional `baseHash` conflict checks in the command layer.
+- [x] Refactor `GET /notes/:noteId` to use `readDocument()`.
+- [x] Refactor `PATCH /notes/:noteId` to use `updateDocument()`.
+- [x] Keep existing autosave behavior unchanged.
+- [x] Keep move note behavior routed through the shared update command.
+- [x] Add frontend API typing for `contentHash`.
+
+### Verification
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [ ] Manual test: open a note and confirm it loads normally.
+- [ ] Manual test: edit note title/content and confirm autosave still persists.
+- [ ] Manual test: move note and confirm it still moves correctly.
+
+---
+
 ## Auth Integration Plan — Better Auth
 
 ### Goal

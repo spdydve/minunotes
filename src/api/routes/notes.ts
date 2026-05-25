@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { and, asc, eq, like, or } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes } from "../db/schema";
+import { readDocument, updateDocument } from "../harness/commands";
 import { auth } from "../lib/auth";
 
 type Variables = {
@@ -48,37 +49,33 @@ noteRoutes.get("/:noteId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const [note] = await db.select().from(notes).where(and(eq(notes.id, c.req.param("noteId")), eq(notes.userId, user.id))).limit(1);
-  if (!note) return c.json({ error: "Note not found" }, 404);
-  return c.json({ note });
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
 });
 
 noteRoutes.patch("/:noteId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string; baseHash?: string } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const title = body.title?.trim();
   if (body.title !== undefined && !title) return c.json({ error: "Note title is required" }, 400);
-  if (body.folderId !== undefined) {
-    const [folder] = await db.select().from(folders).where(and(eq(folders.id, body.folderId), eq(folders.userId, user.id))).limit(1);
-    if (!folder) return c.json({ error: "Destination folder not found" }, 400);
-  }
 
-  const [note] = await db.update(notes)
-    .set({
-      ...(title !== undefined ? { title } : {}),
-      ...(body.content !== undefined ? { content: body.content } : {}),
-      ...(body.folderId !== undefined ? { folderId: body.folderId } : {}),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(notes.id, c.req.param("noteId")), eq(notes.userId, user.id)))
-    .returning();
+  const result = await updateDocument({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    title,
+    markdown: body.content,
+    folderId: body.folderId,
+    baseHash: body.baseHash,
+    actorType: "user",
+  });
 
-  if (!note) return c.json({ error: "Note not found" }, 404);
-  return c.json({ note });
+  if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);
+  return c.json(result.value);
 });
 
 noteRoutes.delete("/:noteId", async (c) => {
