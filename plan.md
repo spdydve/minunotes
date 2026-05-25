@@ -242,6 +242,45 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Agent API Keys v0
+Goal: allow external agents to authenticate to `/api/harness/*` without browser cookies while still scoping access to the owning user.
+
+Scope:
+- Add DB-backed API keys.
+- Store only key hashes.
+- Show raw key only at creation time.
+- Allow bearer key auth for harness routes.
+- Keep API key permissions broad for now: key can access the owner's harness resources.
+- Still respect `is_agent_editable` for agent mutations.
+- Folder-level permissions are deferred.
+
+Files to modify/create:
+- `src/api/db/schema.ts` — add `agent_api_keys` table.
+- `drizzle/*` — add migration.
+- `src/api/lib/api-keys.ts` — key generation/hash helpers.
+- `src/api/middleware/authentication.ts` — add agent key auth helper/middleware.
+- `src/api/routes/agent-keys.ts` — create/list/revoke keys with session auth.
+- `src/api/routes/harness.ts` — set actor metadata based on auth source.
+- `src/api/index.ts` — mount key routes and bearer-capable harness auth.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add `agent_api_keys` schema.
+- [x] Generate migration.
+- [x] Add API key generation/hash helpers.
+- [x] Add session-only agent key management routes.
+- [x] Add bearer API key auth for harness routes.
+- [x] Scope bearer auth to the API key owner user.
+- [x] Mark harness writes from bearer auth as `actorType: "agent"`.
+- [x] Keep session harness writes as `actorType: "user"`.
+- [x] Respect `is_agent_editable` for agent edits.
+- [x] Defer folder permissions/UI.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.

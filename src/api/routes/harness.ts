@@ -1,11 +1,13 @@
 import { Hono, type Context } from "hono";
-import { createDocument, editDocument, listFolders, readDocument, searchDocuments, type DocumentEdit } from "../harness/commands";
+import { type AgentApiKey } from "../db/schema";
+import { createDocument, editDocument, listFolders, readDocument, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
+  agentApiKey: AgentApiKey | null;
 };
 
 export const harnessRoutes = new Hono<{ Variables: Variables }>();
@@ -14,6 +16,11 @@ function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get("user");
   if (!user) return null;
   return user;
+}
+
+function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType; actorId?: string } {
+  const key = c.get("agentApiKey");
+  return key ? { actorType: "agent", actorId: key.id } : { actorType: "user" };
 }
 
 harnessRoutes.get("/folders", async (c) => {
@@ -43,12 +50,14 @@ harnessRoutes.post("/notes", async (c) => {
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
   if (!body.folderId) return c.json({ error: "Folder id is required" }, 400);
 
+  const actor = getActor(c);
   const result = await createDocument({
     userId: user.id,
     folderId: body.folderId,
     title: body.title,
     markdown: body.content,
-    actorType: "user",
+    actorType: actor.actorType,
+    actorId: actor.actorId,
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
@@ -102,12 +111,14 @@ harnessRoutes.post("/notes/:noteId/edit", async (c) => {
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
   if (!Array.isArray(body.edits) || body.edits.length === 0) return c.json({ error: "At least one edit is required" }, 400);
 
+  const actor = getActor(c);
   const result = await editDocument({
     documentId: c.req.param("noteId"),
     userId: user.id,
     edits: body.edits,
     baseHash: body.baseHash,
-    actorType: "user",
+    actorType: actor.actorType,
+    actorId: actor.actorId,
   });
 
   if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);

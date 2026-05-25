@@ -55,6 +55,16 @@ export const folders = sqliteTable("folders", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("folders_user_id_idx").on(table.userId)]);
 
+export const agentApiKeys = sqliteTable("agent_api_keys", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+}, (table) => [index("agent_api_keys_user_id_idx").on(table.userId)]);
+
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
   folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
@@ -71,6 +81,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   folders: many(folders),
   notes: many(notes),
+  agentApiKeys: many(agentApiKeys),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -86,6 +97,10 @@ export const folderRelations = relations(folders, ({ many, one }) => ({
   notes: many(notes),
 }));
 
+export const agentApiKeyRelations = relations(agentApiKeys, ({ one }) => ({
+  user: one(user, { fields: [agentApiKeys.userId], references: [user.id] }),
+}));
+
 export const noteRelations = relations(notes, ({ one }) => ({
   user: one(user, { fields: [notes.userId], references: [user.id] }),
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
@@ -93,3 +108,4 @@ export const noteRelations = relations(notes, ({ one }) => ({
 
 export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
+export type AgentApiKey = typeof agentApiKeys.$inferSelect;
