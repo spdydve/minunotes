@@ -154,6 +154,28 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Create Document Command
+Goal: let app and future agents create markdown documents through the shared harness command path.
+
+Files to modify:
+- `src/api/harness/commands.ts` — add `createDocument()`.
+- `src/api/routes/folders.ts` — route note creation through `createDocument()`.
+- `src/frontend/lib/api.ts` — allow optional title/content when creating notes.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add `createDocument()` harness command.
+- [x] Validate target folder belongs to user.
+- [x] Support optional title and markdown.
+- [x] Preserve existing app create-note behavior.
+- [x] Route `POST /folders/:folderId/notes` through `createDocument()`.
+- [x] Avoid DB/schema changes.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.

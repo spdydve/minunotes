@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, like, or } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes } from "../db/schema";
+import { createId } from "../lib/id";
 import { applyDocumentEdits, type DocumentEdit } from "./edits";
 import { hashMarkdown } from "./hash";
 
@@ -56,6 +57,32 @@ export async function searchDocuments(input: { userId: string; query: string; li
     .limit(input.limit ?? 25);
 
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
+}
+
+export async function createDocument(input: {
+  userId: string;
+  folderId: string;
+  title?: string;
+  markdown?: string;
+  actorType?: ActorType;
+  actorId?: string;
+}) {
+  const [folder] = await db.select().from(folders).where(and(eq(folders.id, input.folderId), eq(folders.userId, input.userId))).limit(1);
+  if (!folder) return { ok: false, status: 404, error: "Folder not found" } satisfies DocumentCommandResult<never>;
+
+  const title = input.title?.trim() || "Untitled note";
+  const note = {
+    id: createId("note"),
+    folderId: input.folderId,
+    userId: input.userId,
+    title,
+    content: input.markdown ?? "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await db.insert(notes).values(note);
+  return { ok: true, value: { note, contentHash: hashMarkdown(note.content) } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
 }
 
 export async function readDocument(input: { documentId: string; userId: string }) {
