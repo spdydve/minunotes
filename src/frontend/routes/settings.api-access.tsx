@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
 import { api } from "../lib/api";
-import { CreateApiKeyDialog } from "../components/create-api-key-dialog";
+import { ApiKeyAccessDialog } from "../components/api-key-access-dialog";
 import { Button } from "../components/ui/button";
 import { rootRoute } from "./__root";
 
@@ -18,7 +18,7 @@ function ApiAccessSettingsView() {
         <h1 className="mt-2 text-2xl font-semibold">API Access</h1>
         <p className="mt-1 text-sm text-slate-500">Create and manage API keys for agents, scripts, and external tools.</p>
       </div>
-      <CreateApiKeyDialog folders={folders.data?.folders ?? []} onCreated={() => qc.invalidateQueries({ queryKey: ["api-keys"] })} />
+      <ApiKeyAccessDialog folders={folders.data?.folders ?? []} onSaved={() => qc.invalidateQueries({ queryKey: ["api-keys"] })} trigger={(open) => <Button onClick={open}>Create key</Button>} />
     </div>
 
     <div className="rounded-lg border border-slate-200 dark:border-slate-800">
@@ -34,7 +34,8 @@ function ApiAccessSettingsView() {
         <code className="text-xs text-slate-500">{key.uid}</code>
         <span className="text-xs text-slate-500">{new Date(key.createdAt).toLocaleString()}</span>
         <span className="text-xs text-slate-500">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : "Never"}</span>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <ApiKeyAccessDialog folders={folders.data?.folders ?? []} apiKey={key} onSaved={() => qc.invalidateQueries({ queryKey: ["api-keys"] })} trigger={(open) => <Button disabled={!!key.revokedAt} onClick={open}>Edit</Button>} />
           <Button disabled={!!key.revokedAt || revoke.isPending} onClick={() => revoke.mutate(key.id)}>{key.revokedAt ? "Revoked" : "Revoke"}</Button>
         </div>
       </div>)}

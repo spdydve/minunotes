@@ -41,6 +41,7 @@ export type SearchNote = Note & { folderTitle: string };
 export const api = {
   apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
   createApiKey: (data: { name: string; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
+  updateApiKey: (keyId: string, data: { name?: string; permissions?: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: "PATCH", body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: "DELETE" }),
   folders: () => request<{ folders: Folder[] }>("/folders"),
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),

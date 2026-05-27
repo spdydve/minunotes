@@ -89,6 +89,57 @@ apiKeyRoutes.post("/", async (c) => {
   return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
 });
 
+apiKeyRoutes.patch("/:keyId", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { name?: string; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+
+  const name = body.name?.trim();
+  if (body.name !== undefined && !name) return c.json({ error: "API key name is required" }, 400);
+
+  const keyId = c.req.param("keyId");
+  const [existing] = await db.select().from(apiKeys).where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt))).limit(1);
+  if (!existing) return c.json({ error: "API key not found" }, 404);
+
+  if (name !== undefined) await db.update(apiKeys).set({ name, updatedAt: new Date() }).where(eq(apiKeys.id, keyId));
+
+  let permissionRows: Array<typeof apiKeyFolderPermissions.$inferInsert> | undefined;
+  if (body.permissions !== undefined) {
+    permissionRows = [];
+    for (const permission of body.permissions) {
+      if (!permission.folderId) continue;
+      const [folder] = await db.select({ id: folders.id }).from(folders).where(and(eq(folders.id, permission.folderId), eq(folders.userId, user.id))).limit(1);
+      if (!folder) continue;
+      permissionRows.push({
+        id: createId("agent_perm"),
+        apiKeyId: keyId,
+        folderId: folder.id,
+        canRead: permission.canRead ?? false,
+        canCreate: permission.canCreate ?? false,
+        canEdit: permission.canEdit ?? false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    await db.delete(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, keyId));
+    if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
+  }
+
+  const [updated] = await db.select({
+    id: apiKeys.id,
+    name: apiKeys.name,
+    uid: apiKeys.uid,
+    createdAt: apiKeys.createdAt,
+    lastUsedAt: apiKeys.lastUsedAt,
+    revokedAt: apiKeys.revokedAt,
+  }).from(apiKeys).where(eq(apiKeys.id, keyId)).limit(1);
+
+  const permissions = await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, keyId));
+  return c.json({ apiKey: { ...updated, permissions } });
+});
+
 apiKeyRoutes.delete("/:keyId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);

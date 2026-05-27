@@ -381,6 +381,40 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Editable API Key Access Controls v0
+Goal: allow users to update API key names and folder permissions after creation.
+
+Scope:
+- Add `PATCH /api/api-keys/:keyId`.
+- Replace folder permission rows on update.
+- Validate folders belong to the current user.
+- Add edit modal in API Access settings page.
+- Add Grant all / Clear all controls for permissions.
+- Continue hiding raw key after creation.
+
+Files to modify/create:
+- `src/api/routes/api-keys.ts` — update endpoint.
+- `src/frontend/lib/api.ts` — update helper.
+- `src/frontend/components/api-key-access-dialog.tsx` — shared create/edit modal.
+- `src/frontend/routes/settings.api-access.tsx` — edit action.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add backend patch route.
+- [x] Allow name updates.
+- [x] Replace permission rows when permissions are provided.
+- [x] Validate folder ownership for permission rows.
+- [x] Add reusable access dialog for create/edit.
+- [x] Add Grant all control.
+- [x] Add Clear all control.
+- [x] Add edit button on settings page.
+- [x] Refresh key list after save.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
