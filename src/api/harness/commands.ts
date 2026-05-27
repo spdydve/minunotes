@@ -78,6 +78,8 @@ export async function createDocument(input: {
     userId: input.userId,
     title,
     content: input.markdown ?? "",
+    updatedByActorType: input.actorType ?? "user",
+    updatedByActorId: input.actorId,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -133,6 +135,8 @@ export async function updateDocument(input: UpdateDocumentInput) {
       ...(input.markdown !== undefined ? { content: input.markdown } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
       ...(input.isApiEditable !== undefined ? { isApiEditable: input.isApiEditable } : {}),
+      updatedByActorType: input.actorType ?? "user",
+      updatedByActorId: input.actorId,
       updatedAt: new Date(),
     })
     .where(and(eq(notes.id, input.documentId), eq(notes.userId, input.userId)))

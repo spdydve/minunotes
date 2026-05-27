@@ -27,7 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
 export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
 export type ApiKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
-export type Note = { id: string; folderId: string; title: string; content: string; isApiEditable: boolean; createdAt: string; updatedAt: string };
+export type Note = { id: string; folderId: string; title: string; content: string; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type DocumentEdit =

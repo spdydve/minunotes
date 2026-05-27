@@ -22,13 +22,16 @@ export function NotesTable({ notes }: { notes: Note[] }) {
     columnHelper.accessor("title", {
       header: "Title",
       cell: (info) => (
-        <Link
-          className="font-medium text-slate-900 hover:text-slate-700 dark:text-slate-100 dark:hover:text-slate-300"
-          to="/notes/$noteId"
-          params={{ noteId: info.row.original.id }}
-        >
-          {info.getValue()}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            className="font-medium text-slate-900 hover:text-slate-700 dark:text-slate-100 dark:hover:text-slate-300"
+            to="/notes/$noteId"
+            params={{ noteId: info.row.original.id }}
+          >
+            {info.getValue()}
+          </Link>
+          {info.row.original.updatedByActorType === "agent" ? <span className="rounded border border-blue-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 dark:border-blue-900 dark:text-blue-300">API</span> : null}
+        </div>
       ),
     }),
     columnHelper.accessor("updatedAt", {

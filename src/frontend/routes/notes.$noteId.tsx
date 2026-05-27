@@ -137,6 +137,12 @@ function NoteView() {
   if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><div className="w-full max-w-lg rounded-lg border border-dashed p-8 text-center"><h2 className="text-xl font-semibold">Note not found</h2><p className="mt-2 text-sm text-slate-500">This note does not exist or you do not have access to it.</p><button className="mt-4 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-900" onClick={() => nav({ to: "/" })}>Back to notes</button></div></section>;
   if (!data?.note) return <section className="grid min-h-[60vh] place-items-center"><div className="w-full max-w-lg rounded-lg border border-dashed p-8 text-center"><h2 className="text-xl font-semibold">Unable to load note</h2><p className="mt-2 text-sm text-slate-500">Try again or return to your notes.</p><button className="mt-4 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-900" onClick={() => nav({ to: "/" })}>Back to notes</button></div></section>;
 
+  const updatedMeta = data.note.updatedByActorType === "agent"
+    ? `Last updated via API key${data.note.updatedByActorId ? ` (${data.note.updatedByActorId})` : ""}`
+    : data.note.updatedByActorType === "system"
+      ? "Last updated by system"
+      : null;
+
   return <NoteEditor
     key={noteId}
     title={title}
@@ -144,6 +150,7 @@ function NoteView() {
     saveState={saveState}
     onTitleChange={setTitle}
     onContentChange={setContent}
+    updatedMeta={updatedMeta}
     staleNotice={isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
     actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
   />;

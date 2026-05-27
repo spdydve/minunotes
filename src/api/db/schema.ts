@@ -86,6 +86,8 @@ export const notes = sqliteTable("notes", {
   title: text("title").notNull().default("Untitled note"),
   content: text("content").notNull().default(""),
   isApiEditable: integer("is_api_editable", { mode: "boolean" }).notNull().default(true),
+  updatedByActorType: text("updated_by_actor_type"),
+  updatedByActorId: text("updated_by_actor_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("notes_user_id_idx").on(table.userId), index("notes_folder_id_idx").on(table.folderId)]);

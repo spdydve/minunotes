@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
 import { api } from "../lib/api";
 import { ApiKeyAccessDialog } from "../components/api-key-access-dialog";
+import { DeleteConfirmDialog } from "../components/delete-confirm-dialog";
 import { Button } from "../components/ui/button";
 import { rootRoute } from "./__root";
 
@@ -76,12 +77,16 @@ function ApiAccessSettingsView() {
                   </Button>
                 )}
               />
-              <Button
-                disabled={!!key.revokedAt || revoke.isPending}
-                onClick={() => revoke.mutate(key.id)}
-              >
-                {key.revokedAt ? "Revoked" : "Revoke"}
-              </Button>
+              {key.revokedAt ? (
+                <Button disabled>Revoked</Button>
+              ) : (
+                <DeleteConfirmDialog
+                  label="API key"
+                  warning="This API key will immediately lose access to all folders and cannot be restored."
+                  onConfirm={() => revoke.mutate(key.id)}
+                  trigger={<Button disabled={revoke.isPending}>Revoke</Button>}
+                />
+              )}
             </div>
           </div>
         ))}

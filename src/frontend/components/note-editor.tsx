@@ -9,6 +9,7 @@ export function NoteEditor({
   onContentChange,
   actions,
   staleNotice,
+  updatedMeta,
 }: {
   title: string;
   content: string;
@@ -17,6 +18,7 @@ export function NoteEditor({
   onContentChange: (value: string) => void;
   actions: ReactNode;
   staleNotice?: ReactNode;
+  updatedMeta?: ReactNode;
 }) {
   const [editingBody, setEditingBody] = useState(false);
   const titleValue = title === "Untitled note" ? "" : title;
@@ -29,7 +31,8 @@ export function NoteEditor({
       <div className="flex justify-end gap-2">{actions}</div>
     </div>
     {staleNotice}
-    <input className="mb-4 w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
+    <input className="w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
+    {updatedMeta ? <div className="mb-4 mt-2 text-xs text-slate-500">{updatedMeta}</div> : <div className="mb-4" />}
     <div
       className="border-t bg-white dark:border-slate-800 dark:bg-slate-950"
       onPointerDownCapture={() => setEditingBody(true)}

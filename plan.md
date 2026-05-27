@@ -444,6 +444,39 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — API Access Hardening v0
+Goal: improve safety and visibility for API-driven note updates.
+
+Scope:
+- Add revoke confirmation for API keys.
+- Add minimal note update metadata.
+- Track last updater actor type/id on notes.
+- Surface last updated by API in the note editor and note list.
+
+Files to modify/create:
+- `src/api/db/schema.ts` — add note update actor metadata.
+- `drizzle/*` — add migration.
+- `src/api/harness/commands.ts` — persist update actor metadata.
+- `src/frontend/lib/api.ts` — expose metadata in `Note`.
+- `src/frontend/routes/settings.api-access.tsx` — revoke confirmation.
+- `src/frontend/components/notes-table.tsx` — optional updated-by display.
+- `src/frontend/components/note-editor.tsx` or note route — last updated by display.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add `updated_by_actor_type` and `updated_by_actor_id` to notes.
+- [x] Generate migration.
+- [x] Persist update actor metadata on create/update/edit commands.
+- [x] Expose metadata in frontend note type.
+- [x] Add revoke confirmation flow for API keys.
+- [x] Show when a note was last updated via API.
+- [x] Keep normal user flows unchanged.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
