@@ -30,6 +30,8 @@ export type ApiKey = { id: string; name: string; uid: string; createdAt: string;
 export type Note = { id: string; folderId: string; title: string; content: string; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
+export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
+export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type DocumentEdit =
   | { type: "append"; text: string }
   | { type: "replace_text"; oldText: string; newText: string }
@@ -51,6 +53,7 @@ export const api = {
   createNote: (folderId: string, data?: { title?: string; content?: string }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
+  noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
   editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),

@@ -92,11 +92,25 @@ export const notes = sqliteTable("notes", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("notes_user_id_idx").on(table.userId), index("notes_folder_id_idx").on(table.folderId)]);
 
+export const noteEvents = sqliteTable("note_events", {
+  id: text("id").primaryKey(),
+  noteId: text("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  actorType: text("actor_type").notNull(),
+  actorId: text("actor_id"),
+  eventType: text("event_type").notNull(),
+  summary: text("summary").notNull(),
+  beforeHash: text("before_hash"),
+  afterHash: text("after_hash"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("note_events_note_id_idx").on(table.noteId), index("note_events_user_id_idx").on(table.userId), index("note_events_created_at_idx").on(table.createdAt)]);
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   folders: many(folders),
   notes: many(notes),
+  noteEvents: many(noteEvents),
   apiKeys: many(apiKeys),
 }));
 
@@ -123,12 +137,19 @@ export const apiKeyFolderPermissionRelations = relations(apiKeyFolderPermissions
   folder: one(folders, { fields: [apiKeyFolderPermissions.folderId], references: [folders.id] }),
 }));
 
-export const noteRelations = relations(notes, ({ one }) => ({
+export const noteRelations = relations(notes, ({ many, one }) => ({
   user: one(user, { fields: [notes.userId], references: [user.id] }),
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
+  events: many(noteEvents),
+}));
+
+export const noteEventRelations = relations(noteEvents, ({ one }) => ({
+  note: one(notes, { fields: [noteEvents.noteId], references: [notes.id] }),
+  user: one(user, { fields: [noteEvents.userId], references: [user.id] }),
 }));
 
 export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
+export type NoteEvent = typeof noteEvents.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type ApiKeyFolderPermission = typeof apiKeyFolderPermissions.$inferSelect;

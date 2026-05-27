@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, like, or } from "drizzle-orm";
 import { db } from "../db/client";
-import { folders, notes } from "../db/schema";
+import { folders, noteEvents, notes, type Note } from "../db/schema";
 import { createId } from "../lib/id";
 import { applyDocumentEdits, type DocumentEdit } from "./edits";
 import { hashMarkdown } from "./hash";
 
 export type ActorType = "user" | "agent" | "system";
+export type NoteEventType = "create" | "update" | "edit_patch" | "move" | "toggle_api_editable";
 
 export type DocumentCommandResult<T> =
   | { ok: true; value: T }
@@ -25,6 +26,18 @@ export async function listDocuments(input: { userId: string; folderId?: string }
     : eq(notes.userId, input.userId);
   const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title));
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
+}
+
+export async function listNoteEvents(input: { documentId: string; userId: string; limit?: number }) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+
+  const events = await db.select().from(noteEvents)
+    .where(and(eq(noteEvents.noteId, input.documentId), eq(noteEvents.userId, input.userId)))
+    .orderBy(desc(noteEvents.createdAt))
+    .limit(input.limit ?? 50);
+
+  return { ok: true, value: { noteId: current.value.note.id, events } } satisfies DocumentCommandResult<{ noteId: string; events: typeof events }>;
 }
 
 export async function searchDocuments(input: { userId: string; query: string; limit?: number }) {
@@ -60,6 +73,64 @@ export async function searchDocuments(input: { userId: string; query: string; li
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
 }
 
+export function getUpdateEventType(input: Pick<UpdateDocumentInput, "title" | "markdown" | "folderId" | "isApiEditable">, current: Pick<Note, "title" | "content" | "folderId" | "isApiEditable">): NoteEventType {
+  if (input.folderId !== undefined && input.folderId !== current.folderId && input.title === undefined && input.markdown === undefined && input.isApiEditable === undefined) {
+    return "move";
+  }
+
+  if (input.isApiEditable !== undefined && input.isApiEditable !== current.isApiEditable && input.title === undefined && input.markdown === undefined && input.folderId === undefined) {
+    return "toggle_api_editable";
+  }
+
+  return "update";
+}
+
+export function getNoteEventSummary(eventType: NoteEventType, details: {
+  titleChanged?: boolean;
+  contentChanged?: boolean;
+  folderChanged?: boolean;
+  isApiEditableChanged?: boolean;
+  isApiEditable?: boolean;
+}) {
+  if (eventType === "create") return "Created note";
+  if (eventType === "edit_patch") return "Patched note content";
+  if (eventType === "move") return "Moved note to another folder";
+  if (eventType === "toggle_api_editable") return details.isApiEditable ? "Enabled API editing" : "Disabled API editing";
+
+  const changed = [
+    details.titleChanged ? "title" : null,
+    details.contentChanged ? "content" : null,
+    details.folderChanged ? "folder" : null,
+    details.isApiEditableChanged ? "API editability" : null,
+  ].filter(Boolean);
+
+  return changed.length > 0 ? `Updated ${changed.join(", ")}` : "Updated note";
+}
+
+async function insertNoteEvent(input: {
+  noteId: string;
+  userId: string;
+  actorType: ActorType;
+  actorId?: string;
+  eventType: NoteEventType;
+  summary: string;
+  beforeHash?: string;
+  afterHash?: string;
+}) {
+  await db.insert(noteEvents).values({
+    id: createId("note_event"),
+    noteId: input.noteId,
+    userId: input.userId,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    eventType: input.eventType,
+    summary: input.summary,
+    beforeHash: input.beforeHash,
+    afterHash: input.afterHash,
+    createdAt: new Date(),
+  });
+}
+
 export async function createDocument(input: {
   userId: string;
   folderId: string;
@@ -85,7 +156,19 @@ export async function createDocument(input: {
   };
 
   await db.insert(notes).values(note);
-  return { ok: true, value: { note, contentHash: hashMarkdown(note.content) } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
+
+  const contentHash = hashMarkdown(note.content);
+  await insertNoteEvent({
+    noteId: note.id,
+    userId: note.userId,
+    actorType: note.updatedByActorType ?? "user",
+    actorId: note.updatedByActorId ?? undefined,
+    eventType: "create",
+    summary: getNoteEventSummary("create", {}),
+    afterHash: contentHash,
+  });
+
+  return { ok: true, value: { note, contentHash } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
 }
 
 export async function readDocument(input: { documentId: string; userId: string }) {
@@ -108,6 +191,7 @@ export interface UpdateDocumentInput {
   baseHash?: string;
   actorType?: ActorType;
   actorId?: string;
+  eventType?: NoteEventType;
 }
 
 export async function updateDocument(input: UpdateDocumentInput) {
@@ -129,6 +213,11 @@ export async function updateDocument(input: UpdateDocumentInput) {
     if (!folder) return { ok: false, status: 404, error: "Destination folder not found" } satisfies DocumentCommandResult<never>;
   }
 
+  const titleChanged = input.title !== undefined && input.title !== current.value.note.title;
+  const contentChanged = input.markdown !== undefined && input.markdown !== current.value.note.content;
+  const folderChanged = input.folderId !== undefined && input.folderId !== current.value.note.folderId;
+  const isApiEditableChanged = input.isApiEditable !== undefined && input.isApiEditable !== current.value.note.isApiEditable;
+
   const [note] = await db.update(notes)
     .set({
       ...(input.title !== undefined ? { title: input.title } : {}),
@@ -143,7 +232,30 @@ export async function updateDocument(input: UpdateDocumentInput) {
     .returning();
 
   if (!note) return { ok: false, status: 404, error: "Note not found" } satisfies DocumentCommandResult<never>;
-  return { ok: true, value: { note, contentHash: hashMarkdown(note.content) } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
+
+  const contentHash = hashMarkdown(note.content);
+  const actorType = input.actorType ?? "user";
+  if (titleChanged || contentChanged || folderChanged || isApiEditableChanged) {
+    const eventType = input.eventType ?? getUpdateEventType(input, current.value.note);
+    await insertNoteEvent({
+      noteId: note.id,
+      userId: note.userId,
+      actorType,
+      actorId: input.actorId,
+      eventType,
+      summary: getNoteEventSummary(eventType, {
+        titleChanged,
+        contentChanged,
+        folderChanged,
+        isApiEditableChanged,
+        isApiEditable: note.isApiEditable,
+      }),
+      beforeHash: currentHash,
+      afterHash: contentHash,
+    });
+  }
+
+  return { ok: true, value: { note, contentHash } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
 }
 
 export async function editDocument(input: Omit<UpdateDocumentInput, "title" | "markdown" | "folderId"> & { edits: DocumentEdit[] }) {
@@ -160,6 +272,7 @@ export async function editDocument(input: Omit<UpdateDocumentInput, "title" | "m
     baseHash: input.baseHash,
     actorType: input.actorType,
     actorId: input.actorId,
+    eventType: "edit_patch",
   });
 }
 

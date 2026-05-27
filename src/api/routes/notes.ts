@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { notes } from "../db/schema";
-import { editDocument, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
+import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
@@ -46,6 +46,16 @@ noteRoutes.get("/:noteId/status", async (c) => {
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json({ noteId: result.value.note.id, contentHash: result.value.contentHash, updatedAt: result.value.note.updatedAt });
+});
+
+noteRoutes.get("/:noteId/events", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
+  const result = await listNoteEvents({ documentId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
 });
 
 noteRoutes.get("/:noteId/outline", async (c) => {

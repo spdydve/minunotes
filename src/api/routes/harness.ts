@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { apiKeyFolderPermissions, type ApiKey } from "../db/schema";
-import { createDocument, editDocument, listFolders, readDocument, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
+import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
@@ -100,6 +100,20 @@ harnessRoutes.get("/notes/:noteId", async (c) => {
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   if (!(await hasFolderPermission(c, result.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+  return c.json(result.value);
+});
+
+harnessRoutes.get("/notes/:noteId/events", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+
+  const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
+  const result = await listNoteEvents({ documentId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value);
 });
 
