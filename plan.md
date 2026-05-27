@@ -119,7 +119,7 @@ Read-only activity surface verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
-## Active Phase — Read-Only Activity Surface
+## Completed Phase — Read-Only Activity Surface
 Goal: expose the event stream without building full version restore/diff tooling.
 
 ### Current session scope
@@ -131,6 +131,28 @@ Goal: expose the event stream without building full version restore/diff tooling
 - [x] Add read API for note events.
 - [x] Add simple note activity UI.
 - [x] Keep it read-only.
+
+## Active Phase — Line-Aware Harness Search / Reads
+Goal: add grep-like niceties for agents/scripts without recreating grep or replacing full-note reads.
+
+### Current session scope
+- add line range reads for individual notes
+- add line-aware substring search for one note and across readable notes
+- keep full-note reads as the default comprehension path
+- return enough context to reduce repeated tool calls
+
+### Proposed endpoints
+- `GET /harness/notes/search-lines?q=...&context=2&limit=25`
+- `GET /harness/notes/:noteId/search-lines?q=...&context=2&limit=25`
+- `GET /harness/notes/:noteId/lines?from=1&to=80`
+
+### Checklist
+- [x] Add pure line helpers.
+- [x] Add command functions for line ranges and line search.
+- [x] Add harness endpoints.
+- [x] Enforce API key read permissions.
+- [x] Add tests for line helpers.
+- [x] Keep this API-shaped, not grep-compatible.
 
 ## Deferred
 Do not implement these until explicitly planned:

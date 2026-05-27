@@ -4,6 +4,7 @@ import { folders, noteEvents, notes, type Note } from "../db/schema";
 import { createId } from "../lib/id";
 import { applyDocumentEdits, type DocumentEdit } from "./edits";
 import { hashMarkdown } from "./hash";
+import { getLineRange, searchLines } from "./line-search";
 
 export type ActorType = "user" | "agent" | "system";
 export type NoteEventType = "create" | "update" | "edit_patch" | "move" | "toggle_api_editable";
@@ -38,6 +39,70 @@ export async function listNoteEvents(input: { documentId: string; userId: string
     .limit(input.limit ?? 50);
 
   return { ok: true, value: { noteId: current.value.note.id, events } } satisfies DocumentCommandResult<{ noteId: string; events: typeof events }>;
+}
+
+export async function readDocumentLines(input: { documentId: string; userId: string; from?: number; to?: number }) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+
+  const range = getLineRange(current.value.note.content, input.from ?? 1, input.to ?? 80);
+  return {
+    ok: true,
+    value: {
+      noteId: current.value.note.id,
+      contentHash: current.value.contentHash,
+      noteSizeBytes: new TextEncoder().encode(current.value.note.content).length,
+      ...range,
+    },
+  } satisfies DocumentCommandResult<{ noteId: string; contentHash: string; noteSizeBytes: number; from: number; to: number; lineCount: number; lines: ReturnType<typeof getLineRange>["lines"] }>;
+}
+
+export async function searchDocumentLines(input: { documentId: string; userId: string; query: string; context?: number; limit?: number; caseSensitive?: boolean }) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+
+  const result = searchLines(current.value.note.content, input);
+  return {
+    ok: true,
+    value: {
+      noteId: current.value.note.id,
+      title: current.value.note.title,
+      folderId: current.value.note.folderId,
+      contentHash: current.value.contentHash,
+      noteSizeBytes: new TextEncoder().encode(current.value.note.content).length,
+      ...result,
+    },
+  } satisfies DocumentCommandResult<{ noteId: string; title: string; folderId: string; contentHash: string; noteSizeBytes: number; lineCount: number; matches: ReturnType<typeof searchLines>["matches"] }>;
+}
+
+export async function searchAllDocumentLines(input: { userId: string; query: string; folderId?: string; context?: number; limit?: number; caseSensitive?: boolean }) {
+  const query = input.query.trim();
+  if (!query) return { ok: true, value: { query, matches: [] } } satisfies DocumentCommandResult<{ query: string; matches: Array<never> }>;
+
+  const pattern = `%${query}%`;
+  const where = input.folderId
+    ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId), or(like(notes.title, pattern), like(notes.content, pattern)))
+    : and(eq(notes.userId, input.userId), or(like(notes.title, pattern), like(notes.content, pattern)));
+  const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title)).limit(50);
+  const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
+  const matches: Array<ReturnType<typeof searchLines>["matches"][number] & { noteId: string; title: string; folderId: string; contentHash: string; noteSizeBytes: number; lineCount: number }> = [];
+
+  for (const note of rows) {
+    const contentHash = hashMarkdown(note.content);
+    const result = searchLines(note.content, { query, context: input.context, limit: limit - matches.length, caseSensitive: input.caseSensitive });
+    matches.push(...result.matches.map((match) => ({
+      ...match,
+      noteId: note.id,
+      title: note.title,
+      folderId: note.folderId,
+      contentHash,
+      noteSizeBytes: new TextEncoder().encode(note.content).length,
+      lineCount: result.lineCount,
+    })));
+    if (matches.length >= limit) break;
+  }
+
+  return { ok: true, value: { query, matches } } satisfies DocumentCommandResult<{ query: string; matches: typeof matches }>;
 }
 
 export async function searchDocuments(input: { userId: string; query: string; limit?: number }) {

@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { apiKeyFolderPermissions, type ApiKey } from "../db/schema";
-import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
+import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
@@ -69,6 +69,26 @@ harnessRoutes.get("/notes/search", async (c) => {
   return c.json({ notes: result.value.documents.filter((note) => readableFolderIds.has(note.folderId)) });
 });
 
+harnessRoutes.get("/notes/search-lines", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const q = c.req.query("q")?.trim();
+  if (!q) return c.json({ query: "", matches: [] });
+
+  const readableFolderIds = await getReadableFolderIds(c);
+  const result = await searchAllDocumentLines({
+    userId: user.id,
+    query: q,
+    folderId: c.req.query("folderId"),
+    context: Number.parseInt(c.req.query("context") ?? "", 10),
+    limit: Number.parseInt(c.req.query("limit") ?? "", 10),
+    caseSensitive: c.req.query("caseSensitive") === "true",
+  });
+  if (!readableFolderIds) return c.json(result.value);
+  return c.json({ query: result.value.query, matches: result.value.matches.filter((match) => readableFolderIds.has(match.folderId)) });
+});
+
 harnessRoutes.post("/notes", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
@@ -113,6 +133,47 @@ harnessRoutes.get("/notes/:noteId/events", async (c) => {
 
   const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
   const result = await listNoteEvents({ documentId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
+});
+
+harnessRoutes.get("/notes/:noteId/lines", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+
+  const result = await readDocumentLines({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    from: Number.parseInt(c.req.query("from") ?? "", 10),
+    to: Number.parseInt(c.req.query("to") ?? "", 10),
+  });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
+});
+
+harnessRoutes.get("/notes/:noteId/search-lines", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+
+  const q = c.req.query("q")?.trim();
+  if (!q) return c.json({ query: "", matches: [] });
+
+  const result = await searchDocumentLines({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    query: q,
+    context: Number.parseInt(c.req.query("context") ?? "", 10),
+    limit: Number.parseInt(c.req.query("limit") ?? "", 10),
+    caseSensitive: c.req.query("caseSensitive") === "true",
+  });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value);
 });
