@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { agentApiKeyFolderPermissions, type AgentApiKey } from "../db/schema";
+import { apiKeyFolderPermissions, type ApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, readDocument, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
@@ -9,7 +9,7 @@ import { auth } from "../lib/auth";
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
-  agentApiKey: AgentApiKey | null;
+  apiKey: ApiKey | null;
 };
 
 export const harnessRoutes = new Hono<{ Variables: Variables }>();
@@ -21,16 +21,16 @@ function getUser(c: Context<{ Variables: Variables }>) {
 }
 
 function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType; actorId?: string } {
-  const key = c.get("agentApiKey");
+  const key = c.get("apiKey");
   return key ? { actorType: "agent", actorId: key.id } : { actorType: "user" };
 }
 
 async function hasFolderPermission(c: Context<{ Variables: Variables }>, folderId: string, permission: "read" | "create" | "edit") {
-  const key = c.get("agentApiKey");
+  const key = c.get("apiKey");
   if (!key) return true;
 
-  const [row] = await db.select().from(agentApiKeyFolderPermissions)
-    .where(and(eq(agentApiKeyFolderPermissions.apiKeyId, key.id), eq(agentApiKeyFolderPermissions.folderId, folderId)))
+  const [row] = await db.select().from(apiKeyFolderPermissions)
+    .where(and(eq(apiKeyFolderPermissions.apiKeyId, key.id), eq(apiKeyFolderPermissions.folderId, folderId)))
     .limit(1);
   if (!row) return false;
   if (permission === "read") return row.canRead;
@@ -39,10 +39,10 @@ async function hasFolderPermission(c: Context<{ Variables: Variables }>, folderI
 }
 
 async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
-  const key = c.get("agentApiKey");
+  const key = c.get("apiKey");
   if (!key) return null;
-  const rows = await db.select().from(agentApiKeyFolderPermissions)
-    .where(and(eq(agentApiKeyFolderPermissions.apiKeyId, key.id), eq(agentApiKeyFolderPermissions.canRead, true)));
+  const rows = await db.select().from(apiKeyFolderPermissions)
+    .where(and(eq(apiKeyFolderPermissions.apiKeyId, key.id), eq(apiKeyFolderPermissions.canRead, true)));
   return new Set(rows.map((row) => row.folderId));
 }
 

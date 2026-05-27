@@ -17,7 +17,7 @@ function FolderPermissionRow({ folder, value, onChange }: {
   </div>;
 }
 
-export function CreateAgentKeyDialog({ folders, onCreated }: { folders: Folder[]; onCreated: () => void }) {
+export function CreateApiKeyDialog({ folders, onCreated }: { folders: Folder[]; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export function CreateAgentKeyDialog({ folders, onCreated }: { folders: Folder[]
       const selected = Object.entries(permissions)
         .filter(([, permission]) => permission.canRead || permission.canCreate || permission.canEdit)
         .map(([folderId, permission]) => ({ folderId, ...permission }));
-      const result = await api.createAgentKey({ name, permissions: selected });
+      const result = await api.createApiKey({ name, permissions: selected });
       setCreatedKey(result.key);
       onCreated();
     } finally {
@@ -58,7 +58,7 @@ export function CreateAgentKeyDialog({ folders, onCreated }: { folders: Folder[]
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Create agent API key</h2>
+            <h2 className="text-lg font-semibold">Create API key</h2>
             <p className="mt-1 text-sm text-slate-500">Choose the folders and actions this key can access.</p>
           </div>
           <Button onClick={close}>Close</Button>

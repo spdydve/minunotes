@@ -102,7 +102,7 @@ export interface UpdateDocumentInput {
   title?: string;
   markdown?: string;
   folderId?: string;
-  isAgentEditable?: boolean;
+  isApiEditable?: boolean;
   baseHash?: string;
   actorType?: ActorType;
   actorId?: string;
@@ -113,9 +113,9 @@ export async function updateDocument(input: UpdateDocumentInput) {
   if (!current.ok) return current;
 
   const currentHash = current.value.contentHash;
-  const isAgentMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isAgentEditable !== undefined);
-  if (isAgentMutation && !current.value.note.isAgentEditable) {
-    return { ok: false, status: 403, error: "Document is not editable by agents" } satisfies DocumentCommandResult<never>;
+  const isApiMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isApiEditable !== undefined);
+  if (isApiMutation && !current.value.note.isApiEditable) {
+    return { ok: false, status: 403, error: "Document is not editable through the API" } satisfies DocumentCommandResult<never>;
   }
 
   if (input.baseHash && input.baseHash !== currentHash) {
@@ -132,7 +132,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.markdown !== undefined ? { content: input.markdown } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
-      ...(input.isAgentEditable !== undefined ? { isAgentEditable: input.isAgentEditable } : {}),
+      ...(input.isApiEditable !== undefined ? { isApiEditable: input.isApiEditable } : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(notes.id, input.documentId), eq(notes.userId, input.userId)))

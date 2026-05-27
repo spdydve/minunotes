@@ -31,7 +31,7 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
             <ActionMenuIconButton icon="settings" aria-label="Open settings" />
           </PopoverTrigger>
           <PopoverContent align="end" className="w-44 p-1">
-            <ActionMenuButton onClick={() => nav({ to: "/settings/agent-keys" })}>Agent API Keys</ActionMenuButton>
+            <ActionMenuButton onClick={() => nav({ to: "/settings/api-access" })}>API Access</ActionMenuButton>
             <ActionMenuButton onClick={() => authClient.signOut()}>Logout</ActionMenuButton>
           </PopoverContent>
         </Popover>

@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { desc, eq, and, isNull } from "drizzle-orm";
 import { db } from "../db/client";
-import { agentApiKeyFolderPermissions, agentApiKeys, folders, type AgentApiKey } from "../db/schema";
+import { apiKeyFolderPermissions, apiKeys, folders, type ApiKey } from "../db/schema";
 import { generateApiKey, hashApiKey } from "../lib/api-keys";
 import { auth } from "../lib/auth";
 import { createId } from "../lib/id";
@@ -9,10 +9,10 @@ import { createId } from "../lib/id";
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
-  agentApiKey: AgentApiKey | null;
+  apiKey: ApiKey | null;
 };
 
-export const agentKeyRoutes = new Hono<{ Variables: Variables }>();
+export const apiKeyRoutes = new Hono<{ Variables: Variables }>();
 
 function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get("user");
@@ -20,29 +20,29 @@ function getUser(c: Context<{ Variables: Variables }>) {
   return user;
 }
 
-agentKeyRoutes.get("/", async (c) => {
+apiKeyRoutes.get("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const keys = await db.select({
-    id: agentApiKeys.id,
-    name: agentApiKeys.name,
-    uid: agentApiKeys.uid,
-    createdAt: agentApiKeys.createdAt,
-    lastUsedAt: agentApiKeys.lastUsedAt,
-    revokedAt: agentApiKeys.revokedAt,
-  }).from(agentApiKeys).where(eq(agentApiKeys.userId, user.id)).orderBy(desc(agentApiKeys.createdAt));
+    id: apiKeys.id,
+    name: apiKeys.name,
+    uid: apiKeys.uid,
+    createdAt: apiKeys.createdAt,
+    lastUsedAt: apiKeys.lastUsedAt,
+    revokedAt: apiKeys.revokedAt,
+  }).from(apiKeys).where(eq(apiKeys.userId, user.id)).orderBy(desc(apiKeys.createdAt));
 
-  const permissions = await db.select().from(agentApiKeyFolderPermissions).innerJoin(agentApiKeys, eq(agentApiKeyFolderPermissions.apiKeyId, agentApiKeys.id)).where(eq(agentApiKeys.userId, user.id));
+  const permissions = await db.select().from(apiKeyFolderPermissions).innerJoin(apiKeys, eq(apiKeyFolderPermissions.apiKeyId, apiKeys.id)).where(eq(apiKeys.userId, user.id));
   return c.json({
     keys: keys.map((key) => ({
       ...key,
-      permissions: permissions.filter((row) => row.agent_api_key_folder_permissions.apiKeyId === key.id).map((row) => row.agent_api_key_folder_permissions),
+      permissions: permissions.filter((row) => row.api_key_folder_permissions.apiKeyId === key.id).map((row) => row.api_key_folder_permissions),
     })),
   });
 });
 
-agentKeyRoutes.post("/", async (c) => {
+apiKeyRoutes.post("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
@@ -65,7 +65,7 @@ agentKeyRoutes.post("/", async (c) => {
     revokedAt: null,
   };
 
-  await db.insert(agentApiKeys).values(apiKey);
+  await db.insert(apiKeys).values(apiKey);
 
   const requestedPermissions = body?.permissions ?? [];
   const permissionRows = [];
@@ -84,19 +84,19 @@ agentKeyRoutes.post("/", async (c) => {
       updatedAt: new Date(),
     });
   }
-  if (permissionRows.length > 0) await db.insert(agentApiKeyFolderPermissions).values(permissionRows);
+  if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
 
   return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
 });
 
-agentKeyRoutes.delete("/:keyId", async (c) => {
+apiKeyRoutes.delete("/:keyId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const [key] = await db.update(agentApiKeys)
+  const [key] = await db.update(apiKeys)
     .set({ revokedAt: new Date() })
-    .where(and(eq(agentApiKeys.id, c.req.param("keyId")), eq(agentApiKeys.userId, user.id), isNull(agentApiKeys.revokedAt)))
-    .returning({ id: agentApiKeys.id });
+    .where(and(eq(apiKeys.id, c.req.param("keyId")), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt)))
+    .returning({ id: apiKeys.id });
 
   if (!key) return c.json({ error: "API key not found" }, 404);
   return c.json({ ok: true });

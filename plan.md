@@ -180,13 +180,13 @@ Verification:
 Goal: add a simple per-document flag that lets users keep normal app editing while preventing agent/API edits to sensitive notes.
 
 Decision:
-- Use `is_agent_editable` instead of a full lock.
+- Use `is_api_editable` instead of a full lock.
 - User/app edits are still allowed.
-- Agent edits are rejected when `is_agent_editable = false`.
+- API edits are rejected when `is_api_editable = false`.
 - Folder/API-key permissions can layer on top later.
 
 Files to modify/create:
-- `src/api/db/schema.ts` — add `notes.isAgentEditable`.
+- `src/api/db/schema.ts` — add `notes.isApiEditable`.
 - `drizzle/*` — add migration.
 - `src/api/harness/commands.ts` — enforce flag for `actorType: "agent"` mutations.
 - `src/api/routes/notes.ts` — allow user/app to update the flag.
@@ -196,13 +196,13 @@ Files to modify/create:
 - `plan.md` — track implementation.
 
 Checklist:
-- [x] Add `is_agent_editable` column defaulting to true.
+- [x] Add `is_api_editable` column defaulting to true.
 - [x] Regenerate/add Drizzle migration.
-- [x] Include `isAgentEditable` in frontend `Note` type.
-- [x] Allow `PATCH /notes/:noteId` to update `isAgentEditable`.
-- [x] Reject agent content/title/move edits when `isAgentEditable` is false.
+- [x] Include `isApiEditable` in frontend `Note` type.
+- [x] Allow `PATCH /notes/:noteId` to update `isApiEditable`.
+- [x] Reject agent content/title/move edits when `isApiEditable` is false.
 - [x] Keep normal app/user edits working regardless of this flag.
-- [x] Add note action to enable/disable agent edits.
+- [x] Add note action to enable/disable API edits.
 - [x] Avoid adding folder permissions/API keys in this slice.
 
 Verification:
@@ -242,7 +242,7 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
-### Next Slice — Agent API Keys v0
+### Next Slice — API Access v0
 Goal: allow external agents to authenticate to `/api/harness/*` without browser cookies while still scoping access to the owning user.
 
 Scope:
@@ -251,21 +251,21 @@ Scope:
 - Show raw key only at creation time.
 - Allow bearer key auth for harness routes.
 - Keep API key permissions broad for now: key can access the owner's harness resources.
-- Still respect `is_agent_editable` for agent mutations.
+- Still respect `is_api_editable` for agent mutations.
 - Folder-level permissions are deferred.
 
 Files to modify/create:
-- `src/api/db/schema.ts` — add `agent_api_keys` table.
+- `src/api/db/schema.ts` — add `api_keys` table.
 - `drizzle/*` — add migration.
 - `src/api/lib/api-keys.ts` — key generation/hash helpers.
 - `src/api/middleware/authentication.ts` — add agent key auth helper/middleware.
-- `src/api/routes/agent-keys.ts` — create/list/revoke keys with session auth.
+- `src/api/routes/api-keys.ts` — create/list/revoke keys with session auth.
 - `src/api/routes/harness.ts` — set actor metadata based on auth source.
 - `src/api/index.ts` — mount key routes and bearer-capable harness auth.
 - `plan.md` — track completion.
 
 Checklist:
-- [x] Add `agent_api_keys` schema.
+- [x] Add `api_keys` schema.
 - [x] Generate migration.
 - [x] Add API key generation/hash helpers.
 - [x] Add session-only agent key management routes.
@@ -273,7 +273,7 @@ Checklist:
 - [x] Scope bearer auth to the API key owner user.
 - [x] Mark harness writes from bearer auth as `actorType: "agent"`.
 - [x] Keep session harness writes as `actorType: "user"`.
-- [x] Respect `is_agent_editable` for agent edits.
+- [x] Respect `is_api_editable` for API edits.
 - [x] Defer folder permissions/UI.
 
 Verification:
@@ -297,7 +297,7 @@ Files to modify:
 - `drizzle/*` — add migration.
 - `src/api/lib/api-keys.ts` — key parsing/generation/hash/verify helpers.
 - `src/api/middleware/authentication.ts` — lookup by `uid`, verify hash.
-- `src/api/routes/agent-keys.ts` — return `uid`/safe metadata.
+- `src/api/routes/api-keys.ts` — return `uid`/safe metadata.
 - `plan.md` — track completion.
 
 Checklist:
@@ -324,17 +324,17 @@ Scope:
 - Session users keep full access to their own data.
 - API keys are limited by folder permissions.
 - Permissions: `can_read`, `can_create`, `can_edit`.
-- `is_agent_editable` still blocks API-key edits even when `can_edit` is true.
+- `is_api_editable` still blocks API-key edits even when `can_edit` is true.
 
 Files to modify:
 - `src/api/db/schema.ts` — add folder permission table.
 - `drizzle/*` — add migration.
-- `src/api/routes/agent-keys.ts` — accept/list key permissions.
+- `src/api/routes/api-keys.ts` — accept/list key permissions.
 - `src/api/routes/harness.ts` — enforce permissions for bearer-auth harness requests.
 - `plan.md` — track completion.
 
 Checklist:
-- [x] Add `agent_api_key_folder_permissions` table.
+- [x] Add `api_key_folder_permissions` table.
 - [x] Generate migration.
 - [x] Accept permissions at API key creation.
 - [x] Return permissions when listing keys.
@@ -359,14 +359,14 @@ Decision:
 - Copy button uses icon feedback.
 
 Files modified/created:
-- `src/frontend/routes/settings.agent-keys.tsx` — settings page.
+- `src/frontend/routes/settings.api-access.tsx` — settings page.
 - `src/frontend/components/create-agent-key-dialog.tsx` — create-key modal.
 - `src/frontend/components/folder-sidebar.tsx` — settings menu link.
 - `src/frontend/router.tsx` — route registration.
 - `src/frontend/lib/api.ts` — agent key API helpers/types.
 
 Checklist:
-- [x] Add `/settings/agent-keys` route.
+- [x] Add `/settings/api-access` route.
 - [x] List existing keys on a page.
 - [x] Revoke keys from the page.
 - [x] Create keys from a modal.
@@ -397,7 +397,7 @@ Do not implement these until explicitly planned:
 ### Next Planning Question
 Before adding any mutation capability for agents, decide this first:
 
-> Should trusted agents be allowed to directly edit documents, and if so, do direct agent edits require an automatic pre-edit snapshot?
+> Should trusted agents be allowed to directly edit documents, and if so, do direct API edits require an automatic pre-edit snapshot?
 
 Recommended answer for now:
 - Keep only read-only harness capabilities merged.

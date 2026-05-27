@@ -25,9 +25,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
-export type AgentKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
-export type AgentKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: AgentKeyPermission[] };
-export type Note = { id: string; folderId: string; title: string; content: string; isAgentEditable: boolean; createdAt: string; updatedAt: string };
+export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
+export type ApiKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
+export type Note = { id: string; folderId: string; title: string; content: string; isApiEditable: boolean; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type DocumentEdit =
@@ -39,9 +39,9 @@ export type SectionResponse = { noteId: string; contentHash: string; section: Do
 export type SearchNote = Note & { folderTitle: string };
 
 export const api = {
-  agentKeys: () => request<{ keys: AgentKey[] }>("/agent-keys"),
-  createAgentKey: (data: { name: string; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: AgentKey }>("/agent-keys", { method: "POST", body: JSON.stringify(data) }),
-  revokeAgentKey: (keyId: string) => request<{ ok: true }>(`/agent-keys/${keyId}`, { method: "DELETE" }),
+  apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
+  createApiKey: (data: { name: string; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
+  revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: "DELETE" }),
   folders: () => request<{ folders: Folder[] }>("/folders"),
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),
   renameFolder: (folderId: string, title: string) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify({ title }) }),
@@ -53,7 +53,7 @@ export const api = {
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
   editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),
-  saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isAgentEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
   searchNotes: (q: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}`),
   deleteNote: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}`, { method: "DELETE" }),

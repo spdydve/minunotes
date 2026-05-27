@@ -1,24 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createRoute, Link } from "@tanstack/react-router";
 import { api } from "../lib/api";
-import { CreateAgentKeyDialog } from "../components/create-agent-key-dialog";
+import { CreateApiKeyDialog } from "../components/create-api-key-dialog";
 import { Button } from "../components/ui/button";
 import { rootRoute } from "./__root";
 
-function AgentKeysSettingsView() {
+function ApiAccessSettingsView() {
   const qc = useQueryClient();
   const folders = useQuery({ queryKey: ["folders"], queryFn: api.folders });
-  const keys = useQuery({ queryKey: ["agent-keys"], queryFn: api.agentKeys });
-  const revoke = useMutation({ mutationFn: api.revokeAgentKey, onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-keys"] }) });
+  const keys = useQuery({ queryKey: ["api-keys"], queryFn: api.apiKeys });
+  const revoke = useMutation({ mutationFn: api.revokeApiKey, onSuccess: () => qc.invalidateQueries({ queryKey: ["api-keys"] }) });
 
   return <section className="mx-auto w-full max-w-5xl">
     <div className="mb-6 flex items-start justify-between gap-4">
       <div>
         <Link to="/" className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">← Back to notes</Link>
-        <h1 className="mt-2 text-2xl font-semibold">Agent API Keys</h1>
-        <p className="mt-1 text-sm text-slate-500">Create keys for external agents and scope access by folder.</p>
+        <h1 className="mt-2 text-2xl font-semibold">API Access</h1>
+        <p className="mt-1 text-sm text-slate-500">Create and manage API keys for agents, scripts, and external tools.</p>
       </div>
-      <CreateAgentKeyDialog folders={folders.data?.folders ?? []} onCreated={() => qc.invalidateQueries({ queryKey: ["agent-keys"] })} />
+      <CreateApiKeyDialog folders={folders.data?.folders ?? []} onCreated={() => qc.invalidateQueries({ queryKey: ["api-keys"] })} />
     </div>
 
     <div className="rounded-lg border border-slate-200 dark:border-slate-800">
@@ -43,4 +43,4 @@ function AgentKeysSettingsView() {
   </section>;
 }
 
-export const agentKeysSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings/agent-keys", component: AgentKeysSettingsView });
+export const apiAccessSettingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings/api-access", component: ApiAccessSettingsView });

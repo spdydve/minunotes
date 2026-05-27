@@ -4,9 +4,9 @@ import { indexRoute } from "./routes/index";
 import { folderRoute } from "./routes/folders.$folderId";
 import { noteRoute } from "./routes/notes.$noteId";
 import { authRoute } from "./routes/auth";
-import { agentKeysSettingsRoute } from "./routes/settings.agent-keys";
+import { apiAccessSettingsRoute } from "./routes/settings.api-access";
 
-const routeTree = rootRoute.addChildren([indexRoute, folderRoute, noteRoute, authRoute, agentKeysSettingsRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, folderRoute, noteRoute, authRoute, apiAccessSettingsRoute]);
 
 export const router = createRouter({ routeTree });
 
