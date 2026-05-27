@@ -1,39 +1,59 @@
-import { Check, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, Copy, Plus, X } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type ApiKey, type Folder } from "../lib/api";
 import { Button } from "./ui/button";
 
 type PermissionValue = { canRead: boolean; canCreate: boolean; canEdit: boolean };
 
-function FolderPermissionRow({ folder, value, onChange }: { folder: Folder; value: PermissionValue; onChange: (value: PermissionValue) => void }) {
-  return <div className="grid grid-cols-[1fr_repeat(3,auto)] items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+function FolderPermissionRow({ folder, value, onChange, onRemove }: { folder: Folder; value: PermissionValue; onChange: (value: PermissionValue) => void; onRemove: () => void }) {
+  return <div className="grid grid-cols-[1fr_repeat(3,auto)_auto] items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
     <span className="truncate">{folder.title}</span>
     {(["canRead", "canCreate", "canEdit"] as const).map((key) => <label key={key} className="flex items-center gap-1 text-xs text-slate-500">
       <input type="checkbox" checked={value[key]} onChange={(e) => onChange({ ...value, [key]: e.target.checked })} />
       {key === "canRead" ? "Read" : key === "canCreate" ? "Create" : "Edit"}
     </label>)}
+    <button className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-900" onClick={onRemove} aria-label={`Remove ${folder.title}`}>
+      <X className="h-4 w-4" />
+    </button>
   </div>;
 }
 
-export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { folders: Folder[]; apiKey?: ApiKey; onSaved: () => void; trigger: (open: () => void) => React.ReactNode }) {
+export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { folders: Folder[]; apiKey?: ApiKey; onSaved: () => void; trigger: (open: () => void) => ReactNode }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, PermissionValue>>({});
   const [saving, setSaving] = useState(false);
   const isEditing = !!apiKey;
+  const selectedFolderIds = new Set(Object.keys(permissions));
+  const selectedFolders = folders.filter((folder) => selectedFolderIds.has(folder.id));
+  const folderMatches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return folders.filter((folder) => !selectedFolderIds.has(folder.id) && folder.title.toLowerCase().includes(q)).slice(0, 8);
+  }, [folders, query, selectedFolderIds]);
 
   useEffect(() => {
     if (!open) return;
     setName(apiKey?.name ?? "");
+    setQuery("");
     setCreatedKey(null);
     setCopied(false);
     setPermissions(Object.fromEntries((apiKey?.permissions ?? []).map((permission) => [permission.folderId, { canRead: permission.canRead, canCreate: permission.canCreate, canEdit: permission.canEdit }])));
   }, [apiKey, open]);
 
   const close = () => setOpen(false);
-  const setAll = (value: PermissionValue) => setPermissions(Object.fromEntries(folders.map((folder) => [folder.id, value])));
+  const addFolder = (folder: Folder) => {
+    setPermissions((current) => ({ ...current, [folder.id]: { canRead: true, canCreate: false, canEdit: false } }));
+    setQuery("");
+  };
+  const removeFolder = (folderId: string) => setPermissions((current) => {
+    const next = { ...current };
+    delete next[folderId];
+    return next;
+  });
   const selectedPermissions = () => Object.entries(permissions)
     .filter(([, permission]) => permission.canRead || permission.canCreate || permission.canEdit)
     .map(([folderId, permission]) => ({ folderId, ...permission }));
@@ -65,7 +85,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">{isEditing ? "Edit API key" : "Create API key"}</h2>
-            <p className="mt-1 text-sm text-slate-500">Choose the folders and actions this key can access.</p>
+            <p className="mt-1 text-sm text-slate-500">Search for folders, add them, then choose access.</p>
           </div>
           <Button onClick={close}>Close</Button>
         </div>
@@ -80,12 +100,20 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
           </div>
         </div> : <>
           <input className="mt-4 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800" placeholder="Key name, e.g. Workout Script" value={name} onChange={(e) => setName(e.target.value)} />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button onClick={() => setAll({ canRead: true, canCreate: true, canEdit: true })}>Grant all</Button>
-            <Button onClick={() => setAll({ canRead: false, canCreate: false, canEdit: false })}>Clear all</Button>
+
+          <div className="mt-4">
+            <label className="text-sm font-medium">Folder access</label>
+            <input className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800" placeholder="Search folders to add..." value={query} onChange={(e) => setQuery(e.target.value)} />
+            {folderMatches.length > 0 ? <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-800">
+              {folderMatches.map((folder) => <button key={folder.id} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-900" onClick={() => addFolder(folder)}>
+                <span>{folder.title}</span><Plus className="h-4 w-4 text-slate-500" />
+              </button>)}
+            </div> : query.trim() ? <p className="mt-2 text-xs text-slate-500">No matching folders.</p> : null}
           </div>
-          <div className="mt-3 space-y-2">
-            {folders.map((folder) => <FolderPermissionRow key={folder.id} folder={folder} value={permissions[folder.id] ?? { canRead: false, canCreate: false, canEdit: false }} onChange={(value) => setPermissions((current) => ({ ...current, [folder.id]: value }))} />)}
+
+          <div className="mt-4 space-y-2">
+            {selectedFolders.map((folder) => <FolderPermissionRow key={folder.id} folder={folder} value={permissions[folder.id]} onChange={(value) => setPermissions((current) => ({ ...current, [folder.id]: value }))} onRemove={() => removeFolder(folder.id)} />)}
+            {selectedFolders.length === 0 ? <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-800">No folders selected. Search and add folders above.</p> : null}
           </div>
           <div className="mt-4 flex justify-end"><Button disabled={!name.trim() || saving} onClick={submit}>{isEditing ? "Save changes" : "Create key"}</Button></div>
         </>}
