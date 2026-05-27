@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { api } from "../lib/api";
 import { authClient } from "../lib/auth-client";
 import { CreateFolderDialog } from "./create-folder-dialog";
@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
   const { data, isLoading, error } = useQuery({ queryKey: ["folders"], queryFn: api.folders });
+  const nav = useNavigate();
 
   return <aside className="flex h-screen w-72 flex-col border-r border-slate-200 p-4 dark:border-slate-800">
     <div className="mb-4 flex items-center justify-between gap-2"><h1 className="font-semibold">Notes</h1><CreateFolderDialog /></div>
@@ -29,7 +30,8 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
           <PopoverTrigger asChild>
             <ActionMenuIconButton icon="settings" aria-label="Open settings" />
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-40 p-1">
+          <PopoverContent align="end" className="w-44 p-1">
+            <ActionMenuButton onClick={() => nav({ to: "/settings/agent-keys" })}>Agent API Keys</ActionMenuButton>
             <ActionMenuButton onClick={() => authClient.signOut()}>Logout</ActionMenuButton>
           </PopoverContent>
         </Popover>

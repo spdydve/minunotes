@@ -349,6 +349,38 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Agent Key Management UI v0
+Goal: manage agent API keys from a dedicated settings page, with key creation in a focused modal.
+
+Decision:
+- Use a full content page for key listing and revocation.
+- Use a modal only for key creation and one-time secret display.
+- Sidebar settings menu navigates to the settings page.
+- Copy button uses icon feedback.
+
+Files modified/created:
+- `src/frontend/routes/settings.agent-keys.tsx` — settings page.
+- `src/frontend/components/create-agent-key-dialog.tsx` — create-key modal.
+- `src/frontend/components/folder-sidebar.tsx` — settings menu link.
+- `src/frontend/router.tsx` — route registration.
+- `src/frontend/lib/api.ts` — agent key API helpers/types.
+
+Checklist:
+- [x] Add `/settings/agent-keys` route.
+- [x] List existing keys on a page.
+- [x] Revoke keys from the page.
+- [x] Create keys from a modal.
+- [x] Select folder permissions during creation.
+- [x] Show raw key once.
+- [x] Add copy icon/check feedback.
+- [x] Navigate to page from sidebar settings menu.
+- [x] Remove all-in-one settings popover modal.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.

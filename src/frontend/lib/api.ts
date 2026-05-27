@@ -25,6 +25,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
+export type AgentKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
+export type AgentKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: AgentKeyPermission[] };
 export type Note = { id: string; folderId: string; title: string; content: string; isAgentEditable: boolean; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
@@ -37,6 +39,9 @@ export type SectionResponse = { noteId: string; contentHash: string; section: Do
 export type SearchNote = Note & { folderTitle: string };
 
 export const api = {
+  agentKeys: () => request<{ keys: AgentKey[] }>("/agent-keys"),
+  createAgentKey: (data: { name: string; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: AgentKey }>("/agent-keys", { method: "POST", body: JSON.stringify(data) }),
+  revokeAgentKey: (keyId: string) => request<{ ok: true }>(`/agent-keys/${keyId}`, { method: "DELETE" }),
   folders: () => request<{ folders: Folder[] }>("/folders"),
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),
   renameFolder: (folderId: string, title: string) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify({ title }) }),
