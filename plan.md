@@ -415,6 +415,35 @@ Verification:
 - [x] `pnpm typecheck` passes.
 - [x] `pnpm build` passes.
 
+### Next Slice — Folder-Level API Access Controls v0
+Goal: add the inverse API access control surface from a folder: which API keys can access this folder?
+
+Scope:
+- Add folder action menu item for API Access.
+- Show all active API keys with permissions for the selected folder.
+- Allow toggling Read/Create/Edit for that folder per key.
+- Save by updating each affected key's permissions through existing API key update endpoint.
+- Keep global API Access page as primary key management surface.
+
+Files to modify/create:
+- `src/frontend/components/folder-api-access-dialog.tsx` — folder-centric access modal.
+- `src/frontend/components/folder-actions-popover.tsx` — add API Access action.
+- `plan.md` — track completion.
+
+Checklist:
+- [x] Add folder API access dialog.
+- [x] Load API keys in dialog.
+- [x] Display permissions for selected folder per key.
+- [x] Allow per-key Read/Create/Edit toggles.
+- [x] Save changed permissions through `api.updateApiKey()`.
+- [x] Add folder action menu entry.
+- [x] Refresh API key data after save.
+
+Verification:
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+
 ### Deferred Work
 Do not implement these until explicitly planned:
 - Direct section mutation endpoints.
