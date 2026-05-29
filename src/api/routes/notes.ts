@@ -1,7 +1,9 @@
 import { Hono, type Context } from "hono";
-import { and, asc, eq, like, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { folders, notes } from "../db/schema";
+import { notes } from "../db/schema";
+import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
+import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 
 type Variables = {
@@ -24,61 +26,116 @@ noteRoutes.get("/search", async (c) => {
   const q = c.req.query("q")?.trim();
   if (!q) return c.json({ notes: [] });
 
-  const pattern = `%${q}%`;
-  const rows = await db.select({
-    id: notes.id,
-    folderId: notes.folderId,
-    userId: notes.userId,
-    title: notes.title,
-    content: notes.content,
-    createdAt: notes.createdAt,
-    updatedAt: notes.updatedAt,
-    folderTitle: folders.title,
-  })
-    .from(notes)
-    .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, user.id)))
-    .where(and(eq(notes.userId, user.id), or(like(notes.title, pattern), like(notes.content, pattern))))
-    .orderBy(asc(notes.title))
-    .limit(25);
-
-  return c.json({ notes: rows });
+  const result = await searchDocuments({ userId: user.id, query: q, limit: 25 });
+  return c.json({ notes: result.value.documents });
 });
 
 noteRoutes.get("/:noteId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const [note] = await db.select().from(notes).where(and(eq(notes.id, c.req.param("noteId")), eq(notes.userId, user.id))).limit(1);
-  if (!note) return c.json({ error: "Note not found" }, 404);
-  return c.json({ note });
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
+});
+
+noteRoutes.get("/:noteId/status", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ noteId: result.value.note.id, contentHash: result.value.contentHash, updatedAt: result.value.note.updatedAt });
+});
+
+noteRoutes.get("/:noteId/events", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
+  const result = await listNoteEvents({ documentId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
+});
+
+noteRoutes.get("/:noteId/outline", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  return c.json({
+    noteId: result.value.note.id,
+    contentHash: result.value.contentHash,
+    sections: parseSections(result.value.note.content),
+  });
+});
+
+noteRoutes.get("/:noteId/sections/:sectionId", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  const section = findSection(result.value.note.content, c.req.param("sectionId"));
+  if (!section) return c.json({ error: "Section not found" }, 404);
+
+  return c.json({
+    noteId: result.value.note.id,
+    contentHash: result.value.contentHash,
+    section: {
+      ...section,
+      markdown: result.value.note.content.slice(section.from, section.to),
+      content: result.value.note.content.slice(section.contentFrom, section.contentTo),
+    },
+  });
+});
+
+noteRoutes.post("/:noteId/edit", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { edits?: DocumentEdit[]; baseHash?: string } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  if (!Array.isArray(body.edits) || body.edits.length === 0) return c.json({ error: "At least one edit is required" }, 400);
+
+  const result = await editDocument({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    edits: body.edits,
+    baseHash: body.baseHash,
+    actorType: "user",
+  });
+
+  if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);
+  return c.json(result.value);
 });
 
 noteRoutes.patch("/:noteId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string; isApiEditable?: boolean; baseHash?: string } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const title = body.title?.trim();
   if (body.title !== undefined && !title) return c.json({ error: "Note title is required" }, 400);
-  if (body.folderId !== undefined) {
-    const [folder] = await db.select().from(folders).where(and(eq(folders.id, body.folderId), eq(folders.userId, user.id))).limit(1);
-    if (!folder) return c.json({ error: "Destination folder not found" }, 400);
-  }
 
-  const [note] = await db.update(notes)
-    .set({
-      ...(title !== undefined ? { title } : {}),
-      ...(body.content !== undefined ? { content: body.content } : {}),
-      ...(body.folderId !== undefined ? { folderId: body.folderId } : {}),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(notes.id, c.req.param("noteId")), eq(notes.userId, user.id)))
-    .returning();
+  const result = await updateDocument({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    title,
+    markdown: body.content,
+    folderId: body.folderId,
+    isApiEditable: body.isApiEditable,
+    baseHash: body.baseHash,
+    actorType: "user",
+  });
 
-  if (!note) return c.json({ error: "Note not found" }, 404);
-  return c.json({ note });
+  if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);
+  return c.json(result.value);
 });
 
 noteRoutes.delete("/:noteId", async (c) => {

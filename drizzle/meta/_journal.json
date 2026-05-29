@@ -8,6 +8,48 @@
       "when": 1779562645201,
       "tag": "0000_eminent_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1779732282831,
+      "tag": "0001_same_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779741381241,
+      "tag": "0002_fresh_maginty",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779743156759,
+      "tag": "0003_warm_silver_surfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779886669936,
+      "tag": "0004_api_access_naming",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1779894321694,
+      "tag": "0005_calm_hammerhead",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1779908861929,
+      "tag": "0006_lush_gravity",
+      "breakpoints": true
     }
   ]
 }

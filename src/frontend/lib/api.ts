@@ -25,19 +25,40 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
-export type Note = { id: string; folderId: string; title: string; content: string; createdAt: string; updatedAt: string };
+export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
+export type ApiKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
+export type Note = { id: string; folderId: string; title: string; content: string; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
+export type NoteResponse = { note: Note; contentHash: string };
+export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
+export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
+export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
+export type DocumentEdit =
+  | { type: "append"; text: string }
+  | { type: "replace_text"; oldText: string; newText: string }
+  | { type: "replace_range"; from: number; to: number; text: string };
+export type DocumentSection = { id: string; heading: string; level: number; from: number; to: number; contentFrom: number; contentTo: number };
+export type SectionResponse = { noteId: string; contentHash: string; section: DocumentSection & { markdown: string; content: string } };
 export type SearchNote = Note & { folderTitle: string };
 
 export const api = {
+  apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
+  createApiKey: (data: { name: string; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
+  updateApiKey: (keyId: string, data: { name?: string; permissions?: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: "DELETE" }),
   folders: () => request<{ folders: Folder[] }>("/folders"),
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),
   renameFolder: (folderId: string, title: string) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify({ title }) }),
   deleteFolder: (folderId: string) => request<{ ok: true }>(`/folders/${folderId}`, { method: "DELETE" }),
   notes: (folderId: string) => request<{ notes: Note[] }>(`/folders/${folderId}/notes`),
-  createNote: (folderId: string) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST" }),
-  note: (noteId: string) => request<{ note: Note }>(`/notes/${noteId}`),
-  saveNote: (noteId: string, data: Pick<Note, "title" | "content">) => request<{ note: Note }>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
-  moveNote: (noteId: string, folderId: string) => request<{ note: Note }>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
+  createNote: (folderId: string, data?: { title?: string; content?: string }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
+  note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
+  noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
+  noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
+  noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
+  noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
+  editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),
+  saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
   searchNotes: (q: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}`),
   deleteNote: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}`, { method: "DELETE" }),
 };

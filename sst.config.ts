@@ -1,5 +1,7 @@
 /// <reference path="./.sst/platform/config.d.ts" />
 
+import { getStageUrls, parseAllowedOrigins } from "./src/api/lib/env";
+
 export default $config({
   app(input) {
     return {
@@ -11,12 +13,14 @@ export default $config({
   },
   async run() {
     const isLocal = $app.stage === "davidkennedy" || $app.stage === "local";
+    const { frontendUrl, betterAuthUrl } = getStageUrls($app.stage);
+    const allowOrigins = parseAllowedOrigins(process.env.API_ALLOWED_ORIGINS, frontendUrl);
 
     const apiGateway = new sst.aws.ApiGatewayV2("ApiGateway", {
       cors: {
-        allowOrigins: isLocal ? ["http://localhost:5173"] : ["*"],
+        allowOrigins,
         allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        allowHeaders: ["Content-Type", "Authorization"],
+        allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
         allowCredentials: true,
       },
     });
@@ -30,8 +34,9 @@ export default $config({
         LIBSQL_URL: process.env.LIBSQL_URL ?? "file:local.db",
         LIBSQL_AUTH_TOKEN: process.env.LIBSQL_AUTH_TOKEN ?? "",
         BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-me",
-        BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? "http://localhost:5173/api/auth",
-        FRONTEND_URL: process.env.FRONTEND_URL ?? "http://localhost:5173",
+        BETTER_AUTH_URL: betterAuthUrl,
+        FRONTEND_URL: frontendUrl,
+        API_ALLOWED_ORIGINS: allowOrigins.join(","),
         COOKIE_DOMAIN: process.env.COOKIE_DOMAIN ?? "",
       },
     });

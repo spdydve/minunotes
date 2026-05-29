@@ -1,0 +1,1 @@
+ALTER TABLE `notes` ADD `is_agent_editable` integer DEFAULT true NOT NULL;
