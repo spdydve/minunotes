@@ -15,12 +15,6 @@ function NoteView() {
     queryFn: () => api.note(noteId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
-  const activity = useQuery({
-    queryKey: ["note-events", noteId],
-    queryFn: () => api.noteEvents(noteId, 25),
-    retry: 1,
-    enabled: !!data?.note,
-  });
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saveError, setSaveError] = useState(false);
@@ -151,46 +145,17 @@ function NoteView() {
       ? "Last updated by system"
       : null;
 
-  return <div className="mx-auto w-full max-w-6xl space-y-8">
-    <NoteEditor
-      key={noteId}
-      title={title}
-      content={content}
-      saveState={saveState}
-      onTitleChange={setTitle}
-      onContentChange={setContent}
-      updatedMeta={updatedMeta}
-      staleNotice={isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
-      actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
-    />
-
-    <section className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Activity</h2>
-          <p className="text-xs text-slate-500">Recent read-only note events.</p>
-        </div>
-      </div>
-
-      {activity.isLoading ? <p className="text-sm text-slate-500">Loading activity...</p> : null}
-      {activity.error ? <p className="text-sm text-rose-600 dark:text-rose-400">Unable to load activity.</p> : null}
-      {!activity.isLoading && !activity.error && (activity.data?.events.length ?? 0) === 0 ? <p className="text-sm text-slate-500">No activity yet.</p> : null}
-
-      {(activity.data?.events ?? []).length > 0 ? <ul className="space-y-3">
-        {activity.data?.events.map((event) => <li key={event.id} className="rounded-md border border-slate-200 px-3 py-2 dark:border-slate-800">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-            <span className="font-medium">{event.summary}</span>
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-slate-600 dark:bg-slate-900 dark:text-slate-300">{event.eventType}</span>
-            <span className="text-xs text-slate-500">{event.actorType}{event.actorId ? ` · ${event.actorId}` : ""}</span>
-          </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-            <span>{new Date(event.createdAt).toLocaleString()}</span>
-            {event.beforeHash || event.afterHash ? <span>hash {event.beforeHash?.slice(0, 8) ?? "-"} → {event.afterHash?.slice(0, 8) ?? "-"}</span> : null}
-          </div>
-        </li>)}
-      </ul> : null}
-    </section>
-  </div>;
+  return <NoteEditor
+    key={noteId}
+    title={title}
+    content={content}
+    saveState={saveState}
+    onTitleChange={setTitle}
+    onContentChange={setContent}
+    updatedMeta={updatedMeta}
+    staleNotice={isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
+    actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
+  />;
 }
 
 export const noteRoute = createRoute({ getParentRoute: () => rootRoute, path: "/notes/$noteId", component: NoteView });

@@ -9,3 +9,4 @@ Reusable implementation notes for editor and harness features.
 - [Agent Thread Notes](./agent-thread-notes.md)
 - [CodeMirror AI Change Highlights](./codemirror-ai-highlights.md)
 - [CodeMirror Comments and Threads](./codemirror-comments.md)
+- [Attachments and Deployment Storage](./attachments-and-deployment-storage.md)

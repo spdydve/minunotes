@@ -132,7 +132,7 @@ Goal: expose the event stream without building full version restore/diff tooling
 - [x] Add simple note activity UI.
 - [x] Keep it read-only.
 
-## Active Phase — Line-Aware Harness Search / Reads
+## Completed Phase — Line-Aware Harness Search / Reads
 Goal: add grep-like niceties for agents/scripts without recreating grep or replacing full-note reads.
 
 ### Current session scope
@@ -153,6 +153,79 @@ Goal: add grep-like niceties for agents/scripts without recreating grep or repla
 - [x] Enforce API key read permissions.
 - [x] Add tests for line helpers.
 - [x] Keep this API-shaped, not grep-compatible.
+
+## Active Phase — API Hardening + Release Readiness
+Goal: add a small MVP-safe protection pass before production deployment and capture the remaining release tasks.
+
+### Why this next
+Core MVP feature work is effectively in place. The main remaining risk is operational hardening around public API access and release process gaps.
+
+### Current session scope
+Keep this pass small and deployment-focused:
+- tighten API CORS policy for production
+- add lightweight rate limiting for sensitive routes
+- add request body size limits for create/edit/update routes
+- add minimal API-safe security headers
+- verify consistent unauthorized/forbidden behavior where needed
+- create a release readiness checklist after the protection work lands
+- align config/auth handling a bit more closely with munobrief where it improves safety and clarity
+- keep this limited to env validation and explicit config derivation, not a larger auth rewrite
+
+### Files to modify/create
+- `plan.md`
+- `sst.config.ts`
+- `src/api/index.ts`
+- `src/api/lib/auth.ts`
+- `src/api/lib/env.ts` — new env/config parsing helper.
+- `src/api/middleware/authentication.ts`
+- `src/api/routes/harness.ts`
+- `src/api/routes/notes.ts`
+- `src/api/routes/folders.ts`
+- `src/api/routes/api-keys.ts`
+- `src/api/middleware/rate-limit.ts` — new lightweight limiter middleware.
+- `src/api/middleware/request-limits.ts` — new request size guard middleware.
+- `src/api/middleware/security-headers.ts` — new minimal API-safe headers middleware.
+- `tests/api-access.test.ts`
+- `tests/env.test.ts` — env/config helper coverage.
+- `tests/harness.test.ts`
+- additional tests as needed
+
+### Checklist
+- [x] Replace wildcard CORS with env-driven allowed origin handling.
+- [x] Keep local development origins working.
+- [x] Add lightweight rate limiting for `/api/auth/*`.
+- [x] Add lightweight rate limiting for `/api/api-keys/*`.
+- [x] Add lightweight rate limiting for `/api/harness/*`.
+- [x] Add request body size limits for note/folder/API key write endpoints.
+- [x] Add minimal API-safe security headers.
+- [x] Verify unauthorized / forbidden responses remain consistent.
+- [x] Add or update tests for the protection middleware.
+- [x] Add a short release readiness checklist section to this plan.
+- [x] Add a shared env/config helper for API/auth settings.
+- [x] Centralize allowed-origin parsing.
+- [x] Derive local/stage URL defaults more explicitly in SST config.
+- [x] Add tests for env/config parsing.
+
+### Verification
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm test` passes.
+- [x] `pnpm build` passes.
+- [ ] Manual smoke test for auth, notes CRUD, folder CRUD, API key flows, and harness reads/edits.
+- [ ] Manual CORS check for allowed and disallowed origins.
+
+### Release readiness checklist
+- [ ] Set production values for `FRONTEND_URL`, `BETTER_AUTH_URL`, `API_ALLOWED_ORIGINS`, `BETTER_AUTH_SECRET`, `LIBSQL_URL`, and `LIBSQL_AUTH_TOKEN`.
+- [ ] Set `COOKIE_DOMAIN` if auth cookies need to work across subdomains.
+- [ ] Run migrations against the production database.
+- [ ] Verify sign in, sign out, and session persistence in production-like env.
+- [ ] Verify note create/edit/move/delete flows.
+- [ ] Verify folder create/rename/delete flows.
+- [ ] Verify API key create/edit/revoke flows.
+- [ ] Verify harness reads and edits with a scoped API key.
+- [ ] Verify CORS for allowed and blocked origins.
+- [ ] Confirm monitoring/log capture for API errors.
+- [ ] Confirm database backup / restore plan.
+- [ ] Deploy to staging before production.
 
 ## Deferred
 Do not implement these until explicitly planned:

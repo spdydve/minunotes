@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { generateApiKey, getApiKeyFromHeaders, hashApiKey, parseApiKey, verifyApiKey } from "../src/api/lib/api-keys";
+import { consumeRateLimit, getClientAddress, resetRateLimitStore } from "../src/api/middleware/rate-limit";
+import { isRequestBodyTooLarge } from "../src/api/middleware/request-limits";
 
 describe("API key generation and parsing", () => {
   it("generates ntak keys with uid and secret parts", () => {
@@ -60,5 +62,46 @@ describe("API key header extraction", () => {
 
   it("returns null when neither header is present", () => {
     expect(getApiKeyFromHeaders(new Headers())).toBeNull();
+  });
+});
+
+describe("rate limiting", () => {
+  beforeEach(() => resetRateLimitStore());
+
+  it("uses forwarded client address when present", () => {
+    const headers = new Headers({ "x-forwarded-for": "203.0.113.1, 10.0.0.2" });
+    expect(getClientAddress(headers)).toBe("203.0.113.1");
+  });
+
+  it("allows requests until the limit is exceeded", () => {
+    const first = consumeRateLimit("auth:203.0.113.1", { windowMs: 60_000, max: 2 }, 1_000);
+    const second = consumeRateLimit("auth:203.0.113.1", { windowMs: 60_000, max: 2 }, 2_000);
+    const third = consumeRateLimit("auth:203.0.113.1", { windowMs: 60_000, max: 2 }, 3_000);
+
+    expect(first.allowed).toBe(true);
+    expect(second.allowed).toBe(true);
+    expect(third.allowed).toBe(false);
+    expect(third.remaining).toBe(0);
+  });
+
+  it("resets after the rate limit window", () => {
+    consumeRateLimit("harness:203.0.113.1", { windowMs: 1_000, max: 1 }, 1_000);
+    const next = consumeRateLimit("harness:203.0.113.1", { windowMs: 1_000, max: 1 }, 2_001);
+
+    expect(next.allowed).toBe(true);
+  });
+});
+
+describe("request size limits", () => {
+  it("rejects requests above the configured content length", () => {
+    expect(isRequestBodyTooLarge(300_000, 256 * 1024)).toBe(true);
+  });
+
+  it("rejects requests above the measured body size", () => {
+    expect(isRequestBodyTooLarge(null, 10, 11)).toBe(true);
+  });
+
+  it("allows requests within the configured limit", () => {
+    expect(isRequestBodyTooLarge(512, 1024, 512)).toBe(false);
   });
 });

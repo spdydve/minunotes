@@ -2,10 +2,9 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins";
 import { db } from "../db/client";
+import { getApiRuntimeConfig } from "./env";
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || `${FRONTEND_URL}/api/auth`;
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN;
+const { frontendUrl, betterAuthUrl, allowedOrigins, cookieDomain } = getApiRuntimeConfig();
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "sqlite" }),
@@ -25,17 +24,17 @@ export const auth = betterAuth({
       strategy: "compact",
     },
   },
-  baseURL: BETTER_AUTH_URL,
+  baseURL: betterAuthUrl,
   advanced: {
     crossSubDomainCookies: {
-      enabled: Boolean(COOKIE_DOMAIN),
+      enabled: Boolean(cookieDomain),
     },
     defaultCookieAttributes: {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      domain: COOKIE_DOMAIN,
+      domain: cookieDomain,
       path: "/",
     },
   },
-  trustedOrigins: [FRONTEND_URL, "http://localhost:5173", BETTER_AUTH_URL].filter(Boolean),
+  trustedOrigins: Array.from(new Set([...allowedOrigins, frontendUrl, betterAuthUrl].filter(Boolean))),
 });
