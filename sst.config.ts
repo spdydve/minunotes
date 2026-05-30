@@ -105,6 +105,7 @@ export default $config({
       domain: !isLocal && stageDomains
         ? {
             name: stageDomains.api,
+            dns: false,
             cert: requireCustomDomainCert("API_CERT_ARN", env.API_CERT_ARN),
           }
         : undefined,
@@ -175,6 +176,7 @@ export default $config({
       domain: !isLocal && stageDomains
         ? {
             name: stageDomains.web,
+            dns: false,
             cert: requireCustomDomainCert("WEB_CERT_ARN", env.WEB_CERT_ARN),
           }
         : undefined,
