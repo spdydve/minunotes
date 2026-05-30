@@ -12,6 +12,14 @@ describe("API key generation and parsing", () => {
     expect(parseApiKey(key)).toEqual(expect.objectContaining({ prefix: "ntak", uid }));
   });
 
+  it("parses base64url keys with underscores or dashes in uid and secret", () => {
+    expect(parseApiKey("ntak_ab_cd-ef_secret_with_under-scores")).toEqual({
+      prefix: "ntak",
+      uid: "ab_cd-ef",
+      secret: "secret_with_under-scores",
+    });
+  });
+
   it("rejects malformed keys", () => {
     expect(parseApiKey("notes_bad")).toBeNull();
     expect(parseApiKey("ntak_onlyuid")).toBeNull();

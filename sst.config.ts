@@ -18,6 +18,40 @@ export default $config({
   async run() {
     const { getStageUrls, parseAllowedOrigins } =
       await import("./src/api/lib/env");
+    const { existsSync, readFileSync } = await import("node:fs");
+
+    const loadEnvFile = (path: string) => {
+      if (!existsSync(path)) return {} as Record<string, string>;
+      return Object.fromEntries(
+        readFileSync(path, "utf8")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line && !line.startsWith("#") && line.includes("="))
+          .map((line) => {
+            const index = line.indexOf("=");
+            const key = line.slice(0, index).trim();
+            const value = line
+              .slice(index + 1)
+              .trim()
+              .replace(/^['\"]|['\"]$/g, "");
+            return [key, value];
+          }),
+      );
+    };
+
+    const env = {
+      ...loadEnvFile(".env"),
+      ...loadEnvFile(`.env.${process.env.ENVIRONMENT}`),
+      ...process.env,
+    };
+
+    const requireCustomDomainCert = (name: string, value?: string) => {
+      if (value?.trim()) return value;
+      throw new Error(
+        `${name} is required for ${$app.stage} custom domains. Set it in .env.${env.ENVIRONMENT} or export it before deploy.`,
+      );
+    };
+
     const stage = $app.stage;
     const isProduction = stage === "production";
     const isDev = stage === "dev";
@@ -39,24 +73,24 @@ export default $config({
       : domains[stage as keyof typeof domains];
 
     const { frontendUrl, apiUrl, betterAuthUrl } = getStageUrls($app.stage, {
-      ...process.env,
+      ...env,
       FRONTEND_URL:
-        process.env.FRONTEND_URL ??
+        env.FRONTEND_URL ??
         (stageDomains ? `https://${stageDomains.web}` : undefined),
       API_URL:
-        process.env.API_URL ??
+        env.API_URL ??
         (stageDomains ? `https://${stageDomains.api}` : undefined),
       BETTER_AUTH_URL:
-        process.env.BETTER_AUTH_URL ??
+        env.BETTER_AUTH_URL ??
         (stageDomains ? `https://${stageDomains.api}/api/auth` : undefined),
     });
     const allowOrigins = parseAllowedOrigins(
-      process.env.API_ALLOWED_ORIGINS,
+      env.API_ALLOWED_ORIGINS,
       frontendUrl,
     );
 
     const attachmentStorageDriver =
-      process.env.ATTACHMENT_STORAGE_DRIVER ?? (isLocal ? "filesystem" : "s3");
+      env.ATTACHMENT_STORAGE_DRIVER ?? (isLocal ? "filesystem" : "s3");
     const attachmentsBucket = new sst.aws.Bucket("Attachments", {
       cors: {
         allowOrigins,
@@ -71,7 +105,7 @@ export default $config({
       domain: !isLocal && stageDomains
         ? {
             name: stageDomains.api,
-            cert: process.env.API_CERT_ARN,
+            cert: requireCustomDomainCert("API_CERT_ARN", env.API_CERT_ARN),
           }
         : undefined,
       cors: {
@@ -101,35 +135,35 @@ export default $config({
         },
       ],
       environment: {
-        TURSO_DB_URL: process.env.TURSO_DB_URL ?? process.env.LIBSQL_URL ?? "file:local.db",
-        TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN ?? process.env.LIBSQL_AUTH_TOKEN ?? "",
+        TURSO_DB_URL: env.TURSO_DB_URL ?? env.LIBSQL_URL ?? "file:local.db",
+        TURSO_AUTH_TOKEN: env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? "",
         BETTER_AUTH_SECRET:
-          process.env.BETTER_AUTH_SECRET ?? "dev-secret-change-me",
+          env.BETTER_AUTH_SECRET ?? "dev-secret-change-me",
         BETTER_AUTH_URL: betterAuthUrl,
         FRONTEND_URL: frontendUrl,
         API_URL: apiUrl,
         API_ALLOWED_ORIGINS: allowOrigins.join(","),
         COOKIE_DOMAIN:
-          process.env.COOKIE_DOMAIN ??
+          env.COOKIE_DOMAIN ??
           (stageDomains
             ? `.${stageDomains.web.split(".").slice(-3).join(".")}`
             : ""),
-        ALLOWED_LOGIN_EMAILS: process.env.ALLOWED_LOGIN_EMAILS ?? "",
-        SES_FROM_EMAIL: process.env.SES_FROM_EMAIL ?? "",
+        ALLOWED_LOGIN_EMAILS: env.ALLOWED_LOGIN_EMAILS ?? "",
+        SES_FROM_EMAIL: env.SES_FROM_EMAIL ?? "",
         SES_REGION:
-          process.env.SES_REGION ?? process.env.AWS_REGION ?? "us-east-1",
+          env.SES_REGION ?? env.AWS_REGION ?? "us-east-1",
         ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
         ATTACHMENT_STORAGE_PATH:
-          process.env.ATTACHMENT_STORAGE_PATH ?? ".notes-attachments",
+          env.ATTACHMENT_STORAGE_PATH ?? ".notes-attachments",
         ATTACHMENT_PUBLIC_BASE_URL:
-          process.env.ATTACHMENT_PUBLIC_BASE_URL ?? "",
+          env.ATTACHMENT_PUBLIC_BASE_URL ?? "",
         ATTACHMENT_BUCKET:
-          process.env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
+          env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
         ATTACHMENT_REGION:
-          process.env.ATTACHMENT_REGION ?? process.env.AWS_REGION ?? "",
-        ATTACHMENT_ENDPOINT: process.env.ATTACHMENT_ENDPOINT ?? "",
+          env.ATTACHMENT_REGION ?? env.AWS_REGION ?? "",
+        ATTACHMENT_ENDPOINT: env.ATTACHMENT_ENDPOINT ?? "",
         ATTACHMENT_FORCE_PATH_STYLE:
-          process.env.ATTACHMENT_FORCE_PATH_STYLE ?? "false",
+          env.ATTACHMENT_FORCE_PATH_STYLE ?? "false",
       },
     });
 
@@ -141,7 +175,7 @@ export default $config({
       domain: !isLocal && stageDomains
         ? {
             name: stageDomains.web,
-            cert: process.env.WEB_CERT_ARN,
+            cert: requireCustomDomainCert("WEB_CERT_ARN", env.WEB_CERT_ARN),
           }
         : undefined,
       dev: {

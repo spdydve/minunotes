@@ -14,13 +14,15 @@ export function generateApiKey() {
 }
 
 export function parseApiKey(key: string) {
-  const parts = key.split("_");
-  if (parts.length < 3) return null;
-  const prefix = parts[0];
-  const uid = parts[1];
-  const secret = parts.slice(2).join("_");
-  if (prefix !== API_KEY_PREFIX || !uid || !secret) return null;
-  return { prefix, uid, secret };
+  const keyPrefix = `${API_KEY_PREFIX}_`;
+  if (!key.startsWith(keyPrefix)) return null;
+
+  const uid = key.slice(keyPrefix.length, keyPrefix.length + 8);
+  const separator = key[keyPrefix.length + 8];
+  const secret = key.slice(keyPrefix.length + 9);
+
+  if (uid.length !== 8 || separator !== "_" || !secret) return null;
+  return { prefix: API_KEY_PREFIX, uid, secret };
 }
 
 export function hashApiKey(key: string, salt = randomToken(16)) {
