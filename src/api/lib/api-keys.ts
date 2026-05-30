@@ -2,14 +2,21 @@ import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const API_KEY_PREFIX = "ntak";
 const HASH_LENGTH = 64;
+const TOKEN_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const API_KEY_UID_LENGTH = 8;
+const API_KEY_SECRET_LENGTH = 32;
+const TOKEN_PATTERN = /^[A-Za-z0-9]+$/;
 
-function randomToken(bytes: number) {
-  return randomBytes(bytes).toString("base64url");
+function randomToken(length: number) {
+  const bytes = randomBytes(length);
+  let token = "";
+  for (const byte of bytes) token += TOKEN_ALPHABET[byte % TOKEN_ALPHABET.length];
+  return token;
 }
 
 export function generateApiKey() {
-  const uid = randomToken(6).slice(0, 8);
-  const secret = randomToken(24);
+  const uid = randomToken(API_KEY_UID_LENGTH);
+  const secret = randomToken(API_KEY_SECRET_LENGTH);
   return { key: `${API_KEY_PREFIX}_${uid}_${secret}`, uid };
 }
 
@@ -17,11 +24,17 @@ export function parseApiKey(key: string) {
   const keyPrefix = `${API_KEY_PREFIX}_`;
   if (!key.startsWith(keyPrefix)) return null;
 
-  const uid = key.slice(keyPrefix.length, keyPrefix.length + 8);
-  const separator = key[keyPrefix.length + 8];
-  const secret = key.slice(keyPrefix.length + 9);
+  const uid = key.slice(keyPrefix.length, keyPrefix.length + API_KEY_UID_LENGTH);
+  const separator = key[keyPrefix.length + API_KEY_UID_LENGTH];
+  const secret = key.slice(keyPrefix.length + API_KEY_UID_LENGTH + 1);
 
-  if (uid.length !== 8 || separator !== "_" || !secret) return null;
+  if (
+    uid.length !== API_KEY_UID_LENGTH ||
+    separator !== "_" ||
+    secret.length !== API_KEY_SECRET_LENGTH ||
+    !TOKEN_PATTERN.test(uid) ||
+    !TOKEN_PATTERN.test(secret)
+  ) return null;
   return { prefix: API_KEY_PREFIX, uid, secret };
 }
 
