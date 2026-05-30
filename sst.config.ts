@@ -26,7 +26,7 @@ export default $config({
     const domains = {
       dev: {
         web: "dev-notes.dpklabs.com",
-        api: "api.dev-notes.dpklabs.com",
+        api: "api-dev-notes.dpklabs.com",
       },
       production: {
         web: "notes.dpklabs.com",
