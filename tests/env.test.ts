@@ -48,6 +48,13 @@ describe("getApiRuntimeConfig", () => {
       FRONTEND_URL: "https://notes.example.com/",
       API_ALLOWED_ORIGINS: "https://notes.example.com, https://admin.example.com",
       COOKIE_DOMAIN: ".example.com",
+      ATTACHMENT_STORAGE_DRIVER: "filesystem",
+      ATTACHMENT_STORAGE_PATH: "/data/attachments",
+      ATTACHMENT_PUBLIC_BASE_URL: "https://images.example.com/",
+      ATTACHMENT_BUCKET: "notes-attachments",
+      ATTACHMENT_REGION: "us-east-1",
+      ATTACHMENT_ENDPOINT: "https://s3.example.com",
+      ATTACHMENT_FORCE_PATH_STYLE: "true",
     })).toEqual({
       frontendUrl: "https://notes.example.com",
       betterAuthUrl: "https://notes.example.com/api/auth",
@@ -57,6 +64,22 @@ describe("getApiRuntimeConfig", () => {
         defaults.localFrontendUrl,
       ],
       cookieDomain: ".example.com",
+      attachmentStorage: {
+        driver: "filesystem",
+        filesystemPath: "/data/attachments",
+        publicBaseUrl: "https://images.example.com",
+        bucket: "notes-attachments",
+        region: "us-east-1",
+        endpoint: "https://s3.example.com",
+        forcePathStyle: true,
+      },
     });
+  });
+
+  it("rejects unknown attachment storage drivers", () => {
+    expect(() => getApiRuntimeConfig({
+      ...process.env,
+      ATTACHMENT_STORAGE_DRIVER: "unknown",
+    })).toThrow("Invalid ATTACHMENT_STORAGE_DRIVER");
   });
 });

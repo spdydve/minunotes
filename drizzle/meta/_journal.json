@@ -50,6 +50,20 @@
       "when": 1779908861929,
       "tag": "0006_lush_gravity",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1780067775517,
+      "tag": "0007_clumsy_multiple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1780150896806,
+      "tag": "0008_organic_speed",
+      "breakpoints": true
     }
   ]
 }

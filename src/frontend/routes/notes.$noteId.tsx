@@ -18,6 +18,7 @@ function NoteView() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saveError, setSaveError] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
   const hydratedNoteId = useRef<string | null>(null);
   const lastSaved = useRef({ title: "", content: "" });
@@ -31,6 +32,7 @@ function NoteView() {
     lastSaved.current = { title: data.note.title, content: data.note.content };
     lastKnownHash.current = data.contentHash;
     setSaveError(false);
+    setImageUploadError(null);
     setIsStale(false);
   }, [data, noteId]);
 
@@ -78,6 +80,15 @@ function NoteView() {
   const saveNow = () => {
     if (!isDirty || save.isPending || isStale) return;
     save.mutate({ title, content });
+  };
+
+  const uploadImage = async (file: File) => {
+    setImageUploadError(null);
+    const result = await api.uploadNoteImage(noteId, file).catch((error) => {
+      setImageUploadError(error instanceof Error ? error.message : "Image upload failed");
+      throw error;
+    });
+    setContent((current) => `${current}${current.trim() ? "\n\n" : ""}${result.markdown}`);
   };
 
   const reloadLatest = async () => {
@@ -153,7 +164,11 @@ function NoteView() {
     onTitleChange={setTitle}
     onContentChange={setContent}
     updatedMeta={updatedMeta}
-    staleNotice={isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
+    staleNotice={<>
+      {isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
+      {imageUploadError ? <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">{imageUploadError}</div> : null}
+    </>}
+    onImageUpload={uploadImage}
     actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
   />;
 }

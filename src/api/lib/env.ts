@@ -39,6 +39,14 @@ export function getStageUrls(stage: StageName, env = process.env): StageUrls {
   return { frontendUrl, betterAuthUrl };
 }
 
+export type AttachmentStorageDriver = "filesystem" | "s3" | "s3-compatible" | "uploadthing" | "cloudinary" | "imgix";
+
+function parseAttachmentStorageDriver(value?: string): AttachmentStorageDriver {
+  const driver = (value?.trim() || "filesystem") as AttachmentStorageDriver;
+  if (["filesystem", "s3", "s3-compatible", "uploadthing", "cloudinary", "imgix"].includes(driver)) return driver;
+  throw new Error(`Invalid ATTACHMENT_STORAGE_DRIVER: ${value}`);
+}
+
 export function getApiRuntimeConfig(env = process.env) {
   const frontendUrl = ensureUrl(env.FRONTEND_URL ?? LOCAL_FRONTEND_URL, "FRONTEND_URL");
   const betterAuthUrl = ensureUrl(env.BETTER_AUTH_URL ?? `${frontendUrl}/api/auth`, "BETTER_AUTH_URL");
@@ -49,6 +57,15 @@ export function getApiRuntimeConfig(env = process.env) {
     betterAuthUrl,
     allowedOrigins,
     cookieDomain: env.COOKIE_DOMAIN?.trim() || undefined,
+    attachmentStorage: {
+      driver: parseAttachmentStorageDriver(env.ATTACHMENT_STORAGE_DRIVER),
+      filesystemPath: env.ATTACHMENT_STORAGE_PATH?.trim() || ".notes-attachments",
+      publicBaseUrl: env.ATTACHMENT_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") || undefined,
+      bucket: env.ATTACHMENT_BUCKET?.trim() || undefined,
+      region: env.ATTACHMENT_REGION?.trim() || env.AWS_REGION?.trim() || undefined,
+      endpoint: env.ATTACHMENT_ENDPOINT?.trim() || undefined,
+      forcePathStyle: env.ATTACHMENT_FORCE_PATH_STYLE === "true",
+    },
   };
 }
 
