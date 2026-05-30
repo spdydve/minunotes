@@ -214,7 +214,7 @@ Keep this pass small and deployment-focused:
 - [ ] Manual CORS check for allowed and disallowed origins.
 
 ### Release readiness checklist
-- [ ] Set production values for `FRONTEND_URL`, `BETTER_AUTH_URL`, `API_ALLOWED_ORIGINS`, `BETTER_AUTH_SECRET`, `LIBSQL_URL`, and `LIBSQL_AUTH_TOKEN`.
+- [ ] Set production values for `FRONTEND_URL`, `BETTER_AUTH_URL`, `API_ALLOWED_ORIGINS`, `BETTER_AUTH_SECRET`, `TURSO_DB_URL`, and `LIBSQL_AUTH_TOKEN`.
 - [ ] Set `COOKIE_DOMAIN` if auth cookies need to work across subdomains.
 - [ ] Run migrations against the production database.
 - [ ] Verify sign in, sign out, and session persistence in production-like env.

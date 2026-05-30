@@ -22,21 +22,25 @@ describe("getStageUrls", () => {
     expect(getStageUrls("production", {
       ...process.env,
       FRONTEND_URL: "https://notes.example.com",
-      BETTER_AUTH_URL: "https://notes.example.com/api/auth",
+      API_URL: "https://api.notes.example.com",
+      BETTER_AUTH_URL: "https://api.notes.example.com/api/auth",
     })).toEqual({
       frontendUrl: "https://notes.example.com",
-      betterAuthUrl: "https://notes.example.com/api/auth",
+      apiUrl: "https://api.notes.example.com",
+      betterAuthUrl: "https://api.notes.example.com/api/auth",
     });
   });
 
-  it("derives the auth url from the frontend url when omitted", () => {
-    expect(getStageUrls("local", {
+  it("derives the auth url from the api url when omitted", () => {
+    expect(getStageUrls("production", {
       ...process.env,
       FRONTEND_URL: "https://notes.example.com",
+      API_URL: "https://api.notes.example.com",
       BETTER_AUTH_URL: undefined,
     })).toEqual({
       frontendUrl: "https://notes.example.com",
-      betterAuthUrl: "https://notes.example.com/api/auth",
+      apiUrl: "https://api.notes.example.com",
+      betterAuthUrl: "https://api.notes.example.com/api/auth",
     });
   });
 });
@@ -46,8 +50,12 @@ describe("getApiRuntimeConfig", () => {
     expect(getApiRuntimeConfig({
       ...process.env,
       FRONTEND_URL: "https://notes.example.com/",
+      API_URL: "https://api.notes.example.com/",
       API_ALLOWED_ORIGINS: "https://notes.example.com, https://admin.example.com",
       COOKIE_DOMAIN: ".example.com",
+      ALLOWED_LOGIN_EMAILS: "owner@example.com, admin@example.com",
+      SES_FROM_EMAIL: "MinuNotes <notes@example.com>",
+      SES_REGION: "us-west-2",
       ATTACHMENT_STORAGE_DRIVER: "filesystem",
       ATTACHMENT_STORAGE_PATH: "/data/attachments",
       ATTACHMENT_PUBLIC_BASE_URL: "https://images.example.com/",
@@ -57,13 +65,19 @@ describe("getApiRuntimeConfig", () => {
       ATTACHMENT_FORCE_PATH_STYLE: "true",
     })).toEqual({
       frontendUrl: "https://notes.example.com",
-      betterAuthUrl: "https://notes.example.com/api/auth",
+      apiUrl: "https://api.notes.example.com",
+      betterAuthUrl: "https://api.notes.example.com/api/auth",
       allowedOrigins: [
         "https://notes.example.com",
         "https://admin.example.com",
         defaults.localFrontendUrl,
       ],
       cookieDomain: ".example.com",
+      allowedLoginEmails: ["owner@example.com", "admin@example.com"],
+      ses: {
+        fromEmail: "MinuNotes <notes@example.com>",
+        region: "us-west-2",
+      },
       attachmentStorage: {
         driver: "filesystem",
         filesystemPath: "/data/attachments",

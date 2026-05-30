@@ -12,6 +12,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
+    credentials: "include",
     headers: { "content-type": "application/json", ...init?.headers },
   });
 
@@ -44,7 +45,7 @@ export type SectionResponse = { noteId: string; contentHash: string; section: Do
 export type SearchNote = Note & { folderTitle: string };
 
 async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, { method: "POST", body: formData });
+  const res = await fetch(`${API_URL}${path}`, { method: "POST", body: formData, credentials: "include" });
   const contentType = res.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? await res.json() : null;
 
