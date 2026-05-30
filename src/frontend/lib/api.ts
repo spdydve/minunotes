@@ -31,6 +31,9 @@ export type Note = { id: string; folderId: string; title: string; content: strin
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
+export type Attachment = { id: string; userId: string; noteId: string; folderId: string; provider: string; filename: string; mimeType: string; size: number; contentHash: string; storageKey: string; status: "pending" | "ready"; createdAt: string; updatedAt: string };
+export type UploadImageResponse = { attachment: Attachment; markdownUrl: string; markdown: string };
+export type SignedImageUpload = UploadImageResponse & { signedUrl: string; method: "PUT"; headers: { "content-type": string } };
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type DocumentEdit =
   | { type: "append"; text: string }
@@ -39,6 +42,17 @@ export type DocumentEdit =
 export type DocumentSection = { id: string; heading: string; level: number; from: number; to: number; contentFrom: number; contentTo: number };
 export type SectionResponse = { noteId: string; contentHash: string; section: DocumentSection & { markdown: string; content: string } };
 export type SearchNote = Note & { folderTitle: string };
+
+async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { method: "POST", body: formData });
+  const contentType = res.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json") ? await res.json() : null;
+
+  if (!res.ok) throw new ApiError(data?.error ?? "Request failed", res.status);
+  if (!data) throw new Error("API did not return JSON. Check VITE_API_URL.");
+
+  return data as T;
+}
 
 export const api = {
   apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
@@ -60,5 +74,29 @@ export const api = {
   saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
   searchNotes: (q: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}`),
+  uploadNoteImage: async (noteId: string, file: File) => {
+    try {
+      const { uploads } = await request<{ uploads: SignedImageUpload[] }>(`/attachments/notes/${noteId}/image-uploads`, {
+        method: "POST",
+        body: JSON.stringify({ files: [{ filename: file.name, mimeType: file.type, size: file.size }] }),
+      });
+      const upload = uploads[0];
+      if (!upload) throw new Error("API did not return an upload URL");
+
+      const uploadResponse = await fetch(upload.signedUrl, {
+        method: upload.method,
+        headers: upload.headers,
+        body: file,
+      });
+      if (!uploadResponse.ok) throw new ApiError("Image upload failed", uploadResponse.status);
+
+      return request<UploadImageResponse>(`/attachments/${upload.attachment.id}/complete`, { method: "POST", body: JSON.stringify({}) });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 400) throw error;
+      const formData = new FormData();
+      formData.set("image", file);
+      return uploadRequest<UploadImageResponse>(`/attachments/notes/${noteId}/images`, formData);
+    }
+  },
   deleteNote: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}`, { method: "DELETE" }),
 };

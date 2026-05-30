@@ -14,6 +14,10 @@ declare module "sst" {
       "type": "sst.aws.ApiGatewayV2"
       "url": string
     }
+    "Attachments": {
+      "name": string
+      "type": "sst.aws.Bucket"
+    }
     "Web": {
       "type": "sst.aws.StaticSite"
       "url": string

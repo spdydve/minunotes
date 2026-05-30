@@ -227,6 +227,87 @@ Keep this pass small and deployment-focused:
 - [ ] Confirm database backup / restore plan.
 - [ ] Deploy to staging before production.
 
+## Active Phase — Image Attachments / Object Storage
+Goal: add MVP image upload handling while keeping markdown URL-first and storage backend swappable.
+
+### Current session scope
+Keep this pass focused on app-owned image uploads and rendering:
+- store uploaded image bytes outside `notes.content`
+- store normal markdown URLs for app-owned images, e.g. `/api/attachments/:attachmentId/content`
+- preserve external image URLs in markdown
+- add a generic object storage interface with a local filesystem implementation first
+- leave SST/S3 wiring as the next backend once the seam is proven
+
+### Proposed data model
+- `attachments`
+  - `id`
+  - `user_id`
+  - `note_id`
+  - `folder_id`
+  - `filename`
+  - `mime_type`
+  - `size`
+  - `content_hash`
+  - `storage_key`
+  - `created_at`
+  - `updated_at`
+
+### Files to modify/create
+- `plan.md`
+- `src/api/db/schema.ts`
+- `drizzle/*`
+- `src/api/lib/env.ts`
+- `src/api/storage/object-storage.ts` — new storage adapter interface.
+- `src/api/storage/filesystem-storage.ts` — new local/Docker-compatible adapter.
+- `src/api/storage/index.ts` — new storage factory.
+- `src/api/routes/attachments.ts` — new upload/metadata/content routes.
+- `src/api/index.ts`
+- `src/frontend/lib/api.ts`
+- `src/frontend/components/note-editor.tsx`
+- `src/frontend/routes/notes.$noteId.tsx`
+- `tests/attachments.test.ts` — new API/storage route coverage.
+- `tests/env.test.ts`
+- `sst.config.ts`
+- `src/api/storage/s3-storage.ts` — new S3/S3-compatible adapter.
+- additional tests as needed
+
+### Checklist
+- [x] Add `attachments` schema and relations.
+- [x] Add migration.
+- [x] Add env/config for attachment storage driver and filesystem path.
+- [x] Add generic object storage interface.
+- [x] Add filesystem object storage adapter for local/Docker path.
+- [x] Add authenticated upload endpoint for note images.
+- [x] Validate upload content type and size.
+- [x] Create attachment metadata records after successful storage writes.
+- [x] Return stable markdown URL for app-owned images.
+- [x] Add authenticated content/download route for app-owned images.
+- [x] Enforce note/folder ownership on upload and download.
+- [x] Add frontend upload action in the note editor.
+- [x] Insert returned markdown image URL into `notes.content`.
+- [x] Preserve external markdown image URLs without rewriting.
+- [x] Defer S3/SST bucket implementation until the local adapter and API shape are verified.
+- [x] Add S3/S3-compatible storage adapter.
+- [x] Add SST bucket wiring for non-local deployments.
+- [x] Add S3 config env vars for bucket, region, endpoint, and path-style mode.
+- [x] Add S3 signed upload URL creation endpoint.
+- [x] Add pending/ready attachment status.
+- [x] Add signed upload complete endpoint that verifies object existence when supported.
+- [x] Update frontend upload flow to prefer signed S3 uploads and fall back to local app-proxy upload.
+- [x] Configure SST bucket CORS for signed browser uploads.
+- [x] Document local S3/S3-compatible env overrides in `.env.example`.
+
+### Verification
+- [x] `pnpm db:generate` creates the migration.
+- [x] `pnpm db:migrate` succeeds locally.
+- [x] `pnpm test` passes.
+- [x] `pnpm typecheck` passes.
+- [x] `pnpm build` passes.
+- [x] `pnpm db:migrate` succeeds after signed upload status migration.
+- [ ] Manual upload smoke test inserts `![alt](/api/attachments/:id/content)` into markdown.
+- [ ] Manual note reload confirms app-owned image URLs render.
+- [ ] Manual external image URL check confirms external URLs remain unchanged.
+
 ## Deferred
 Do not implement these until explicitly planned:
 - workspaces

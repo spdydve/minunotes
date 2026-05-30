@@ -1,0 +1,1 @@
+ALTER TABLE `attachments` ADD `status` text DEFAULT 'ready' NOT NULL;

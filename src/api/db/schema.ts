@@ -105,12 +105,29 @@ export const noteEvents = sqliteTable("note_events", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("note_events_note_id_idx").on(table.noteId), index("note_events_user_id_idx").on(table.userId), index("note_events_created_at_idx").on(table.createdAt)]);
 
+export const attachments = sqliteTable("attachments", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  noteId: text("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull().default("filesystem"),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  contentHash: text("content_hash").notNull(),
+  storageKey: text("storage_key").notNull(),
+  status: text("status").notNull().default("ready"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("attachments_user_id_idx").on(table.userId), index("attachments_note_id_idx").on(table.noteId), index("attachments_folder_id_idx").on(table.folderId)]);
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   folders: many(folders),
   notes: many(notes),
   noteEvents: many(noteEvents),
+  attachments: many(attachments),
   apiKeys: many(apiKeys),
 }));
 
@@ -125,6 +142,7 @@ export const accountRelations = relations(account, ({ one }) => ({
 export const folderRelations = relations(folders, ({ many, one }) => ({
   user: one(user, { fields: [folders.userId], references: [user.id] }),
   notes: many(notes),
+  attachments: many(attachments),
 }));
 
 export const apiKeyRelations = relations(apiKeys, ({ many, one }) => ({
@@ -141,6 +159,7 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   user: one(user, { fields: [notes.userId], references: [user.id] }),
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
   events: many(noteEvents),
+  attachments: many(attachments),
 }));
 
 export const noteEventRelations = relations(noteEvents, ({ one }) => ({
@@ -148,8 +167,15 @@ export const noteEventRelations = relations(noteEvents, ({ one }) => ({
   user: one(user, { fields: [noteEvents.userId], references: [user.id] }),
 }));
 
+export const attachmentRelations = relations(attachments, ({ one }) => ({
+  user: one(user, { fields: [attachments.userId], references: [user.id] }),
+  note: one(notes, { fields: [attachments.noteId], references: [notes.id] }),
+  folder: one(folders, { fields: [attachments.folderId], references: [folders.id] }),
+}));
+
 export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
+export type Attachment = typeof attachments.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type ApiKeyFolderPermission = typeof apiKeyFolderPermissions.$inferSelect;
