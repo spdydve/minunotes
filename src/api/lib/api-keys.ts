@@ -14,7 +14,11 @@ export function generateApiKey() {
 }
 
 export function parseApiKey(key: string) {
-  const [prefix, uid, secret] = key.split("_");
+  const parts = key.split("_");
+  if (parts.length < 3) return null;
+  const prefix = parts[0];
+  const uid = parts[1];
+  const secret = parts.slice(2).join("_");
   if (prefix !== API_KEY_PREFIX || !uid || !secret) return null;
   return { prefix, uid, secret };
 }

@@ -71,7 +71,7 @@ export default $config({
       domain: !isLocal && stageDomains
         ? {
             name: stageDomains.api,
-            dns: sst.aws.dns(),
+            cert: process.env.API_CERT_ARN,
           }
         : undefined,
       cors: {
@@ -141,7 +141,7 @@ export default $config({
       domain: !isLocal && stageDomains
         ? {
             name: stageDomains.web,
-            dns: sst.aws.dns(),
+            cert: process.env.WEB_CERT_ARN,
           }
         : undefined,
       dev: {
