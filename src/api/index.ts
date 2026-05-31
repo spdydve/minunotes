@@ -73,5 +73,15 @@ app.route("/api/attachments", attachmentRoutes);
 app.route("/api/api-keys", apiKeyRoutes);
 app.route("/api/harness", harnessRoutes);
 
+app.onError((error, c) => {
+  console.error("[API ERROR]", {
+    method: c.req.method,
+    path: c.req.path,
+    message: error.message,
+    stack: error.stack,
+  });
+  return c.json({ error: "Internal Server Error" }, 500);
+});
+
 export default app;
 export const handler = handle(app);
