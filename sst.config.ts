@@ -171,7 +171,7 @@ export default $config({
     apiGateway.route("ANY /", api.arn);
     apiGateway.route("ANY /{proxy+}", api.arn);
 
-    new sst.aws.StaticSite("Web", {
+    const web = new sst.aws.StaticSite("Web", {
       path: ".",
       domain: !isLocal && stageDomains
         ? {
@@ -193,5 +193,16 @@ export default $config({
         VITE_API_PROXY_TARGET: apiGateway.url,
       },
     });
+
+    return {
+      webUrl: web.url,
+      webDnsName: stageDomains ? web.nodes.cdn!.nodes.distribution.domainName : "",
+      apiUrl: apiGateway.url,
+      apiDnsName: stageDomains
+        ? apiGateway.nodes.domainName.domainNameConfiguration.apply(
+            (configuration) => configuration.targetDomainName,
+          )
+        : "",
+    };
   },
 });
