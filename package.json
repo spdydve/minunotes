@@ -18,9 +18,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:migrate:dev": "ENVIRONMENT=development drizzle-kit migrate",
-    "db:migrate:production": "ENVIRONMENT=production drizzle-kit migrate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:migrate:dev": "ENVIRONMENT=development tsx scripts/migrate.ts",
+    "db:migrate:production": "ENVIRONMENT=production tsx scripts/migrate.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
