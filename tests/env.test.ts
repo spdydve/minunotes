@@ -15,6 +15,13 @@ describe("parseAllowedOrigins", () => {
       defaults.localFrontendUrl,
     ]);
   });
+
+  it("normalizes origins by removing paths", () => {
+    expect(parseAllowedOrigins("https://notes.example.com/api/auth", "https://notes.example.com")).toEqual([
+      "https://notes.example.com",
+      defaults.localFrontendUrl,
+    ]);
+  });
 });
 
 describe("getStageUrls", () => {

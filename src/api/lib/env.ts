@@ -25,7 +25,7 @@ export function parseAllowedOrigins(value?: string, fallback = LOCAL_FRONTEND_UR
     .map((origin) => ensureUrl(origin, "API_ALLOWED_ORIGINS"));
 
   if (!origins.includes(LOCAL_FRONTEND_URL)) origins.push(LOCAL_FRONTEND_URL);
-  return Array.from(new Set(origins));
+  return Array.from(new Set(origins.map((origin) => new URL(origin).origin)));
 }
 
 export function getStageUrls(stage: StageName, env = process.env): StageUrls {

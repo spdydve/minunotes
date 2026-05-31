@@ -61,10 +61,12 @@ export default $config({
       dev: {
         web: "dev-notes.dpklabs.com",
         api: "api-dev-notes.dpklabs.com",
+        cookieDomain: ".dpklabs.com",
       },
       production: {
         web: "notes.dpklabs.com",
         api: "api.notes.dpklabs.com",
+        cookieDomain: ".notes.dpklabs.com",
       },
     };
 
@@ -144,11 +146,7 @@ export default $config({
         FRONTEND_URL: frontendUrl,
         API_URL: apiUrl,
         API_ALLOWED_ORIGINS: allowOrigins.join(","),
-        COOKIE_DOMAIN:
-          env.COOKIE_DOMAIN ??
-          (stageDomains
-            ? `.${stageDomains.web.split(".").slice(-3).join(".")}`
-            : ""),
+        COOKIE_DOMAIN: env.COOKIE_DOMAIN ?? stageDomains?.cookieDomain ?? "",
         ALLOWED_LOGIN_EMAILS: env.ALLOWED_LOGIN_EMAILS ?? "",
         SES_FROM_EMAIL: env.SES_FROM_EMAIL ?? "",
         SES_REGION:
