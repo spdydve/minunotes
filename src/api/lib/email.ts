@@ -1,6 +1,14 @@
 import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 
 const ses = new SESv2Client({ region: process.env.SES_REGION || process.env.AWS_REGION || "us-east-1" });
+const EMAIL_ADDRESS_PATTERN = /(?:^|<)[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/;
+
+function assertValidFromEmail(from: string) {
+  if (EMAIL_ADDRESS_PATTERN.test(from)) return;
+  throw new Error(
+    `Invalid SES_FROM_EMAIL: expected an email address like "MinuNotes <auth@example.com>", received "${from}".`,
+  );
+}
 
 export async function sendEmail(input: {
   to: string;
@@ -9,6 +17,8 @@ export async function sendEmail(input: {
   html: string;
   text: string;
 }) {
+  assertValidFromEmail(input.from);
+
   const result = await ses.send(new SendEmailCommand({
     Destination: { ToAddresses: [input.to] },
     FromEmailAddress: input.from,
