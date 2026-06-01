@@ -21,6 +21,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:dev": "ENVIRONMENT=development tsx scripts/migrate.ts",
     "db:migrate:production": "ENVIRONMENT=production tsx scripts/migrate.ts",
+    "db:wipe:dev": "ENVIRONMENT=development tsx scripts/wipe-db.ts --yes",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
