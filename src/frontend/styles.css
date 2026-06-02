@@ -19,6 +19,18 @@
     --notes-muted: #a6adc8;
     --notes-blue: #89b4fa;
     --notes-code-bg: #313244;
+    --notes-button-secondary-bg: #181825;
+    --notes-button-secondary-hover: #313244;
+    --notes-button-secondary-border: #45475a;
+    --notes-button-secondary-text: #cdd6f4;
+    --notes-button-destructive-bg: #3b1f2a;
+    --notes-button-destructive-hover: #5a2732;
+    --notes-button-destructive-border: #f38ba8;
+    --notes-button-destructive-text: #f5c2e7;
+    --notes-button-destructive-soft-hover: #3b1f2a;
+    --notes-table-header-bg: var(--notes-panel-muted);
+    --notes-table-row-hover: var(--notes-hover);
+    --notes-table-row-border: color-mix(in srgb, var(--notes-border) 65%, transparent);
 }
 
 .theme-catppuccin-latte {
@@ -32,6 +44,15 @@
     --notes-muted: #6c6f85;
     --notes-blue: #1e66f5;
     --notes-code-bg: #e6e9ef;
+    --notes-button-secondary-bg: #ffffff;
+    --notes-button-secondary-hover: #e6e9ef;
+    --notes-button-secondary-border: #bcc0cc;
+    --notes-button-secondary-text: #4c4f69;
+    --notes-button-destructive-bg: #fff5f5;
+    --notes-button-destructive-hover: #ffe8e8;
+    --notes-button-destructive-border: #d20f39;
+    --notes-button-destructive-text: #a30d2d;
+    --notes-button-destructive-soft-hover: #ffe8e8;
 }
 .theme-catppuccin-frappe {
     color-scheme: dark;
@@ -44,6 +65,15 @@
     --notes-muted: #a5adce;
     --notes-blue: #8caaee;
     --notes-code-bg: #414559;
+    --notes-button-secondary-bg: #292c3c;
+    --notes-button-secondary-hover: #414559;
+    --notes-button-secondary-border: #51576d;
+    --notes-button-secondary-text: #c6d0f5;
+    --notes-button-destructive-bg: #40242e;
+    --notes-button-destructive-hover: #5a2c3a;
+    --notes-button-destructive-border: #e78284;
+    --notes-button-destructive-text: #f2d5cf;
+    --notes-button-destructive-soft-hover: #40242e;
 }
 .theme-catppuccin-macchiato {
     color-scheme: dark;
@@ -56,6 +86,15 @@
     --notes-muted: #a5adcb;
     --notes-blue: #8aadf4;
     --notes-code-bg: #363a4f;
+    --notes-button-secondary-bg: #1e2030;
+    --notes-button-secondary-hover: #363a4f;
+    --notes-button-secondary-border: #494d64;
+    --notes-button-secondary-text: #cad3f5;
+    --notes-button-destructive-bg: #3f2530;
+    --notes-button-destructive-hover: #5b2d3d;
+    --notes-button-destructive-border: #ed8796;
+    --notes-button-destructive-text: #f4dbd6;
+    --notes-button-destructive-soft-hover: #3f2530;
 }
 .theme-catppuccin-mocha {
     color-scheme: dark;
@@ -68,6 +107,15 @@
     --notes-muted: #a6adc8;
     --notes-blue: #89b4fa;
     --notes-code-bg: #313244;
+    --notes-button-secondary-bg: #181825;
+    --notes-button-secondary-hover: #313244;
+    --notes-button-secondary-border: #45475a;
+    --notes-button-secondary-text: #cdd6f4;
+    --notes-button-destructive-bg: #3b1f2a;
+    --notes-button-destructive-hover: #5a2732;
+    --notes-button-destructive-border: #f38ba8;
+    --notes-button-destructive-text: #f5c2e7;
+    --notes-button-destructive-soft-hover: #3b1f2a;
 }
 .theme-tokyo-night {
     color-scheme: dark;
@@ -80,6 +128,15 @@
     --notes-muted: #9aa5ce;
     --notes-blue: #7aa2f7;
     --notes-code-bg: #24283b;
+    --notes-button-secondary-bg: #16161e;
+    --notes-button-secondary-hover: #24283b;
+    --notes-button-secondary-border: #3b4261;
+    --notes-button-secondary-text: #c0caf5;
+    --notes-button-destructive-bg: #3a1f2b;
+    --notes-button-destructive-hover: #532536;
+    --notes-button-destructive-border: #f7768e;
+    --notes-button-destructive-text: #ffb3c0;
+    --notes-button-destructive-soft-hover: #3a1f2b;
 }
 .theme-everforest {
     color-scheme: dark;
@@ -92,6 +149,15 @@
     --notes-muted: #9da9a0;
     --notes-blue: #7fbbb3;
     --notes-code-bg: #3a464c;
+    --notes-button-secondary-bg: #232a2e;
+    --notes-button-secondary-hover: #3a464c;
+    --notes-button-secondary-border: #4f5b58;
+    --notes-button-secondary-text: #d3c6aa;
+    --notes-button-destructive-bg: #3a2727;
+    --notes-button-destructive-hover: #4d3030;
+    --notes-button-destructive-border: #e67e80;
+    --notes-button-destructive-text: #f1c0c0;
+    --notes-button-destructive-soft-hover: #3a2727;
 }
 
 body {
