@@ -360,7 +360,7 @@ Goal: safely clean up app-owned uploaded images after they are removed from note
 - [ ] Add integration tests for cleanup selection and idempotency.
 
 ### Phase 4 — Operational integration
-- [ ] Wire cleanup script into deployment/runtime schedule if needed.
+- [x] Wire cleanup script into deployment/runtime schedule if needed.
 - [x] Document local/manual cleanup command.
 - [ ] Consider admin/debug listing for orphaned attachments.
 

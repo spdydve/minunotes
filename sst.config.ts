@@ -169,6 +169,39 @@ export default $config({
     apiGateway.route("ANY /", api.arn);
     apiGateway.route("ANY /{proxy+}", api.arn);
 
+    if (!isLocal) {
+      new sst.aws.Cron("AttachmentCleanup", {
+        schedule: (env.ATTACHMENT_CLEANUP_SCHEDULE ?? "rate(1 day)") as `rate(${string})` | `cron(${string})`,
+        function: {
+          handler: "src/api/attachments/cleanup-handler.handler",
+          nodejs: {
+            install: [
+              "@aws-sdk/client-s3",
+              "@libsql/client",
+              "libsql",
+            ],
+          },
+          link: [attachmentsBucket],
+          environment: {
+            TURSO_DB_URL: env.TURSO_DB_URL ?? env.LIBSQL_URL ?? "file:local.db",
+            TURSO_AUTH_TOKEN: env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? "",
+            ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
+            ATTACHMENT_STORAGE_PATH:
+              env.ATTACHMENT_STORAGE_PATH ?? ".notes-attachments",
+            ATTACHMENT_BUCKET:
+              env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
+            ATTACHMENT_REGION:
+              env.ATTACHMENT_REGION ?? env.AWS_REGION ?? "",
+            ATTACHMENT_ENDPOINT: env.ATTACHMENT_ENDPOINT ?? "",
+            ATTACHMENT_FORCE_PATH_STYLE:
+              env.ATTACHMENT_FORCE_PATH_STYLE ?? "false",
+            ATTACHMENT_CLEANUP_GRACE_DAYS:
+              env.ATTACHMENT_CLEANUP_GRACE_DAYS ?? "30",
+          },
+        },
+      });
+    }
+
     const web = new sst.aws.StaticSite("Web", {
       path: ".",
       domain: !isLocal && stageDomains
