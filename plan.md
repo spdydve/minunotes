@@ -308,6 +308,70 @@ Keep this pass focused on app-owned image uploads and rendering:
 - [ ] Manual note reload confirms app-owned image URLs render.
 - [ ] Manual external image URL check confirms external URLs remain unchanged.
 
+## Planned Phase — Attachment Reference Tracking / Orphan Cleanup
+Goal: safely clean up app-owned uploaded images after they are removed from note markdown, without breaking undo/version-history-friendly behavior.
+
+### Product behavior
+- Uploaded images remain normal markdown URLs: `/api/attachments/:attachmentId/content`.
+- Removing an image from a note removes the markdown reference first; it should not immediately delete the file.
+- The backend tracks whether each attachment is still referenced by note content.
+- Unreferenced attachments are retained for a grace period, then deleted by cleanup.
+- Re-adding an attachment URL before cleanup should mark it referenced again.
+
+### Proposed data model additions
+- `attachments.referenced_at` — last time the attachment was found in note markdown.
+- `attachments.unreferenced_at` — when the attachment became orphaned, nullable.
+- `attachments.deleted_at` — soft-delete marker after cleanup, nullable.
+- Optional later: `attachments.reference_source` or `attachment_references` table if references can span multiple notes.
+
+### Files to modify/create
+- `plan.md`
+- `src/api/db/schema.ts`
+- `drizzle/*`
+- `src/api/harness/commands.ts`
+- `src/api/routes/notes.ts`
+- `src/api/routes/attachments.ts`
+- `src/api/storage/index.ts`
+- `scripts/cleanup-attachments.ts` — new cleanup job/script.
+- `tests/attachments.test.ts`
+- additional tests as needed
+
+### Phase 1 — Parse and sync note attachment references
+- [x] Add helper to extract app-owned attachment IDs from markdown.
+- [x] Add unit tests for markdown image/link parsing.
+- [x] Add attachment reference columns and migration.
+- [x] On note create/update/edit, sync references for that note.
+- [x] Mark currently referenced attachments with `referenced_at` and clear `unreferenced_at`.
+- [x] Mark previously referenced but now missing attachments with `unreferenced_at`.
+- [x] Do not delete storage objects in this phase.
+
+### Phase 2 — Protect reads and metadata from deleted/unowned attachments
+- [x] Keep existing ownership checks for attachment content reads.
+- [x] Exclude or reject `deleted_at` attachments from content reads.
+- [x] Decide response for deleted content: 404 preferred.
+- [ ] Add tests for deleted/unreferenced read behavior.
+
+### Phase 3 — Cleanup job with grace period
+- [ ] Add cleanup script that finds attachments with `unreferenced_at` older than configured grace period.
+- [ ] Delete object storage file first, then set `deleted_at`.
+- [ ] Make cleanup idempotent and safe if storage object is already missing.
+- [ ] Add env/config for grace period; default 7–30 days.
+- [ ] Add tests for cleanup selection and idempotency.
+
+### Phase 4 — Operational integration
+- [ ] Wire cleanup script into deployment/runtime schedule if needed.
+- [ ] Document local/manual cleanup command.
+- [ ] Consider admin/debug listing for orphaned attachments.
+
+### Verification
+- [x] `pnpm db:generate` creates expected migration.
+- [ ] `pnpm db:migrate` succeeds locally.
+- [x] `pnpm test` passes.
+- [x] `pnpm exec tsc --noEmit` passes.
+- [ ] Manual: upload image, remove markdown URL, save note, confirm attachment becomes unreferenced.
+- [ ] Manual: re-add URL before cleanup, save note, confirm unreferenced state clears.
+- [ ] Manual: run cleanup after forced old `unreferenced_at`, confirm content route returns 404.
+
 ## Deferred
 Do not implement these until explicitly planned:
 - workspaces

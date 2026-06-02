@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, like, or } from "drizzle-orm";
+import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
 import { folders, noteEvents, notes, type Note } from "../db/schema";
 import { createId } from "../lib/id";
@@ -221,6 +222,7 @@ export async function createDocument(input: {
   };
 
   await db.insert(notes).values(note);
+  await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
 
   const contentHash = hashMarkdown(note.content);
   await insertNoteEvent({
@@ -297,6 +299,10 @@ export async function updateDocument(input: UpdateDocumentInput) {
     .returning();
 
   if (!note) return { ok: false, status: 404, error: "Note not found" } satisfies DocumentCommandResult<never>;
+
+  if (contentChanged) {
+    await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+  }
 
   const contentHash = hashMarkdown(note.content);
   const actorType = input.actorType ?? "user";

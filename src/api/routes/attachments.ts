@@ -169,7 +169,7 @@ attachmentRoutes.get("/:attachmentId/content", async (c) => {
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const [attachment] = await db.select().from(attachments).where(and(eq(attachments.id, c.req.param("attachmentId")), eq(attachments.userId, user.id))).limit(1);
-  if (!attachment) return c.json({ error: "Attachment not found" }, 404);
+  if (!attachment || attachment.deletedAt) return c.json({ error: "Attachment not found" }, 404);
   if (attachment.status !== "ready") return c.json({ error: "Attachment is not ready" }, 404);
 
   const object = await getObjectStorage().getObject({ key: attachment.storageKey });

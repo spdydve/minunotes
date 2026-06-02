@@ -117,6 +117,9 @@ export const attachments = sqliteTable("attachments", {
   contentHash: text("content_hash").notNull(),
   storageKey: text("storage_key").notNull(),
   status: text("status").notNull().default("ready"),
+  referencedAt: integer("referenced_at", { mode: "timestamp" }),
+  unreferencedAt: integer("unreferenced_at", { mode: "timestamp" }),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("attachments_user_id_idx").on(table.userId), index("attachments_note_id_idx").on(table.noteId), index("attachments_folder_id_idx").on(table.folderId)]);
