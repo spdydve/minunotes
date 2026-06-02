@@ -366,7 +366,7 @@ Goal: safely clean up app-owned uploaded images after they are removed from note
 
 ### Verification
 - [x] `pnpm db:generate` creates expected migration.
-- [ ] `pnpm db:migrate` succeeds locally.
+- [x] `pnpm db:migrate` succeeds locally.
 - [x] `pnpm test` passes.
 - [x] `pnpm exec tsc --noEmit` passes.
 - [ ] Manual: upload image, remove markdown URL, save note, confirm attachment becomes unreferenced.
