@@ -352,15 +352,16 @@ Goal: safely clean up app-owned uploaded images after they are removed from note
 - [ ] Add tests for deleted/unreferenced read behavior.
 
 ### Phase 3 — Cleanup job with grace period
-- [ ] Add cleanup script that finds attachments with `unreferenced_at` older than configured grace period.
-- [ ] Delete object storage file first, then set `deleted_at`.
-- [ ] Make cleanup idempotent and safe if storage object is already missing.
-- [ ] Add env/config for grace period; default 7–30 days.
-- [ ] Add tests for cleanup selection and idempotency.
+- [x] Add cleanup script that finds attachments with `unreferenced_at` older than configured grace period.
+- [x] Delete object storage file first, then set `deleted_at`.
+- [x] Make cleanup idempotent and safe if storage object is already missing.
+- [x] Add env/config for grace period; default 7–30 days.
+- [x] Add tests for cleanup grace-period config/cutoff.
+- [ ] Add integration tests for cleanup selection and idempotency.
 
 ### Phase 4 — Operational integration
 - [ ] Wire cleanup script into deployment/runtime schedule if needed.
-- [ ] Document local/manual cleanup command.
+- [x] Document local/manual cleanup command.
 - [ ] Consider admin/debug listing for orphaned attachments.
 
 ### Verification
