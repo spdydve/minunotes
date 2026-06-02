@@ -1,4 +1,4 @@
-import { MarkdownEditor } from "@dpklabs/minueditor";
+import { MarkdownEditor, MarkdownRenderer } from "@dpklabs/minueditor";
 import { useRef, useState, type ReactNode } from "react";
 
 export function NoteEditor({
@@ -8,6 +8,7 @@ export function NoteEditor({
   onTitleChange,
   onContentChange,
   onImageUpload,
+  initialEditing = false,
   actions,
   staleNotice,
   updatedMeta,
@@ -18,11 +19,12 @@ export function NoteEditor({
   onTitleChange: (value: string) => void;
   onContentChange: (value: string) => void;
   onImageUpload?: (file: File) => Promise<void> | void;
+  initialEditing?: boolean;
   actions: ReactNode;
   staleNotice?: ReactNode;
   updatedMeta?: ReactNode;
 }) {
-  const [editingBody, setEditingBody] = useState(false);
+  const [editingBody, setEditingBody] = useState(initialEditing);
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const titleValue = title === "Untitled note" ? "" : title;
@@ -54,20 +56,19 @@ export function NoteEditor({
     {staleNotice}
     <input className="w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
     {updatedMeta ? <div className="mb-4 mt-2 text-xs text-slate-500">{updatedMeta}</div> : <div className="mb-4" />}
-    <div
-      className="border-t bg-white dark:border-slate-800 dark:bg-slate-950"
-      onPointerDownCapture={() => setEditingBody(true)}
-      onFocusCapture={() => setEditingBody(true)}
-    >
-      <MarkdownEditor
+    <div className="border-t bg-white dark:border-slate-800 dark:bg-slate-950">
+      {editingBody ? <MarkdownEditor
         value={content}
         onChange={onContentChange}
         placeholder="Start typing..."
-        readOnly={!editingBody}
         minHeight={520}
-        floatingToolbar={editingBody}
+        floatingToolbar
         className="notes-minu-editor"
-      />
+      /> : <MarkdownRenderer
+        value={content || "Start typing..."}
+        onClick={() => setEditingBody(true)}
+        className={`notes-minu-renderer ${content ? "" : "notes-minu-renderer-placeholder"}`}
+      />}
     </div>
   </section>;
 }

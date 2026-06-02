@@ -34,14 +34,16 @@ textarea {
     font: inherit;
 }
 
-.notes-minu-editor {
+.notes-minu-editor,
+.notes-minu-renderer {
     min-height: 65vh;
     --me-font-family:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --me-font-code:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --me-font-size: 14px;
-    --me-content-padding: 0;
+    --me-code-font-size: 1em;
+    --me-content-padding: 12px 0 0;
 }
 .notes-minu-editor .cm-editor {
     border-radius: 0.5rem;
@@ -51,12 +53,27 @@ textarea {
     font-family:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 14px;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    padding: 12px 0 0 !important;
 }
 .notes-minu-editor .cm-line {
     font-size: 14px;
 }
 .notes-minu-editor .cm-scroller {
     font-size: 14px;
+}
+.notes-minu-renderer {
+    cursor: text;
+    padding: 12px 0 0 !important;
+}
+.notes-minu-renderer > :first-child {
+    margin-top: 0 !important;
+}
+.notes-minu-renderer code:not(pre code) {
+    font-size: 1em;
+    line-height: inherit;
+    padding: 0.2em 0.4em;
+    border-radius: 6px;
+}
+.notes-minu-renderer-placeholder {
+    color: #94a3b8;
 }

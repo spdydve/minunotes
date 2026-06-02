@@ -163,6 +163,7 @@ function NoteView() {
     saveState={saveState}
     onTitleChange={setTitle}
     onContentChange={setContent}
+    initialEditing={!data.note.content.trim()}
     updatedMeta={updatedMeta}
     staleNotice={<>
       {isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
