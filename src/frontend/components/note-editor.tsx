@@ -56,7 +56,7 @@ export function NoteEditor({
     {staleNotice}
     <input className="w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
     {updatedMeta ? <div className="mb-4 mt-2 text-xs text-slate-500">{updatedMeta}</div> : <div className="mb-4" />}
-    <div className="border-t bg-white dark:border-slate-800 dark:bg-slate-950">
+    <div className="border-t border-[var(--notes-border)] bg-[var(--notes-bg)]">
       {editingBody ? <MarkdownEditor
         value={content}
         onChange={onContentChange}

@@ -1,15 +1,21 @@
 import { Navigate, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { FolderSidebar } from "./folder-sidebar";
 import { authClient } from "../lib/auth-client";
+import { applyNoteTheme, getStoredTheme } from "../lib/themes";
 
 export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const session = authClient.useSession();
   const isAuthRoute = pathname === "/auth";
 
+  useEffect(() => {
+    applyNoteTheme(getStoredTheme());
+  }, []);
+
   if (isAuthRoute) return <Outlet />;
-  if (session.isPending) return <div className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-500 dark:bg-slate-950">Loading...</div>;
+  if (session.isPending) return <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">Loading...</div>;
   if (!session.data?.user) return <Navigate to="/auth" />;
 
-  return <div className="flex min-h-screen bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-100"><FolderSidebar userEmail={session.data.user.email} /><main className="min-w-0 flex-1 px-6 py-6"><Outlet /></main></div>;
+  return <div className="flex min-h-screen bg-[var(--notes-bg)] text-[var(--notes-text)]"><FolderSidebar userEmail={session.data.user.email} /><main className="min-w-0 flex-1 px-6 py-6"><Outlet /></main></div>;
 }

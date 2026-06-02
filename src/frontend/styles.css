@@ -9,28 +9,102 @@
 :root {
     font-family:
         ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    color-scheme: light dark;
+    color-scheme: dark;
+    --notes-bg: #1e1e2e;
+    --notes-panel: #181825;
+    --notes-panel-muted: #11111b;
+    --notes-hover: #313244;
+    --notes-border: #313244;
+    --notes-text: #cdd6f4;
+    --notes-muted: #a6adc8;
+    --notes-blue: #89b4fa;
+    --notes-code-bg: #313244;
 }
+
+.theme-catppuccin-latte {
+    color-scheme: light;
+    --notes-bg: #eff1f5;
+    --notes-panel: #ffffff;
+    --notes-panel-muted: #e6e9ef;
+    --notes-hover: #dce0e8;
+    --notes-border: #ccd0da;
+    --notes-text: #4c4f69;
+    --notes-muted: #6c6f85;
+    --notes-blue: #1e66f5;
+    --notes-code-bg: #e6e9ef;
+}
+.theme-catppuccin-frappe {
+    color-scheme: dark;
+    --notes-bg: #303446;
+    --notes-panel: #292c3c;
+    --notes-panel-muted: #232634;
+    --notes-hover: #414559;
+    --notes-border: #414559;
+    --notes-text: #c6d0f5;
+    --notes-muted: #a5adce;
+    --notes-blue: #8caaee;
+    --notes-code-bg: #414559;
+}
+.theme-catppuccin-macchiato {
+    color-scheme: dark;
+    --notes-bg: #24273a;
+    --notes-panel: #1e2030;
+    --notes-panel-muted: #181926;
+    --notes-hover: #363a4f;
+    --notes-border: #363a4f;
+    --notes-text: #cad3f5;
+    --notes-muted: #a5adcb;
+    --notes-blue: #8aadf4;
+    --notes-code-bg: #363a4f;
+}
+.theme-catppuccin-mocha {
+    color-scheme: dark;
+    --notes-bg: #1e1e2e;
+    --notes-panel: #181825;
+    --notes-panel-muted: #11111b;
+    --notes-hover: #313244;
+    --notes-border: #313244;
+    --notes-text: #cdd6f4;
+    --notes-muted: #a6adc8;
+    --notes-blue: #89b4fa;
+    --notes-code-bg: #313244;
+}
+.theme-tokyo-night {
+    color-scheme: dark;
+    --notes-bg: #1a1b26;
+    --notes-panel: #16161e;
+    --notes-panel-muted: #101014;
+    --notes-hover: #24283b;
+    --notes-border: #292e42;
+    --notes-text: #c0caf5;
+    --notes-muted: #9aa5ce;
+    --notes-blue: #7aa2f7;
+    --notes-code-bg: #24283b;
+}
+.theme-everforest {
+    color-scheme: dark;
+    --notes-bg: #2d353b;
+    --notes-panel: #232a2e;
+    --notes-panel-muted: #1e2326;
+    --notes-hover: #3a464c;
+    --notes-border: #4f5b58;
+    --notes-text: #d3c6aa;
+    --notes-muted: #9da9a0;
+    --notes-blue: #7fbbb3;
+    --notes-code-bg: #3a464c;
+}
+
 body {
     margin: 0;
     min-height: 100vh;
-    background: #f8fafc;
-    color: #0f172a;
+    background: var(--notes-bg);
+    color: var(--notes-text);
     font-size: 0.875rem;
-}
-.dark body {
-    background: #020617;
-    color: #e2e8f0;
-}
-@media (prefers-color-scheme: dark) {
-    body {
-        background: #020617;
-        color: #e2e8f0;
-    }
 }
 button,
 input,
-textarea {
+textarea,
+select {
     font: inherit;
 }
 
@@ -44,10 +118,23 @@ textarea {
     --me-font-size: 14px;
     --me-code-font-size: 1em;
     --me-content-padding: 12px 0 0;
+    --me-text: var(--notes-text);
+    --me-heading-color: var(--notes-text);
+    --me-link-color: var(--notes-blue);
+    --me-code-bg: var(--notes-code-bg);
+    --me-code-color: var(--notes-text);
+    --me-codeblock-bg: var(--notes-panel-muted);
+    --me-codeblock-border: var(--notes-border);
+    --me-blockquote-border: var(--notes-blue);
+    --me-blockquote-color: var(--notes-muted);
+    --me-table-border: var(--notes-border);
+    --me-table-header-bg: var(--notes-panel-muted);
+    --me-table-row-alt-bg: var(--notes-panel-muted);
 }
 .notes-minu-editor .cm-editor {
     border-radius: 0.5rem;
     background: transparent;
+    color: var(--notes-text);
 }
 .notes-minu-editor .cm-content {
     font-family:
@@ -55,11 +142,20 @@ textarea {
     font-size: 14px;
     padding: 12px 0 0 !important;
 }
-.notes-minu-editor .cm-line {
-    font-size: 14px;
-}
+.notes-minu-editor .cm-line,
 .notes-minu-editor .cm-scroller {
     font-size: 14px;
+}
+.notes-minu-editor .me-h1,
+.notes-minu-editor .me-h2,
+.notes-minu-editor .me-h3,
+.notes-minu-editor .me-h4,
+.notes-minu-editor .me-h5,
+.notes-minu-editor .me-h6,
+.notes-minu-editor .tok-heading,
+.notes-minu-editor .cm-line[class*="me-heading"],
+.notes-minu-editor .cm-line[class*="heading"] {
+    color: var(--notes-text) !important;
 }
 .notes-minu-renderer {
     cursor: text;
@@ -68,12 +164,14 @@ textarea {
 .notes-minu-renderer > :first-child {
     margin-top: 0 !important;
 }
-.notes-minu-renderer code:not(pre code) {
+.notes-minu-renderer :not(pre) > code {
     font-size: 1em;
     line-height: inherit;
     padding: 0.2em 0.4em;
     border-radius: 6px;
+    background: var(--notes-code-bg);
+    color: var(--notes-text);
 }
 .notes-minu-renderer-placeholder {
-    color: #94a3b8;
+    color: var(--notes-muted);
 }

@@ -11,7 +11,7 @@ export function PopoverContent({ className, align = "center", sideOffset = 4, ..
     <PopoverPrimitive.Content
       align={align}
       sideOffset={sideOffset}
-      className={`z-50 min-w-32 rounded-md border bg-white p-1 shadow-sm outline-none dark:border-slate-800 dark:bg-slate-950 ${className ?? ""}`}
+      className={`z-50 min-w-32 rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel)] p-1 shadow-sm outline-none ${className ?? ""}`}
       {...props}
     />
   </PopoverPrimitive.Portal>;

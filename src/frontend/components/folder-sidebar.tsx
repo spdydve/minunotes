@@ -5,6 +5,7 @@ import { authClient } from "../lib/auth-client";
 import { CreateFolderDialog } from "./create-folder-dialog";
 import { FolderActionsPopover } from "./folder-actions-popover";
 import { SearchDialog } from "./search-dialog";
+import { ThemeSelect } from "./theme-select";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
@@ -16,7 +17,7 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
   const nav = useNavigate();
 
   return (
-    <aside className="flex h-screen w-72 flex-col border-r border-slate-200 p-4 dark:border-slate-800">
+    <aside className="flex h-screen w-72 flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="font-semibold">Notes</h1>
         <CreateFolderDialog />
@@ -34,7 +35,7 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
         {(data?.folders ?? []).map((folder) => (
           <div
             key={folder.id}
-            className="flex items-center gap-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-900"
+            className="flex items-center gap-2 rounded-md hover:bg-[var(--notes-hover)]"
           >
             <Link
               to="/folders/$folderId"
@@ -47,7 +48,7 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
           </div>
         ))}
       </nav>
-      <div className="mt-auto border-t border-slate-200 pt-4 dark:border-slate-800">
+      <div className="mt-auto border-t border-[var(--notes-border)] pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm">{userEmail}</p>
@@ -59,7 +60,8 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
                 aria-label="Open settings"
               />
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-44 p-1">
+            <PopoverContent align="end" className="w-56 p-1">
+              <ThemeSelect />
               <ActionMenuButton
                 onClick={() => nav({ to: "/settings/api-access" })}
               >
