@@ -37,8 +37,8 @@ function ApiAccessSettingsView() {
         />
       </div>
 
-      <div className="rounded-lg border border-slate-200 dark:border-slate-800">
-        <div className="grid grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] gap-3 border-b border-slate-200 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:border-slate-800">
+      <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
+        <div className="grid grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] gap-3 border-b border-[var(--notes-border)] bg-[var(--notes-table-header-bg)] px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
           <span>Name</span>
           <span>UID</span>
           <span>Created</span>
@@ -51,17 +51,17 @@ function ApiAccessSettingsView() {
         {(keys.data?.keys ?? []).map((key) => (
           <div
             key={key.id}
-            className="grid grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 dark:border-slate-900"
+            className="grid grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] items-center gap-3 border-b border-[var(--notes-table-row-border)] px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-[var(--notes-table-row-hover)]"
           >
             <div className="min-w-0">
               <p className="truncate font-medium">{key.name}</p>
               {/*<p className="text-xs text-slate-500">{key.permissions.length} folder permission{key.permissions.length === 1 ? "" : "s"}</p>*/}
             </div>
-            <code className="text-xs text-slate-500">{key.uid}</code>
-            <span className="text-xs text-slate-500">
+            <code className="text-xs text-[var(--notes-muted)]">{key.uid}</code>
+            <span className="text-xs text-[var(--notes-muted)]">
               {new Date(key.createdAt).toLocaleString()}
             </span>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-[var(--notes-muted)]">
               {key.lastUsedAt
                 ? new Date(key.lastUsedAt).toLocaleString()
                 : "Never"}

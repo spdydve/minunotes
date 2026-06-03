@@ -24,20 +24,20 @@ export function NotesTable({ notes }: { notes: Note[] }) {
       cell: (info) => (
         <div className="flex items-center gap-2">
           <Link
-            className="font-medium text-slate-900 hover:text-slate-700 dark:text-slate-100 dark:hover:text-slate-300"
+            className="font-medium text-[var(--notes-text)] transition-colors hover:text-[var(--notes-blue)]"
             to="/notes/$noteId"
             params={{ noteId: info.row.original.id }}
           >
             {info.getValue()}
           </Link>
-          {info.row.original.updatedByActorType === "agent" ? <span className="rounded border border-blue-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 dark:border-blue-900 dark:text-blue-300">API</span> : null}
+          {info.row.original.updatedByActorType === "agent" ? <span className="rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
         </div>
       ),
     }),
     columnHelper.accessor("updatedAt", {
       header: "Updated",
       cell: (info) => (
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-[var(--notes-muted)]">
           {new Date(info.getValue()).toLocaleString()}
         </span>
       ),
@@ -63,14 +63,14 @@ export function NotesTable({ notes }: { notes: Note[] }) {
   });
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+    <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
       <table className="w-full border-collapse text-sm">
-        <thead>
+        <thead className="bg-[var(--notes-table-header-bg)]">
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id}>
               {hg.headers.map((h) => (
                 <th
-                  className="border-b border-slate-200 px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-slate-500 dark:border-slate-800"
+                  className="border-b border-[var(--notes-border)] px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)] first:pl-5 last:pr-5"
                   key={h.id}
                 >
                   {flexRender(h.column.columnDef.header, h.getContext())}
@@ -81,10 +81,10 @@ export function NotesTable({ notes }: { notes: Note[] }) {
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
+            <tr key={row.id} className="transition-colors hover:bg-[var(--notes-table-row-hover)]">
               {row.getVisibleCells().map((cell) => (
                 <td
-                  className="border-b border-slate-100 px-4 py-3 align-middle last:text-right dark:border-slate-900"
+                  className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle last:text-right first:pl-5 last:pr-5"
                   key={cell.id}
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
