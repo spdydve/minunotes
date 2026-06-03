@@ -1,5 +1,6 @@
 import { MarkdownEditor, MarkdownRenderer } from "@dpklabs/minueditor";
 import { useRef, useState, type ReactNode } from "react";
+import { editorCodeLanguages } from "../lib/editor-languages";
 
 export function NoteEditor({
   title,
@@ -62,7 +63,7 @@ export function NoteEditor({
         onChange={onContentChange}
         placeholder="Start typing..."
         minHeight={520}
-        floatingToolbar
+        codeLanguages={editorCodeLanguages}
         className="notes-minu-editor"
       /> : <MarkdownRenderer
         value={content || "Start typing..."}
