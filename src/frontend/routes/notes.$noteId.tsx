@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { NoteActionsPopover } from "../components/note-actions-popover";
+import { Button } from "../components/ui/button";
+import { EmptyState } from "../components/ui/empty-state";
 import { rootRoute } from "./__root";
 
 const NoteEditor = lazy(() => import("../components/note-editor").then((module) => ({ default: module.NoteEditor })));
@@ -147,9 +149,9 @@ function NoteView() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty, save.isPending]);
-  if (isLoading) return <p className="text-sm text-slate-500">Loading note...</p>;
-  if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><div className="w-full max-w-lg rounded-lg border border-dashed p-8 text-center"><h2 className="text-xl font-semibold">Note not found</h2><p className="mt-2 text-sm text-slate-500">This note does not exist or you do not have access to it.</p><button className="mt-4 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-900" onClick={() => nav({ to: "/" })}>Back to notes</button></div></section>;
-  if (!data?.note) return <section className="grid min-h-[60vh] place-items-center"><div className="w-full max-w-lg rounded-lg border border-dashed p-8 text-center"><h2 className="text-xl font-semibold">Unable to load note</h2><p className="mt-2 text-sm text-slate-500">Try again or return to your notes.</p><button className="mt-4 rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-900" onClick={() => nav({ to: "/" })}>Back to notes</button></div></section>;
+  if (isLoading) return <p className="notes-muted text-sm">Loading note...</p>;
+  if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Note not found"><p>This note does not exist or you do not have access to it.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
+  if (!data?.note) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Unable to load note"><p>Try again or return to your notes.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
 
   const updatedMeta = data.note.updatedByActorType === "agent"
     ? `Last updated via API key${data.note.updatedByActorId ? ` (${data.note.updatedByActorId})` : ""}`

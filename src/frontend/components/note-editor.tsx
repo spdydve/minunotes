@@ -1,6 +1,7 @@
 import { MarkdownEditor, MarkdownRenderer } from "@dpklabs/minueditor";
 import { useRef, useState, type ReactNode } from "react";
 import { editorCodeLanguages } from "../lib/editor-languages";
+import { Button } from "./ui/button";
 
 export function NoteEditor({
   title,
@@ -45,18 +46,18 @@ export function NoteEditor({
 
   return <section className="mx-auto w-full max-w-6xl">
     <div className="mb-4 flex items-center justify-between gap-2">
-      <p className="text-xs text-slate-500">{uploadingImage ? "Uploading image..." : saveLabel}</p>
+      <p className="notes-muted text-xs">{uploadingImage ? "Uploading image..." : saveLabel}</p>
       <div className="flex justify-end gap-2">
         {onImageUpload ? <>
           <input ref={imageInputRef} className="hidden" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" onChange={(e) => void handleImageChange(e.target.files?.[0])} />
-          <button className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-900" type="button" disabled={uploadingImage} onClick={() => imageInputRef.current?.click()}>{uploadingImage ? "Uploading..." : "Upload image"}</button>
+          <Button type="button" disabled={uploadingImage} onClick={() => imageInputRef.current?.click()}>{uploadingImage ? "Uploading..." : "Upload image"}</Button>
         </> : null}
         {actions}
       </div>
     </div>
     {staleNotice}
     <input className="w-full bg-transparent text-3xl font-semibold outline-none" value={titleValue} onChange={(e) => onTitleChange(e.target.value)} placeholder="Untitled note" />
-    {updatedMeta ? <div className="mb-4 mt-2 text-xs text-slate-500">{updatedMeta}</div> : <div className="mb-4" />}
+    {updatedMeta ? <div className="notes-muted mb-4 mt-2 text-xs">{updatedMeta}</div> : <div className="mb-4" />}
     <div className="border-t border-[var(--notes-border)] bg-[var(--notes-bg)]">
       {editingBody ? <MarkdownEditor
         value={content}

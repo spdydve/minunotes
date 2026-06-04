@@ -12,16 +12,16 @@ export function SearchDialog() {
 
   return <>
     <Button onClick={() => setOpen(true)}>Search</Button>
-    {open && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
-      <div className="w-full max-w-xl rounded-lg border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+    {open && <div className="notes-overlay fixed inset-0 z-50 grid place-items-center">
+      <div className="notes-card w-full max-w-xl rounded-lg p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Search notes</h2><Button onClick={() => setOpen(false)}>Close</Button></div>
-        <input autoFocus className="mt-4 w-full rounded-md border bg-transparent px-3 py-2" placeholder="Search title or content..." value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input autoFocus className="notes-input mt-4 w-full rounded-md px-3 py-2" placeholder="Search title or content..." value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="mt-4 max-h-96 space-y-2 overflow-auto">
-          {isFetching && <p className="text-sm text-slate-500">Searching...</p>}
-          {!isFetching && trimmed && !data?.notes.length && <p className="text-sm text-slate-500">No notes found.</p>}
-          {(data?.notes ?? []).map((note) => <Link key={note.id} to="/notes/$noteId" params={{ noteId: note.id }} onClick={() => setOpen(false)} className="block rounded-md border p-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900">
+          {isFetching && <p className="notes-muted text-sm">Searching...</p>}
+          {!isFetching && trimmed && !data?.notes.length && <p className="notes-muted text-sm">No notes found.</p>}
+          {(data?.notes ?? []).map((note) => <Link key={note.id} to="/notes/$noteId" params={{ noteId: note.id }} onClick={() => setOpen(false)} className="block rounded-md border border-[var(--notes-border)] p-3 transition-colors hover:bg-[var(--notes-hover)]">
             <div className="font-medium">{note.title}</div>
-            <div className="text-xs text-slate-500">{note.folderTitle}</div>
+            <div className="notes-muted text-xs">{note.folderTitle}</div>
           </Link>)}
         </div>
       </div>

@@ -174,6 +174,31 @@ select {
     font: inherit;
 }
 
+.notes-card {
+    border: 1px solid var(--notes-border);
+    background: var(--notes-panel);
+    color: var(--notes-text);
+}
+.notes-muted {
+    color: var(--notes-muted);
+}
+.notes-input {
+    border: 1px solid var(--notes-border);
+    background: transparent;
+    color: var(--notes-text);
+}
+.notes-input::placeholder {
+    color: var(--notes-muted);
+}
+.notes-overlay {
+    background: rgb(0 0 0 / 0.45);
+}
+.notes-empty-state {
+    border: 1px dashed var(--notes-border);
+    background: color-mix(in srgb, var(--notes-panel) 70%, transparent);
+    color: var(--notes-muted);
+}
+
 .notes-minu-editor,
 .notes-minu-renderer {
     min-height: 65vh;

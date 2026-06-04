@@ -16,10 +16,10 @@ export function RenameFolderDialog({ folder, triggerClassName, onDone, onOpen, o
 
   return <>
     {open === undefined && <Button className={triggerClassName} onClick={() => { form.reset(); setOpen(true); onOpen?.(); }}>Rename</Button>}
-    {isOpen && createPortal(<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40">
-      <form className="w-full max-w-md rounded-lg border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950" onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}>
+    {isOpen && createPortal(<div className="notes-overlay fixed inset-0 z-[100] grid place-items-center">
+      <form className="notes-card w-full max-w-md rounded-lg p-5 shadow-sm" onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}>
         <h2 className="text-lg font-semibold">Rename folder</h2>
-        <form.Field name="title">{(field) => <input autoFocus className="mt-4 w-full rounded-md border bg-transparent px-3 py-2" placeholder="Folder title" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} />}</form.Field>
+        <form.Field name="title">{(field) => <input autoFocus className="notes-input mt-4 w-full rounded-md px-3 py-2" placeholder="Folder title" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} />}</form.Field>
         <div className="mt-4 flex justify-end gap-2"><Button type="button" onClick={close}>Cancel</Button><Button type="submit" disabled={mutation.isPending}>Save</Button></div>
       </form>
     </div>, document.body)}
