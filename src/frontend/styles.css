@@ -160,9 +160,14 @@
     --notes-button-destructive-soft-hover: #3a2727;
 }
 
+html,
+body,
+#root {
+    min-height: 100%;
+    overflow-x: hidden;
+}
 body {
     margin: 0;
-    min-height: 100vh;
     background: var(--notes-bg);
     color: var(--notes-text);
     font-size: 0.875rem;
@@ -219,13 +224,32 @@ select {
     --me-blockquote-border: var(--notes-blue);
     --me-blockquote-color: var(--notes-muted);
     --me-table-border: var(--notes-border);
+    --me-table-bg: var(--notes-panel);
     --me-table-header-bg: var(--notes-panel-muted);
-    --me-table-row-alt-bg: var(--notes-panel-muted);
+    --me-table-row-alt-bg: transparent;
+    --me-table-selection-bg: var(--notes-hover);
+    --me-table-selection-header-bg: var(--notes-hover);
 }
+
 .notes-minu-editor .cm-editor {
     border-radius: 0.5rem;
     background: transparent;
     color: var(--notes-text);
+}
+.notes-minu-editor .cm-scroller {
+    overflow-x: hidden !important;
+}
+.notes-minu-editor .cm-content {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.notes-minu-editor .cm-content,
+.notes-minu-renderer {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 .notes-minu-editor .cm-content {
     font-family:
@@ -242,11 +266,16 @@ select {
 .notes-minu-editor .me-h3,
 .notes-minu-editor .me-h4,
 .notes-minu-editor .me-h5,
-.notes-minu-editor .me-h6,
-.notes-minu-editor .tok-heading,
-.notes-minu-editor .cm-line[class*="me-heading"],
-.notes-minu-editor .cm-line[class*="heading"] {
-    color: var(--notes-text) !important;
+.notes-minu-editor .me-h6 {
+    color: var(--notes-text);
+}
+.notes-minu-editor .me-token {
+    color: transparent !important;
+}
+.notes-minu-editor .me-token--inline,
+.notes-minu-editor .me-token--block {
+    font-size: 1px !important;
+    letter-spacing: -1ch !important;
 }
 .notes-minu-renderer {
     cursor: text;
@@ -265,4 +294,96 @@ select {
 }
 .notes-minu-renderer-placeholder {
     color: var(--notes-muted);
+}
+.notes-minu-renderer table,
+.notes-minu-editor .me-table-render {
+    width: 100%;
+    max-width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    border-radius: 0.5rem;
+    background: var(--me-table-bg);
+    font-size: 0.95em;
+}
+.notes-minu-renderer th,
+.notes-minu-renderer td,
+.notes-minu-editor .me-table-render th,
+.notes-minu-editor .me-table-render td {
+    min-width: 5ch;
+    border: 1px solid var(--me-table-border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+}
+.notes-minu-renderer th,
+.notes-minu-editor .me-table-render th {
+    background: var(--me-table-header-bg);
+    color: var(--notes-text);
+    font-weight: 600;
+}
+.notes-minu-renderer table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+.notes-minu-editor .me-table-scroller {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0.75rem 0;
+}
+.notes-minu-editor .me-table-scroller .me-table-render {
+    width: max-content;
+}
+.notes-minu-editor .me-table-widget {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    color: var(--notes-text) !important;
+}
+.notes-minu-editor .me-table-widget .me-table-render {
+    width: max-content !important;
+    border: 1px solid var(--notes-border) !important;
+    background: var(--notes-panel) !important;
+    color: var(--notes-text) !important;
+}
+.notes-minu-editor .me-table-widget .me-table-render th,
+.notes-minu-editor .me-table-widget .me-table-render td {
+    border-color: var(--notes-border) !important;
+    background: var(--notes-panel) !important;
+    color: var(--notes-text) !important;
+}
+.notes-minu-editor .me-table-widget .me-table-render th {
+    background: var(--notes-panel-muted) !important;
+}
+.notes-minu-editor .me-table-widget--editing .me-table-render {
+    outline: 1px solid var(--notes-border);
+    outline-offset: -1px;
+}
+.notes-minu-editor .me-table-input {
+    width: 100%;
+    min-width: 5ch;
+    border: 0;
+    background: transparent !important;
+    color: var(--notes-text) !important;
+    font: inherit;
+    outline: none;
+}
+.notes-minu-editor .me-table-input:focus {
+    background: color-mix(in srgb, var(--notes-blue) 10%, transparent);
+    box-shadow: inset 0 0 0 1px var(--notes-blue);
+}
+.notes-minu-editor .me-table-cell--selected,
+.notes-minu-editor .me-table-cell--selected td,
+.notes-minu-editor .me-table-cell--selected th {
+    background: var(--me-table-selection-bg) !important;
+}
+.notes-minu-editor .me-table-cell--selected-header,
+.notes-minu-editor .me-table-cell--selected-header td,
+.notes-minu-editor .me-table-cell--selected-header th {
+    background: var(--me-table-selection-header-bg) !important;
 }

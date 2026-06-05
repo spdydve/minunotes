@@ -1,13 +1,12 @@
 import { createRoute, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { NoteActionsPopover } from "../components/note-actions-popover";
+import { NoteEditor } from "../components/note-editor";
 import { Button } from "../components/ui/button";
 import { EmptyState } from "../components/ui/empty-state";
 import { rootRoute } from "./__root";
-
-const NoteEditor = lazy(() => import("../components/note-editor").then((module) => ({ default: module.NoteEditor })));
 
 function NoteView() {
   const { noteId } = noteRoute.useParams();
@@ -152,6 +151,7 @@ function NoteView() {
   if (isLoading) return <p className="notes-muted text-sm">Loading note...</p>;
   if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Note not found"><p>This note does not exist or you do not have access to it.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
   if (!data?.note) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Unable to load note"><p>Try again or return to your notes.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
+  if (hydratedNoteId.current !== noteId) return <p className="notes-muted text-sm">Loading note...</p>;
 
   const updatedMeta = data.note.updatedByActorType === "agent"
     ? `Last updated via API key${data.note.updatedByActorId ? ` (${data.note.updatedByActorId})` : ""}`
@@ -159,8 +159,7 @@ function NoteView() {
       ? "Last updated by system"
       : null;
 
-  return <Suspense fallback={<p className="text-sm text-[var(--notes-muted)]">Loading editor...</p>}>
-    <NoteEditor
+  return <NoteEditor
       key={noteId}
       title={title}
       content={content}
@@ -175,8 +174,7 @@ function NoteView() {
       </>}
       onImageUpload={uploadImage}
       actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
-    />
-  </Suspense>;
+    />;
 }
 
 export const noteRoute = createRoute({ getParentRoute: () => rootRoute, path: "/notes/$noteId", component: NoteView });

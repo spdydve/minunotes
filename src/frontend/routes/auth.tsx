@@ -78,11 +78,11 @@ function AuthView() {
       {error && <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">{error}</p>}
       {step === "email" ? <form className="mt-5 space-y-4" onSubmit={sendOtp}>
         <input autoFocus required type="email" className="w-full rounded-md border bg-transparent px-3 py-2" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Button className="w-full" type="submit" disabled={loading}>{loading ? "Sending..." : "Send code"}</Button>
+        <Button variant="base" className="w-full" type="submit" disabled={loading}>{loading ? "Sending..." : "Send code"}</Button>
       </form> : <form className="mt-5 space-y-4" onSubmit={verifyOtp}>
         <input autoFocus required className="w-full rounded-md border bg-transparent px-3 py-2" placeholder="123456" value={otp} onChange={(e) => setOtp(e.target.value)} />
-        <div className="flex gap-2"><Button type="button" onClick={changeEmail} disabled={loading}>Change email</Button><Button className="flex-1" type="submit" disabled={loading}>{loading ? "Verifying..." : "Verify"}</Button></div>
-        <Button className="w-full" type="button" onClick={resendOtp} disabled={loading}>{loading ? "Sending..." : "Resend code"}</Button>
+        <div className="flex gap-2"><Button variant="base" type="button" onClick={changeEmail} disabled={loading}>Change email</Button><Button variant="base" className="flex-1" type="submit" disabled={loading}>{loading ? "Verifying..." : "Verify"}</Button></div>
+        <Button variant="base" className="w-full" type="button" onClick={resendOtp} disabled={loading}>{loading ? "Sending..." : "Resend code"}</Button>
       </form>}
     </div>
   </div>;
