@@ -9,7 +9,7 @@ import { ThemeSelect } from "./theme-select";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
-export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
+export function FolderSidebar({ userEmail, onNavigate }: { userEmail?: string | null; onNavigate?: () => void }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["folders"],
     queryFn: api.folders,
@@ -17,7 +17,7 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
   const nav = useNavigate();
 
   return (
-    <aside className="flex h-screen w-72 flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4">
+    <aside className="flex h-screen w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:w-72">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="font-semibold">Notes</h1>
         <CreateFolderDialog />
@@ -41,6 +41,7 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
               to="/folders/$folderId"
               params={{ folderId: folder.id }}
               className="min-w-0 flex-1 px-3 py-2 text-sm"
+              onClick={onNavigate}
             >
               {folder.title}
             </Link>
@@ -63,7 +64,10 @@ export function FolderSidebar({ userEmail }: { userEmail?: string | null }) {
             <PopoverContent align="end" className="w-56 p-1">
               <ThemeSelect />
               <ActionMenuButton
-                onClick={() => nav({ to: "/settings/api-access" })}
+                onClick={() => {
+                  nav({ to: "/settings/api-access" });
+                  onNavigate?.();
+                }}
               >
                 API Access
               </ActionMenuButton>

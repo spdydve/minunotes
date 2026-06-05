@@ -90,7 +90,7 @@ function NoteView() {
       setImageUploadError(error instanceof Error ? error.message : "Image upload failed");
       throw error;
     });
-    setContent((current) => `${current}${current.trim() ? "\n\n" : ""}${result.markdown}`);
+    return result.markdownUrl;
   };
 
   const reloadLatest = async () => {
