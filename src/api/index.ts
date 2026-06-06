@@ -2,6 +2,7 @@ import { handle } from "hono/aws-lambda";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type ApiKey } from "./db/schema";
+import { libsql } from "./db/client";
 import { auth } from "./lib/auth";
 import { authenticationMiddleware, harnessAuthenticationMiddleware } from "./middleware/authentication";
 import { createRateLimitMiddleware } from "./middleware/rate-limit";
@@ -40,7 +41,22 @@ app.use("*", cors({
   allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
   credentials: true,
 }));
-app.get("/health", (c) => c.json({ ok: true }));
+app.get("/health", async (c) => {
+  let dbOk = false;
+  try {
+    await libsql.execute("select 1");
+    dbOk = true;
+  } catch (error) {
+    console.error("[HEALTH CHECK DB ERROR]", error);
+  }
+
+  return c.json({
+    ok: dbOk,
+    environment: process.env.ENVIRONMENT ?? "unknown",
+    time: new Date().toISOString(),
+    db: dbOk,
+  }, dbOk ? 200 : 503);
+});
 app.use("/api/auth", authRateLimit);
 app.use("/api/auth/*", authRateLimit);
 app.route("/api/auth", authRoutes);
