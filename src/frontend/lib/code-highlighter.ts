@@ -1,24 +1,31 @@
 import { createShikiHighlighter } from "@dpklabs/minueditor/shiki";
 import type { CodeHighlighter } from "@dpklabs/minueditor";
 
+const languageAliases: Record<string, string> = {
+  js: "javascript",
+  md: "markdown",
+  py: "python",
+  sh: "bash",
+  shell: "bash",
+  shellscript: "bash",
+  ts: "typescript",
+  yml: "yaml",
+  zsh: "bash",
+};
+
 const highlightedLanguages = new Set([
   "bash",
   "css",
   "html",
   "javascript",
-  "js",
   "json",
   "jsx",
   "markdown",
-  "md",
-  "shell",
-  "sh",
+  "python",
   "sql",
   "tsx",
   "typescript",
-  "ts",
   "yaml",
-  "yml",
 ]);
 
 const shikiHighlighter = createShikiHighlighter({
@@ -29,7 +36,8 @@ const shikiHighlighter = createShikiHighlighter({
 });
 
 export const editorCodeHighlighter: CodeHighlighter = (code, lang) => {
-  const normalized = lang.trim().toLowerCase();
+  const rawLanguage = lang.trim().toLowerCase();
+  const normalized = languageAliases[rawLanguage] ?? rawLanguage;
   if (!normalized || !highlightedLanguages.has(normalized)) return null;
   return shikiHighlighter(code, normalized);
 };
