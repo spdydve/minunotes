@@ -1,6 +1,7 @@
 import { defaultSlashCommands, MarkdownEditor, type MarkdownEditorHandle, type SlashCommand } from "@dpklabs/minueditor";
 import { Heading1, Heading2, Heading3, Image, List, ListChecks, ListOrdered, Plus, Quote, Redo2, Table2, Type, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { editorCodeHighlighter } from "../lib/code-highlighter";
 import { editorCodeLanguages } from "../lib/editor-languages";
 
 export function NoteEditor({
@@ -160,6 +161,7 @@ export function NoteEditor({
           placeholder="Start typing..."
           minHeight={520}
           codeLanguages={editorCodeLanguages}
+          codeHighlighter={editorCodeHighlighter}
           slashCommands={slashCommands}
           onImageUpload={onImageUpload ? async (file) => {
             setUploadingImage(true);

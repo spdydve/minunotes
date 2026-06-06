@@ -45,8 +45,8 @@ dependencies:
     specifier: ^6.5.3
     version: 6.5.3
   '@dpklabs/minueditor':
-    specifier: github:spdydve/minueditor#v0.6.0
-    version: github.com/spdydve/minueditor/4320838e2473f61665b26dcd252c858aaeceaac2(react-dom@19.2.6)(react@19.2.6)
+    specifier: github:spdydve/minueditor#v0.7.2
+    version: github.com/spdydve/minueditor/2e5948cf1e14a96c98878fdd1f38583babe00bfe(react-dom@19.2.6)(react@19.2.6)
   '@hono/node-server':
     specifier: ^2.0.3
     version: 2.0.3(hono@4.12.21)
@@ -4359,11 +4359,12 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
     dev: false
 
-  github.com/spdydve/minueditor/4320838e2473f61665b26dcd252c858aaeceaac2(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/4320838e2473f61665b26dcd252c858aaeceaac2}
-    id: github.com/spdydve/minueditor/4320838e2473f61665b26dcd252c858aaeceaac2
+  github.com/spdydve/minueditor/2e5948cf1e14a96c98878fdd1f38583babe00bfe(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/2e5948cf1e14a96c98878fdd1f38583babe00bfe}
+    id: github.com/spdydve/minueditor/2e5948cf1e14a96c98878fdd1f38583babe00bfe
     name: '@dpklabs/minueditor'
-    version: 0.6.0
+    version: 0.7.2
+    prepare: true
     requiresBuild: true
     peerDependencies:
       react: '>=18.0.0'
