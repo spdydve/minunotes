@@ -17,7 +17,7 @@ function ApiAccessSettingsView() {
 
   return (
     <section className="mx-auto w-full max-w-5xl">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
             to="/"
@@ -38,7 +38,7 @@ function ApiAccessSettingsView() {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
-        <div className="grid grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] gap-3 border-b border-[var(--notes-border)] bg-[var(--notes-table-header-bg)] px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+        <div className="hidden grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] gap-3 border-b border-[var(--notes-border)] bg-[var(--notes-table-header-bg)] px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)] md:grid">
           <span>Name</span>
           <span>UID</span>
           <span>Created</span>
@@ -51,22 +51,22 @@ function ApiAccessSettingsView() {
         {(keys.data?.keys ?? []).map((key) => (
           <div
             key={key.id}
-            className="grid grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] items-center gap-3 border-b border-[var(--notes-table-row-border)] px-4 py-3 text-sm transition-colors last:border-b-0 hover:bg-[var(--notes-table-row-hover)]"
+            className="grid gap-3 border-b border-[var(--notes-table-row-border)] px-4 py-4 text-sm transition-colors last:border-b-0 hover:bg-[var(--notes-table-row-hover)] md:grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] md:items-center md:py-3"
           >
             <div className="min-w-0">
               <p className="truncate font-medium">{key.name}</p>
               {/*<p className="text-xs text-slate-500">{key.permissions.length} folder permission{key.permissions.length === 1 ? "" : "s"}</p>*/}
             </div>
-            <code className="text-xs text-[var(--notes-muted)]">{key.uid}</code>
-            <span className="text-xs text-[var(--notes-muted)]">
+            <code className="text-xs text-[var(--notes-muted)]"><span className="md:hidden">UID </span>{key.uid}</code>
+            <span className="text-xs text-[var(--notes-muted)]"><span className="md:hidden">Created </span>
               {new Date(key.createdAt).toLocaleString()}
             </span>
             <span className="text-xs text-[var(--notes-muted)]">
-              {key.lastUsedAt
+              <span className="md:hidden">Last used </span>{key.lastUsedAt
                 ? new Date(key.lastUsedAt).toLocaleString()
                 : "Never"}
             </span>
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap gap-2 md:justify-end">
               <ApiKeyAccessDialog
                 folders={folders.data?.folders ?? []}
                 apiKey={key}

@@ -229,6 +229,17 @@ select {
     --me-table-row-alt-bg: transparent;
     --me-table-selection-bg: var(--notes-hover);
     --me-table-selection-header-bg: var(--notes-hover);
+    --me-command-bg: var(--notes-panel);
+    --me-command-border: var(--notes-border);
+    --me-command-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+    --me-image-picker-bg: var(--notes-panel);
+    --me-image-picker-color: var(--notes-text);
+    --me-image-picker-muted: var(--notes-muted);
+    --me-image-picker-border: var(--notes-border);
+    --me-image-picker-accent: var(--notes-blue);
+    --me-image-picker-accent-text: #ffffff;
+    --me-image-picker-button-bg: var(--notes-bg);
+    --me-image-picker-input-bg: var(--notes-bg);
 }
 
 .notes-minu-editor .cm-editor {

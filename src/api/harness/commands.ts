@@ -222,7 +222,9 @@ export async function createDocument(input: {
   };
 
   await db.insert(notes).values(note);
-  await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+  if (note.content.includes("/api/attachments/")) {
+    await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+  }
 
   const contentHash = hashMarkdown(note.content);
   await insertNoteEvent({

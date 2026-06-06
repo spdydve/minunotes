@@ -38,20 +38,38 @@ function NoteView() {
     setIsStale(false);
   }, [data, noteId]);
 
+  const applySavedNote = ({ note, contentHash }: { note: NonNullable<typeof data>["note"]; contentHash: string }) => {
+    lastSaved.current = { title: note.title, content: note.content };
+    lastKnownHash.current = contentHash;
+    setSaveError(false);
+    setIsStale(false);
+    qc.setQueryData(["note", noteId], { note, contentHash });
+    qc.invalidateQueries({ queryKey: ["notes", note.folderId] });
+    qc.invalidateQueries({ queryKey: ["note-events", noteId] });
+  };
+
   const save = useMutation({
-    mutationFn: (next: { title: string; content: string }) => api.saveNote(noteId, { ...next, baseHash: lastKnownHash.current ?? undefined }),
-    onSuccess: ({ note, contentHash }) => {
-      lastSaved.current = { title: note.title, content: note.content };
-      lastKnownHash.current = contentHash;
-      setSaveError(false);
-      setIsStale(false);
-      qc.setQueryData(["note", noteId], { note, contentHash });
-      qc.invalidateQueries({ queryKey: ["notes", note.folderId] });
-      qc.invalidateQueries({ queryKey: ["note-events", noteId] });
-    },
-    onError: (error) => {
+    mutationFn: (next: { title: string; content: string }) => api.saveNote(noteId, next),
+    onSuccess: applySavedNote,
+    onError: async (error, attempted) => {
       setSaveError(true);
-      if (error instanceof ApiError && error.status === 409) setIsStale(true);
+      if (!(error instanceof ApiError) || error.status !== 409) return;
+
+      const latest = await api.note(noteId).catch(() => null);
+      if (!latest) {
+        setIsStale(true);
+        return;
+      }
+
+      lastKnownHash.current = latest.contentHash;
+      qc.setQueryData(["note", noteId], latest);
+
+      if (latest.note.title === attempted.title && latest.note.content === attempted.content) {
+        applySavedNote(latest);
+        return;
+      }
+
+      setIsStale(true);
     },
   });
 
@@ -90,7 +108,7 @@ function NoteView() {
       setImageUploadError(error instanceof Error ? error.message : "Image upload failed");
       throw error;
     });
-    setContent((current) => `${current}${current.trim() ? "\n\n" : ""}${result.markdown}`);
+    return result.markdownUrl;
   };
 
   const reloadLatest = async () => {
@@ -123,11 +141,11 @@ function NoteView() {
       if (document.visibilityState !== "visible" || save.isPending || isStale) return;
       const status = await api.noteStatus(noteId).catch(() => null);
       if (!status || !lastKnownHash.current) return;
-      if (status.contentHash !== lastKnownHash.current) setIsStale(true);
+      if (status.contentHash !== lastKnownHash.current && !isDirty) setIsStale(true);
     };
     const timer = window.setInterval(checkStatus, 20_000);
     return () => window.clearInterval(timer);
-  }, [noteId, save.isPending, isStale]);
+  }, [noteId, save.isPending, isStale, isDirty]);
 
   useEffect(() => {
     if (blocker.status !== "blocked") return;
