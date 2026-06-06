@@ -16,7 +16,13 @@ function FolderView() {
     queryFn: () => api.notes(folderId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
-  const create = useMutation({ mutationFn: () => api.createNote(folderId), onSuccess: ({ note }) => nav({ to: "/notes/$noteId", params: { noteId: note.id } }) });
+  const create = useMutation({
+    mutationFn: () => api.createNote(folderId),
+    onSuccess: ({ note }) => {
+      qc.invalidateQueries({ queryKey: ["notes", folderId] });
+      nav({ to: "/notes/$noteId", params: { noteId: note.id } });
+    },
+  });
   const remove = useMutation({ mutationFn: () => api.deleteFolder(folderId), onSuccess: () => { qc.invalidateQueries({ queryKey: ["folders"] }); nav({ to: "/" }); } });
   if (isLoading) return <p className="notes-muted text-sm">Loading folder...</p>;
   if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Folder not found"><p>This folder does not exist or you do not have access to it.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;

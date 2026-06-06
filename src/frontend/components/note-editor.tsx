@@ -1,6 +1,6 @@
 import { defaultSlashCommands, MarkdownEditor, type MarkdownEditorHandle, type SlashCommand } from "@dpklabs/minueditor";
 import { Heading1, Heading2, Heading3, Image, List, ListChecks, ListOrdered, Plus, Quote, Redo2, Table2, Type, Undo2, X } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { editorCodeLanguages } from "../lib/editor-languages";
 
 export function NoteEditor({
@@ -34,9 +34,28 @@ export function NoteEditor({
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [imagePickerError, setImagePickerError] = useState<string | null>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const titleValue = title === "Untitled note" ? "" : title;
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const updateKeyboardOffset = () => {
+      const offset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      setKeyboardOffset(offset);
+    };
+
+    updateKeyboardOffset();
+    viewport.addEventListener("resize", updateKeyboardOffset);
+    viewport.addEventListener("scroll", updateKeyboardOffset);
+    return () => {
+      viewport.removeEventListener("resize", updateKeyboardOffset);
+      viewport.removeEventListener("scroll", updateKeyboardOffset);
+    };
+  }, []);
 
   const saveLabel =
     saveState === "saving"
@@ -192,7 +211,7 @@ export function NoteEditor({
           </div>
         </div>
       ) : null}
-      <div className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4 sm:px-6 md:left-72 md:right-0">
+      <div className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4 sm:px-6 md:left-72 md:right-0" style={keyboardOffset ? { bottom: keyboardOffset + 12 } : undefined}>
         <div className="mx-auto flex max-w-3xl flex-col items-center">
           {blockMenuOpen ? (
             <div className="mb-3 rounded-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
