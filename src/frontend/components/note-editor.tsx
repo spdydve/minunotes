@@ -177,9 +177,9 @@ export function NoteEditor({
         />
       </div>
       {imagePickerOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-3 sm:place-items-center sm:p-6">
-          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[var(--notes-border)] px-4 py-3">
+        <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-6">
+          <div className="max-h-[min(82vh,42rem)] w-full max-w-lg overflow-hidden rounded-t-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-[var(--notes-border)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3">
               <h2 className="text-sm font-semibold">Add an image</h2>
               <button type="button" className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]" onClick={closeImagePicker} aria-label="Close image picker">
                 <X className="h-4 w-4" />
@@ -189,20 +189,20 @@ export function NoteEditor({
               <button type="button" className={`border-b-2 px-3 py-2 text-sm font-medium ${imageTab === "upload" ? "border-[var(--notes-blue)] text-[var(--notes-text)]" : "border-transparent text-[var(--notes-muted)] hover:text-[var(--notes-text)]"}`} onClick={() => setImageTab("upload")}>Upload</button>
               <button type="button" className={`border-b-2 px-3 py-2 text-sm font-medium ${imageTab === "link" ? "border-[var(--notes-blue)] text-[var(--notes-text)]" : "border-transparent text-[var(--notes-muted)] hover:text-[var(--notes-text)]"}`} onClick={() => setImageTab("link")}>Link</button>
             </div>
-            <div className="space-y-3 p-4">
-              <input className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--notes-blue)]" placeholder="Alt text optional" value={imageAlt} onChange={(event) => setImageAlt(event.target.value)} />
+            <div className="max-h-[calc(min(82vh,42rem)-6rem)] space-y-3 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+              <input className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm" placeholder="Alt text optional" value={imageAlt} onChange={(event) => setImageAlt(event.target.value)} />
               {imageTab === "upload" ? (
                 <div>
                   <input ref={imageInputRef} className="hidden" type="file" accept="image/*" onChange={(event) => void uploadImageFile(event.target.files?.[0])} />
-                  <button type="button" className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-sm font-semibold hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-50" disabled={uploadingImage || !onImageUpload} onClick={() => imageInputRef.current?.click()}>
+                  <button type="button" className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-4 text-base font-semibold hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm" disabled={uploadingImage || !onImageUpload} onClick={() => imageInputRef.current?.click()}>
                     {uploadingImage ? "Uploading..." : "Upload file"}
                   </button>
                   <p className="mt-2 text-center text-xs text-[var(--notes-muted)]">Choose an image from your device</p>
                 </div>
               ) : (
                 <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); insertLinkedImage(); }}>
-                  <input className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--notes-blue)]" type="url" placeholder="Paste the image link…" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} />
-                  <button type="submit" className="w-full rounded-lg border border-[var(--notes-blue)] bg-[var(--notes-blue)] px-3 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!imageUrl.trim()}>Embed image</button>
+                  <input className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm" type="url" inputMode="url" placeholder="Paste the image link…" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} />
+                  <button type="submit" className="w-full rounded-lg border border-[var(--notes-blue)] bg-[var(--notes-blue)] px-3 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm" disabled={!imageUrl.trim()}>Embed image</button>
                   <p className="text-center text-xs text-[var(--notes-muted)]">Works with any image from the web</p>
                 </form>
               )}
