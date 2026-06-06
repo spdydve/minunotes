@@ -288,6 +288,37 @@ select {
     font-size: 1px !important;
     letter-spacing: -1ch !important;
 }
+/* CodeMirror's defaultHighlightStyle is tuned for light backgrounds. The
+   nested code-block editor inherits our dark editor surface, so remap the
+   generated highlight classes to theme-readable colors. */
+.notes-minu-editor .me-codeblock-widget--editing .ͼ5 { color: #8b949e !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼb { color: #ff7b72 !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼc { color: #79c0ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼd { color: #79c0ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼe { color: #a5d6ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼf { color: #a5d6ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼg { color: #d2a8ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼh { color: #ffa657 !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼi { color: #ffa657 !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼj { color: #ffa657 !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼk { color: #79c0ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼl { color: #79c0ff !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼm { color: #8b949e !important; }
+.notes-minu-editor .me-codeblock-widget--editing .ͼn { color: #ff7b72 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼ5 { color: #6c6f85 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼb { color: #8839ef !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼc { color: #1e66f5 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼd { color: #40a02b !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼe { color: #d20f39 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼf { color: #fe640b !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼg { color: #1e66f5 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼh { color: #7287fd !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼi { color: #179299 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼj { color: #209fb5 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼk { color: #04a5e5 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼl { color: #1e66f5 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼm { color: #7c7f93 !important; }
+.theme-catppuccin-latte .notes-minu-editor .me-codeblock-widget--editing .ͼn { color: #d20f39 !important; }
 .notes-minu-renderer {
     cursor: text;
     padding: 12px 0 0 !important;

@@ -45,8 +45,8 @@ dependencies:
     specifier: ^6.5.3
     version: 6.5.3
   '@dpklabs/minueditor':
-    specifier: github:spdydve/minueditor#v0.7.2
-    version: github.com/spdydve/minueditor/2e5948cf1e14a96c98878fdd1f38583babe00bfe(react-dom@19.2.6)(react@19.2.6)
+    specifier: github:spdydve/minueditor#v0.8.0
+    version: github.com/spdydve/minueditor/89e489aad2bb9c69c472e404820b62c51185f22c(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
   '@hono/node-server':
     specifier: ^2.0.3
     version: 2.0.3(hono@4.12.21)
@@ -4359,14 +4359,20 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
     dev: false
 
-  github.com/spdydve/minueditor/2e5948cf1e14a96c98878fdd1f38583babe00bfe(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/2e5948cf1e14a96c98878fdd1f38583babe00bfe}
-    id: github.com/spdydve/minueditor/2e5948cf1e14a96c98878fdd1f38583babe00bfe
+  github.com/spdydve/minueditor/89e489aad2bb9c69c472e404820b62c51185f22c(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/89e489aad2bb9c69c472e404820b62c51185f22c}
+    id: github.com/spdydve/minueditor/89e489aad2bb9c69c472e404820b62c51185f22c
     name: '@dpklabs/minueditor'
-    version: 0.7.2
+    version: 0.8.0
     prepare: true
     requiresBuild: true
     peerDependencies:
+      '@codemirror/autocomplete': ^6.20.0
+      '@codemirror/commands': ^6.7.0
+      '@codemirror/lang-markdown': ^6.3.0
+      '@codemirror/language': ^6.10.0
+      '@codemirror/state': ^6.5.0
+      '@codemirror/view': ^6.36.0
       react: '>=18.0.0'
       react-dom: '>=18.0.0'
     dependencies:
@@ -4376,7 +4382,6 @@ packages:
       '@codemirror/language': 6.12.3
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.43.0
-      '@lezer/highlight': 1.2.3
       marked: 15.0.12
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)

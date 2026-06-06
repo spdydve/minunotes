@@ -19,6 +19,25 @@ export default defineConfig(async ({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    resolve: {
+      dedupe: [
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/lang-css",
+        "@codemirror/lang-html",
+        "@codemirror/lang-javascript",
+        "@codemirror/lang-json",
+        "@codemirror/lang-markdown",
+        "@codemirror/lang-python",
+        "@codemirror/lang-sql",
+        "@codemirror/lang-yaml",
+        "@codemirror/language",
+        "@codemirror/legacy-modes",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight",
+      ],
+    },
     server: {
       proxy: apiTarget && apiTarget !== "/api"
         ? {
