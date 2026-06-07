@@ -85,12 +85,21 @@ export const notes = sqliteTable("notes", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   title: text("title").notNull().default("Untitled note"),
   content: text("content").notNull().default(""),
+  type: text("type", { enum: ["note", "template"] }).notNull().default("note"),
   isApiEditable: integer("is_api_editable", { mode: "boolean" }).notNull().default(true),
   updatedByActorType: text("updated_by_actor_type"),
   updatedByActorId: text("updated_by_actor_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [index("notes_user_id_idx").on(table.userId), index("notes_folder_id_idx").on(table.folderId)]);
+}, (table) => [index("notes_user_id_idx").on(table.userId), index("notes_folder_id_idx").on(table.folderId), index("notes_type_idx").on(table.type)]);
+
+export const templateFolderAssignments = sqliteTable("template_folder_assignments", {
+  id: text("id").primaryKey(),
+  templateId: text("template_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("template_folder_assignments_template_id_idx").on(table.templateId), index("template_folder_assignments_folder_id_idx").on(table.folderId), index("template_folder_assignments_user_id_idx").on(table.userId)]);
 
 export const noteEvents = sqliteTable("note_events", {
   id: text("id").primaryKey(),
@@ -131,6 +140,7 @@ export const userRelations = relations(user, ({ many }) => ({
   notes: many(notes),
   noteEvents: many(noteEvents),
   attachments: many(attachments),
+  templateFolderAssignments: many(templateFolderAssignments),
   apiKeys: many(apiKeys),
 }));
 
@@ -146,6 +156,7 @@ export const folderRelations = relations(folders, ({ many, one }) => ({
   user: one(user, { fields: [folders.userId], references: [user.id] }),
   notes: many(notes),
   attachments: many(attachments),
+  templateAssignments: many(templateFolderAssignments),
 }));
 
 export const apiKeyRelations = relations(apiKeys, ({ many, one }) => ({
@@ -163,6 +174,13 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
   events: many(noteEvents),
   attachments: many(attachments),
+  templateAssignments: many(templateFolderAssignments),
+}));
+
+export const templateFolderAssignmentRelations = relations(templateFolderAssignments, ({ one }) => ({
+  template: one(notes, { fields: [templateFolderAssignments.templateId], references: [notes.id] }),
+  folder: one(folders, { fields: [templateFolderAssignments.folderId], references: [folders.id] }),
+  user: one(user, { fields: [templateFolderAssignments.userId], references: [user.id] }),
 }));
 
 export const noteEventRelations = relations(noteEvents, ({ one }) => ({
@@ -178,6 +196,7 @@ export const attachmentRelations = relations(attachments, ({ one }) => ({
 
 export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
+export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;

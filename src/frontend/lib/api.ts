@@ -28,7 +28,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
 export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
 export type ApiKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
-export type Note = { id: string; folderId: string; title: string; content: string; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
+export type NoteType = "note" | "template";
+export type Note = { id: string; folderId: string; title: string; content: string; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
@@ -64,8 +65,12 @@ export const api = {
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),
   renameFolder: (folderId: string, title: string) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify({ title }) }),
   deleteFolder: (folderId: string) => request<{ ok: true }>(`/folders/${folderId}`, { method: "DELETE" }),
-  notes: (folderId: string) => request<{ notes: Note[] }>(`/folders/${folderId}/notes`),
-  createNote: (folderId: string, data?: { title?: string; content?: string }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
+  templates: () => request<{ templates: Note[] }>("/notes/templates"),
+  folderTemplates: (folderId: string) => request<{ templates: Note[] }>(`/folders/${folderId}/templates`),
+  templateFolders: (templateId: string) => request<{ folders: Folder[] }>(`/notes/templates/${templateId}/folders`),
+  updateTemplateFolders: (templateId: string, folderIds: string[]) => request<{ ok: true }>(`/notes/templates/${templateId}/folders`, { method: "PUT", body: JSON.stringify({ folderIds }) }),
+  notes: (folderId: string, type: NoteType = "note") => request<{ notes: Note[] }>(`/folders/${folderId}/notes?type=${type}`),
+  createNote: (folderId: string, data?: { title?: string; content?: string; type?: NoteType }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
@@ -74,7 +79,7 @@ export const api = {
   editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),
   saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
-  searchNotes: (q: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}`),
+  searchNotes: (q: string, type: NoteType = "note") => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}&type=${type}`),
   uploadNoteImage: async (noteId: string, file: File) => {
     try {
       const { uploads } = await request<{ uploads: SignedImageUpload[] }>(`/attachments/notes/${noteId}/image-uploads`, {

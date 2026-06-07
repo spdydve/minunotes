@@ -6,14 +6,14 @@ import { NoteActionsPopover } from "./note-actions-popover";
 
 const columnHelper = createColumnHelper<Note>();
 
-export function NotesTable({ notes }: { notes: Note[] }) {
+export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unknown[] }) {
   const qc = useQueryClient();
   const remove = useMutation({
     mutationFn: ({ noteId }: { noteId: string }) => api.deleteNote(noteId),
     onSuccess: (_, variables) => {
       const note = notes.find((item) => item.id === variables.noteId);
       if (!note) return;
-      qc.invalidateQueries({ queryKey: ["notes", note.folderId] });
+      qc.invalidateQueries({ queryKey: queryKey ?? ["notes", note.folderId] });
       qc.invalidateQueries({ queryKey: ["note", note.id] });
     },
   });

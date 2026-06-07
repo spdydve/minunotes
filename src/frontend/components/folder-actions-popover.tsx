@@ -1,5 +1,9 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import type { Folder } from "../lib/api";
+import { api } from "../lib/api";
+import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { FolderApiAccessDialog } from "./folder-api-access-dialog";
 import { RenameFolderDialog } from "./rename-folder-dialog";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
@@ -9,15 +13,33 @@ export function FolderActionsPopover({ folder }: { folder: Folder }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [apiAccessOpen, setApiAccessOpen] = useState(false);
+  const nav = useNavigate();
+  const qc = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => api.deleteFolder(folder.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["folders"] });
+      nav({ to: "/" });
+    },
+  });
 
   return <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <ActionMenuIconButton aria-label={`Actions for ${folder.title}`} />
+        <ActionMenuIconButton icon="settings" aria-label={`Settings for ${folder.title}`} />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-40 p-1">
+      <PopoverContent align="end" className="w-48 p-1">
+        <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setRenameOpen(true); }}>Rename</ActionMenuButton>
+        <ActionMenuButton disabled title="Folder moving is coming with folder tree support.">Move</ActionMenuButton>
+        <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Template settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setApiAccessOpen(true); }}>API Access</ActionMenuButton>
+        <DeleteConfirmDialog
+          label="folder"
+          warning="All notes in this folder will be permanently lost."
+          onConfirm={() => remove.mutate()}
+          trigger={<span className="block w-full rounded-md px-3 py-2 text-left text-sm text-[var(--notes-button-destructive-text)] transition-colors hover:bg-[var(--notes-button-destructive-soft-hover)]">Delete</span>}
+        />
       </PopoverContent>
     </Popover>
     <RenameFolderDialog folder={folder} open={renameOpen} onOpenChange={setRenameOpen} />

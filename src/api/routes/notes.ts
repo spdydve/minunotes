@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client";
-import { notes } from "../db/schema";
+import { folders, notes, templateFolderAssignments } from "../db/schema";
 import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
@@ -19,6 +19,42 @@ function getUser(c: Context<{ Variables: Variables }>) {
   return user;
 }
 
+noteRoutes.get("/templates", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const rows = await db.select().from(notes).where(and(eq(notes.userId, user.id), eq(notes.type, "template")));
+  return c.json({ templates: rows });
+});
+
+noteRoutes.get("/templates/:templateId/folders", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const rows = await db.select({ folder: folders }).from(templateFolderAssignments)
+    .innerJoin(folders, eq(templateFolderAssignments.folderId, folders.id))
+    .where(and(eq(templateFolderAssignments.userId, user.id), eq(templateFolderAssignments.templateId, c.req.param("templateId"))));
+  return c.json({ folders: rows.map((row) => row.folder) });
+});
+
+noteRoutes.put("/templates/:templateId/folders", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const templateId = c.req.param("templateId");
+  const [template] = await db.select().from(notes).where(and(eq(notes.id, templateId), eq(notes.userId, user.id), eq(notes.type, "template"))).limit(1);
+  if (!template) return c.json({ error: "Template not found" }, 404);
+  const body = await c.req.json().catch(() => null) as { folderIds?: string[] } | null;
+  const folderIds = [...new Set(body?.folderIds ?? [])];
+  if (folderIds.length) {
+    const valid = await db.select({ id: folders.id }).from(folders).where(and(eq(folders.userId, user.id), inArray(folders.id, folderIds)));
+    if (valid.length !== folderIds.length) return c.json({ error: "One or more folders were not found" }, 400);
+  }
+  await db.delete(templateFolderAssignments).where(and(eq(templateFolderAssignments.userId, user.id), eq(templateFolderAssignments.templateId, templateId)));
+  if (folderIds.length) {
+    await db.insert(templateFolderAssignments).values(folderIds.map((folderId) => ({ id: crypto.randomUUID(), userId: user.id, templateId, folderId, createdAt: new Date() })));
+  }
+  return c.json({ ok: true });
+});
+
 noteRoutes.get("/search", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
@@ -26,7 +62,8 @@ noteRoutes.get("/search", async (c) => {
   const q = c.req.query("q")?.trim();
   if (!q) return c.json({ notes: [] });
 
-  const result = await searchDocuments({ userId: user.id, query: q, limit: 25 });
+  const type = c.req.query("type") === "template" ? "template" : "note";
+  const result = await searchDocuments({ userId: user.id, query: q, limit: 25, type });
   return c.json({ notes: result.value.documents });
 });
 

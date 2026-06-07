@@ -6,8 +6,12 @@ import { noteRoute } from "./routes/notes.$noteId";
 import { noteActivityRoute } from "./routes/notes.$noteId.activity";
 import { authRoute } from "./routes/auth";
 import { apiAccessSettingsRoute } from "./routes/settings.api-access";
+import { templatesRoute } from "./routes/templates";
+import { newFromTemplateRoute } from "./routes/folders.$folderId.new-from-template";
+import { folderTemplateSettingsRoute } from "./routes/folders.$folderId.templates";
+import { folderSettingsRoute } from "./routes/folders.$folderId.settings";
 
-const routeTree = rootRoute.addChildren([indexRoute, folderRoute, noteRoute, noteActivityRoute, authRoute, apiAccessSettingsRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, folderRoute, newFromTemplateRoute, folderTemplateSettingsRoute, folderSettingsRoute, templatesRoute, noteRoute, noteActivityRoute, authRoute, apiAccessSettingsRoute]);
 
 export const router = createRouter({ routeTree });
 

@@ -71,6 +71,20 @@
       "when": 1780361758538,
       "tag": "0009_green_dragon_lord",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1780796864810,
+      "tag": "0010_keen_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1780841563899,
+      "tag": "0011_dazzling_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

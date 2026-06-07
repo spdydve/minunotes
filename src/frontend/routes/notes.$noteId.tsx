@@ -44,7 +44,8 @@ function NoteView() {
     setSaveError(false);
     setIsStale(false);
     qc.setQueryData(["note", noteId], { note, contentHash });
-    qc.invalidateQueries({ queryKey: ["notes", note.folderId] });
+    qc.invalidateQueries({ queryKey: [note.type === "template" ? "templates" : "notes", note.folderId] });
+    if (note.type === "template") qc.invalidateQueries({ queryKey: ["templates"] });
     qc.invalidateQueries({ queryKey: ["note-events", noteId] });
   };
 
@@ -73,7 +74,7 @@ function NoteView() {
     },
   });
 
-  const remove = useMutation({ mutationFn: () => api.deleteNote(noteId), onSuccess: () => nav({ to: "/folders/$folderId", params: { folderId: data!.note.folderId } }) });
+  const remove = useMutation({ mutationFn: () => api.deleteNote(noteId), onSuccess: () => nav(data!.note.type === "template" ? { to: "/templates" } : { to: "/folders/$folderId", params: { folderId: data!.note.folderId } }) });
   const toggleApiEditable = useMutation({
     mutationFn: () => api.saveNote(noteId, { isApiEditable: !data!.note.isApiEditable }),
     onSuccess: ({ note, contentHash }) => {
@@ -171,7 +172,9 @@ function NoteView() {
   if (!data?.note) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Unable to load note"><p>Try again or return to your notes.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
   if (hydratedNoteId.current !== noteId) return <p className="notes-muted text-sm">Loading note...</p>;
 
-  const updatedMeta = data.note.updatedByActorType === "agent"
+  const updatedMeta = data.note.type === "template"
+    ? "Template"
+    : data.note.updatedByActorType === "agent"
     ? `Last updated via API key${data.note.updatedByActorId ? ` (${data.note.updatedByActorId})` : ""}`
     : data.note.updatedByActorType === "system"
       ? "Last updated by system"

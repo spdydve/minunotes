@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { folders, notes } from "../db/schema";
+import { folders, notes, templateFolderAssignments } from "../db/schema";
 import { createDocument, listDocuments, listFolders } from "../harness/commands";
 import { createId } from "../lib/id";
 import { auth } from "../lib/auth";
@@ -61,20 +61,32 @@ folderRoutes.get("/:folderId/notes", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const result = await listDocuments({ userId: user.id, folderId: c.req.param("folderId") });
+  const type = c.req.query("type") === "template" ? "template" : "note";
+  const result = await listDocuments({ userId: user.id, folderId: c.req.param("folderId"), type });
   return c.json({ notes: result.value.documents });
+});
+
+folderRoutes.get("/:folderId/templates", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const rows = await db.select({ template: notes }).from(templateFolderAssignments)
+    .innerJoin(notes, eq(templateFolderAssignments.templateId, notes.id))
+    .where(and(eq(templateFolderAssignments.userId, user.id), eq(templateFolderAssignments.folderId, c.req.param("folderId")), eq(notes.type, "template")));
+  return c.json({ templates: rows.map((row) => row.template) });
 });
 
 folderRoutes.post("/:folderId/notes", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => ({})) as { title?: string; content?: string };
+  const body = await c.req.json().catch(() => ({})) as { title?: string; content?: string; type?: "note" | "template" };
   const result = await createDocument({
     userId: user.id,
     folderId: c.req.param("folderId"),
     title: body.title,
     markdown: body.content,
+    type: body.type === "template" ? "template" : "note",
     actorType: "user",
   });
 

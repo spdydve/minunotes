@@ -22,10 +22,13 @@ export async function listFolders(input: { userId: string }) {
   return { ok: true, value: { folders: rows } } satisfies DocumentCommandResult<{ folders: typeof rows }>;
 }
 
-export async function listDocuments(input: { userId: string; folderId?: string }) {
+export type NoteType = "note" | "template";
+
+export async function listDocuments(input: { userId: string; folderId?: string; type?: NoteType }) {
+  const type = input.type ?? "note";
   const where = input.folderId
-    ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId))
-    : eq(notes.userId, input.userId);
+    ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId), eq(notes.type, type))
+    : and(eq(notes.userId, input.userId), eq(notes.type, type));
   const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title));
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
 }
@@ -106,7 +109,7 @@ export async function searchAllDocumentLines(input: { userId: string; query: str
   return { ok: true, value: { query, matches } } satisfies DocumentCommandResult<{ query: string; matches: typeof matches }>;
 }
 
-export async function searchDocuments(input: { userId: string; query: string; limit?: number }) {
+export async function searchDocuments(input: { userId: string; query: string; limit?: number; type?: NoteType }) {
   const query = input.query.trim();
   if (!query) return { ok: true, value: { documents: [] } } satisfies DocumentCommandResult<{ documents: Array<{
     id: string;
@@ -120,19 +123,21 @@ export async function searchDocuments(input: { userId: string; query: string; li
   }> }>;
 
   const pattern = `%${query}%`;
+  const type = input.type ?? "note";
   const rows = await db.select({
     id: notes.id,
     folderId: notes.folderId,
     userId: notes.userId,
     title: notes.title,
     content: notes.content,
+    type: notes.type,
     createdAt: notes.createdAt,
     updatedAt: notes.updatedAt,
     folderTitle: folders.title,
   })
     .from(notes)
     .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
-    .where(and(eq(notes.userId, input.userId), or(like(notes.title, pattern), like(notes.content, pattern))))
+    .where(and(eq(notes.userId, input.userId), eq(notes.type, type), or(like(notes.title, pattern), like(notes.content, pattern))))
     .orderBy(desc(notes.updatedAt), asc(notes.title))
     .limit(input.limit ?? 25);
 
@@ -204,6 +209,7 @@ export async function createDocument(input: {
   markdown?: string;
   actorType?: ActorType;
   actorId?: string;
+  type?: NoteType;
 }) {
   const [folder] = await db.select().from(folders).where(and(eq(folders.id, input.folderId), eq(folders.userId, input.userId))).limit(1);
   if (!folder) return { ok: false, status: 404, error: "Folder not found" } satisfies DocumentCommandResult<never>;
@@ -215,6 +221,7 @@ export async function createDocument(input: {
     userId: input.userId,
     title,
     content: input.markdown ?? "",
+    type: input.type ?? "note",
     updatedByActorType: input.actorType ?? "user",
     updatedByActorId: input.actorId,
     createdAt: new Date(),
@@ -269,6 +276,9 @@ export async function updateDocument(input: UpdateDocumentInput) {
 
   const currentHash = current.value.contentHash;
   const isApiMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isApiEditable !== undefined);
+  if (isApiMutation && current.value.note.type === "template") {
+    return { ok: false, status: 403, error: "Templates cannot be edited through the API" } satisfies DocumentCommandResult<never>;
+  }
   if (isApiMutation && !current.value.note.isApiEditable) {
     return { ok: false, status: 403, error: "Document is not editable through the API" } satisfies DocumentCommandResult<never>;
   }

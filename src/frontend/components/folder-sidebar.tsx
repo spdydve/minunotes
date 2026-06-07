@@ -32,6 +32,13 @@ export function FolderSidebar({ userEmail, onNavigate }: { userEmail?: string | 
         </p>
       )}
       <nav className="space-y-1">
+        <Link
+          to="/templates"
+          className="block rounded-md px-3 py-2 text-sm text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+          onClick={onNavigate}
+        >
+          Templates
+        </Link>
         {(data?.folders ?? []).map((folder) => (
           <div
             key={folder.id}
