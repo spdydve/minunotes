@@ -1,6 +1,6 @@
 import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ApiError, api, type Note } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { EmptyState } from "../components/ui/empty-state";
@@ -22,6 +22,13 @@ function NewFromTemplateView() {
   const folders = useQuery({ queryKey: ["folders"], queryFn: api.folders });
   const templates = useQuery({ queryKey: ["folder-templates", folderId], queryFn: () => api.folderTemplates(folderId) });
   const folder = folders.data?.folders.find((item) => item.id === folderId);
+
+  useEffect(() => {
+    const assignedTemplates = templates.data?.templates ?? [];
+    if (selectedId || assignedTemplates.length !== 1) return;
+    setSelectedId(assignedTemplates[0].id);
+  }, [selectedId, templates.data]);
+
   const selected = useMemo(() => templates.data?.templates.find((template) => template.id === selectedId) ?? null, [selectedId, templates.data]);
   const create = useMutation({
     mutationFn: async () => {
