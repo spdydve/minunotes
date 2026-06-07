@@ -140,21 +140,21 @@ Create a typed SDK package used by all non-browser control planes.
 - SDK tests
 
 ### Checklist
-- [ ] Define `NotesClient` constructor with `baseUrl`, `apiKey`, optional `fetch`.
-- [ ] Add typed API errors with status/code/message.
-- [ ] Add folder methods: list/get/create/update/delete where supported.
-- [ ] Add note methods: list/get/create/update/delete/duplicate where supported or client-side duplicate.
-- [ ] Add template methods using the same note model plus template-specific list helpers.
-- [ ] Add search methods.
-- [ ] Add API key auth header handling.
-- [ ] Add JSON request/response helpers.
-- [ ] Add README examples.
+- [x] Define `NotesClient` constructor with `baseUrl`, `apiKey`, optional `fetch`.
+- [x] Add typed API errors with status/code/message.
+- [x] Add folder methods: list/get/create/update/delete where supported.
+- [x] Add note methods: list/get/create/update/delete/duplicate where supported or client-side duplicate.
+- [x] Add template methods using the same note model plus template-specific list helpers.
+- [x] Add search methods.
+- [x] Add API key auth header handling.
+- [x] Add JSON request/response helpers.
+- [x] Add README examples.
 
 ### Verification
-- [ ] SDK unit tests with mocked fetch.
-- [ ] `pnpm --filter @dpklabs/notes-sdk typecheck`
-- [ ] Root `pnpm typecheck`
-- [ ] Root `pnpm test`
+- [x] SDK unit tests with mocked fetch.
+- [x] `pnpm --filter @dpklabs/notes-sdk typecheck`
+- [x] Root `pnpm typecheck`
+- [x] Root `pnpm test`
 
 ---
 

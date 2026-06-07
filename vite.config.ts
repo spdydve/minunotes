@@ -26,7 +26,7 @@ export default defineConfig(async ({ mode }) => {
     },
     test: {
       root: process.cwd(),
-      include: ["tests/**/*.test.ts"],
+      include: ["tests/**/*.test.ts", "packages/**/*.test.ts"],
     },
     plugins: [react(), tailwindcss()],
     resolve: {
