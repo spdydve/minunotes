@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 type PermissionValue = { canRead: boolean; canCreate: boolean; canEdit: boolean };
 
 function FolderPermissionRow({ folder, value, onChange, onRemove }: { folder: Folder; value: PermissionValue; onChange: (value: PermissionValue) => void; onRemove: () => void }) {
-  return <div className="grid grid-cols-[1fr_repeat(3,auto)_auto] items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+  return <div className="grid grid-cols-1 gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800 sm:grid-cols-[1fr_repeat(3,auto)_auto] sm:items-center">
     <span className="truncate">{folder.title}</span>
     {(["canRead", "canCreate", "canEdit"] as const).map((key) => <label key={key} className="flex items-center gap-1 text-xs text-slate-500">
       <input type="checkbox" checked={value[key]} onChange={(e) => onChange({ ...value, [key]: e.target.checked })} />
@@ -81,7 +81,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
   return <>
     {trigger(() => setOpen(true))}
     {open ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">{isEditing ? "Edit API key" : "Create API key"}</h2>

@@ -22,8 +22,8 @@ export function MoveNoteDialog({ note, trigger, onOpenChange }: { note: Note; tr
 
   return <>
     {trigger ? <button type="button" onClick={() => { setFolderId(note.folderId); setOpen(true); onOpenChange?.(true); }}>{trigger}</button> : <Button onClick={() => { setFolderId(note.folderId); setOpen(true); onOpenChange?.(true); }}>Move</Button>}
-    {open && createPortal(<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40">
-      <form className="w-full max-w-md rounded-lg border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950" onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }}>
+    {open && createPortal(<div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4">
+      <form className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:p-5" onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }}>
         <h2 className="text-lg font-semibold">Move note</h2>
         <select className="mt-4 w-full rounded-md border bg-transparent px-3 py-2" value={folderId} onChange={(e) => setFolderId(e.target.value)}>
           {(data?.folders ?? []).map((folder) => <option key={folder.id} value={folder.id}>{folder.title}</option>)}

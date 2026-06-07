@@ -12,8 +12,8 @@ export function CreateFolderDialog() {
   const close = () => { form.reset(); setOpen(false); };
   return <>
     <Button onClick={() => { form.reset(); setOpen(true); }}>New folder</Button>
-    {open && <div className="notes-overlay fixed inset-0 z-50 grid place-items-center">
-      <form className="notes-card w-full max-w-md rounded-lg p-5 shadow-sm" onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}>
+    {open && <div className="notes-overlay fixed inset-0 z-50 grid place-items-center p-4">
+      <form className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5" onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}>
         <h2 className="text-lg font-semibold">Create folder</h2>
         <form.Field name="title">{(field) => <input autoFocus className="notes-input mt-4 w-full rounded-md px-3 py-2" placeholder="Folder title" value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} />}</form.Field>
         <div className="mt-4 flex justify-end gap-2"><Button type="button" onClick={close}>Cancel</Button><Button type="submit" disabled={mutation.isPending}>Create</Button></div>

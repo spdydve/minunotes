@@ -7,8 +7,8 @@ export function DeleteConfirmDialog({ label, warning, onConfirm, trigger, onOpen
   const [value, setValue] = useState("");
   return <>
     {trigger ? <button type="button" onClick={() => { setOpen(true); onOpenChange?.(true); }}>{trigger}</button> : <Button variant="destructive" onClick={() => { setOpen(true); onOpenChange?.(true); }}>Delete</Button>}
-    {open && createPortal(<div className="notes-overlay fixed inset-0 z-[100] grid place-items-center">
-      <div className="notes-card w-full max-w-md rounded-lg p-5 shadow-sm">
+    {open && createPortal(<div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
+      <div className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
         <h2 className="text-lg font-semibold">Delete {label}</h2>
         <p className="notes-muted mt-2 text-sm">{warning}</p>
         <p className="mt-4 text-sm">Type <strong>delete</strong> to confirm.</p>

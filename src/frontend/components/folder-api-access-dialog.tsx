@@ -42,7 +42,7 @@ export function FolderApiAccessDialog({ folder, open, onOpenChange }: { folder: 
   if (!open) return null;
 
   return <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+    <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">API Access</h2>
@@ -55,7 +55,7 @@ export function FolderApiAccessDialog({ folder, open, onOpenChange }: { folder: 
         {keys.isLoading ? <p className="text-sm text-slate-500">Loading API keys...</p> : null}
         {(keys.data?.keys ?? []).filter((key) => !key.revokedAt).map((key) => {
           const value = values[key.id] ?? { canRead: false, canCreate: false, canEdit: false };
-          return <div key={key.id} className="grid grid-cols-[1fr_repeat(3,auto)] items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+          return <div key={key.id} className="grid grid-cols-1 gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800 sm:grid-cols-[1fr_repeat(3,auto)] sm:items-center">
             <div className="min-w-0">
               <p className="truncate font-medium">{key.name}</p>
               <p className="text-xs text-slate-500">UID: {key.uid}</p>
