@@ -38,7 +38,7 @@ export function NoteEditor({
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const titleValue = title === "Untitled note" ? "" : title;
+  const titleValue = title === "Untitled note" || title === "Untitled template" ? "" : title;
 
   useEffect(() => {
     const viewport = window.visualViewport;
