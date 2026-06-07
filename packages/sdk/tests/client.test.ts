@@ -65,4 +65,48 @@ describe("NotesClient", () => {
       body: JSON.stringify({ title: "Original copy", content: "Body", type: "note" }),
     }));
   });
+
+  it("calls template endpoints", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ templates: [] }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.templates.list();
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/notes/templates", expect.any(Object));
+  });
+
+  it("updates template folder assignments", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ ok: true }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.templates.updateFolders("template 1", ["folder-1"]);
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/notes/templates/template%201/folders", expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ folderIds: ["folder-1"] }),
+    }));
+  });
+
+  it("searches notes with encoded query", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ notes: [] }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.search.notes("hello world", "template");
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/notes/search?q=hello%20world&type=template", expect.any(Object));
+  });
+
+  it("updates and deletes notes", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ ok: true }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.notes.update("note 1", { title: "Updated" });
+    await client.notes.delete("note 1");
+
+    expect(fetch).toHaveBeenNthCalledWith(1, "https://example.com/api/notes/note%201", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ title: "Updated" }),
+    }));
+    expect(fetch).toHaveBeenNthCalledWith(2, "https://example.com/api/notes/note%201", expect.objectContaining({ method: "DELETE" }));
+  });
 });

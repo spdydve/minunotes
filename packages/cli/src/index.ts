@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { stdin } from "node:process";
-import { NotesApiError } from "@dpklabs/notes-sdk";
+import { NotesApiError, type NotesClient } from "@dpklabs/notes-sdk";
 import { createClient } from "./config.js";
 import { printJson, printRows } from "./output.js";
 
-export async function main(argv = process.argv.slice(2)) {
+export async function main(argv = process.argv.slice(2), client?: NotesClient) {
   const json = consumeFlag(argv, "--json");
   const [resource, command, ...args] = argv;
 
@@ -14,7 +14,7 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  const client = createClient();
+  client ??= createClient();
 
   if (resource === "folders") {
     if (command === "list") {
@@ -145,13 +145,15 @@ async function readStdin() {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-main().catch((error: unknown) => {
-  if (error instanceof NotesApiError) {
-    console.error(`Notes API error (${error.status}): ${error.message}`);
-  } else if (error instanceof Error) {
-    console.error(error.message);
-  } else {
-    console.error(String(error));
-  }
-  process.exitCode = 1;
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error: unknown) => {
+    if (error instanceof NotesApiError) {
+      console.error(`Notes API error (${error.status}): ${error.message}`);
+    } else if (error instanceof Error) {
+      console.error(error.message);
+    } else {
+      console.error(String(error));
+    }
+    process.exitCode = 1;
+  });
+}

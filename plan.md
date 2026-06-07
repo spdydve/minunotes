@@ -207,7 +207,7 @@ notes search <query>
 ```
 
 ### Verification
-- [x] CLI unit tests for config.
+- [x] CLI unit tests for config and command dispatch with mocked SDK.
 - [x] `pnpm --filter @dpklabs/notes-cli typecheck`
 - [ ] Smoke commands against dev API with a test API key, only after approval.
 
@@ -257,7 +257,7 @@ Create an MCP server package for agents/tools that uses the SDK.
 - [x] `notes_create_from_template`
 
 ### Verification
-- [x] MCP config tests.
+- [x] MCP config and server/tool tests with mocked SDK.
 - [x] `pnpm --filter @dpklabs/notes-mcp typecheck`
 - [ ] Local MCP inspector/manual tool invocation if available.
 
