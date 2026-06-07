@@ -1,204 +1,300 @@
-# Note Templates Design Plan
+# SDK / CLI / MCP Monorepo Plan
 
 ## Objective
-Add user-created note templates using the existing note editor and markdown model.
+Restructure Notes into a larger monorepo and add three coupled control-plane packages:
 
-## Core decision
-Use a hybrid Obsidian/Notion model:
+- `@dpklabs/notes-sdk` — typed reusable API client.
+- `@dpklabs/notes-cli` — human/developer CLI using the SDK.
+- `@dpklabs/notes-mcp` — MCP server using the SDK.
 
-```ts
-type: "note" | "template"
-```
+## Decisions
+- Move toward a larger monorepo with `apps/` and `packages/`.
+- SDK/CLI/MCP use API key auth for MVP.
+- API key permissions are the primary access-control mechanism.
+- Templates are handled the same as notes across SDK/CLI/MCP; no special agent template lock behavior in MVP.
+- CLI and MCP must depend on the SDK instead of duplicating HTTP logic.
+- Preserve the existing web/API release and deploy flow during the restructure.
 
-Templates are normal markdown notes with different list/create behavior, not a separate content model.
+## Current working context
+- Branch: `sdk-cli-mcp-planning`
+- Existing uncommitted work from before this plan:
+  - `package.json` / `pnpm-lock.yaml`: MinuEditor upgraded to `v0.9.1`.
+  - `src/frontend/styles.css`: removed redundant editor CSS now covered upstream, retained checkbox theming.
+- Before monorepo implementation, decide whether to commit or separately release the editor update.
 
-- Obsidian-style: templates are authored/managed in a dedicated Templates area.
-- Notion-style future direction: templates can optionally be scoped/available to a folder context.
-- First pass: templates are globally available; folder-scoped availability is reserved for later.
-
-## Goals
-- Users can create and edit templates themselves.
-- Templates use the same editor experience as notes.
-- Normal note lists exclude templates.
-- A Templates area lists only templates.
-- Users can create a normal note from a template.
-- Keep the model agent/API friendly.
-
-## Non-goals for first pass
-- Built-in templates.
-- Public template marketplace/library.
-- Folder-scoped template availability.
-- Folder default templates.
-- Advanced variable prompting UI.
-- Template versioning.
-- Drag/drop folder tree changes.
-
-## Data model
-### Files likely to modify
-- `src/api/db/schema.ts`
-- new migration generated under `src/api/db/migrations/`
-- API note validation/types as needed
-
-### Proposed schema change
-Add `type` column to notes:
-
-```ts
-type: text("type", { enum: ["note", "template"] }).notNull().default("note")
-```
-
-Default all existing notes to `note`.
-
-### Future template scoping fields
-Reserve for later if we want Notion-like folder/context templates:
-
-```ts
-templateScope: "global" | "folder"
-templateFolderId: string | null
-```
-
-First pass does not need these fields unless we decide to implement folder-scoped availability immediately.
-
-## API design
-### Files likely to modify
-- `src/api/routes/notes.ts`
-- `src/api/harness/commands.ts`
-- `src/frontend/lib/api.ts`
-
-### Behavior
-- Existing note list endpoints default to `type=note`.
-- Add query support for `type=template`.
-- Create note accepts optional `type`, default `note`.
-- Update note may allow changing type only if we want “convert to template”; defer if unnecessary.
-- Harness/API should expose type so agents can create/search templates.
-
-## Frontend UX
-### Files likely to modify/create
-- `src/frontend/components/app-shell.tsx`
-- `src/frontend/components/folder-sidebar.tsx`
-- `src/frontend/components/notes-table.tsx`
-- `src/frontend/components/note-editor.tsx` if labels/actions need template context
-- `src/frontend/routes/templates.tsx` or equivalent route file
-- `src/frontend/routes/notes.$noteId.tsx`
-- `src/frontend/routes/index.tsx`
-- `src/frontend/routes/folders.$folderId.tsx`
-- possibly `src/frontend/components/template-picker-dialog.tsx`
-
-### Templates area
-- Add sidebar nav item: Templates.
-- Templates route lists `type=template` notes.
-- Primary action: New template.
-- Template rows/cards open the same editor.
-- Editor can display subtle label/status: Template.
-- This acts like an Obsidian templates folder/management area without requiring a physical folder yet.
-
-### New from template
-Options:
-1. Add dropdown next to New Note: Blank / From template.
-2. Add separate “New from template” action in notes list empty state/header.
-
-First-pass recommendation:
-- Keep existing New Note button.
-- Add a small adjacent action or menu item “From template”.
-- Opens template picker dialog.
-- Selecting a template creates a normal note copied from template title/content.
-
-## Template copy behavior
-- New note type is always `note`.
-- Content copied from template content.
-- If creating from a folder context, the new note goes into the destination/current folder.
-- Template storage/management location does not determine destination.
-- First pass templates are globally available.
-
-## Variables
-### First pass variables
-Support simple replacements when creating from template:
+## Target structure
 
 ```txt
-{{title}}
-{{date}}
-{{time}}
-{{datetime}}
+notes-2/
+  apps/
+    web/
+    api/
+  packages/
+    sdk/
+    cli/
+    mcp/
+    shared/              # optional; only if needed
+  drizzle/
+  scripts/
+  docs/
+  package.json
+  pnpm-workspace.yaml
+  tsconfig.json
 ```
 
-### Open question
-Should creation prompt for title before variable replacement?
+## Dependency flow
 
-Recommendation:
-- First pass: ask for title in picker/create dialog.
-- Use title for note title and `{{title}}` replacement.
+```txt
+apps/api exposes HTTP API
+  ↓
+packages/sdk wraps HTTP API
+  ↓
+packages/cli and packages/mcp use SDK
+```
 
-## Verification
-- [x] Generate and inspect migration.
-- [x] `pnpm typecheck`.
-- [x] `pnpm test`.
-- [x] `pnpm build`.
-- [ ] Manual: existing notes still list normally.
-- [ ] Manual: templates do not appear in normal notes list.
-- [ ] Manual: create/edit template.
-- [ ] Manual: create note from template.
-- [ ] Manual mobile: templates list and picker/page usable.
-- [ ] Manual: folder template assignment page works.
-- [ ] Manual: create-from-template page only shows folder-assigned templates.
-- [x] Manual/local migration: `0011_dazzling_squadron_sinister` applied.
-- [ ] Manual: agent/API cannot edit templates.
-- [ ] API smoke: create/list template via API if exposed.
+---
 
-## Implementation phases
-### Phase 1: Schema/API foundation
-- [x] Add `type` to notes.
-- [x] Migrate existing rows to `note` default.
-- [x] Update API types/list/create.
-- [x] Verify tests/build.
+## Phase 0 — Stabilize current branch state
 
-### Phase 2: Templates list/editor UX
-- [x] Add Templates sidebar/nav route.
-- [x] List templates.
-- [x] New template action.
-- [x] Reuse editor.
+### Files likely to modify
+- `package.json`
+- `pnpm-lock.yaml`
+- `src/frontend/styles.css`
+- `plan.md`
 
-### Phase 3: Create from template
-- [x] Add picker dialog.
-- [x] Add variable replacement.
-- [x] Create normal note from selected template.
+### Checklist
+- [ ] Review current MinuEditor `v0.9.1` changes.
+- [ ] Confirm editor CSS cleanup still matches desired UI.
+- [ ] Run verification.
+- [ ] Commit current editor dependency/style update separately from monorepo work.
 
-### Phase 4: Global templates + folder assignments
-- [x] Add `template_folder_assignments` table.
-- [x] Add assignment migration.
-- [x] Add API endpoints:
-  - [x] `GET /notes/templates` — fast global template list.
-  - [x] `GET /folders/:folderId/templates` — templates assigned to a folder.
-  - [x] `PUT /notes/templates/:templateId/folders` — replace folder assignments.
-- [x] Block agent/API edits to templates by default.
-- [x] Replace N+1 frontend template loading with global/assigned endpoints.
-- [x] Replace create-from-template modal with a dedicated route/page.
-- [x] Add folder template settings page:
-  - [x] route `/folders/:folderId/templates`.
-  - [x] show assigned templates.
-  - [x] add/remove assignments.
-- [x] Create-from-template page should show:
-  - [x] destination folder name.
-  - [x] templates assigned to that folder.
-  - [x] empty state with link to template settings/templates page.
-  - [x] title field without auto-filling from template unless explicitly selected/entered.
-- [ ] Add template search/filter on Templates page if lightweight.
+### Verification
+- [ ] `pnpm typecheck`
+- [ ] `pnpm test`
+- [ ] `pnpm build`
+- [ ] Manual browser check for code block highlighting, task checkboxes, wrapped lists.
 
-### Phase 5: Folder settings/action UX
-- [x] Update folder cog popover actions:
-  - [x] Settings
-  - [x] Rename
-  - [x] Move (deferred/disabled until folder tree/subfolders exists)
-  - [x] Template settings
-  - [x] API Access
-  - [x] Delete
-- [x] Add folder settings route/page `/folders/:folderId/settings`.
-- [x] Folder settings page should include:
-  - [x] Folder title/rename action.
-  - [x] Template availability settings.
-  - [x] API access settings.
-  - [x] Delete folder action.
-  - [x] Move folder action placeholder/disabled until hierarchy support.
-- [x] Link existing `/folders/:folderId/templates` behavior into settings via redirect.
-- [x] Remove clutter from folder header by moving Template settings into folder settings/cog.
+---
 
-## Approval
-Approved and implementation started on `note-templates-design`.
+## Phase 1 — Monorepo restructure
+
+### Goal
+Move current app code into `apps/` while preserving existing behavior, scripts, routes, migrations, and deployment.
+
+### Files/directories likely to move or modify
+- `src/api/**` → likely `apps/api/src/**`
+- `src/frontend/**` → likely `apps/web/src/**`
+- `index.html` → likely `apps/web/index.html`
+- `vite.config.ts`
+- `sst.config.ts`
+- `tsconfig.json`
+- `package.json`
+- `pnpm-workspace.yaml`
+- `scripts/**`
+- `drizzle/**`
+- test config files if present
+
+### Checklist
+- [ ] Decide final app paths: `apps/api`, `apps/web`.
+- [ ] Add/adjust `pnpm-workspace.yaml`.
+- [ ] Move frontend app files into `apps/web`.
+- [ ] Move API app files into `apps/api` or adjust imports if API remains bundled through SST from app path.
+- [ ] Update TS path aliases/imports.
+- [ ] Update Vite config paths.
+- [ ] Update SST config paths.
+- [ ] Update release/migration scripts for new locations.
+- [ ] Ensure Drizzle migrations remain stable.
+- [ ] Keep root scripts as the primary developer entrypoint.
+
+### Verification
+- [ ] `pnpm install`
+- [ ] `pnpm typecheck`
+- [ ] `pnpm test`
+- [ ] `pnpm build`
+- [ ] Local API/web smoke if available.
+- [ ] `pnpm release:dev` dry-run or dev deploy only after approval.
+
+---
+
+## Phase 2 — SDK MVP
+
+### Goal
+Create a typed SDK package used by all non-browser control planes.
+
+### Package
+- `packages/sdk`
+- Name: `@dpklabs/notes-sdk`
+
+### Files likely to create
+- `packages/sdk/package.json`
+- `packages/sdk/src/index.ts`
+- `packages/sdk/src/client.ts`
+- `packages/sdk/src/errors.ts`
+- `packages/sdk/src/types.ts`
+- `packages/sdk/src/resources/folders.ts`
+- `packages/sdk/src/resources/notes.ts`
+- `packages/sdk/src/resources/templates.ts`
+- `packages/sdk/src/resources/search.ts`
+- `packages/sdk/tsconfig.json`
+- `packages/sdk/README.md`
+- SDK tests
+
+### Checklist
+- [ ] Define `NotesClient` constructor with `baseUrl`, `apiKey`, optional `fetch`.
+- [ ] Add typed API errors with status/code/message.
+- [ ] Add folder methods: list/get/create/update/delete where supported.
+- [ ] Add note methods: list/get/create/update/delete/duplicate where supported or client-side duplicate.
+- [ ] Add template methods using the same note model plus template-specific list helpers.
+- [ ] Add search methods.
+- [ ] Add API key auth header handling.
+- [ ] Add JSON request/response helpers.
+- [ ] Add README examples.
+
+### Verification
+- [ ] SDK unit tests with mocked fetch.
+- [ ] `pnpm --filter @dpklabs/notes-sdk typecheck`
+- [ ] Root `pnpm typecheck`
+- [ ] Root `pnpm test`
+
+---
+
+## Phase 3 — CLI MVP
+
+### Goal
+Create a CLI package for users/developers that uses the SDK.
+
+### Package
+- `packages/cli`
+- Name: `@dpklabs/notes-cli`
+- Binary: `notes`
+
+### Files likely to create
+- `packages/cli/package.json`
+- `packages/cli/src/index.ts`
+- `packages/cli/src/config.ts`
+- `packages/cli/src/output.ts`
+- `packages/cli/src/commands/folders.ts`
+- `packages/cli/src/commands/notes.ts`
+- `packages/cli/src/commands/templates.ts`
+- `packages/cli/src/commands/search.ts`
+- `packages/cli/README.md`
+- CLI tests
+
+### Checklist
+- [ ] Choose CLI parser (`commander`, `cac`, or similar).
+- [ ] Support env config: `NOTES_API_URL`, `NOTES_API_KEY`.
+- [ ] Optionally support local config file later; env-only is acceptable for MVP.
+- [ ] Add `--json` output mode.
+- [ ] Add folder commands.
+- [ ] Add note commands.
+- [ ] Add template commands.
+- [ ] Add search command.
+- [ ] Add helpful error output for auth/permission failures.
+
+### Initial command surface
+
+```txt
+notes folders list
+notes folders create <name>
+notes notes list --folder <folderId>
+notes notes get <noteId>
+notes notes create --folder <folderId> --title <title> [--content <file|->]
+notes notes update <noteId> [--title <title>] [--content <file|->]
+notes notes delete <noteId>
+notes templates list
+notes templates create --title <title> [--content <file|->]
+notes search <query>
+```
+
+### Verification
+- [ ] CLI unit tests with mocked SDK.
+- [ ] `pnpm --filter @dpklabs/notes-cli typecheck`
+- [ ] Smoke commands against dev API with a test API key, only after approval.
+
+---
+
+## Phase 4 — MCP MVP
+
+### Goal
+Create an MCP server package for agents/tools that uses the SDK.
+
+### Package
+- `packages/mcp`
+- Name: `@dpklabs/notes-mcp`
+- Binary: `notes-mcp`
+
+### Files likely to create
+- `packages/mcp/package.json`
+- `packages/mcp/src/index.ts`
+- `packages/mcp/src/config.ts`
+- `packages/mcp/src/server.ts`
+- `packages/mcp/src/tools/folders.ts`
+- `packages/mcp/src/tools/notes.ts`
+- `packages/mcp/src/tools/templates.ts`
+- `packages/mcp/src/tools/search.ts`
+- `packages/mcp/README.md`
+- MCP tests
+
+### Checklist
+- [ ] Use official MCP TypeScript SDK if appropriate.
+- [ ] Configure via `NOTES_API_URL` and `NOTES_API_KEY`.
+- [ ] Add folder tools.
+- [ ] Add note tools.
+- [ ] Add template tools using same permission model as notes.
+- [ ] Add search tool.
+- [ ] Return concise structured responses.
+- [ ] Document Claude Desktop / generic MCP client config.
+
+### Initial tool surface
+- [ ] `notes_list_folders`
+- [ ] `notes_list_notes`
+- [ ] `notes_get_note`
+- [ ] `notes_create_note`
+- [ ] `notes_update_note`
+- [ ] `notes_delete_note`
+- [ ] `notes_search`
+- [ ] `notes_list_templates`
+- [ ] `notes_create_from_template`
+
+### Verification
+- [ ] MCP unit tests with mocked SDK.
+- [ ] `pnpm --filter @dpklabs/notes-mcp typecheck`
+- [ ] Local MCP inspector/manual tool invocation if available.
+
+---
+
+## Phase 5 — Docs, packaging, and release flow
+
+### Goal
+Document and prepare packages for local/dev use and future publishing.
+
+### Files likely to create/modify
+- root `README.md`
+- `docs/sdk.md`
+- `docs/cli.md`
+- `docs/mcp.md`
+- package READMEs
+- root/package scripts
+- release scripts if package publishing is added
+
+### Checklist
+- [ ] Add root monorepo development docs.
+- [ ] Add SDK usage examples.
+- [ ] Add CLI usage examples.
+- [ ] Add MCP client config examples.
+- [ ] Decide package publish strategy.
+- [ ] Add package build scripts.
+- [ ] Add package versioning approach.
+
+### Verification
+- [ ] Fresh clone/install/build instructions tested locally.
+- [ ] Package binaries work from workspace.
+- [ ] Existing app release still works.
+
+---
+
+## Approval gates
+- [ ] Approve this plan before implementation.
+- [ ] Approve Phase 0 commit/release handling.
+- [ ] Approve Phase 1 restructure before moving files.
+- [ ] Approve SDK public API shape before implementing CLI/MCP.
