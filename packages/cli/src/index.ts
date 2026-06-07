@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { stdin } from "node:process";
-import { NotesApiError, type NotesClient } from "@dpklabs/notes-sdk";
+import { NotesApiError, type NotesClient } from "@minunotes/sdk";
 import { createClient } from "./config.js";
 import { printJson, printRows } from "./output.js";
 

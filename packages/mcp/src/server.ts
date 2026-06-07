@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { NotesClient } from "@dpklabs/notes-sdk";
+import type { NotesClient } from "@minunotes/sdk";
 import { z } from "zod";
 
 const noteTypeSchema = z.enum(["note", "template"]);
@@ -13,7 +13,7 @@ function toolResult(data: unknown) {
 }
 
 export function createNotesMcpServer(client: NotesClient) {
-  const server = new McpServer({ name: "dpklabs-notes", version: "0.1.0" });
+  const server = new McpServer({ name: "minunotes", version: "0.1.0" });
 
   server.registerTool(
     "notes_list_folders",

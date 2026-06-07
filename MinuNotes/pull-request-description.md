@@ -10,9 +10,9 @@ This PR restructures MinuNotes into a larger monorepo and adds first-pass SDK, C
   - `apps/api/src`
   - `apps/web/src`
 - Adds workspace package layout with `pnpm-workspace.yaml`.
-- Adds `@dpklabs/notes-sdk` package.
-- Adds `@dpklabs/notes-cli` package with `notes` binary.
-- Adds `@dpklabs/notes-mcp` package with `notes-mcp` binary.
+- Adds `@minunotes/sdk` package.
+- Adds `@minunotes/cli` package with `notes` binary.
+- Adds `@minunotes/mcp` package with `notes-mcp` binary.
 - Adds SDK/CLI/MCP test coverage.
 - Aligns MCP implementation with current MCP SDK standards.
 - Updates MinuEditor from `v0.8.0` to `v0.9.1`.
@@ -44,7 +44,7 @@ Updated related paths in:
 
 ## SDK
 
-Added `packages/sdk` as `@dpklabs/notes-sdk`.
+Added `packages/sdk` as `@minunotes/sdk`.
 
 Includes:
 
@@ -62,7 +62,7 @@ Includes:
 
 ## CLI
 
-Added `packages/cli` as `@dpklabs/notes-cli` with `notes` binary.
+Added `packages/cli` as `@minunotes/cli` with `notes` binary.
 
 Supports env-based configuration:
 
@@ -91,7 +91,7 @@ Also includes `--json` output support and command dispatch tests with mocked SDK
 
 ## MCP
 
-Added `packages/mcp` as `@dpklabs/notes-mcp` with `notes-mcp` binary.
+Added `packages/mcp` as `@minunotes/mcp` with `notes-mcp` binary.
 
 Uses:
 
@@ -146,12 +146,12 @@ Verified locally:
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm --filter @dpklabs/notes-sdk typecheck
-pnpm --filter @dpklabs/notes-sdk build
-pnpm --filter @dpklabs/notes-cli typecheck
-pnpm --filter @dpklabs/notes-cli build
-pnpm --filter @dpklabs/notes-mcp typecheck
-pnpm --filter @dpklabs/notes-mcp build
+pnpm --filter @minunotes/sdk typecheck
+pnpm --filter @minunotes/sdk build
+pnpm --filter @minunotes/cli typecheck
+pnpm --filter @minunotes/cli build
+pnpm --filter @minunotes/mcp typecheck
+pnpm --filter @minunotes/mcp build
 ```
 
 Current test coverage includes:

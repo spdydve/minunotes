@@ -1,6 +1,6 @@
-# @dpklabs/notes-cli
+# @minunotes/cli
 
-CLI for Notes. Uses `@dpklabs/notes-sdk` and API key auth.
+CLI for Notes. Uses `@minunotes/sdk` and API key auth.
 
 ```sh
 export NOTES_API_URL="https://api.notes.example.com/api"
@@ -15,5 +15,5 @@ notes search "query" --json
 Build locally:
 
 ```sh
-pnpm --filter @dpklabs/notes-cli build
+pnpm --filter @minunotes/cli build
 ```

@@ -1,5 +1,5 @@
 {
-  "name": "@dpklabs/notes-cli",
+  "name": "@minunotes/cli",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -12,7 +12,7 @@
     "test": "vitest run tests/**/*.test.ts"
   },
   "dependencies": {
-    "@dpklabs/notes-sdk": "workspace:*"
+    "@minunotes/sdk": "workspace:*"
   },
   "devDependencies": {
     "typescript": "latest",

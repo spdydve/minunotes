@@ -3,9 +3,9 @@
 ## Objective
 Restructure Notes into a larger monorepo and add three coupled control-plane packages:
 
-- `@dpklabs/notes-sdk` — typed reusable API client.
-- `@dpklabs/notes-cli` — human/developer CLI using the SDK.
-- `@dpklabs/notes-mcp` — MCP server using the SDK.
+- `@minunotes/sdk` — typed reusable API client.
+- `@minunotes/cli` — human/developer CLI using the SDK.
+- `@minunotes/mcp` — MCP server using the SDK.
 
 ## Decisions
 - Move toward a larger monorepo with `apps/` and `packages/`.
@@ -123,7 +123,7 @@ Create a typed SDK package used by all non-browser control planes.
 
 ### Package
 - `packages/sdk`
-- Name: `@dpklabs/notes-sdk`
+- Name: `@minunotes/sdk`
 
 ### Files likely to create
 - `packages/sdk/package.json`
@@ -152,7 +152,7 @@ Create a typed SDK package used by all non-browser control planes.
 
 ### Verification
 - [x] SDK unit tests with mocked fetch.
-- [x] `pnpm --filter @dpklabs/notes-sdk typecheck`
+- [x] `pnpm --filter @minunotes/sdk typecheck`
 - [x] Root `pnpm typecheck`
 - [x] Root `pnpm test`
 
@@ -165,7 +165,7 @@ Create a CLI package for users/developers that uses the SDK.
 
 ### Package
 - `packages/cli`
-- Name: `@dpklabs/notes-cli`
+- Name: `@minunotes/cli`
 - Binary: `notes`
 
 ### Files likely to create
@@ -208,7 +208,7 @@ notes search <query>
 
 ### Verification
 - [x] CLI unit tests for config and command dispatch with mocked SDK.
-- [x] `pnpm --filter @dpklabs/notes-cli typecheck`
+- [x] `pnpm --filter @minunotes/cli typecheck`
 - [ ] Smoke commands against dev API with a test API key, only after approval.
 
 ---
@@ -220,7 +220,7 @@ Create an MCP server package for agents/tools that uses the SDK.
 
 ### Package
 - `packages/mcp`
-- Name: `@dpklabs/notes-mcp`
+- Name: `@minunotes/mcp`
 - Binary: `notes-mcp`
 
 ### Files likely to create
@@ -258,7 +258,7 @@ Create an MCP server package for agents/tools that uses the SDK.
 
 ### Verification
 - [x] MCP config and server/tool tests with mocked SDK.
-- [x] `pnpm --filter @dpklabs/notes-mcp typecheck`
+- [x] `pnpm --filter @minunotes/mcp typecheck`
 - [ ] Local MCP inspector/manual tool invocation if available.
 
 ---

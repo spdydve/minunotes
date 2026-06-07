@@ -1,9 +1,9 @@
-# @dpklabs/notes-sdk
+# @minunotes/sdk
 
 Typed client for the Notes HTTP API.
 
 ```ts
-import { NotesClient } from "@dpklabs/notes-sdk";
+import { NotesClient } from "@minunotes/sdk";
 
 const notes = new NotesClient({
   baseUrl: process.env.NOTES_API_URL!, // e.g. https://api.notes.example.com/api

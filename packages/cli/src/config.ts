@@ -1,4 +1,4 @@
-import { NotesClient, NotesConfigurationError } from "@dpklabs/notes-sdk";
+import { NotesClient, NotesConfigurationError } from "@minunotes/sdk";
 
 export type CliConfig = {
   apiUrl: string;

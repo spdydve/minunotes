@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NotesConfigurationError } from "@dpklabs/notes-sdk";
+import { NotesConfigurationError } from "@minunotes/sdk";
 import { loadConfig } from "../src/config";
 
 describe("loadConfig", () => {

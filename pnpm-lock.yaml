@@ -141,7 +141,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@dpklabs/notes-sdk':
+      '@minunotes/sdk':
         specifier: workspace:*
         version: link:../sdk
     devDependencies:
@@ -154,7 +154,7 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@dpklabs/notes-sdk':
+      '@minunotes/sdk':
         specifier: workspace:*
         version: link:../sdk
       '@modelcontextprotocol/sdk':

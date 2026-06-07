@@ -1,6 +1,6 @@
-# @dpklabs/notes-mcp
+# @minunotes/mcp
 
-MCP server for Notes. Uses `@dpklabs/notes-sdk` and API key auth.
+MCP server for Notes. Uses `@minunotes/sdk` and API key auth.
 
 ```sh
 export NOTES_API_URL="https://api.notes.example.com/api"
