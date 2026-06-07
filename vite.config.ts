@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vitest/config";
+import { loadEnv } from "vite";
 
 async function getSstApiUrl() {
   try {
@@ -18,6 +19,15 @@ export default defineConfig(async ({ mode }) => {
   console.log(`[vite] Proxy target: ${apiTarget}`);
 
   return {
+    root: "apps/web",
+    build: {
+      outDir: "../../dist",
+      emptyOutDir: true,
+    },
+    test: {
+      root: process.cwd(),
+      include: ["tests/**/*.test.ts"],
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       dedupe: [

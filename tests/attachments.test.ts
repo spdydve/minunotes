@@ -2,10 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FilesystemObjectStorage } from "../src/api/storage/filesystem-storage";
-import { getAttachmentMarkdownUrl, getObjectStorage, resetObjectStorageForTests } from "../src/api/storage";
-import type { ObjectStorage } from "../src/api/storage/object-storage";
-import { S3ObjectStorage } from "../src/api/storage/s3-storage";
+import { FilesystemObjectStorage } from "../apps/api/src/storage/filesystem-storage";
+import { getAttachmentMarkdownUrl, getObjectStorage, resetObjectStorageForTests } from "../apps/api/src/storage";
+import type { ObjectStorage } from "../apps/api/src/storage/object-storage";
+import { S3ObjectStorage } from "../apps/api/src/storage/s3-storage";
 
 const tempDirs: string[] = [];
 

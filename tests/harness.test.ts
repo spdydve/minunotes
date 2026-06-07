@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { applyDocumentEdits } from "../src/api/harness/edits";
-import { hashMarkdown } from "../src/api/harness/hash";
-import { findSection, parseSections } from "../src/api/harness/sections";
+import { applyDocumentEdits } from "../apps/api/src/harness/edits";
+import { hashMarkdown } from "../apps/api/src/harness/hash";
+import { findSection, parseSections } from "../apps/api/src/harness/sections";
 
 describe("hashMarkdown", () => {
   it("returns a stable sha256 hash for markdown content", () => {

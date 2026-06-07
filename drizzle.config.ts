@@ -28,7 +28,7 @@ const url = env.TURSO_DB_URL ?? env.LIBSQL_URL ?? "file:local.db";
 const token = env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN;
 
 export default defineConfig({
-  schema: "./src/api/db/schema.ts",
+  schema: "./apps/api/src/db/schema.ts",
   out: "./drizzle",
   dialect: "sqlite",
   dbCredentials: token ? { url, token } : { url },

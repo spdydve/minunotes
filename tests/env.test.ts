@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaults, getApiRuntimeConfig, getStageUrls, parseAllowedOrigins } from "../src/api/lib/env";
+import { defaults, getApiRuntimeConfig, getStageUrls, parseAllowedOrigins } from "../apps/api/src/lib/env";
 
 describe("parseAllowedOrigins", () => {
   it("parses and deduplicates configured origins", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLineRange, searchLines, splitNumberedLines } from "../src/api/harness/line-search";
+import { getLineRange, searchLines, splitNumberedLines } from "../apps/api/src/harness/line-search";
 
 describe("splitNumberedLines", () => {
   it("numbers lines starting at one", () => {

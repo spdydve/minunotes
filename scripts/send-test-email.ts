@@ -36,7 +36,7 @@ if (!from) {
   process.exit(1);
 }
 
-const { sendEmail } = await import("../src/api/lib/email");
+const { sendEmail } = await import("../apps/api/src/lib/email");
 const sentAt = new Date().toISOString();
 
 const result = await sendEmail({

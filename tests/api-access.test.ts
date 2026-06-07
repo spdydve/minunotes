@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { generateApiKey, getApiKeyFromHeaders, hashApiKey, parseApiKey, verifyApiKey } from "../src/api/lib/api-keys";
-import { consumeRateLimit, getClientAddress, resetRateLimitStore } from "../src/api/middleware/rate-limit";
-import { isRequestBodyTooLarge } from "../src/api/middleware/request-limits";
+import { generateApiKey, getApiKeyFromHeaders, hashApiKey, parseApiKey, verifyApiKey } from "../apps/api/src/lib/api-keys";
+import { consumeRateLimit, getClientAddress, resetRateLimitStore } from "../apps/api/src/middleware/rate-limit";
+import { isRequestBodyTooLarge } from "../apps/api/src/middleware/request-limits";
 
 describe("API key generation and parsing", () => {
   it("generates ntak keys with uid and secret parts", () => {

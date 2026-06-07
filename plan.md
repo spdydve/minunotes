@@ -95,22 +95,22 @@ Move current app code into `apps/` while preserving existing behavior, scripts, 
 - test config files if present
 
 ### Checklist
-- [ ] Decide final app paths: `apps/api`, `apps/web`.
-- [ ] Add/adjust `pnpm-workspace.yaml`.
-- [ ] Move frontend app files into `apps/web`.
-- [ ] Move API app files into `apps/api` or adjust imports if API remains bundled through SST from app path.
-- [ ] Update TS path aliases/imports.
-- [ ] Update Vite config paths.
-- [ ] Update SST config paths.
-- [ ] Update release/migration scripts for new locations.
-- [ ] Ensure Drizzle migrations remain stable.
-- [ ] Keep root scripts as the primary developer entrypoint.
+- [x] Decide final app paths: `apps/api`, `apps/web`.
+- [x] Add/adjust `pnpm-workspace.yaml`.
+- [x] Move frontend app files into `apps/web`.
+- [x] Move API app files into `apps/api` or adjust imports if API remains bundled through SST from app path.
+- [x] Update TS path aliases/imports.
+- [x] Update Vite config paths.
+- [x] Update SST config paths.
+- [x] Update release/migration scripts for new locations.
+- [x] Ensure Drizzle migrations remain stable.
+- [x] Keep root scripts as the primary developer entrypoint.
 
 ### Verification
 - [ ] `pnpm install`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] `pnpm build`
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm build`
 - [ ] Local API/web smoke if available.
 - [ ] `pnpm release:dev` dry-run or dev deploy only after approval.
 

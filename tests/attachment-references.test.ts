@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractAppAttachmentIds } from "../src/api/attachments/references";
+import { extractAppAttachmentIds } from "../apps/api/src/attachments/references";
 
 describe("attachment markdown references", () => {
   it("extracts unique app-owned attachment ids from image markdown", () => {

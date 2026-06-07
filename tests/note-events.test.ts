@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getNoteEventSummary, getUpdateEventType } from "../src/api/harness/commands";
+import { getNoteEventSummary, getUpdateEventType } from "../apps/api/src/harness/commands";
 
 describe("getUpdateEventType", () => {
   const current = {

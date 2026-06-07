@@ -17,7 +17,7 @@ export default $config({
   },
   async run() {
     const { getStageUrls, parseAllowedOrigins } =
-      await import("./src/api/lib/env");
+      await import("./apps/api/src/lib/env");
     const { existsSync, readFileSync } = await import("node:fs");
 
     const loadEnvFile = (path: string) => {
@@ -120,7 +120,7 @@ export default $config({
     });
 
     const api = new sst.aws.Function("Api", {
-      handler: "src/api/index.handler",
+      handler: "apps/api/src/index.handler",
       nodejs: {
         install: [
           "@aws-sdk/client-s3",
@@ -173,7 +173,7 @@ export default $config({
       new sst.aws.Cron("AttachmentCleanup", {
         schedule: (env.ATTACHMENT_CLEANUP_SCHEDULE ?? "rate(1 day)") as `rate(${string})` | `cron(${string})`,
         function: {
-          handler: "src/api/attachments/cleanup-handler.handler",
+          handler: "apps/api/src/attachments/cleanup-handler.handler",
           nodejs: {
             install: [
               "@aws-sdk/client-s3",

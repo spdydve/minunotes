@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_ATTACHMENT_CLEANUP_GRACE_DAYS, getAttachmentCleanupCutoff, getAttachmentCleanupGraceDays } from "../src/api/attachments/cleanup";
+import { DEFAULT_ATTACHMENT_CLEANUP_GRACE_DAYS, getAttachmentCleanupCutoff, getAttachmentCleanupGraceDays } from "../apps/api/src/attachments/cleanup";
 
 afterEach(() => {
   vi.unstubAllEnvs();
