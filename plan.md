@@ -181,15 +181,15 @@ Create a CLI package for users/developers that uses the SDK.
 - CLI tests
 
 ### Checklist
-- [ ] Choose CLI parser (`commander`, `cac`, or similar).
-- [ ] Support env config: `NOTES_API_URL`, `NOTES_API_KEY`.
-- [ ] Optionally support local config file later; env-only is acceptable for MVP.
-- [ ] Add `--json` output mode.
-- [ ] Add folder commands.
-- [ ] Add note commands.
-- [ ] Add template commands.
-- [ ] Add search command.
-- [ ] Add helpful error output for auth/permission failures.
+- [x] Choose CLI parser (`commander`, `cac`, or similar). Used a lightweight internal parser for MVP.
+- [x] Support env config: `NOTES_API_URL`, `NOTES_API_KEY`.
+- [x] Optionally support local config file later; env-only is acceptable for MVP.
+- [x] Add `--json` output mode.
+- [x] Add folder commands.
+- [x] Add note commands.
+- [x] Add template commands.
+- [x] Add search command.
+- [x] Add helpful error output for auth/permission failures.
 
 ### Initial command surface
 
@@ -207,8 +207,8 @@ notes search <query>
 ```
 
 ### Verification
-- [ ] CLI unit tests with mocked SDK.
-- [ ] `pnpm --filter @dpklabs/notes-cli typecheck`
+- [x] CLI unit tests for config.
+- [x] `pnpm --filter @dpklabs/notes-cli typecheck`
 - [ ] Smoke commands against dev API with a test API key, only after approval.
 
 ---

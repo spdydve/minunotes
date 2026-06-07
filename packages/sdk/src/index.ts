@@ -1,6 +1,6 @@
-export { NotesClient } from "./client";
-export type { NotesClientOptions } from "./client";
-export { NotesApiError, NotesConfigurationError } from "./errors";
+export { NotesClient } from "./client.js";
+export type { NotesClientOptions } from "./client.js";
+export { NotesApiError, NotesConfigurationError } from "./errors.js";
 export type {
   ActorType,
   CreateFolderInput,
@@ -16,4 +16,4 @@ export type {
   SectionResponse,
   UpdateFolderInput,
   UpdateNoteInput,
-} from "./types";
+} from "./types.js";

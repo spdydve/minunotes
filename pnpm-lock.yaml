@@ -4,138 +4,162 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-dependencies:
-  '@aws-sdk/client-s3':
-    specifier: ^3.1057.0
-    version: 3.1057.0
-  '@aws-sdk/client-sesv2':
-    specifier: ^3.1057.0
-    version: 3.1057.0
-  '@aws-sdk/s3-request-presigner':
-    specifier: ^3.1057.0
-    version: 3.1057.0
-  '@codemirror/lang-css':
-    specifier: ^6.3.1
-    version: 6.3.1
-  '@codemirror/lang-html':
-    specifier: ^6.4.11
-    version: 6.4.11
-  '@codemirror/lang-javascript':
-    specifier: ^6.2.5
-    version: 6.2.5
-  '@codemirror/lang-json':
-    specifier: ^6.0.2
-    version: 6.0.2
-  '@codemirror/lang-markdown':
-    specifier: ^6.5.0
-    version: 6.5.0
-  '@codemirror/lang-python':
-    specifier: ^6.2.1
-    version: 6.2.1
-  '@codemirror/lang-sql':
-    specifier: ^6.10.0
-    version: 6.10.0
-  '@codemirror/lang-yaml':
-    specifier: ^6.1.3
-    version: 6.1.3
-  '@codemirror/language':
-    specifier: ^6.12.3
-    version: 6.12.3
-  '@codemirror/legacy-modes':
-    specifier: ^6.5.3
-    version: 6.5.3
-  '@dpklabs/minueditor':
-    specifier: github:spdydve/minueditor#v0.9.1
-    version: github.com/spdydve/minueditor/455a91d11ee07fe5d3e3342b7483b8705eac78f4(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
-  '@hono/node-server':
-    specifier: ^2.0.3
-    version: 2.0.3(hono@4.12.21)
-  '@libsql/client':
-    specifier: latest
-    version: 0.17.3
-  '@radix-ui/react-popover':
-    specifier: ^1.1.15
-    version: 1.1.15(@types/react-dom@19.2.3)(@types/react@19.2.15)(react-dom@19.2.6)(react@19.2.6)
-  '@tanstack/react-form':
-    specifier: latest
-    version: 1.32.0(react-dom@19.2.6)(react@19.2.6)
-  '@tanstack/react-query':
-    specifier: latest
-    version: 5.100.11(react@19.2.6)
-  '@tanstack/react-router':
-    specifier: latest
-    version: 1.170.6(react-dom@19.2.6)(react@19.2.6)
-  '@tanstack/react-table':
-    specifier: latest
-    version: 8.21.3(react-dom@19.2.6)(react@19.2.6)
-  better-auth:
-    specifier: ^1.6.11
-    version: 1.6.11(drizzle-kit@0.31.10)(drizzle-orm@0.45.2)(react-dom@19.2.6)(react@19.2.6)(vitest@4.1.7)
-  class-variance-authority:
-    specifier: latest
-    version: 0.7.1
-  clsx:
-    specifier: latest
-    version: 2.1.1
-  drizzle-orm:
-    specifier: latest
-    version: 0.45.2(@libsql/client@0.17.3)(kysely@0.28.17)
-  hono:
-    specifier: latest
-    version: 4.12.21
-  lucide-react:
-    specifier: latest
-    version: 1.16.0(react@19.2.6)
-  react:
-    specifier: latest
-    version: 19.2.6
-  react-dom:
-    specifier: latest
-    version: 19.2.6(react@19.2.6)
-  sst:
-    specifier: 4.14.3
-    version: 4.14.3
-  tailwind-merge:
-    specifier: latest
-    version: 3.6.0
+importers:
 
-devDependencies:
-  '@tailwindcss/vite':
-    specifier: latest
-    version: 4.3.0(vite@8.0.14)
-  '@types/aws-lambda':
-    specifier: 8.10.161
-    version: 8.10.161
-  '@types/node':
-    specifier: latest
-    version: 25.9.1
-  '@types/react':
-    specifier: latest
-    version: 19.2.15
-  '@types/react-dom':
-    specifier: latest
-    version: 19.2.3(@types/react@19.2.15)
-  '@vitejs/plugin-react':
-    specifier: latest
-    version: 6.0.2(vite@8.0.14)
-  drizzle-kit:
-    specifier: latest
-    version: 0.31.10
-  tailwindcss:
-    specifier: latest
-    version: 4.3.0
-  tsx:
-    specifier: latest
-    version: 4.22.3
-  typescript:
-    specifier: latest
-    version: 6.0.3
-  vite:
-    specifier: latest
-    version: 8.0.14(@types/node@25.9.1)(tsx@4.22.3)
-  vitest:
-    specifier: ^4.1.7
-    version: 4.1.7(@types/node@25.9.1)(vite@8.0.14)
+  .:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1057.0
+        version: 3.1057.0
+      '@aws-sdk/client-sesv2':
+        specifier: ^3.1057.0
+        version: 3.1057.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.1057.0
+        version: 3.1057.0
+      '@codemirror/lang-css':
+        specifier: ^6.3.1
+        version: 6.3.1
+      '@codemirror/lang-html':
+        specifier: ^6.4.11
+        version: 6.4.11
+      '@codemirror/lang-javascript':
+        specifier: ^6.2.5
+        version: 6.2.5
+      '@codemirror/lang-json':
+        specifier: ^6.0.2
+        version: 6.0.2
+      '@codemirror/lang-markdown':
+        specifier: ^6.5.0
+        version: 6.5.0
+      '@codemirror/lang-python':
+        specifier: ^6.2.1
+        version: 6.2.1
+      '@codemirror/lang-sql':
+        specifier: ^6.10.0
+        version: 6.10.0
+      '@codemirror/lang-yaml':
+        specifier: ^6.1.3
+        version: 6.1.3
+      '@codemirror/language':
+        specifier: ^6.12.3
+        version: 6.12.3
+      '@codemirror/legacy-modes':
+        specifier: ^6.5.3
+        version: 6.5.3
+      '@dpklabs/minueditor':
+        specifier: github:spdydve/minueditor#v0.9.1
+        version: github.com/spdydve/minueditor/455a91d11ee07fe5d3e3342b7483b8705eac78f4(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
+      '@hono/node-server':
+        specifier: ^2.0.3
+        version: 2.0.3(hono@4.12.21)
+      '@libsql/client':
+        specifier: latest
+        version: 0.17.3
+      '@radix-ui/react-popover':
+        specifier: ^1.1.15
+        version: 1.1.15(@types/react-dom@19.2.3)(@types/react@19.2.15)(react-dom@19.2.6)(react@19.2.6)
+      '@tanstack/react-form':
+        specifier: latest
+        version: 1.32.0(react-dom@19.2.6)(react@19.2.6)
+      '@tanstack/react-query':
+        specifier: latest
+        version: 5.100.11(react@19.2.6)
+      '@tanstack/react-router':
+        specifier: latest
+        version: 1.170.6(react-dom@19.2.6)(react@19.2.6)
+      '@tanstack/react-table':
+        specifier: latest
+        version: 8.21.3(react-dom@19.2.6)(react@19.2.6)
+      better-auth:
+        specifier: ^1.6.11
+        version: 1.6.11(drizzle-kit@0.31.10)(drizzle-orm@0.45.2)(react-dom@19.2.6)(react@19.2.6)(vitest@4.1.7)
+      class-variance-authority:
+        specifier: latest
+        version: 0.7.1
+      clsx:
+        specifier: latest
+        version: 2.1.1
+      drizzle-orm:
+        specifier: latest
+        version: 0.45.2(@libsql/client@0.17.3)(kysely@0.28.17)
+      hono:
+        specifier: latest
+        version: 4.12.21
+      lucide-react:
+        specifier: latest
+        version: 1.16.0(react@19.2.6)
+      react:
+        specifier: latest
+        version: 19.2.6
+      react-dom:
+        specifier: latest
+        version: 19.2.6(react@19.2.6)
+      sst:
+        specifier: 4.14.3
+        version: 4.14.3
+      tailwind-merge:
+        specifier: latest
+        version: 3.6.0
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: latest
+        version: 4.3.0(vite@8.0.14)
+      '@types/aws-lambda':
+        specifier: 8.10.161
+        version: 8.10.161
+      '@types/node':
+        specifier: latest
+        version: 25.9.1
+      '@types/react':
+        specifier: latest
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: latest
+        version: 19.2.3(@types/react@19.2.15)
+      '@vitejs/plugin-react':
+        specifier: latest
+        version: 6.0.2(vite@8.0.14)
+      drizzle-kit:
+        specifier: latest
+        version: 0.31.10
+      tailwindcss:
+        specifier: latest
+        version: 4.3.0
+      tsx:
+        specifier: latest
+        version: 4.22.3
+      typescript:
+        specifier: latest
+        version: 6.0.3
+      vite:
+        specifier: latest
+        version: 8.0.14(@types/node@25.9.1)(tsx@4.22.3)
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@25.9.1)(vite@8.0.14)
+
+  packages/cli:
+    dependencies:
+      '@dpklabs/notes-sdk':
+        specifier: workspace:*
+        version: link:../sdk
+    devDependencies:
+      typescript:
+        specifier: latest
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@25.9.1)(vite@8.0.16)
+
+  packages/sdk:
+    devDependencies:
+      typescript:
+        specifier: latest
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@25.9.1)(vite@8.0.16)
 
 packages:
 
@@ -1908,6 +1932,10 @@ packages:
   /@oxc-project/types@0.132.0:
     resolution: {integrity: sha512-FESMOxil5Se014ui/Eq8fT5uHJo6nIRwH0PfJrZJXs6Gek3ZVFOrpUv3YIZT20m+extU98Hg1Ym72U58rlsxUQ==}
 
+  /@oxc-project/types@0.133.0:
+    resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
+    dev: true
+
   /@radix-ui/primitive@1.1.3:
     resolution: {integrity: sha512-JTF99U/6XIjCBo0wqkU5sK10glYe27MRRsfwoiq5zzOEZLHU3A3KCMa5X/azekYRCJ0HlwI0crAXS/5dEHTzDg==}
     dev: false
@@ -2279,12 +2307,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-android-arm64@1.0.3:
+    resolution: {integrity: sha512-454rs7jHngixp/NMxd5srYD57OnzSlZ/eFTETjORQHLwJG1lRtmNOJcBerZlfu4GjKqeq8aCCIQrMdHyhI51Hw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-darwin-arm64@1.0.2:
     resolution: {integrity: sha512-vdFA9+C/rekyGce7WqHs/xoT0ioZEWaOFyZLIV1mEeNFaFDUQrPIo8Vs2GvJ6eetb3rzDUtUBgzto3ExpXJB3w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [darwin]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-darwin-arm64@1.0.3:
+    resolution: {integrity: sha512-PcAhP+ynjURNyy8SKGl5DQP94aGuB/7JrXJb/t7P+hanXvQVMWzUvRRhBAcg/lNRadBhoUPqSoP4xw5tR/KBEA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/binding-darwin-x64@1.0.2:
@@ -2295,12 +2341,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-darwin-x64@1.0.3:
+    resolution: {integrity: sha512-9YpfeUvSE2RS7wysJ81uOZkXJz7f7Q55H2Gvp3VEw/EsahqDtrphrZ0EwDLK5vvKOzaCrBsjF8JmnMLcUt78Gg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-freebsd-x64@1.0.2:
     resolution: {integrity: sha512-m41o7M0YWtUdqk61Tb+jnKb2rN++iRdIASlExkUoKfIAH30DOHCB8fVLzSUpbWHHU8esmEioY62PxzexE8MBuA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [freebsd]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-freebsd-x64@1.0.3:
+    resolution: {integrity: sha512-yB1IlAsSNHncV6SCTL27/MVGR5htvQsoGxIv5KMGXALp+Ll1wYsn+x98M9MW7qa+NdSbvrrY7ANI4wLJ0n1e6g==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/binding-linux-arm-gnueabihf@1.0.2:
@@ -2311,12 +2375,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-linux-arm-gnueabihf@1.0.3:
+    resolution: {integrity: sha512-Yi30IVAAfLUCy2MseFjbB1jAMDl1VMCAas5StnYp8da9+CKvMd2H2cbEjWcw5NPaPqzvYkVIaF1nNUG+b7u/sw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-linux-arm64-gnu@1.0.2:
     resolution: {integrity: sha512-1jn6qDU5iiOgFgygDzKUuKP0maTi0/f1+sBLgvij/76C77Nm3ts6ufz9Bjg5q5dduxiUIxtq86JIoBvo1xQ4Ig==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-linux-arm64-gnu@1.0.3:
+    resolution: {integrity: sha512-jsO7R8To+AdlYgUmN5sHSCZbfhtMBkO0WUx8iORQnPcMMdgr7qM2DQmMwgabs3GhNztdmoKkMKQFHD6DTMCIQw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/binding-linux-arm64-musl@1.0.2:
@@ -2327,12 +2409,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-linux-arm64-musl@1.0.3:
+    resolution: {integrity: sha512-VWkUHwWriDciit80wleYwKILoR/KMvxh/IdwS/paX+ZgpuRpCrKLUdadJbc0NpBEiyhpYawsJ73j9aCvOH+f7Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-linux-ppc64-gnu@1.0.2:
     resolution: {integrity: sha512-hgO5Abm0w5UL6FEa2iFnZqo2KlK7TQ5QhV5x09hujBf7t5KzHQ1VmfPuTpqRy/rNlSxua3eWH374xxiVrP+lcA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
     os: [linux]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-linux-ppc64-gnu@1.0.3:
+    resolution: {integrity: sha512-5f1laC0SlIR0yDbFCd8acUhvJIag6N3zC5P7oUPN6wX0aOma+uKJ0wBDH5aq7I1PVI2ttTlhJwzwRIBnLiSGEg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ppc64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/binding-linux-s390x-gnu@1.0.2:
@@ -2343,12 +2443,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-linux-s390x-gnu@1.0.3:
+    resolution: {integrity: sha512-Iq4ko0r4XsgbrF/LunNgHtAGLRRVE2kXonAXQ/MV0mC6jQpMOhW1SvtZja2EhC/kd05++bP78dsqBeIQyYJ6Yg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [s390x]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-linux-x64-gnu@1.0.2:
     resolution: {integrity: sha512-0+bOkiQ779+r1WpoHOWHqncvyySci0vKph+myNDYb+im6meJAzHQXay6oEgnkHuUGouM1LKTZwqKpBow6Kj7CQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-linux-x64-gnu@1.0.3:
+    resolution: {integrity: sha512-B8m6tD5+/N5FeNQFbKlLA/2yVq9ycQP1SeedyEYYKWBNR3ZQbkvIUcNnDNM03lO1l5F2roiiFJGgvoLLyZXtSg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/binding-linux-x64-musl@1.0.2:
@@ -2359,12 +2477,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-linux-x64-musl@1.0.3:
+    resolution: {integrity: sha512-pSdpdUJHkuCxun9LE7jvgUB9qsRgaiyNNCX7m/AvHTcq67AiT/Yhoxvw5zPfhrM8k/BfP8ce/hMOpthKDpEUow==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-openharmony-arm64@1.0.2:
     resolution: {integrity: sha512-1v5vHasdfQAZoEHakBV72LIFAC9JjnymsiKxp+GEr/ma3+NJCPSaYK+qavInOovJkgwFrs7GccX2d6IgDA3Z5w==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [openharmony]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-openharmony-arm64@1.0.3:
+    resolution: {integrity: sha512-OXXS3RKJgX2uLwM+gYyuH5omcH8fL1LJs96pZGgtetVCahON57+d4SJHzTgZiOjxgGkSnpXpOsWuPDGAKAigEg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/binding-wasm32-wasi@1.0.2:
@@ -2378,6 +2514,18 @@ packages:
       '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
+  /@rolldown/binding-wasm32-wasi@1.0.3:
+    resolution: {integrity: sha512-JTtb8BWFynicNSoPrehsCzBtOKjZ6jhMiPFEmOiuXg1Fl8dn2KHQob+GuPSGR0dryQa1PQJbzjF3dqO/whhjLg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [wasm32]
+    requiresBuild: true
+    dependencies:
+      '@emnapi/core': 1.10.0
+      '@emnapi/runtime': 1.10.0
+      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+    dev: true
+    optional: true
+
   /@rolldown/binding-win32-arm64-msvc@1.0.2:
     resolution: {integrity: sha512-SqKonF56vA/L2yHwHYcEp2P34URpOZ7d1fS635cTkpDnUtEGdUbhI6NzsPdqeSWvAAeGDrxjWjNmibDIdFf9/A==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -2386,12 +2534,30 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@rolldown/binding-win32-arm64-msvc@1.0.3:
+    resolution: {integrity: sha512-gEdFFEN70A/jxb2svrWsN3aDL7OUtmvlOy+6fa2jxG8K0wQ1ZbdeLGnidov6Yu5/733dI5ySfzFlQ/cb0bSz1g==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+    requiresBuild: true
+    dev: true
+    optional: true
+
   /@rolldown/binding-win32-x64-msvc@1.0.2:
     resolution: {integrity: sha512-v7qRI7gXLRINcOGXt+7YmAZ6iFuyZVMIoXAxhd8oP+DR9dLfL9GfNIx7PLMxmhZdvq8waUJBQiWN9EKNy+TRBQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
     requiresBuild: true
+    optional: true
+
+  /@rolldown/binding-win32-x64-msvc@1.0.3:
+    resolution: {integrity: sha512-eXB7CHuaQdqmJcc3koCNtNPmT/bj2gc999kUFgBxG8Ac0NdgXc4rkCHhqrgrhN3zddvvvrgzj1e90SuSfmyIXA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
+    requiresBuild: true
+    dev: true
     optional: true
 
   /@rolldown/pluginutils@1.0.1:
@@ -2957,6 +3123,23 @@ packages:
       estree-walker: 3.0.3
       magic-string: 0.30.21
       vite: 8.0.14(@types/node@25.9.1)(tsx@4.22.3)
+
+  /@vitest/mocker@4.1.7(vite@8.0.16):
+    resolution: {integrity: sha512-vY7nuamKgfvpA1Koa3oYIw/k7D6kZnpGyNMZW8loow2bsBYla1TFdqTaXncWdRn4pgwNs+90RhnXhJScDwQeJA==}
+    peerDependencies:
+      msw: ^2.4.9
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+    peerDependenciesMeta:
+      msw:
+        optional: true
+      vite:
+        optional: true
+    dependencies:
+      '@vitest/spy': 4.1.7
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+      vite: 8.0.16(@types/node@25.9.1)(tsx@4.22.3)
+    dev: true
 
   /@vitest/pretty-format@4.1.7:
     resolution: {integrity: sha512-umgCarTOYQWIaDMvGDRZij+6b9oVeLIyJzfN+AS88e0ZOU3QTgNNSTtjQOpcvWr3np1N0j4WgZj+sb3oYBDscw==}
@@ -3892,6 +4075,31 @@ packages:
       '@rolldown/binding-win32-arm64-msvc': 1.0.2
       '@rolldown/binding-win32-x64-msvc': 1.0.2
 
+  /rolldown@1.0.3:
+    resolution: {integrity: sha512-i00lAJ2ks1BYr7rjNjKC7BcqAS7nVfiT3QX1SI5aY+AFHblCmaUf9OE9dbdzDvW6dJxbi2ZCZiy9v3CcwOiX3g==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    dependencies:
+      '@oxc-project/types': 0.133.0
+      '@rolldown/pluginutils': 1.0.1
+    optionalDependencies:
+      '@rolldown/binding-android-arm64': 1.0.3
+      '@rolldown/binding-darwin-arm64': 1.0.3
+      '@rolldown/binding-darwin-x64': 1.0.3
+      '@rolldown/binding-freebsd-x64': 1.0.3
+      '@rolldown/binding-linux-arm-gnueabihf': 1.0.3
+      '@rolldown/binding-linux-arm64-gnu': 1.0.3
+      '@rolldown/binding-linux-arm64-musl': 1.0.3
+      '@rolldown/binding-linux-ppc64-gnu': 1.0.3
+      '@rolldown/binding-linux-s390x-gnu': 1.0.3
+      '@rolldown/binding-linux-x64-gnu': 1.0.3
+      '@rolldown/binding-linux-x64-musl': 1.0.3
+      '@rolldown/binding-openharmony-arm64': 1.0.3
+      '@rolldown/binding-wasm32-wasi': 1.0.3
+      '@rolldown/binding-win32-arm64-msvc': 1.0.3
+      '@rolldown/binding-win32-x64-msvc': 1.0.3
+    dev: true
+
   /rou3@0.7.12:
     resolution: {integrity: sha512-iFE4hLDuloSWcD7mjdCDhx2bKcIsYbtOTpfH5MHHLSKMOUyjqQXTeZVa289uuwEGEKFoE/BAPbhaU4B774nceg==}
     dev: false
@@ -4084,6 +4292,14 @@ packages:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
+  /tinyglobby@0.2.17:
+    resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
+    engines: {node: '>=12.0.0'}
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+    dev: true
+
   /tinyrainbow@3.1.0:
     resolution: {integrity: sha512-Bf+ILmBgretUrdJxzXM0SgXLZ3XfiaUuOj/IKQHuTXip+05Xn+uyEYdVg0kYDipTBcLrCVyUzAPz7QmArb0mmw==}
     engines: {node: '>=14.0.0'}
@@ -4252,6 +4468,60 @@ packages:
     optionalDependencies:
       fsevents: 2.3.3
 
+  /vite@8.0.16(@types/node@25.9.1)(tsx@4.22.3):
+    resolution: {integrity: sha512-h9bXPmJichP5fLmVQo3PyaGSDE2n3aPuomeAlVRm0JLmt4rY6zmPKd59HYI4LNW8oTK7tlTsuC7l/m7awx9Jcw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^20.19.0 || >=22.12.0
+      '@vitejs/devtools': ^0.1.18
+      esbuild: ^0.27.0 || ^0.28.0
+      jiti: '>=1.21.0'
+      less: ^4.0.0
+      sass: ^1.70.0
+      sass-embedded: ^1.70.0
+      stylus: '>=0.54.8'
+      sugarss: ^5.0.0
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      '@vitejs/devtools':
+        optional: true
+      esbuild:
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
+    dependencies:
+      '@types/node': 25.9.1
+      lightningcss: 1.32.0
+      picomatch: 4.0.4
+      postcss: 8.5.15
+      rolldown: 1.0.3
+      tinyglobby: 0.2.17
+      tsx: 4.22.3
+    optionalDependencies:
+      fsevents: 2.3.3
+    dev: true
+
   /vitest@4.1.7(@types/node@25.9.1)(vite@8.0.14):
     resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
@@ -4317,6 +4587,72 @@ packages:
     transitivePeerDependencies:
       - msw
 
+  /vitest@4.1.7(@types/node@25.9.1)(vite@8.0.16):
+    resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
+    engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@opentelemetry/api': ^1.9.0
+      '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
+      '@vitest/browser-playwright': 4.1.7
+      '@vitest/browser-preview': 4.1.7
+      '@vitest/browser-webdriverio': 4.1.7
+      '@vitest/coverage-istanbul': 4.1.7
+      '@vitest/coverage-v8': 4.1.7
+      '@vitest/ui': 4.1.7
+      happy-dom: '*'
+      jsdom: '*'
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser-playwright':
+        optional: true
+      '@vitest/browser-preview':
+        optional: true
+      '@vitest/browser-webdriverio':
+        optional: true
+      '@vitest/coverage-istanbul':
+        optional: true
+      '@vitest/coverage-v8':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
+        optional: true
+    dependencies:
+      '@types/node': 25.9.1
+      '@vitest/expect': 4.1.7
+      '@vitest/mocker': 4.1.7(vite@8.0.16)
+      '@vitest/pretty-format': 4.1.7
+      '@vitest/runner': 4.1.7
+      '@vitest/snapshot': 4.1.7
+      '@vitest/spy': 4.1.7
+      '@vitest/utils': 4.1.7
+      es-module-lexer: 2.1.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      obug: 2.1.1
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.2.2
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.0
+      vite: 8.0.16(@types/node@25.9.1)(tsx@4.22.3)
+      why-is-node-running: 2.3.0
+    transitivePeerDependencies:
+      - msw
+    dev: true
+
   /w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
     dev: false
@@ -4364,7 +4700,6 @@ packages:
     id: github.com/spdydve/minueditor/455a91d11ee07fe5d3e3342b7483b8705eac78f4
     name: '@dpklabs/minueditor'
     version: 0.9.1
-    prepare: true
     requiresBuild: true
     peerDependencies:
       '@codemirror/autocomplete': ^6.20.0

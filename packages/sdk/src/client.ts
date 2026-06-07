@@ -1,4 +1,4 @@
-import { NotesApiError, NotesConfigurationError } from "./errors";
+import { NotesApiError, NotesConfigurationError } from "./errors.js";
 import type {
   CreateFolderInput,
   CreateNoteInput,
@@ -13,7 +13,7 @@ import type {
   SectionResponse,
   UpdateFolderInput,
   UpdateNoteInput,
-} from "./types";
+} from "./types.js";
 
 type FetchLike = typeof fetch;
 
