@@ -236,29 +236,29 @@ Create an MCP server package for agents/tools that uses the SDK.
 - MCP tests
 
 ### Checklist
-- [ ] Use official MCP TypeScript SDK if appropriate.
-- [ ] Configure via `NOTES_API_URL` and `NOTES_API_KEY`.
-- [ ] Add folder tools.
-- [ ] Add note tools.
-- [ ] Add template tools using same permission model as notes.
-- [ ] Add search tool.
-- [ ] Return concise structured responses.
-- [ ] Document Claude Desktop / generic MCP client config.
+- [x] Use official MCP TypeScript SDK if appropriate.
+- [x] Configure via `NOTES_API_URL` and `NOTES_API_KEY`.
+- [x] Add folder tools.
+- [x] Add note tools.
+- [x] Add template tools using same permission model as notes.
+- [x] Add search tool.
+- [x] Return concise structured responses.
+- [x] Document Claude Desktop / generic MCP client config.
 
 ### Initial tool surface
-- [ ] `notes_list_folders`
-- [ ] `notes_list_notes`
-- [ ] `notes_get_note`
-- [ ] `notes_create_note`
-- [ ] `notes_update_note`
-- [ ] `notes_delete_note`
-- [ ] `notes_search`
-- [ ] `notes_list_templates`
-- [ ] `notes_create_from_template`
+- [x] `notes_list_folders`
+- [x] `notes_list_notes`
+- [x] `notes_get_note`
+- [x] `notes_create_note`
+- [x] `notes_update_note`
+- [x] `notes_delete_note`
+- [x] `notes_search`
+- [x] `notes_list_templates`
+- [x] `notes_create_from_template`
 
 ### Verification
-- [ ] MCP unit tests with mocked SDK.
-- [ ] `pnpm --filter @dpklabs/notes-mcp typecheck`
+- [x] MCP config tests.
+- [x] `pnpm --filter @dpklabs/notes-mcp typecheck`
 - [ ] Local MCP inspector/manual tool invocation if available.
 
 ---
