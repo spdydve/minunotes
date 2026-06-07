@@ -2,8 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { NotesClient } from "@dpklabs/notes-sdk";
 import { z } from "zod";
 
-function asText(data: unknown) {
+const noteTypeSchema = z.enum(["note", "template"]);
+const jsonObjectSchema = z.object({}).passthrough();
+
+function toolResult(data: unknown) {
   return {
+    structuredContent: { result: data },
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   };
 }
@@ -11,86 +15,155 @@ function asText(data: unknown) {
 export function createNotesMcpServer(client: NotesClient) {
   const server = new McpServer({ name: "dpklabs-notes", version: "0.1.0" });
 
-  server.tool("notes_list_folders", "List folders available to the API key.", {}, async () => {
-    return asText(await client.folders.list());
-  });
-
-  server.tool(
-    "notes_list_notes",
-    "List notes in a folder.",
-    { folderId: z.string(), type: z.enum(["note", "template"]).default("note") },
-    async ({ folderId, type }) => asText(await client.notes.list(folderId, type)),
-  );
-
-  server.tool(
-    "notes_get_note",
-    "Get a note by id.",
-    { noteId: z.string() },
-    async ({ noteId }) => asText(await client.notes.get(noteId)),
-  );
-
-  server.tool(
-    "notes_create_note",
-    "Create a note in a folder.",
+  server.registerTool(
+    "notes_list_folders",
     {
-      folderId: z.string(),
-      title: z.string().optional(),
-      content: z.string().optional(),
-      type: z.enum(["note", "template"]).default("note"),
+      title: "List folders",
+      description: "List folders available to the configured Notes API key.",
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async () => toolResult(await client.folders.list()),
+  );
+
+  server.registerTool(
+    "notes_list_notes",
+    {
+      title: "List notes",
+      description: "List notes or templates in a folder.",
+      inputSchema: { folderId: z.string(), type: noteTypeSchema.default("note") },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ folderId, type }) => toolResult(await client.notes.list(folderId, type)),
+  );
+
+  server.registerTool(
+    "notes_get_note",
+    {
+      title: "Get note",
+      description: "Read a note or template by id.",
+      inputSchema: { noteId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId }) => toolResult(await client.notes.get(noteId)),
+  );
+
+  server.registerTool(
+    "notes_create_note",
+    {
+      title: "Create note",
+      description: "Create a note or template in a folder. Permissions are enforced by the Notes API key.",
+      inputSchema: {
+        folderId: z.string(),
+        title: z.string().optional(),
+        content: z.string().optional(),
+        type: noteTypeSchema.default("note"),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ folderId, title, content, type }) =>
-      asText(await client.notes.create(folderId, { title, content, type })),
+      toolResult(await client.notes.create(folderId, { title, content, type })),
   );
 
-  server.tool(
+  server.registerTool(
     "notes_update_note",
-    "Update a note. Permissions are enforced by the Notes API key.",
     {
-      noteId: z.string(),
-      title: z.string().optional(),
-      content: z.string().optional(),
-      folderId: z.string().optional(),
-      isApiEditable: z.boolean().optional(),
-      baseHash: z.string().optional(),
+      title: "Update note",
+      description: "Update a note or template. Permissions are enforced by the Notes API key.",
+      inputSchema: {
+        noteId: z.string(),
+        title: z.string().optional(),
+        content: z.string().optional(),
+        folderId: z.string().optional(),
+        isApiEditable: z.boolean().optional(),
+        baseHash: z.string().optional(),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     async ({ noteId, title, content, folderId, isApiEditable, baseHash }) =>
-      asText(await client.notes.update(noteId, { title, content, folderId, isApiEditable, baseHash })),
+      toolResult(await client.notes.update(noteId, { title, content, folderId, isApiEditable, baseHash })),
   );
 
-  server.tool(
+  server.registerTool(
     "notes_delete_note",
-    "Delete a note by id.",
-    { noteId: z.string() },
-    async ({ noteId }) => asText(await client.notes.delete(noteId)),
-  );
-
-  server.tool(
-    "notes_search",
-    "Search notes.",
-    { query: z.string(), type: z.enum(["note", "template"]).default("note") },
-    async ({ query, type }) => asText(await client.search.notes(query, type)),
-  );
-
-  server.tool("notes_list_templates", "List templates.", {}, async () => {
-    return asText(await client.templates.list());
-  });
-
-  server.tool(
-    "notes_create_from_template",
-    "Create a note by copying an existing template's content.",
     {
-      templateId: z.string(),
-      folderId: z.string(),
-      title: z.string().optional(),
+      title: "Delete note",
+      description: "Delete a note or template by id. Permissions are enforced by the Notes API key.",
+      inputSchema: { noteId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId }) => toolResult(await client.notes.delete(noteId)),
+  );
+
+  server.registerTool(
+    "notes_search",
+    {
+      title: "Search notes",
+      description: "Search notes or templates.",
+      inputSchema: { query: z.string(), type: noteTypeSchema.default("note") },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ query, type }) => toolResult(await client.search.notes(query, type)),
+  );
+
+  server.registerTool(
+    "notes_list_templates",
+    {
+      title: "List templates",
+      description: "List all templates visible to the configured Notes API key.",
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async () => toolResult(await client.templates.list()),
+  );
+
+  server.registerTool(
+    "notes_create_from_template",
+    {
+      title: "Create from template",
+      description: "Create a note by copying an existing template's content into a destination folder.",
+      inputSchema: {
+        templateId: z.string(),
+        folderId: z.string(),
+        title: z.string().optional(),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ templateId, folderId, title }) => {
       const { note: template } = await client.notes.get(templateId);
-      return asText(await client.notes.create(folderId, {
+      return toolResult(await client.notes.create(folderId, {
         title: title ?? template.title,
         content: template.content,
         type: "note",
       }));
     },
+  );
+
+  server.registerPrompt(
+    "summarize_note",
+    {
+      title: "Summarize note",
+      description: "Prompt template for summarizing a note after fetching it with notes_get_note.",
+      argsSchema: { noteId: z.string() },
+    },
+    ({ noteId }) => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Fetch note ${noteId} with notes_get_note, then summarize the note in concise bullet points.`,
+          },
+        },
+      ],
+    }),
   );
 
   return server;
