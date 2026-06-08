@@ -227,6 +227,7 @@ select {
     --me-codeblock-border: var(--notes-border);
     --me-blockquote-border: var(--notes-blue);
     --me-blockquote-color: var(--notes-muted);
+    --me-hr-color: var(--notes-border);
     --me-table-border: var(--notes-border);
     --me-table-bg: var(--notes-panel);
     --me-table-header-bg: var(--notes-panel-muted);
