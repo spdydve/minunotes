@@ -61,12 +61,14 @@ export default $config({
       dev: {
         web: "dev-notes.dpklabs.com",
         api: "api-dev-notes.dpklabs.com",
-        cookieDomain: ".dpklabs.com",
+        cookieDomain: "dpklabs.com",
+        cookiePrefix: "minunotes-dev",
       },
       production: {
         web: "notes.dpklabs.com",
         api: "api.notes.dpklabs.com",
-        cookieDomain: ".notes.dpklabs.com",
+        cookieDomain: "notes.dpklabs.com",
+        cookiePrefix: "minunotes",
       },
     };
 
@@ -104,13 +106,14 @@ export default $config({
     });
 
     const apiGateway = new sst.aws.ApiGatewayV2("ApiGateway", {
-      domain: !isLocal && stageDomains
-        ? {
-            name: stageDomains.api,
-            dns: false,
-            cert: requireCustomDomainCert("API_CERT_ARN", env.API_CERT_ARN),
-          }
-        : undefined,
+      domain:
+        !isLocal && stageDomains
+          ? {
+              name: stageDomains.api,
+              dns: false,
+              cert: requireCustomDomainCert("API_CERT_ARN", env.API_CERT_ARN),
+            }
+          : undefined,
       cors: {
         allowOrigins,
         allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -140,29 +143,25 @@ export default $config({
       environment: {
         TURSO_DB_URL: env.TURSO_DB_URL ?? env.LIBSQL_URL ?? "file:local.db",
         TURSO_AUTH_TOKEN: env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? "",
-        BETTER_AUTH_SECRET:
-          env.BETTER_AUTH_SECRET ?? "dev-secret-change-me",
+        BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET ?? "dev-secret-change-me",
         BETTER_AUTH_URL: betterAuthUrl,
         FRONTEND_URL: frontendUrl,
         API_URL: apiUrl,
         API_ALLOWED_ORIGINS: allowOrigins.join(","),
         COOKIE_DOMAIN: env.COOKIE_DOMAIN ?? stageDomains?.cookieDomain ?? "",
+        COOKIE_PREFIX:
+          env.COOKIE_PREFIX ?? stageDomains?.cookiePrefix ?? "minunotes-local",
         ALLOWED_LOGIN_EMAILS: env.ALLOWED_LOGIN_EMAILS ?? "",
         SES_FROM_EMAIL: env.SES_FROM_EMAIL ?? "",
-        SES_REGION:
-          env.SES_REGION ?? env.AWS_REGION ?? "us-east-1",
+        SES_REGION: env.SES_REGION ?? env.AWS_REGION ?? "us-east-1",
         ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
         ATTACHMENT_STORAGE_PATH:
           env.ATTACHMENT_STORAGE_PATH ?? ".notes-attachments",
-        ATTACHMENT_PUBLIC_BASE_URL:
-          env.ATTACHMENT_PUBLIC_BASE_URL ?? "",
-        ATTACHMENT_BUCKET:
-          env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
-        ATTACHMENT_REGION:
-          env.ATTACHMENT_REGION ?? env.AWS_REGION ?? "",
+        ATTACHMENT_PUBLIC_BASE_URL: env.ATTACHMENT_PUBLIC_BASE_URL ?? "",
+        ATTACHMENT_BUCKET: env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
+        ATTACHMENT_REGION: env.ATTACHMENT_REGION ?? env.AWS_REGION ?? "",
         ATTACHMENT_ENDPOINT: env.ATTACHMENT_ENDPOINT ?? "",
-        ATTACHMENT_FORCE_PATH_STYLE:
-          env.ATTACHMENT_FORCE_PATH_STYLE ?? "false",
+        ATTACHMENT_FORCE_PATH_STYLE: env.ATTACHMENT_FORCE_PATH_STYLE ?? "false",
       },
     });
 
@@ -171,27 +170,24 @@ export default $config({
 
     if (!isLocal) {
       new sst.aws.Cron("AttachmentCleanup", {
-        schedule: (env.ATTACHMENT_CLEANUP_SCHEDULE ?? "rate(1 day)") as `rate(${string})` | `cron(${string})`,
+        schedule: (env.ATTACHMENT_CLEANUP_SCHEDULE ?? "rate(1 day)") as
+          | `rate(${string})`
+          | `cron(${string})`,
         function: {
           handler: "src/api/attachments/cleanup-handler.handler",
           nodejs: {
-            install: [
-              "@aws-sdk/client-s3",
-              "@libsql/client",
-              "libsql",
-            ],
+            install: ["@aws-sdk/client-s3", "@libsql/client", "libsql"],
           },
           link: [attachmentsBucket],
           environment: {
             TURSO_DB_URL: env.TURSO_DB_URL ?? env.LIBSQL_URL ?? "file:local.db",
-            TURSO_AUTH_TOKEN: env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? "",
+            TURSO_AUTH_TOKEN:
+              env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? "",
             ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
             ATTACHMENT_STORAGE_PATH:
               env.ATTACHMENT_STORAGE_PATH ?? ".notes-attachments",
-            ATTACHMENT_BUCKET:
-              env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
-            ATTACHMENT_REGION:
-              env.ATTACHMENT_REGION ?? env.AWS_REGION ?? "",
+            ATTACHMENT_BUCKET: env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
+            ATTACHMENT_REGION: env.ATTACHMENT_REGION ?? env.AWS_REGION ?? "",
             ATTACHMENT_ENDPOINT: env.ATTACHMENT_ENDPOINT ?? "",
             ATTACHMENT_FORCE_PATH_STYLE:
               env.ATTACHMENT_FORCE_PATH_STYLE ?? "false",
@@ -204,13 +200,14 @@ export default $config({
 
     const web = new sst.aws.StaticSite("Web", {
       path: ".",
-      domain: !isLocal && stageDomains
-        ? {
-            name: stageDomains.web,
-            dns: false,
-            cert: requireCustomDomainCert("WEB_CERT_ARN", env.WEB_CERT_ARN),
-          }
-        : undefined,
+      domain:
+        !isLocal && stageDomains
+          ? {
+              name: stageDomains.web,
+              dns: false,
+              cert: requireCustomDomainCert("WEB_CERT_ARN", env.WEB_CERT_ARN),
+            }
+          : undefined,
       dev: {
         command: "pnpm dev:web",
         url: "http://localhost:5173",
@@ -227,7 +224,9 @@ export default $config({
 
     return {
       webUrl: web.url,
-      webDnsName: stageDomains ? web.nodes.cdn!.nodes.distribution.domainName : "",
+      webDnsName: stageDomains
+        ? web.nodes.cdn!.nodes.distribution.domainName
+        : "",
       apiUrl: apiGateway.url,
       apiDnsName: stageDomains
         ? apiGateway.nodes.domainName.domainNameConfiguration.apply(

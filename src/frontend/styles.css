@@ -217,6 +217,10 @@ select {
     --me-text: var(--notes-text);
     --me-heading-color: var(--notes-text);
     --me-link-color: var(--notes-blue);
+    --me-list-marker-color: var(--notes-muted);
+    --me-list-hanging-indent-base: 3.25ch;
+    --me-task-list-hanging-indent-base: 4.75ch;
+    --me-checkbox-color: var(--notes-blue);
     --me-code-bg: var(--notes-code-bg);
     --me-code-color: var(--notes-text);
     --me-codeblock-bg: var(--notes-panel-muted);
@@ -287,6 +291,32 @@ select {
 .notes-minu-editor .me-token--block {
     font-size: 1px !important;
     letter-spacing: -1ch !important;
+}
+.notes-minu-editor .me-list-marker,
+.notes-minu-editor .me-ordered-list-marker,
+.notes-minu-editor .me-unordered-list-marker::before {
+    color: var(--notes-muted) !important;
+}
+.notes-minu-editor .me-checkbox,
+.notes-minu-renderer .task-list-item input[type="checkbox"],
+.notes-minu-renderer .me-renderer-checkbox {
+    border-color: var(--notes-blue) !important;
+    border-radius: 0.25rem !important;
+    background-color: transparent;
+}
+.notes-minu-editor .me-checkbox--checked,
+.notes-minu-renderer .task-list-item input[type="checkbox"]:checked {
+    background-color: var(--notes-blue) !important;
+}
+.notes-minu-editor .me-checkbox--partial,
+.notes-minu-renderer .me-renderer-checkbox--partial {
+    background: linear-gradient(135deg, var(--notes-blue) 0 50%, transparent 50% 100%) !important;
+}
+.notes-minu-renderer ul.contains-task-list {
+    padding-left: 0.25em;
+}
+.notes-minu-renderer .task-list-item {
+    gap: 0.5rem;
 }
 /* CodeMirror's defaultHighlightStyle is tuned for light backgrounds. The
    nested code-block editor inherits our dark editor surface, so remap the

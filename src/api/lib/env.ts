@@ -16,7 +16,15 @@ function ensureUrl(value: string, name: string) {
   }
 }
 
-export function parseAllowedOrigins(value?: string, fallback = LOCAL_FRONTEND_URL) {
+function normalizeCookieDomain(value?: string) {
+  const normalized = value?.trim().replace(/^\.+/, "");
+  return normalized || undefined;
+}
+
+export function parseAllowedOrigins(
+  value?: string,
+  fallback = LOCAL_FRONTEND_URL,
+) {
   const raw = value?.trim() ? value : fallback;
   const origins = raw
     .split(",")
@@ -30,46 +38,90 @@ export function parseAllowedOrigins(value?: string, fallback = LOCAL_FRONTEND_UR
 
 export function getStageUrls(stage: StageName, env = process.env): StageUrls {
   const normalizedStage = stage ?? "local";
-  const isLocal = normalizedStage === "local" || normalizedStage === "davidkennedy";
-  const defaultFrontendUrl = isLocal ? LOCAL_FRONTEND_URL : "https://notes.dpklabs.com";
-  const frontendUrl = ensureUrl(env.FRONTEND_URL ?? defaultFrontendUrl, "FRONTEND_URL");
-  const apiUrl = ensureUrl(env.API_URL ?? (isLocal ? frontendUrl : "https://api.notes.dpklabs.com"), "API_URL");
-  const betterAuthUrl = ensureUrl(env.BETTER_AUTH_URL ?? `${apiUrl}/api/auth`, "BETTER_AUTH_URL");
+  const isLocal =
+    normalizedStage === "local" || normalizedStage === "davidkennedy";
+  const defaultFrontendUrl = isLocal
+    ? LOCAL_FRONTEND_URL
+    : "https://notes.dpklabs.com";
+  const frontendUrl = ensureUrl(
+    env.FRONTEND_URL ?? defaultFrontendUrl,
+    "FRONTEND_URL",
+  );
+  const apiUrl = ensureUrl(
+    env.API_URL ?? (isLocal ? frontendUrl : "https://api.notes.dpklabs.com"),
+    "API_URL",
+  );
+  const betterAuthUrl = ensureUrl(
+    env.BETTER_AUTH_URL ?? `${apiUrl}/api/auth`,
+    "BETTER_AUTH_URL",
+  );
 
   return { frontendUrl, apiUrl, betterAuthUrl };
 }
 
-export type AttachmentStorageDriver = "filesystem" | "s3" | "s3-compatible" | "uploadthing" | "cloudinary" | "imgix";
+export type AttachmentStorageDriver =
+  | "filesystem"
+  | "s3"
+  | "s3-compatible"
+  | "uploadthing"
+  | "cloudinary"
+  | "imgix";
 
 function parseAttachmentStorageDriver(value?: string): AttachmentStorageDriver {
   const driver = (value?.trim() || "filesystem") as AttachmentStorageDriver;
-  if (["filesystem", "s3", "s3-compatible", "uploadthing", "cloudinary", "imgix"].includes(driver)) return driver;
+  if (
+    [
+      "filesystem",
+      "s3",
+      "s3-compatible",
+      "uploadthing",
+      "cloudinary",
+      "imgix",
+    ].includes(driver)
+  )
+    return driver;
   throw new Error(`Invalid ATTACHMENT_STORAGE_DRIVER: ${value}`);
 }
 
 export function getApiRuntimeConfig(env = process.env) {
-  const frontendUrl = ensureUrl(env.FRONTEND_URL ?? LOCAL_FRONTEND_URL, "FRONTEND_URL");
+  const frontendUrl = ensureUrl(
+    env.FRONTEND_URL ?? LOCAL_FRONTEND_URL,
+    "FRONTEND_URL",
+  );
   const apiUrl = ensureUrl(env.API_URL ?? frontendUrl, "API_URL");
-  const betterAuthUrl = ensureUrl(env.BETTER_AUTH_URL ?? `${apiUrl}/api/auth`, "BETTER_AUTH_URL");
-  const allowedOrigins = parseAllowedOrigins(env.API_ALLOWED_ORIGINS, frontendUrl);
+  const betterAuthUrl = ensureUrl(
+    env.BETTER_AUTH_URL ?? `${apiUrl}/api/auth`,
+    "BETTER_AUTH_URL",
+  );
+  const allowedOrigins = parseAllowedOrigins(
+    env.API_ALLOWED_ORIGINS,
+    frontendUrl,
+  );
 
   return {
     frontendUrl,
     apiUrl,
     betterAuthUrl,
     allowedOrigins,
-    cookieDomain: env.COOKIE_DOMAIN?.trim() || undefined,
-    allowedLoginEmails: (env.ALLOWED_LOGIN_EMAILS ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
+    cookieDomain: normalizeCookieDomain(env.COOKIE_DOMAIN),
+    cookiePrefix: env.COOKIE_PREFIX?.trim() || "minunotes",
+    allowedLoginEmails: (env.ALLOWED_LOGIN_EMAILS ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
     ses: {
       fromEmail: env.SES_FROM_EMAIL?.trim() || undefined,
       region: env.SES_REGION?.trim() || env.AWS_REGION?.trim() || "us-east-1",
     },
     attachmentStorage: {
       driver: parseAttachmentStorageDriver(env.ATTACHMENT_STORAGE_DRIVER),
-      filesystemPath: env.ATTACHMENT_STORAGE_PATH?.trim() || ".notes-attachments",
-      publicBaseUrl: env.ATTACHMENT_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") || undefined,
+      filesystemPath:
+        env.ATTACHMENT_STORAGE_PATH?.trim() || ".notes-attachments",
+      publicBaseUrl:
+        env.ATTACHMENT_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") || undefined,
       bucket: env.ATTACHMENT_BUCKET?.trim() || undefined,
-      region: env.ATTACHMENT_REGION?.trim() || env.AWS_REGION?.trim() || undefined,
+      region:
+        env.ATTACHMENT_REGION?.trim() || env.AWS_REGION?.trim() || undefined,
       endpoint: env.ATTACHMENT_ENDPOINT?.trim() || undefined,
       forcePathStyle: env.ATTACHMENT_FORCE_PATH_STYLE === "true",
     },

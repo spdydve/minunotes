@@ -5,7 +5,16 @@ import { db } from "../db/client";
 import { sendEmail } from "./email";
 import { getApiRuntimeConfig } from "./env";
 
-const { frontendUrl, apiUrl, betterAuthUrl, allowedOrigins, cookieDomain, allowedLoginEmails, ses } = getApiRuntimeConfig();
+const {
+  frontendUrl,
+  apiUrl,
+  betterAuthUrl,
+  allowedOrigins,
+  cookieDomain,
+  cookiePrefix,
+  allowedLoginEmails,
+  ses,
+} = getApiRuntimeConfig();
 
 function isAllowedLoginEmail(email: string) {
   if (allowedLoginEmails.length === 0) return true;
@@ -18,7 +27,9 @@ export const auth = betterAuth({
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
         if (!isAllowedLoginEmail(email)) {
-          console.warn(`[AUTH OTP] blocked ${type} OTP for unauthorized email: ${email}`);
+          console.warn(
+            `[AUTH OTP] blocked ${type} OTP for unauthorized email: ${email}`,
+          );
           return;
         }
 
@@ -50,8 +61,10 @@ export const auth = betterAuth({
   },
   baseURL: betterAuthUrl,
   advanced: {
+    cookiePrefix,
     crossSubDomainCookies: {
       enabled: Boolean(cookieDomain),
+      domain: cookieDomain,
     },
     defaultCookieAttributes: {
       sameSite: cookieDomain ? "none" : "lax",
@@ -60,5 +73,9 @@ export const auth = betterAuth({
       path: "/",
     },
   },
-  trustedOrigins: Array.from(new Set([...allowedOrigins, frontendUrl, apiUrl, betterAuthUrl].filter(Boolean))),
+  trustedOrigins: Array.from(
+    new Set(
+      [...allowedOrigins, frontendUrl, apiUrl, betterAuthUrl].filter(Boolean),
+    ),
+  ),
 });
