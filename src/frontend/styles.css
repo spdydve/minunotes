@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "@dpklabs/minueditor/theme.css";
+@import "@dpklabs/minueditor/themes/dark.css";
 
 @layer base {
     html {
@@ -218,8 +220,6 @@ select {
     --me-heading-color: var(--notes-text);
     --me-link-color: var(--notes-blue);
     --me-list-marker-color: var(--notes-muted);
-    --me-list-hanging-indent-base: 3.25ch;
-    --me-task-list-hanging-indent-base: 4.75ch;
     --me-checkbox-color: var(--notes-blue);
     --me-code-bg: var(--notes-code-bg);
     --me-code-color: var(--notes-text);
@@ -292,9 +292,9 @@ select {
     font-size: 1px !important;
     letter-spacing: -1ch !important;
 }
-.notes-minu-editor .me-list-marker,
+.notes-minu-editor .me-list-marker-widget,
 .notes-minu-editor .me-ordered-list-marker,
-.notes-minu-editor .me-unordered-list-marker::before {
+.notes-minu-editor .me-unordered-list-marker {
     color: var(--notes-muted) !important;
 }
 .notes-minu-editor .me-checkbox,
@@ -311,12 +311,6 @@ select {
 .notes-minu-editor .me-checkbox--partial,
 .notes-minu-renderer .me-renderer-checkbox--partial {
     background: linear-gradient(135deg, var(--notes-blue) 0 50%, transparent 50% 100%) !important;
-}
-.notes-minu-renderer ul.contains-task-list {
-    padding-left: 0.25em;
-}
-.notes-minu-renderer .task-list-item {
-    gap: 0.5rem;
 }
 /* CodeMirror's defaultHighlightStyle is tuned for light backgrounds. The
    nested code-block editor inherits our dark editor surface, so remap the
