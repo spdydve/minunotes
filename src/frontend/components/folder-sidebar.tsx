@@ -26,7 +26,7 @@ export function FolderSidebar({
   const nav = useNavigate();
 
   return (
-    <aside className="flex h-screen w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:w-72">
+    <aside className="flex h-full min-h-0 w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:h-screen md:w-72">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="font-semibold">MinuNotes</h1>
         {onCollapse ? (
@@ -45,7 +45,7 @@ export function FolderSidebar({
           API unavailable. Check VITE_API_URL.
         </p>
       )}
-      <nav className="space-y-1">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pb-4">
         <Link
           to="/templates"
           className="block rounded-md px-3 py-2 text-sm text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
@@ -70,7 +70,7 @@ export function FolderSidebar({
           </div>
         ))}
       </nav>
-      <div className="mt-auto border-t border-[var(--notes-border)] pt-4">
+      <div className="shrink-0 border-t border-[var(--notes-border)] pt-4 pb-[env(safe-area-inset-bottom,0px)]">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm">{userEmail}</p>
