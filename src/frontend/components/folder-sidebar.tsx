@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { PanelLeftClose } from "lucide-react";
 import { api } from "../lib/api";
 import { authClient } from "../lib/auth-client";
 import { CreateFolderDialog } from "./create-folder-dialog";
@@ -12,9 +13,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 export function FolderSidebar({
   userEmail,
   onNavigate,
+  onCollapse,
 }: {
   userEmail?: string | null;
   onNavigate?: () => void;
+  onCollapse?: () => void;
 }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["folders"],
@@ -26,6 +29,11 @@ export function FolderSidebar({
     <aside className="flex h-screen w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:w-72">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h1 className="font-semibold">MinuNotes</h1>
+        {onCollapse ? (
+          <button className="rounded-md border border-[var(--notes-border)] p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]" type="button" aria-label="Collapse sidebar" onClick={onCollapse}>
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
       <div className="mb-4 flex flex-wrap gap-2">
         <SearchDialog />
