@@ -27,6 +27,16 @@ function NoteView() {
   const lastKnownHash = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!data?.note) return;
+    document.title = `${data.note.title} - MinuNotes`;
+  }, [data?.note]);
+
+  useEffect(() => {
+    if (hydratedNoteId.current !== noteId) return;
+    document.title = `${title.trim() || "Untitled note"} - MinuNotes`;
+  }, [noteId, title]);
+
+  useEffect(() => {
     if (!data?.note || hydratedNoteId.current === noteId) return;
     hydratedNoteId.current = noteId;
     setTitle(data.note.title);
@@ -45,6 +55,7 @@ function NoteView() {
     setIsStale(false);
     qc.setQueryData(["note", noteId], { note, contentHash });
     qc.invalidateQueries({ queryKey: [note.type === "template" ? "templates" : "notes", note.folderId] });
+    qc.invalidateQueries({ queryKey: ["notes", "recent"] });
     if (note.type === "template") qc.invalidateQueries({ queryKey: ["templates"] });
     qc.invalidateQueries({ queryKey: ["note-events", noteId] });
   };

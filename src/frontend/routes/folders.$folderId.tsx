@@ -21,6 +21,7 @@ function FolderView() {
     mutationFn: () => api.createNote(folderId),
     onSuccess: ({ note }) => {
       qc.invalidateQueries({ queryKey: ["notes", folderId] });
+      qc.invalidateQueries({ queryKey: ["notes", "recent"] });
       nav({ to: "/notes/$noteId", params: { noteId: note.id } });
     },
   });

@@ -70,6 +70,7 @@ export const api = {
   templateFolders: (templateId: string) => request<{ folders: Folder[] }>(`/notes/templates/${templateId}/folders`),
   updateTemplateFolders: (templateId: string, folderIds: string[]) => request<{ ok: true }>(`/notes/templates/${templateId}/folders`, { method: "PUT", body: JSON.stringify({ folderIds }) }),
   notes: (folderId: string, type: NoteType = "note") => request<{ notes: Note[] }>(`/folders/${folderId}/notes?type=${type}`),
+  recentNotes: (limit = 10) => request<{ notes: Note[] }>(`/notes/recent?limit=${limit}`),
   createNote: (folderId: string, data?: { title?: string; content?: string; type?: NoteType }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),

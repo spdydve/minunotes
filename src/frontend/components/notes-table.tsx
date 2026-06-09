@@ -34,6 +34,14 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
         </div>
       ),
     }),
+    columnHelper.accessor("createdAt", {
+      header: "Created",
+      cell: (info) => (
+        <span className="text-xs text-[var(--notes-muted)]">
+          {new Date(info.getValue()).toLocaleString()}
+        </span>
+      ),
+    }),
     columnHelper.accessor("updatedAt", {
       header: "Updated",
       cell: (info) => (
@@ -75,6 +83,7 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
                   </Link>
                   {note.updatedByActorType === "agent" ? <span className="shrink-0 rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
                 </div>
+                <p className="mt-1 text-xs text-[var(--notes-muted)]">Created {new Date(note.createdAt).toLocaleString()}</p>
                 <p className="mt-1 text-xs text-[var(--notes-muted)]">Updated {new Date(note.updatedAt).toLocaleString()}</p>
               </div>
               <NoteActionsPopover note={note} onDelete={() => remove.mutate({ noteId: note.id })} />

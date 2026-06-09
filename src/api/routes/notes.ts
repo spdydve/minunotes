@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes, templateFolderAssignments } from "../db/schema";
 import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
@@ -65,6 +65,19 @@ noteRoutes.get("/search", async (c) => {
   const type = c.req.query("type") === "template" ? "template" : "note";
   const result = await searchDocuments({ userId: user.id, query: q, limit: 25, type });
   return c.json({ notes: result.value.documents });
+});
+
+noteRoutes.get("/recent", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
+  const rows = await db.select().from(notes)
+    .where(and(eq(notes.userId, user.id), eq(notes.type, "note")))
+    .orderBy(desc(notes.updatedAt))
+    .limit(Number.isFinite(limit) && limit > 0 ? Math.min(limit, 50) : 10);
+
+  return c.json({ notes: rows });
 });
 
 noteRoutes.get("/:noteId", async (c) => {
