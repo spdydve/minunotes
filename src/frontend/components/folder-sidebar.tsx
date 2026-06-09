@@ -9,7 +9,13 @@ import { ThemeSelect } from "./theme-select";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
-export function FolderSidebar({ userEmail, onNavigate }: { userEmail?: string | null; onNavigate?: () => void }) {
+export function FolderSidebar({
+  userEmail,
+  onNavigate,
+}: {
+  userEmail?: string | null;
+  onNavigate?: () => void;
+}) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["folders"],
     queryFn: api.folders,
@@ -19,11 +25,11 @@ export function FolderSidebar({ userEmail, onNavigate }: { userEmail?: string | 
   return (
     <aside className="flex h-screen w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:w-72">
       <div className="mb-4 flex items-center justify-between gap-2">
-        <h1 className="font-semibold">Notes</h1>
-        <CreateFolderDialog />
+        <h1 className="font-semibold">MinuNotes</h1>
       </div>
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap gap-2">
         <SearchDialog />
+        <CreateFolderDialog />
       </div>
       {isLoading && <p className="text-sm text-slate-500">Loading...</p>}
       {error && (

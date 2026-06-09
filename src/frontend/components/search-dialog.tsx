@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Search } from "lucide-react";
 import { useState } from "react";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
@@ -11,7 +12,7 @@ export function SearchDialog() {
   const { data, isFetching } = useQuery({ queryKey: ["note-search", trimmed], queryFn: () => api.searchNotes(trimmed), enabled: open && trimmed.length > 0 });
 
   return <>
-    <Button onClick={() => setOpen(true)}>Search</Button>
+    <Button className="inline-flex items-center gap-2" onClick={() => setOpen(true)}><Search className="h-4 w-4" />Search</Button>
     {open && <div className="notes-overlay fixed inset-0 z-50 grid place-items-center p-4">
       <div className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
         <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Search notes</h2><Button onClick={() => setOpen(false)}>Close</Button></div>
