@@ -232,8 +232,8 @@ select {
     --me-table-bg: var(--notes-panel);
     --me-table-header-bg: var(--notes-panel-muted);
     --me-table-row-alt-bg: transparent;
-    --me-table-selection-bg: var(--notes-hover);
-    --me-table-selection-header-bg: var(--notes-hover);
+    --me-table-selection-bg: color-mix(in srgb, var(--notes-blue) 18%, transparent);
+    --me-table-selection-header-bg: color-mix(in srgb, var(--notes-blue) 26%, transparent);
     --me-command-bg: var(--notes-panel);
     --me-command-border: var(--notes-border);
     --me-command-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
@@ -444,13 +444,20 @@ select {
     background: color-mix(in srgb, var(--notes-blue) 10%, transparent);
     box-shadow: inset 0 0 0 1px var(--notes-blue);
 }
+.notes-minu-editor .me-table-widget .me-table-render td.me-table-cell--selected,
+.notes-minu-editor .me-table-widget .me-table-render th.me-table-cell--selected,
 .notes-minu-editor .me-table-cell--selected,
 .notes-minu-editor .me-table-cell--selected td,
 .notes-minu-editor .me-table-cell--selected th {
     background: var(--me-table-selection-bg) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--notes-blue) 72%, transparent) !important;
 }
+.notes-minu-editor .me-table-widget .me-table-render th.me-table-cell--selected-header,
 .notes-minu-editor .me-table-cell--selected-header,
 .notes-minu-editor .me-table-cell--selected-header td,
 .notes-minu-editor .me-table-cell--selected-header th {
     background: var(--me-table-selection-header-bg) !important;
+}
+.notes-minu-editor .me-table-cell--selected .me-table-input::selection {
+    background: color-mix(in srgb, var(--notes-blue) 35%, transparent);
 }

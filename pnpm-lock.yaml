@@ -45,8 +45,8 @@ dependencies:
     specifier: ^6.5.3
     version: 6.5.3
   '@dpklabs/minueditor':
-    specifier: github:spdydve/minueditor#v0.9.7
-    version: github.com/spdydve/minueditor/0bcd49f531d3455a43aa7db63fc042d616269e66(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
+    specifier: github:spdydve/minueditor#v0.9.8
+    version: github.com/spdydve/minueditor/7d97f0f4233c6b2d1ceab0b8556fcd35ceccd2f5(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
   '@hono/node-server':
     specifier: ^2.0.3
     version: 2.0.3(hono@4.12.21)
@@ -4359,11 +4359,11 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
     dev: false
 
-  github.com/spdydve/minueditor/0bcd49f531d3455a43aa7db63fc042d616269e66(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/0bcd49f531d3455a43aa7db63fc042d616269e66}
-    id: github.com/spdydve/minueditor/0bcd49f531d3455a43aa7db63fc042d616269e66
+  github.com/spdydve/minueditor/7d97f0f4233c6b2d1ceab0b8556fcd35ceccd2f5(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/7d97f0f4233c6b2d1ceab0b8556fcd35ceccd2f5}
+    id: github.com/spdydve/minueditor/7d97f0f4233c6b2d1ceab0b8556fcd35ceccd2f5
     name: '@dpklabs/minueditor'
-    version: 0.9.7
+    version: 0.9.8
     prepare: true
     requiresBuild: true
     peerDependencies:

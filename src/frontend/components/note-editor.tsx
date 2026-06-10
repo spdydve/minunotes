@@ -1,4 +1,4 @@
-import { defaultSlashCommands, MarkdownEditor, type MarkdownEditorHandle, type SlashCommand } from "@dpklabs/minueditor";
+import { MarkdownEditor, type MarkdownEditorHandle } from "@dpklabs/minueditor";
 import { Heading1, Heading2, Heading3, Image, List, ListChecks, ListOrdered, Plus, Quote, Redo2, Table2, Type, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { editorCodeHighlighter } from "../lib/code-highlighter";
@@ -119,18 +119,6 @@ export function NoteEditor({
     closeImagePicker();
   };
 
-  const slashCommands: readonly SlashCommand[] = defaultSlashCommands.map((command) =>
-    command.label === "Image"
-      ? {
-          ...command,
-          run: () => {
-            openImagePicker();
-            return true;
-          },
-        }
-      : command,
-  );
-
   return (
     <section className="mx-auto w-full max-w-6xl">
       <div className="border-b border-[var(--notes-border)] bg-[var(--notes-bg)] pb-4 md:sticky md:-top-6 md:z-20 md:-mt-6 md:pt-6">
@@ -148,6 +136,10 @@ export function NoteEditor({
           value={titleValue}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder="Untitled note"
+          spellCheck={true}
+          autoCorrect="on"
+          autoComplete="on"
+          autoCapitalize="sentences"
         />
         {updatedMeta ? (
           <div className="notes-muted mt-2 text-xs">{updatedMeta}</div>
@@ -162,7 +154,11 @@ export function NoteEditor({
           minHeight={520}
           codeLanguages={editorCodeLanguages}
           codeHighlighter={editorCodeHighlighter}
-          slashCommands={slashCommands}
+          spellCheck={true}
+          autoCorrect="on"
+          autoComplete="on"
+          autoCapitalize="sentences"
+          onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
           onImageUpload={onImageUpload ? async (file) => {
             setUploadingImage(true);
             try {
