@@ -63,8 +63,10 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
   const submit = async () => {
     setSaving(true);
     try {
-      if (apiKey) await api.updateApiKey(apiKey.id, { name, canCreateFolders, permissions: selectedPermissions() });
-      else {
+      if (apiKey) {
+        await api.updateApiKey(apiKey.id, { name, canCreateFolders, permissions: selectedPermissions() });
+        setOpen(false);
+      } else {
         const result = await api.createApiKey({ name, canCreateFolders, permissions: selectedPermissions() });
         setCreatedKey(result.key);
       }
