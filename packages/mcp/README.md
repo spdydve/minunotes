@@ -58,7 +58,10 @@ Tools include:
 - `notes_get_note`
 - `notes_create_note`
 - `notes_edit_note`
+- `notes_search_lines`
 - `notes_read_lines`
+- `notes_search_note_lines`
+- `notes_read_section`
 
 Implementation notes:
 

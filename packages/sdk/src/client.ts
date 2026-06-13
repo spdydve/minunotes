@@ -5,6 +5,9 @@ import type {
   DocumentEdit,
   DocumentSection,
   Folder,
+  LineRangeInput,
+  LineSearchInput,
+  LineSearchResponse,
   Note,
   NoteEventsResponse,
   NoteResponse,
@@ -85,13 +88,14 @@ export class NotesClient {
       this.request<NoteResponse>(`/harness/notes/${encodeURIComponent(noteId)}`),
     events: (noteId: string, limit?: number) =>
       this.request<NoteEventsResponse>(`/harness/notes/${encodeURIComponent(noteId)}/events${limit ? `?limit=${encodeURIComponent(String(limit))}` : ""}`),
-    lines: (noteId: string, input: { from?: number; to?: number } = {}) => {
-      const params = new URLSearchParams();
-      if (input.from !== undefined) params.set("from", String(input.from));
-      if (input.to !== undefined) params.set("to", String(input.to));
-      const query = params.toString();
-      return this.request(`/harness/notes/${encodeURIComponent(noteId)}/lines${query ? `?${query}` : ""}`);
+    searchLines: (input: LineSearchInput) =>
+      this.request<LineSearchResponse>(`/harness/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`),
+    lines: (noteId: string, input: LineRangeInput = {}) => {
+      const query = toQueryString(input);
+      return this.request(`/harness/notes/${encodeURIComponent(noteId)}/lines${query}`);
     },
+    searchNoteLines: (noteId: string, input: Omit<LineSearchInput, "folderId">) =>
+      this.request<LineSearchResponse>(`/harness/notes/${encodeURIComponent(noteId)}/search-lines${toQueryString({ q: input.query, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`),
     outline: (noteId: string) =>
       this.request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(
         `/harness/notes/${encodeURIComponent(noteId)}/outline`,
@@ -115,4 +119,13 @@ export class NotesClient {
   search = {
     notes: (query: string) => this.notes.search(query),
   };
+}
+
+function toQueryString(input: Record<string, string | number | boolean | undefined>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }

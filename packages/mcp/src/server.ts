@@ -25,7 +25,10 @@ export type NotesMcpClient = {
     get: (noteId: string) => Promise<unknown>;
     create: (folderId: string, input: { title?: string; content?: string }) => Promise<unknown>;
     edit: (noteId: string, edits: DocumentEdit[], baseHash?: string) => Promise<unknown>;
+    searchLines: (input: { query: string; folderId?: string; context?: number; limit?: number; caseSensitive?: boolean }) => Promise<unknown>;
     lines: (noteId: string, input: { from?: number; to?: number }) => Promise<unknown>;
+    searchNoteLines: (noteId: string, input: { query: string; context?: number; limit?: number; caseSensitive?: boolean }) => Promise<unknown>;
+    section: (noteId: string, sectionId: string) => Promise<unknown>;
   };
 };
 
@@ -112,6 +115,18 @@ export function createNotesMcpServer(client: NotesMcpClient) {
   );
 
   server.registerTool(
+    "notes_search_lines",
+    {
+      title: "Search note lines",
+      description: "Search matching lines across notes visible to the configured MinuNotes API key.",
+      inputSchema: { query: z.string(), folderId: z.string().optional(), context: z.number().optional(), limit: z.number().optional(), caseSensitive: z.boolean().optional() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ query, folderId, context, limit, caseSensitive }) => toolResult(await client.notes.searchLines({ query, folderId, context, limit, caseSensitive })),
+  );
+
+  server.registerTool(
     "notes_read_lines",
     {
       title: "Read note lines",
@@ -121,6 +136,30 @@ export function createNotesMcpServer(client: NotesMcpClient) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ noteId, from, to }) => toolResult(await client.notes.lines(noteId, { from, to })),
+  );
+
+  server.registerTool(
+    "notes_search_note_lines",
+    {
+      title: "Search lines in note",
+      description: "Search matching lines within a single note.",
+      inputSchema: { noteId: z.string(), query: z.string(), context: z.number().optional(), limit: z.number().optional(), caseSensitive: z.boolean().optional() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId, query, context, limit, caseSensitive }) => toolResult(await client.notes.searchNoteLines(noteId, { query, context, limit, caseSensitive })),
+  );
+
+  server.registerTool(
+    "notes_read_section",
+    {
+      title: "Read note section",
+      description: "Read a section from a note by section id from the note outline.",
+      inputSchema: { noteId: z.string(), sectionId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId, sectionId }) => toolResult(await client.notes.section(noteId, sectionId)),
   );
 
   server.registerPrompt(

@@ -31,6 +31,15 @@ mcpRoutes.all("/", async (c) => {
   return transport.handleRequest(c.req.raw);
 });
 
+function toQueryString(input: Record<string, string | number | boolean | undefined>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
 function createHostedMcpClient(origin: string, apiKey: string): NotesMcpClient {
   async function request(path: string, init: RequestInit = {}) {
     const response = await fetch(`${origin}/api/harness${path}`, {
@@ -60,13 +69,10 @@ function createHostedMcpClient(origin: string, apiKey: string): NotesMcpClient {
       get: (noteId) => request(`/notes/${encodeURIComponent(noteId)}`),
       create: (folderId, input) => request("/notes", { method: "POST", body: JSON.stringify({ folderId, title: input.title, content: input.content }) }),
       edit: (noteId, edits, baseHash) => request(`/notes/${encodeURIComponent(noteId)}/edit`, { method: "POST", body: JSON.stringify({ edits, baseHash }) }),
-      lines: (noteId, input) => {
-        const params = new URLSearchParams();
-        if (input.from !== undefined) params.set("from", String(input.from));
-        if (input.to !== undefined) params.set("to", String(input.to));
-        const query = params.toString();
-        return request(`/notes/${encodeURIComponent(noteId)}/lines${query ? `?${query}` : ""}`);
-      },
+      searchLines: (input) => request(`/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`),
+      lines: (noteId, input) => request(`/notes/${encodeURIComponent(noteId)}/lines${toQueryString(input)}`),
+      searchNoteLines: (noteId, input) => request(`/notes/${encodeURIComponent(noteId)}/search-lines${toQueryString({ q: input.query, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`),
+      section: (noteId, sectionId) => request(`/notes/${encodeURIComponent(noteId)}/sections/${encodeURIComponent(sectionId)}`),
     },
   };
 }

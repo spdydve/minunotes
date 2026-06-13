@@ -12,7 +12,10 @@ function mockClient() {
       get: vi.fn(async () => ({ note: { id: "note-1", title: "Note", content: "Body" }, contentHash: "hash" })),
       create: vi.fn(async () => ({ note: { id: "note-2" }, contentHash: "hash" })),
       edit: vi.fn(async () => ({ note: { id: "note-1" }, contentHash: "next" })),
+      searchLines: vi.fn(async () => ({ query: "todo", matches: [] })),
       lines: vi.fn(async () => ({ noteId: "note-1", lines: [] })),
+      searchNoteLines: vi.fn(async () => ({ query: "todo", matches: [] })),
+      section: vi.fn(async () => ({ noteId: "note-1", section: { id: "intro" } })),
     },
   };
 }
@@ -33,7 +36,10 @@ describe("createNotesMcpServer", () => {
       "notes_get_note",
       "notes_create_note",
       "notes_edit_note",
+      "notes_search_lines",
       "notes_read_lines",
+      "notes_search_note_lines",
+      "notes_read_section",
     ]);
     expect(registered.notes_list_folders.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(registered.notes_create_folder.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
@@ -71,6 +77,15 @@ describe("createNotesMcpServer", () => {
     expect(client.notes.edit).toHaveBeenCalledWith("note-1", [{ type: "append", text: "hello" }], "hash");
   });
 
+  it("searches lines across notes", async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_search_lines.handler({ query: "todo", folderId: "folder-1", context: 1, limit: 5, caseSensitive: true } as never);
+
+    expect(client.notes.searchLines).toHaveBeenCalledWith({ query: "todo", folderId: "folder-1", context: 1, limit: 5, caseSensitive: true });
+  });
+
   it("reads note lines", async () => {
     const client = mockClient();
     const server = createNotesMcpServer(client as never);
@@ -78,5 +93,23 @@ describe("createNotesMcpServer", () => {
     await tools(server).notes_read_lines.handler({ noteId: "note-1", from: 2, to: 4 } as never);
 
     expect(client.notes.lines).toHaveBeenCalledWith("note-1", { from: 2, to: 4 });
+  });
+
+  it("searches lines in one note", async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_search_note_lines.handler({ noteId: "note-1", query: "todo", context: 1, limit: 5 } as never);
+
+    expect(client.notes.searchNoteLines).toHaveBeenCalledWith("note-1", { query: "todo", context: 1, limit: 5, caseSensitive: undefined });
+  });
+
+  it("reads note sections", async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_read_section.handler({ noteId: "note-1", sectionId: "intro" } as never);
+
+    expect(client.notes.section).toHaveBeenCalledWith("note-1", "intro");
   });
 });

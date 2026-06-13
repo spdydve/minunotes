@@ -113,6 +113,33 @@ describe("NotesClient", () => {
     expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/notes/note%201/events?limit=10", expect.any(Object));
   });
 
+  it("searches lines across notes", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ query: "todo", matches: [] }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.notes.searchLines({ query: "todo item", folderId: "folder 1", context: 2, limit: 5, caseSensitive: true });
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/notes/search-lines?q=todo+item&folderId=folder+1&context=2&limit=5&caseSensitive=true", expect.any(Object));
+  });
+
+  it("searches lines within a note", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ query: "todo", matches: [] }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.notes.searchNoteLines("note 1", { query: "todo", context: 1 });
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/notes/note%201/search-lines?q=todo&context=1", expect.any(Object));
+  });
+
+  it("reads note sections", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ noteId: "note-1", contentHash: "hash", section: { id: "intro" } }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.notes.section("note 1", "intro section");
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/notes/note%201/sections/intro%20section", expect.any(Object));
+  });
+
   it("throws typed API errors", async () => {
     const fetch = vi.fn(async () => jsonResponse({ error: "Forbidden" }, { status: 403 }));
     const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });

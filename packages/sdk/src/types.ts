@@ -42,6 +42,21 @@ export type DocumentSection = {
   contentTo: number;
 };
 
+export type LineRangeInput = { from?: number; to?: number };
+export type LineSearchInput = { query: string; folderId?: string; context?: number; limit?: number; caseSensitive?: boolean };
+export type NumberedLine = { line: number; text: string };
+export type LineSearchMatch = {
+  noteId?: string;
+  folderId?: string;
+  title?: string;
+  line: number;
+  column: number;
+  text: string;
+  before: NumberedLine[];
+  after: NumberedLine[];
+};
+export type LineSearchResponse = { query: string; matches: LineSearchMatch[] };
+
 export type SectionResponse = {
   noteId: string;
   contentHash: string;

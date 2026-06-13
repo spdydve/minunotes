@@ -26,4 +26,5 @@ Available workflow groups:
 - `folders.list()` / `folders.create()`
 - `notes.search()` / `search.notes()`
 - `notes.create()` / `notes.get()` / `notes.update()` / `notes.edit()`
-- `notes.events()` / `notes.lines()` / `notes.outline()` / `notes.section()`
+- `notes.events()` / `notes.lines()` / `notes.searchLines()` / `notes.searchNoteLines()`
+- `notes.outline()` / `notes.section()`
