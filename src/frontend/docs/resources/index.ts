@@ -3,7 +3,6 @@ import AgentIntegrations from "./agent-integrations.mdx";
 import HarnessApi from "./harness-api.mdx";
 import OpenApi from "./openapi.mdx";
 import Mcp from "./mcp.mdx";
-import SdkCli from "./sdk-cli.mdx";
 
 export type ResourceDoc = {
   slug: string;
@@ -17,7 +16,7 @@ export const resourceDocs = [
   {
     slug: "agent-integrations",
     title: "Agent integrations",
-    description: "Choose between harness API, hosted MCP, local MCP, OpenAPI, SDK, and CLI paths.",
+    description: "Choose between harness API, hosted MCP, local MCP, and OpenAPI paths.",
     category: "Overview",
     component: AgentIntegrations,
   },
@@ -41,13 +40,6 @@ export const resourceDocs = [
     description: "Hosted Streamable HTTP MCP and local stdio MCP usage.",
     category: "Agents",
     component: Mcp,
-  },
-  {
-    slug: "sdk-cli",
-    title: "SDK and CLI",
-    description: "Developer package and command-line usage for automation workflows.",
-    category: "Developer tools",
-    component: SdkCli,
   },
 ] as const satisfies readonly ResourceDoc[];
 

@@ -46,7 +46,7 @@ describe("createNotesMcpServer", () => {
     expect(registered.notes_edit_note.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
   });
 
-  it("calls SDK methods and returns structured content", async () => {
+  it("calls harness client methods and returns structured content", async () => {
     const client = mockClient();
     const server = createNotesMcpServer(client as never);
 

@@ -266,7 +266,7 @@ Approved and implemented on `sdk-cli-mcp-continuation`.
 # Simplify Integration Surface Plan
 
 ## Status
-Superseded. User decided not to remove SDK/CLI code for now and to continue with the publishable MCP export path instead.
+Approved and implemented after preserving the SDK/CLI experiment on `keep/sdk-cli-wrapper-experiment`.
 
 ## Objective
 Keep the experimental SDK/CLI work preserved on `keep/sdk-cli-wrapper-experiment`, then simplify the current branch to focus on the four integration surfaces that currently matter most:
@@ -314,24 +314,24 @@ Keep the experimental SDK/CLI work preserved on `keep/sdk-cli-wrapper-experiment
   - `plan.md`
 
 ## Implementation checklist
-- [ ] Remove `packages/sdk` and `packages/cli` from the current branch.
-- [ ] Keep `packages/mcp` as the optional protocol wrapper.
-- [ ] Replace local MCP dependency on `@minunotes/sdk` with a small internal harness HTTP client.
-- [ ] Keep hosted MCP route working with shared tool registration.
-- [ ] Update package lockfile after dependency removal.
-- [ ] Update docs/resources to avoid presenting SDK/CLI as primary supported surfaces.
-- [ ] Keep OpenAPI, harness skill docs, and hosted/local MCP docs intact.
+- [x] Remove `packages/sdk` and `packages/cli` from the current branch.
+- [x] Keep `packages/mcp` as the optional protocol wrapper.
+- [x] Replace local MCP dependency on `@minunotes/sdk` with a small internal harness HTTP client.
+- [x] Keep hosted MCP route working with shared tool registration.
+- [x] Update package lockfile after dependency removal.
+- [x] Update docs/resources to avoid presenting SDK/CLI as primary supported surfaces.
+- [x] Keep OpenAPI, harness skill docs, and hosted/local MCP docs intact.
 
 ## Verification
-- [ ] `pnpm install` / lockfile refresh.
-- [ ] `pnpm --filter @minunotes/mcp typecheck`.
-- [ ] `pnpm --filter @minunotes/mcp test`.
-- [ ] `pnpm --filter @minunotes/mcp build`.
-- [ ] `pnpm typecheck`.
-- [ ] `pnpm test`.
-- [ ] `pnpm build`.
-- [ ] Confirm `packages/sdk` and `packages/cli` no longer exist on current branch.
-- [ ] Confirm `keep/sdk-cli-wrapper-experiment` preserves the removed SDK/CLI work.
+- [x] `pnpm install` / lockfile refresh.
+- [x] `pnpm --filter @minunotes/mcp typecheck`.
+- [x] `pnpm --filter @minunotes/mcp test`.
+- [x] `pnpm --filter @minunotes/mcp build`.
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+- [x] `pnpm build`.
+- [x] Confirm `packages/sdk` and `packages/cli` no longer exist on current branch.
+- [x] Confirm `keep/sdk-cli-wrapper-experiment` preserves the removed SDK/CLI work.
 
 ## Approval
-Superseded; do not implement unless revisited.
+Approved and implemented on `sdk-cli-mcp-continuation`.

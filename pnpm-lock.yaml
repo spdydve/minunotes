@@ -145,19 +145,6 @@ importers:
         specifier: ^4.1.7
         version: 4.1.7(@types/node@25.9.1)(vite@8.0.14)
 
-  packages/cli:
-    dependencies:
-      '@minunotes/sdk':
-        specifier: workspace:*
-        version: link:../sdk
-    devDependencies:
-      typescript:
-        specifier: latest
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.0.16)
-
   packages/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -166,15 +153,6 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
-    devDependencies:
-      typescript:
-        specifier: latest
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.0.16)
-
-  packages/sdk:
     devDependencies:
       typescript:
         specifier: latest
