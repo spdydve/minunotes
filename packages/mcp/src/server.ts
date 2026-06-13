@@ -1,6 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { NotesClient } from "@minunotes/sdk";
 import { z } from "zod";
+
+type DocumentEdit =
+  | { type: "append"; text: string }
+  | { type: "replace_text"; oldText: string; newText: string }
+  | { type: "replace_range"; from: number; to: number; text: string };
 
 const jsonObjectSchema = z.object({}).passthrough();
 
@@ -11,7 +15,21 @@ function toolResult(data: unknown) {
   };
 }
 
-export function createNotesMcpServer(client: NotesClient) {
+export type NotesMcpClient = {
+  folders: {
+    list: () => Promise<unknown>;
+    create: (input: { title: string }) => Promise<unknown>;
+  };
+  notes: {
+    search: (query: string) => Promise<unknown>;
+    get: (noteId: string) => Promise<unknown>;
+    create: (folderId: string, input: { title?: string; content?: string }) => Promise<unknown>;
+    edit: (noteId: string, edits: DocumentEdit[], baseHash?: string) => Promise<unknown>;
+    lines: (noteId: string, input: { from?: number; to?: number }) => Promise<unknown>;
+  };
+};
+
+export function createNotesMcpServer(client: NotesMcpClient) {
   const server = new McpServer({ name: "minunotes", version: "0.1.0" });
 
   server.registerTool(

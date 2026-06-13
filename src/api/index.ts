@@ -14,6 +14,7 @@ import { attachmentRoutes } from "./routes/attachments";
 import { authRoutes } from "./routes/auth";
 import { folderRoutes } from "./routes/folders";
 import { harnessRoutes } from "./routes/harness";
+import { mcpRoutes } from "./routes/mcp";
 import { noteRoutes } from "./routes/notes";
 
 const app = new Hono<{
@@ -38,7 +39,8 @@ app.use("*", cors({
     return allowedOrigins.includes(origin) ? origin : "";
   },
   allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+  allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "Mcp-Session-Id", "MCP-Protocol-Version", "Last-Event-ID"],
+  exposeHeaders: ["Mcp-Session-Id"],
   credentials: true,
 }));
 app.get("/health", async (c) => {
@@ -68,9 +70,13 @@ app.use("/api/attachments/*", authenticationMiddleware);
 app.use("/api/api-keys", authenticationMiddleware);
 app.use("/api/api-keys/*", authenticationMiddleware);
 app.use("/api/harness/*", harnessAuthenticationMiddleware);
+app.use("/api/mcp", harnessAuthenticationMiddleware);
+app.use("/api/mcp/*", harnessAuthenticationMiddleware);
 app.use("/api/api-keys", apiKeyRateLimit);
 app.use("/api/api-keys/*", apiKeyRateLimit);
 app.use("/api/harness/*", harnessRateLimit);
+app.use("/api/mcp", harnessRateLimit);
+app.use("/api/mcp/*", harnessRateLimit);
 app.use("/api/folders", writeBodyLimit);
 app.use("/api/folders/:folderId", writeBodyLimit);
 app.use("/api/folders/:folderId/notes", writeBodyLimit);
@@ -81,6 +87,8 @@ app.use("/api/api-keys/:keyId", writeBodyLimit);
 app.use("/api/harness/folders", writeBodyLimit);
 app.use("/api/harness/notes", writeBodyLimit);
 app.use("/api/harness/notes/:noteId/edit", writeBodyLimit);
+app.use("/api/mcp", writeBodyLimit);
+app.use("/api/mcp/*", writeBodyLimit);
 app.use("/api/attachments/notes/:noteId/images", uploadBodyLimit);
 app.use("/api/attachments/notes/:noteId/image-uploads", writeBodyLimit);
 app.use("/api/attachments/:attachmentId/complete", writeBodyLimit);
@@ -89,6 +97,7 @@ app.route("/api/notes", noteRoutes);
 app.route("/api/attachments", attachmentRoutes);
 app.route("/api/api-keys", apiKeyRoutes);
 app.route("/api/harness", harnessRoutes);
+app.route("/api/mcp", mcpRoutes);
 
 app.onError((error, c) => {
   console.error("[API ERROR]", {

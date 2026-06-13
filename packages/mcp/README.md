@@ -2,6 +2,10 @@
 
 MCP server for MinuNotes harness workflows. Uses `@minunotes/sdk` and API key auth.
 
+## Local stdio MCP
+
+Use the local binary for desktop/local MCP clients that spawn a process:
+
 ```sh
 export NOTES_API_URL="https://api.notes.example.com"
 export NOTES_API_KEY="ntak_..."
@@ -24,6 +28,28 @@ Example MCP client config:
 }
 ```
 
+## Hosted MCP
+
+MinuNotes also exposes a hosted Streamable HTTP MCP endpoint at:
+
+```txt
+POST /api/mcp
+GET /api/mcp
+DELETE /api/mcp
+```
+
+Hosted MCP v1 requires `X-API-Key` authentication. Tool calls run through the same SDK and `/api/harness/*` permissions as the CLI/local MCP path.
+
+```http
+X-API-Key: ntak_...
+Accept: application/json, text/event-stream
+Content-Type: application/json
+```
+
+Use hosted MCP for cloud agents, ChatGPT-style integrations, Lambda/container agents, or team-managed agent runtimes. Use local stdio MCP when a desktop client expects to launch a local MCP process.
+
+## Tools
+
 Tools include:
 
 - `notes_list_folders`
@@ -38,6 +64,7 @@ Implementation notes:
 
 - Uses the official `@modelcontextprotocol/sdk`.
 - Uses stdio transport for local process-spawned MCP clients.
+- Uses Streamable HTTP transport for hosted `/api/mcp` clients.
 - Returns both `structuredContent` and text content.
 - Adds MCP tool annotations for read-only/destructive/idempotent hints.
 - Includes a starter `summarize_note` prompt.

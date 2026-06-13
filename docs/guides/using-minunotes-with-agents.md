@@ -1,6 +1,6 @@
 # Using MinuNotes with Agents
 
-MinuNotes exposes a harness API for agents to read, search, create, and edit notes without browser access.
+MinuNotes exposes a harness API and hosted MCP endpoint for agents to read, search, create, and edit notes without browser access.
 
 ## Recommended setup
 
@@ -41,6 +41,14 @@ if (taskMatches("notes|minunotes|save this|search my notes|update note")) {
 ```
 
 Then route note operations through helper functions that wrap the harness API.
+
+For MCP-capable hosted agents, use the hosted Streamable HTTP MCP endpoint instead:
+
+```txt
+https://<your-minunotes-host>/api/mcp
+```
+
+Hosted MCP currently uses `X-API-Key` authentication and the same scoped folder permissions as `/api/harness/*`. Local MCP clients can still run the `notes-mcp` stdio binary.
 
 Recommended helper shape:
 
@@ -125,6 +133,14 @@ For any edit task, the agent should:
 5. Send `baseHash: contentHash` with the edit request.
 6. Read the note again.
 7. Report the note ID, changed section, and final markdown or summary.
+
+## MCP options
+
+- Use **hosted MCP** (`/api/mcp`) for ChatGPT-style integrations, cloud agents, Lambda/container agents, and team-managed runtimes.
+- Use **local stdio MCP** (`notes-mcp`) for desktop clients that spawn local MCP processes.
+- Use the **harness skill/API** for coding agents that can call HTTPS directly and do not need MCP transport.
+
+All three paths should keep business logic and permissions centralized in `/api/harness/*`.
 
 ## Best practices
 
