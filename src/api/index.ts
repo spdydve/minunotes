@@ -9,6 +9,7 @@ import { createRateLimitMiddleware } from "./middleware/rate-limit";
 import { createRequestSizeLimitMiddleware } from "./middleware/request-limits";
 import { securityHeadersMiddleware } from "./middleware/security-headers";
 import { getApiRuntimeConfig } from "./lib/env";
+import { harnessOpenApiSpec } from "./openapi/harness";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { attachmentRoutes } from "./routes/attachments";
 import { authRoutes } from "./routes/auth";
@@ -43,6 +44,8 @@ app.use("*", cors({
   exposeHeaders: ["Mcp-Session-Id"],
   credentials: true,
 }));
+app.get("/api/openapi.json", (c) => c.json(harnessOpenApiSpec));
+app.get("/api/harness/openapi.json", (c) => c.json(harnessOpenApiSpec));
 app.get("/health", async (c) => {
   let dbOk = false;
   try {

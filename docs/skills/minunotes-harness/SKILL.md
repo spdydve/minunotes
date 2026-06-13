@@ -124,6 +124,13 @@ curl -s "${AUTH[@]}" \
   }'
 ```
 
+## OpenAPI
+
+A static OpenAPI document for these harness endpoints is available at:
+
+- `GET /api/openapi.json`
+- `GET /api/harness/openapi.json`
+
 ## Endpoint reference
 
 - `GET /api/harness/folders`

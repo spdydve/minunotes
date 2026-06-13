@@ -134,13 +134,21 @@ For any edit task, the agent should:
 6. Read the note again.
 7. Report the note ID, changed section, and final markdown or summary.
 
-## MCP options
+## MCP and OpenAPI options
 
-- Use **hosted MCP** (`/api/mcp`) for ChatGPT-style integrations, cloud agents, Lambda/container agents, and team-managed runtimes.
+- Use **hosted MCP** (`/api/mcp`) for MCP-native hosted agents, cloud agents, Lambda/container agents, and team-managed runtimes.
 - Use **local stdio MCP** (`notes-mcp`) for desktop clients that spawn local MCP processes.
 - Use the **harness skill/API** for coding agents that can call HTTPS directly and do not need MCP transport.
+- Use **OpenAPI** for REST/OpenAPI-native platforms such as custom actions or tools importers.
 
-All three paths should keep business logic and permissions centralized in `/api/harness/*`.
+OpenAPI documents are available at:
+
+```txt
+GET /api/openapi.json
+GET /api/harness/openapi.json
+```
+
+All paths keep business logic and permissions centralized in `/api/harness/*`.
 
 ## Best practices
 
