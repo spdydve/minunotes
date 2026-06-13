@@ -160,9 +160,6 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@minunotes/sdk':
-        specifier: workspace:*
-        version: link:../sdk
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)

@@ -24,6 +24,14 @@ export NOTES_API_KEY="ntak_..."
 notes-mcp
 ```
 
+The monorepo can export a standalone MCP package artifact for a future `minunotes-mcp` mirror repo or npm package:
+
+```sh
+pnpm export:mcp
+cd .release/minunotes-mcp
+npm pack --dry-run
+```
+
 ## Available tools
 
 - `notes_list_folders`

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NotesConfigurationError } from "@minunotes/sdk";
-import { loadConfig } from "../src/config";
+import { loadConfig, NotesConfigurationError } from "../src/config";
 
 describe("loadConfig", () => {
   it("loads API URL and key from env", () => {

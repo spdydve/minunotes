@@ -1,6 +1,6 @@
 # @minunotes/mcp
 
-MCP server for MinuNotes harness workflows. Uses `@minunotes/sdk` and API key auth.
+MCP server for MinuNotes harness workflows. Uses the MinuNotes harness API and API key auth.
 
 ## Local stdio MCP
 
@@ -38,7 +38,7 @@ GET /api/mcp
 DELETE /api/mcp
 ```
 
-Hosted MCP v1 requires `X-API-Key` authentication. Tool calls run through the same SDK and `/api/harness/*` permissions as the CLI/local MCP path.
+Hosted MCP v1 requires `X-API-Key` authentication. Tool calls run through the same `/api/harness/*` permissions as the local MCP path.
 
 ```http
 X-API-Key: ntak_...

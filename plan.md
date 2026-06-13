@@ -192,3 +192,146 @@ Add a `/resources` documentation area backed by MDX so MinuNotes can grow in-app
 
 ## Approval
 Approved and implemented on `sdk-cli-mcp-continuation`.
+
+---
+
+# Publishable Package Mirror Plan
+
+## Objective
+Keep MinuNotes source of truth in the monorepo while preparing standalone publishable/exportable package artifacts, starting with the local stdio MCP package. This lets users globally install a lightweight package from a separate GitHub repo or npm later without cloning/deploying the full app.
+
+## Proposed architecture
+- Monorepo remains source of truth for app/API, hosted MCP, SDK, CLI, and MCP source.
+- SST continues to deploy only the web app and Hono API; local package exports are release artifacts only.
+- Add scripts that build and stage standalone package contents into an ignored export directory.
+- First export target: `@minunotes/mcp` local stdio server.
+- The hosted `/api/mcp` route remains part of the app/API deploy and is not exported as a separate service.
+
+## Initial export shape
+- Export directory: `dist-packages/minunotes-mcp/` or `.release/minunotes-mcp/`.
+- Contents:
+  - `package.json` rewritten for standalone install
+  - `README.md`
+  - `dist/`
+  - optional `LICENSE` if present later
+- Package bin remains:
+  - `notes-mcp -> ./dist/index.js`
+- Dependencies should include runtime deps only:
+  - `@modelcontextprotocol/sdk`
+  - `zod`
+- Avoid workspace dependencies in the exported artifact.
+
+## Files likely to modify/create
+- Release/export scripts:
+  - `scripts/export-mcp-package.ts`
+- Package metadata:
+  - `packages/mcp/package.json`
+  - `packages/mcp/README.md`
+- Root scripts/config:
+  - `package.json`
+  - `.gitignore`
+  - possibly `pnpm-lock.yaml` if dependencies/scripts change
+- Docs:
+  - `src/frontend/docs/resources/mcp.mdx`
+  - `src/frontend/docs/resources/sdk-cli.mdx` if install guidance changes
+  - possibly `packages/mcp/README.md`
+- Tests/verification:
+  - optional script test under `tests/*` if practical
+
+## Implementation checklist
+- [x] Decide export directory name; recommended `.release/minunotes-mcp/` and gitignored.
+- [x] Ensure `packages/mcp` builds cleanly before export.
+- [x] Add export script that removes previous export directory and copies package files.
+- [x] Rewrite standalone `package.json` without `workspace:*`, private flags, or dev-only fields.
+- [x] Include `dist/` and README in exported package.
+- [x] Add root script, e.g. `package:mcp` or `export:mcp`.
+- [x] Verify exported package can be packed with `npm pack --pack-destination` or inspected with `npm pack --dry-run`.
+- [x] Document how to install from a future mirror repo and how to install local tarball.
+- [x] Keep package source in monorepo; do not create/push the mirror repo in this step.
+
+## Verification
+- [x] `pnpm --filter @minunotes/mcp build`.
+- [x] `pnpm export:mcp` or chosen script.
+- [x] `npm pack --dry-run` in exported package directory.
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+- [x] `pnpm build`.
+- [ ] Optional manual smoke: install exported tarball globally and run `notes-mcp --help` or start stdio server with env vars.
+
+## Approval
+Approved and implemented on `sdk-cli-mcp-continuation`.
+
+---
+
+# Simplify Integration Surface Plan
+
+## Status
+Superseded. User decided not to remove SDK/CLI code for now and to continue with the publishable MCP export path instead.
+
+## Objective
+Keep the experimental SDK/CLI work preserved on `keep/sdk-cli-wrapper-experiment`, then simplify the current branch to focus on the four integration surfaces that currently matter most:
+
+- Harness API = real product surface
+- OpenAPI = machine-readable wrapper
+- Skill docs = agent behavior/safety wrapper
+- MCP = optional protocol wrapper
+
+## Branch preservation
+- [x] Created `keep/sdk-cli-wrapper-experiment` at the current branch state before removing SDK/CLI packages.
+
+## Files likely to remove
+- SDK package:
+  - `packages/sdk/package.json`
+  - `packages/sdk/README.md`
+  - `packages/sdk/tsconfig.json`
+  - `packages/sdk/src/*`
+  - `packages/sdk/tests/*`
+- CLI package:
+  - `packages/cli/package.json`
+  - `packages/cli/README.md`
+  - `packages/cli/tsconfig.json`
+  - `packages/cli/src/*`
+  - `packages/cli/tests/*`
+
+## Files likely to modify
+- Workspace/package config:
+  - `pnpm-workspace.yaml` only if package globs need adjustment; likely no change needed
+  - `pnpm-lock.yaml`
+  - `package.json` only if scripts/deps mention SDK/CLI; likely no direct script removal needed
+- MCP package:
+  - `packages/mcp/package.json` remove `@minunotes/sdk` dependency
+  - `packages/mcp/src/config.ts` replace SDK client creation with a small local harness HTTP client
+  - `packages/mcp/src/index.ts` if imports/types change
+  - `packages/mcp/tests/config.test.ts` if config/client behavior changes
+  - `packages/mcp/README.md` remove SDK dependency language
+- Hosted MCP/API:
+  - `src/api/routes/mcp.ts` should continue using shared MCP tool registration directly
+- Resources/docs:
+  - `src/frontend/docs/resources/sdk-cli.mdx` remove or replace with a lighter docs page
+  - `src/frontend/docs/resources/index.ts` update registry
+  - `src/frontend/docs/resources/agent-integrations.mdx` update integration list
+  - `packages/mcp/README.md`
+  - `plan.md`
+
+## Implementation checklist
+- [ ] Remove `packages/sdk` and `packages/cli` from the current branch.
+- [ ] Keep `packages/mcp` as the optional protocol wrapper.
+- [ ] Replace local MCP dependency on `@minunotes/sdk` with a small internal harness HTTP client.
+- [ ] Keep hosted MCP route working with shared tool registration.
+- [ ] Update package lockfile after dependency removal.
+- [ ] Update docs/resources to avoid presenting SDK/CLI as primary supported surfaces.
+- [ ] Keep OpenAPI, harness skill docs, and hosted/local MCP docs intact.
+
+## Verification
+- [ ] `pnpm install` / lockfile refresh.
+- [ ] `pnpm --filter @minunotes/mcp typecheck`.
+- [ ] `pnpm --filter @minunotes/mcp test`.
+- [ ] `pnpm --filter @minunotes/mcp build`.
+- [ ] `pnpm typecheck`.
+- [ ] `pnpm test`.
+- [ ] `pnpm build`.
+- [ ] Confirm `packages/sdk` and `packages/cli` no longer exist on current branch.
+- [ ] Confirm `keep/sdk-cli-wrapper-experiment` preserves the removed SDK/CLI work.
+
+## Approval
+Superseded; do not implement unless revisited.

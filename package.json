@@ -28,7 +28,8 @@
     "db:migrate:production": "ENVIRONMENT=production tsx scripts/migrate.ts",
     "db:wipe:dev": "ENVIRONMENT=development tsx scripts/wipe-db.ts --yes",
     "db:studio": "drizzle-kit studio",
-    "attachments:cleanup": "tsx scripts/cleanup-attachments.ts"
+    "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",
+    "export:mcp": "tsx scripts/export-mcp-package.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
