@@ -1,0 +1,29 @@
+# Agent integrations
+
+MinuNotes supports several integration paths for agents and tools. They all use the same scoped permissions model.
+
+## Recommended paths
+
+- **Harness API** for agents that can call HTTPS directly.
+- **Hosted MCP** for MCP-native hosted agents and shared runtimes.
+- **Local MCP** for desktop clients that spawn local MCP processes.
+- **OpenAPI** for actions, REST tool importers, and compatibility with non-MCP platforms.
+- **SDK / CLI** for application code, scripts, and automation.
+
+## Permissions model
+
+Create one API key per agent or project. Grant only the folders it needs. Enable folder creation only when an agent is explicitly allowed to create folders.
+
+Agent-created folders are automatically accessible to the same API key.
+
+## Core endpoints
+
+```txt
+GET /api/harness/folders
+POST /api/harness/notes
+POST /api/harness/notes/:noteId/edit
+GET /api/openapi.json
+POST /api/mcp
+```
+
+Use `X-API-Key` on every harness, OpenAPI-authenticated, or hosted MCP request.

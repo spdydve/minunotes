@@ -1,0 +1,40 @@
+# MCP
+
+MinuNotes supports both hosted MCP and local stdio MCP.
+
+## Hosted MCP
+
+Use hosted MCP for cloud agents, shared runtimes, and MCP-native integrations that can connect to a remote HTTP endpoint.
+
+```txt
+POST /api/mcp
+GET /api/mcp
+DELETE /api/mcp
+```
+
+Hosted MCP currently uses `X-API-Key` authentication and routes tool calls through `/api/harness/*`.
+
+## Local MCP
+
+Use local MCP for desktop clients that launch a process, such as local MCP-compatible tools.
+
+```sh
+export NOTES_API_URL="https://your-minunotes-host"
+export NOTES_API_KEY="ntak_..."
+notes-mcp
+```
+
+## Available tools
+
+- `notes_list_folders`
+- `notes_create_folder`
+- `notes_search`
+- `notes_get_note`
+- `notes_create_note`
+- `notes_edit_note`
+- `notes_search_lines`
+- `notes_read_lines`
+- `notes_search_note_lines`
+- `notes_read_section`
+
+Tool discovery is handled by the MCP protocol. Clients call `tools/list`; MinuNotes registers tool names, descriptions, schemas, annotations, and handlers.

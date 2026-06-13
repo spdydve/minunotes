@@ -1,0 +1,28 @@
+# OpenAPI
+
+MinuNotes exposes a static OpenAPI 3.1 document for harness endpoints.
+
+## Spec URLs
+
+```txt
+GET /api/openapi.json
+GET /api/harness/openapi.json
+```
+
+Both URLs return the same harness API specification.
+
+## Use cases
+
+Use OpenAPI when a platform imports REST tools from a schema, such as custom actions, hosted workflow tools, or non-MCP agent platforms.
+
+## Auth scheme
+
+The spec defines `ApiKeyAuth` using the `X-API-Key` header.
+
+```http
+X-API-Key: ntak_...
+```
+
+## Scope
+
+The spec describes `/api/harness/*` endpoints. It does not duplicate hosted MCP protocol calls. MCP clients should use `/api/mcp` instead.

@@ -121,3 +121,74 @@ Add a hosted MCP option for MinuNotes while keeping `/api/harness/*` as the sing
 
 ## Approval
 Approved and implemented on `sdk-cli-mcp-continuation`.
+
+---
+
+# MDX Resources Plan
+
+## Objective
+Add a `/resources` documentation area backed by MDX so MinuNotes can grow in-app guides, API references, and agent integration docs without cluttering settings or the main notes workspace.
+
+## Proposed UX
+- `/resources` is a documentation landing page with cards for major resource areas.
+- `/resources/$slug` renders individual MDX docs.
+- Add a Resources entry near the settings cog/user email area in the app shell.
+- Keep `/settings/api-access` focused on managing keys, but link to it from relevant docs.
+- Keep styling consistent with the app: flat dashboard cards, mono/technical typography, light/dark support.
+
+## Initial docs
+- `agent-integrations`: overview of harness API, hosted MCP, local MCP, SDK/CLI, OpenAPI.
+- `harness-api`: core endpoint usage, auth, permissions, edit safety.
+- `openapi`: where to find `/api/openapi.json` and how to use it with Actions/tool importers.
+- `mcp`: hosted MCP vs local stdio MCP and endpoint/config examples.
+- `sdk-cli`: SDK and CLI setup examples.
+
+## Files likely to modify/create
+- MDX/build config:
+  - `package.json`
+  - `pnpm-lock.yaml`
+  - `vite.config.ts`
+  - possibly `src/frontend/mdx.d.ts`
+- Docs content:
+  - `src/frontend/docs/resources/agent-integrations.mdx`
+  - `src/frontend/docs/resources/harness-api.mdx`
+  - `src/frontend/docs/resources/openapi.mdx`
+  - `src/frontend/docs/resources/mcp.mdx`
+  - `src/frontend/docs/resources/sdk-cli.mdx`
+- Docs registry/components:
+  - `src/frontend/docs/resources/index.ts`
+  - possibly `src/frontend/components/resource-doc-layout.tsx`
+- Routes:
+  - `src/frontend/routes/resources.tsx`
+  - `src/frontend/routes/resources.$slug.tsx`
+  - `src/frontend/routes/__root.tsx` if route registration imports are manual
+- Navigation:
+  - `src/frontend/components/app-shell.tsx`
+  - `src/frontend/components/folder-sidebar.tsx`
+- Styles:
+  - `src/frontend/styles.css` if MDX/prose styling needs app-specific classes
+
+## Implementation checklist
+- [x] Inspect current TanStack route tree/root imports and app-shell user/settings navigation.
+- [x] Add MDX support to Vite using `@mdx-js/rollup`.
+- [x] Add TypeScript MDX module declaration if needed.
+- [x] Create a typed docs registry mapping slugs to MDX components and metadata.
+- [x] Create `/resources` landing route.
+- [x] Create `/resources/$slug` MDX document route with not-found handling for unknown slugs.
+- [x] Create initial MDX docs with concise content and links to current endpoints.
+- [x] Add Resources link near the settings cog/user email area.
+- [x] Add minimal MDX content styling that works in light/dark themes.
+- [x] Avoid duplicating the full OpenAPI spec in MDX; link to `/api/openapi.json`.
+
+## Verification
+- [x] `pnpm install` / lockfile refresh.
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+- [x] `pnpm build`.
+- [ ] Manual UI smoke: Resources link is reachable from the app shell.
+- [ ] Manual UI smoke: `/resources` renders all cards.
+- [ ] Manual UI smoke: each initial `/resources/$slug` doc renders.
+- [ ] Manual UI smoke: unknown doc slug shows a useful fallback.
+
+## Approval
+Approved and implemented on `sdk-cli-mcp-continuation`.

@@ -86,6 +86,14 @@ export function FolderSidebar({
               <ThemeSelect />
               <ActionMenuButton
                 onClick={() => {
+                  nav({ to: "/resources" });
+                  onNavigate?.();
+                }}
+              >
+                Resources
+              </ActionMenuButton>
+              <ActionMenuButton
+                onClick={() => {
                   nav({ to: "/settings/api-access" });
                   onNavigate?.();
                 }}

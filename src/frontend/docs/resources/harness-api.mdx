@@ -1,0 +1,41 @@
+# Harness API
+
+The harness API is the core MinuNotes surface for agents, scripts, SDKs, CLI tools, and MCP adapters.
+
+## Auth
+
+Send the API key with every request:
+
+```http
+X-API-Key: ntak_...
+Content-Type: application/json
+```
+
+## Folder access
+
+API keys are scoped to selected folders. A key can have read, create, and edit permissions per folder.
+
+Folder creation is separate. Only keys with folder-creation permission can call:
+
+```txt
+POST /api/harness/folders
+```
+
+## Safe editing flow
+
+1. Search or list folders.
+2. Read the note.
+3. Capture `contentHash`.
+4. Send small edits with `baseHash`.
+5. Read back the note and report final markdown or a changed-section summary.
+
+## Edit payloads
+
+```ts
+type DocumentEdit =
+  | { type: "append"; text: string }
+  | { type: "replace_text"; oldText: string; newText: string }
+  | { type: "replace_range"; from: number; to: number; text: string };
+```
+
+Prefer `replace_text` when the target text is unique. Use `replace_range` only after reading lines or sections.

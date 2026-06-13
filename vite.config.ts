@@ -1,3 +1,4 @@
+import mdx from "@mdx-js/rollup";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, loadEnv } from "vite";
@@ -18,7 +19,7 @@ export default defineConfig(async ({ mode }) => {
   console.log(`[vite] Proxy target: ${apiTarget}`);
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [mdx(), react(), tailwindcss()],
     resolve: {
       dedupe: [
         "@codemirror/autocomplete",

@@ -10,8 +10,10 @@ import { templatesRoute } from "./routes/templates";
 import { newFromTemplateRoute } from "./routes/folders.$folderId.new-from-template";
 import { folderTemplateSettingsRoute } from "./routes/folders.$folderId.templates";
 import { folderSettingsRoute } from "./routes/folders.$folderId.settings";
+import { resourcesRoute } from "./routes/resources";
+import { resourceDocRoute } from "./routes/resources.$slug";
 
-const routeTree = rootRoute.addChildren([indexRoute, folderRoute, newFromTemplateRoute, folderTemplateSettingsRoute, folderSettingsRoute, templatesRoute, noteRoute, noteActivityRoute, authRoute, apiAccessSettingsRoute]);
+const routeTree = rootRoute.addChildren([indexRoute, folderRoute, newFromTemplateRoute, folderTemplateSettingsRoute, folderSettingsRoute, templatesRoute, noteRoute, noteActivityRoute, authRoute, apiAccessSettingsRoute, resourcesRoute, resourceDocRoute]);
 
 export const router = createRouter({ routeTree });
 
