@@ -38,7 +38,10 @@ export function NoteEditor({
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const editorKeydownCleanupRef = useRef<(() => void) | null>(null);
   const titleValue = title === "Untitled note" || title === "Untitled template" ? "" : title;
+
+  useEffect(() => () => editorKeydownCleanupRef.current?.(), []);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -169,6 +172,70 @@ export function NoteEditor({
           } : undefined}
           onViewReady={(view) => {
             setEditorReady(true);
+            editorKeydownCleanupRef.current?.();
+            const handlePartialTaskEnter = (event: KeyboardEvent) => {
+              if (event.key !== "Enter" || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+
+              const selection = view.state.selection.main;
+              if (!selection.empty) return;
+
+              const line = view.state.doc.lineAt(selection.from);
+              if (selection.from !== line.to) return;
+
+              const taskMatch = line.text.match(/^(\s*)([-*+])\s+\[\/\](?:\s+(.*))?$/);
+              if (!taskMatch) return;
+
+              event.preventDefault();
+              event.stopPropagation();
+
+              const text = taskMatch[3] ?? "";
+              if (text.length === 0) {
+                view.dispatch({
+                  changes: { from: line.from, to: line.to, insert: "" },
+                  selection: { anchor: line.from },
+                  scrollIntoView: true,
+                });
+                return;
+              }
+
+              const insert = `\n${taskMatch[1]}${taskMatch[2]} [ ] `;
+              view.dispatch({
+                changes: { from: line.to, insert },
+                selection: { anchor: line.to + insert.length },
+                scrollIntoView: true,
+              });
+            };
+            const handleTaskCopy = (event: ClipboardEvent) => {
+              const ranges = view.state.selection.ranges.filter((range) => !range.empty);
+              if (ranges.length === 0) return;
+
+              let expanded = false;
+              const text = ranges.map((range) => {
+                let from = range.from;
+                const to = range.to;
+                const fromLine = view.state.doc.lineAt(from);
+                const toLine = view.state.doc.lineAt(to);
+                const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
+
+                if (taskPrefix && fromLine.number !== toLine.number && from > fromLine.from && from <= fromLine.to) {
+                  from = fromLine.from;
+                  expanded = true;
+                }
+
+                return view.state.doc.sliceString(from, to);
+              }).join("\n");
+
+              if (!expanded) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.clipboardData?.setData("text/plain", text);
+            };
+            view.contentDOM.addEventListener("keydown", handlePartialTaskEnter, { capture: true });
+            view.contentDOM.addEventListener("copy", handleTaskCopy, { capture: true });
+            editorKeydownCleanupRef.current = () => {
+              view.contentDOM.removeEventListener("keydown", handlePartialTaskEnter, { capture: true });
+              view.contentDOM.removeEventListener("copy", handleTaskCopy, { capture: true });
+            };
             if (!initialEditing && view.hasFocus) view.contentDOM.blur();
           }}
           className="notes-minu-editor"

@@ -9,8 +9,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, icon = "more" }: { note: Note; onDelete: () => void; onToggleApiEditable?: () => void; icon?: "more" | "settings" }) {
   const [open, setOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const copyNoteLink = async () => {
+    const url = `${window.location.origin}/notes/${note.id}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    window.setTimeout(() => setCopiedLink(false), 1600);
+    setOpen(false);
+  };
+
   const duplicate = useMutation({
     mutationFn: () => api.createNote(note.folderId, { title: `${note.title} copy`, content: note.content, type: note.type }),
     onSuccess: ({ note: duplicateNote }) => {
@@ -24,7 +33,8 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, icon =
     <PopoverTrigger asChild>
       <ActionMenuIconButton icon={icon} aria-label="Open note actions" />
     </PopoverTrigger>
-    <PopoverContent align="end" className="w-40 p-1">
+    <PopoverContent align="end" className="w-44 p-1">
+      <ActionMenuButton onClick={() => void copyNoteLink()}>{copiedLink ? "Copied link" : "Copy note link"}</ActionMenuButton>
       <MoveNoteDialog note={note} onOpenChange={setOpen} trigger={<ActionMenuItemLabel>Move note</ActionMenuItemLabel>} />
       <ActionMenuButton disabled={duplicate.isPending} onClick={() => { duplicate.mutate(); setOpen(false); }}>Duplicate</ActionMenuButton>
       <ActionMenuButton onClick={() => { navigate({ to: "/notes/$noteId/activity", params: { noteId: note.id } }); setOpen(false); }}>View activity</ActionMenuButton>
