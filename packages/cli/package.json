@@ -1,0 +1,21 @@
+{
+  "name": "@minunotes/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "notes": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@minunotes/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vitest": "^4.1.7"
+  }
+}
