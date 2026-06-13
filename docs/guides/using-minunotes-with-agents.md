@@ -6,20 +6,21 @@ MinuNotes exposes a harness API for agents to read, search, create, and edit not
 
 1. In MinuNotes, create an API key for the agent.
 2. Grant only the folder permissions the agent needs.
-3. Store credentials as environment variables or secrets, not in prompts:
+3. Enable folder creation only if the agent is explicitly allowed to create new folders. Agent-created folders are automatically scoped to that same API key.
+4. Store credentials as environment variables or secrets, not in prompts:
 
 ```bash
 export MINUNOTES_API_URL="https://api-dev-notes.dpklabs.com"
 export MINUNOTES_API_KEY="ntak_..."
 ```
 
-4. Give the agent the portable skill:
+5. Give the agent the portable skill:
 
 ```txt
 docs/skills/minunotes-harness/SKILL.md
 ```
 
-5. Prompt the agent to use the skill:
+6. Prompt the agent to use the skill:
 
 ```txt
 Use the MinuNotes Harness Skill for note reading, searching, creation, and editing.
@@ -79,6 +80,12 @@ const MinuNotes = {
   folders: (config: MinuNotesConfig) =>
     minunotesRequest(config, "/folders"),
 
+  createFolder: (config: MinuNotesConfig, input: { title: string }) =>
+    minunotesRequest(config, "/folders", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   createNote: (config: MinuNotesConfig, input: {
     folderId: string;
     title: string;
@@ -123,6 +130,7 @@ For any edit task, the agent should:
 
 - Use one API key per agent/project.
 - Use least-privilege folder permissions.
+- Keep folder creation disabled unless the agent has explicit permission to create new folders.
 - Revoke keys when a project ends.
 - Do not paste API keys into chat prompts.
 - Store credentials in env vars or a secret store.

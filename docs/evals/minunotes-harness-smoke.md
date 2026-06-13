@@ -4,7 +4,7 @@ Use this eval to test whether a fresh agent with no project history can operate 
 
 ## Setup
 
-Create or choose an API key with access to a disposable test folder.
+Create or choose an API key with access to a disposable test folder. If testing folder creation, enable folder creation on the API key; otherwise use only the disposable folder already granted to the key.
 
 Required environment for the evaluated agent:
 
@@ -32,15 +32,16 @@ Task:
 1. Read the MinuNotes Harness Skill.
 2. List available folders.
 3. Pick the most appropriate folder you can create notes in.
-4. Create a note titled "Agent Harness Smoke Test".
-5. The note content should be markdown and include:
+4. Do not create a folder unless the key was explicitly configured for folder creation and the prompt asks you to test it.
+5. Create a note titled "Agent Harness Smoke Test".
+6. The note content should be markdown and include:
    - an H1 heading matching the title
    - a short sentence explaining this is an agent harness smoke test
    - a checklist of at least 4 capabilities you verified or attempted
-6. Read the note back and capture its note ID and content hash.
-7. Edit exactly one checklist item from unchecked to checked using the harness edit endpoint with `baseHash`.
-8. Read the note back again.
-9. Report:
+7. Read the note back and capture its note ID and content hash.
+8. Edit exactly one checklist item from unchecked to checked using the harness edit endpoint with `baseHash`.
+9. Read the note back again.
+10. Report:
    - folder ID
    - note ID
    - whether the edit succeeded

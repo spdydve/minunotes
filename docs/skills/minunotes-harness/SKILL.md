@@ -7,7 +7,7 @@ Use this skill when the user wants an agent to read, search, create, or edit not
 You need these environment variables or equivalent secrets:
 
 - `MINUNOTES_API_URL` — API origin or API base, for example `https://api-dev-notes.dpklabs.com`.
-- `MINUNOTES_API_KEY` — MinuNotes API key with folder permissions.
+- `MINUNOTES_API_KEY` — MinuNotes API key with scoped folder permissions. Folder creation requires the key's explicit folder-creation permission.
 
 Normalize `MINUNOTES_API_URL` by removing any trailing slash. Harness routes live under `/api/harness`.
 
@@ -30,6 +30,7 @@ Use JSON for request/response bodies.
 - For app-owned images, preserve normal URL markdown such as `/api/attachments/.../content`.
 - Report the folder ID, note ID, and final changed markdown or section summary after edits.
 - If an API key lacks permission, report the permission issue instead of retrying unrelated actions.
+- Do not create folders unless the user explicitly asks or grants permission for folder creation.
 
 ## Common commands
 
@@ -47,7 +48,15 @@ List accessible folders:
 curl -s "${AUTH[@]}" "$API/api/harness/folders"
 ```
 
-Search notes by title/content:
+Create a folder, only when explicitly requested and when the API key allows folder creation. The created folder is automatically accessible to the same API key:
+
+```bash
+curl -s "${AUTH[@]}" \
+  -X POST "$API/api/harness/folders" \
+  -d '{"title":"Agent Workspace"}'
+```
+
+Search notes by title/content/folder title:
 
 ```bash
 curl -s "${AUTH[@]}" "$API/api/harness/notes/search?q=project"
@@ -118,6 +127,7 @@ curl -s "${AUTH[@]}" \
 ## Endpoint reference
 
 - `GET /api/harness/folders`
+- `POST /api/harness/folders`
 - `GET /api/harness/notes/search?q=...`
 - `GET /api/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
 - `POST /api/harness/notes`
@@ -143,7 +153,7 @@ Prefer `replace_text` when the target text is unique. Use `replace_range` only a
 ## Error handling
 
 - `401`: missing/invalid API key.
-- `403`: API key lacks folder permission.
+- `403`: API key lacks folder permission or folder-creation permission.
 - `404`: note/folder/section not found.
 - `409`: stale `baseHash`; reread the note and retry with the new hash.
 - `500`: server error; report endpoint and response body.

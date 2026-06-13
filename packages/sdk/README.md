@@ -20,3 +20,10 @@ const note = await notes.notes.create(created.folder.id, {
 ```
 
 The SDK targets `/api/harness/*`, so access is controlled by API-key folder permissions. Folder creation requires the key's `canCreateFolders` capability; newly-created folders are automatically scoped to that key by the API.
+
+Available workflow groups:
+
+- `folders.list()` / `folders.create()`
+- `notes.search()` / `search.notes()`
+- `notes.create()` / `notes.get()` / `notes.update()` / `notes.edit()`
+- `notes.events()` / `notes.lines()` / `notes.outline()` / `notes.section()`
