@@ -28,6 +28,7 @@ apiKeyRoutes.get("/", async (c) => {
     id: apiKeys.id,
     name: apiKeys.name,
     uid: apiKeys.uid,
+    canCreateFolders: apiKeys.canCreateFolders,
     createdAt: apiKeys.createdAt,
     lastUsedAt: apiKeys.lastUsedAt,
     revokedAt: apiKeys.revokedAt,
@@ -46,7 +47,7 @@ apiKeyRoutes.post("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { name?: string; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
+  const body = await c.req.json().catch(() => null) as { name?: string; canCreateFolders?: boolean; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
   const name = body?.name?.trim();
   if (!name) return c.json({ error: "API key name is required" }, 400);
 
@@ -59,6 +60,7 @@ apiKeyRoutes.post("/", async (c) => {
     uid,
     hash,
     salt,
+    canCreateFolders: body?.canCreateFolders ?? false,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastUsedAt: null,
@@ -86,14 +88,14 @@ apiKeyRoutes.post("/", async (c) => {
   }
   if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
 
-  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
+  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, canCreateFolders: apiKey.canCreateFolders, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
 });
 
 apiKeyRoutes.patch("/:keyId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { name?: string; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
+  const body = await c.req.json().catch(() => null) as { name?: string; canCreateFolders?: boolean; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const name = body.name?.trim();
@@ -103,7 +105,7 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
   const [existing] = await db.select().from(apiKeys).where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt))).limit(1);
   if (!existing) return c.json({ error: "API key not found" }, 404);
 
-  if (name !== undefined) await db.update(apiKeys).set({ name, updatedAt: new Date() }).where(eq(apiKeys.id, keyId));
+  if (name !== undefined || body.canCreateFolders !== undefined) await db.update(apiKeys).set({ ...(name !== undefined ? { name } : {}), ...(body.canCreateFolders !== undefined ? { canCreateFolders: body.canCreateFolders } : {}), updatedAt: new Date() }).where(eq(apiKeys.id, keyId));
 
   let permissionRows: Array<typeof apiKeyFolderPermissions.$inferInsert> | undefined;
   if (body.permissions !== undefined) {
@@ -131,6 +133,7 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
     id: apiKeys.id,
     name: apiKeys.name,
     uid: apiKeys.uid,
+    canCreateFolders: apiKeys.canCreateFolders,
     createdAt: apiKeys.createdAt,
     lastUsedAt: apiKeys.lastUsedAt,
     revokedAt: apiKeys.revokedAt,

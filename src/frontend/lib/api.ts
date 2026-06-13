@@ -27,7 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
 export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
-export type ApiKey = { id: string; name: string; uid: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
+export type ApiKey = { id: string; name: string; uid: string; canCreateFolders: boolean; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
 export type NoteType = "note" | "template";
 export type Note = { id: string; folderId: string; title: string; content: string; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
@@ -58,8 +58,8 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
 
 export const api = {
   apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
-  createApiKey: (data: { name: string; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
-  updateApiKey: (keyId: string, data: { name?: string; permissions?: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  createApiKey: (data: { name: string; canCreateFolders?: boolean; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
+  updateApiKey: (keyId: string, data: { name?: string; canCreateFolders?: boolean; permissions?: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: "PATCH", body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: "DELETE" }),
   folders: () => request<{ folders: Folder[] }>("/folders"),
   createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),

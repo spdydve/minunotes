@@ -25,6 +25,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, PermissionValue>>({});
+  const [canCreateFolders, setCanCreateFolders] = useState(false);
   const [saving, setSaving] = useState(false);
   const isEditing = !!apiKey;
   const selectedFolderIds = new Set(Object.keys(permissions));
@@ -41,6 +42,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
     setQuery("");
     setCreatedKey(null);
     setCopied(false);
+    setCanCreateFolders(apiKey?.canCreateFolders ?? false);
     setPermissions(Object.fromEntries((apiKey?.permissions ?? []).map((permission) => [permission.folderId, { canRead: permission.canRead, canCreate: permission.canCreate, canEdit: permission.canEdit }])));
   }, [apiKey, open]);
 
@@ -61,9 +63,9 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
   const submit = async () => {
     setSaving(true);
     try {
-      if (apiKey) await api.updateApiKey(apiKey.id, { name, permissions: selectedPermissions() });
+      if (apiKey) await api.updateApiKey(apiKey.id, { name, canCreateFolders, permissions: selectedPermissions() });
       else {
-        const result = await api.createApiKey({ name, permissions: selectedPermissions() });
+        const result = await api.createApiKey({ name, canCreateFolders, permissions: selectedPermissions() });
         setCreatedKey(result.key);
       }
       onSaved();
@@ -100,6 +102,14 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
           </div>
         </div> : <>
           <input className="mt-4 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800" placeholder="Key name, e.g. Workout Script" value={name} onChange={(e) => setName(e.target.value)} />
+
+          <label className="mt-4 flex items-start gap-3 rounded-md border border-slate-200 p-3 text-sm dark:border-slate-800">
+            <input className="mt-1" type="checkbox" checked={canCreateFolders} onChange={(e) => setCanCreateFolders(e.target.checked)} />
+            <span>
+              <span className="block font-medium">Allow folder creation</span>
+              <span className="mt-1 block text-xs text-slate-500">New folders created by this key are automatically accessible to this key.</span>
+            </span>
+          </label>
 
           <div className="mt-4">
             <label className="text-sm font-medium">Folder access</label>

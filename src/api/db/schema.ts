@@ -62,6 +62,7 @@ export const apiKeys = sqliteTable("api_keys", {
   uid: text("uid").notNull().unique(),
   hash: text("hash").notNull(),
   salt: text("salt").notNull(),
+  canCreateFolders: integer("can_create_folders", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),

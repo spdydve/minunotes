@@ -1,0 +1,1 @@
+ALTER TABLE `api_keys` ADD `can_create_folders` integer DEFAULT false NOT NULL;

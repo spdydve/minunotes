@@ -1,10 +1,11 @@
 import { Hono, type Context } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { apiKeyFolderPermissions, type ApiKey } from "../db/schema";
+import { apiKeyFolderPermissions, folders, type ApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
+import { createId } from "../lib/id";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -54,6 +55,36 @@ harnessRoutes.get("/folders", async (c) => {
   const readableFolderIds = await getReadableFolderIds(c);
   if (!readableFolderIds) return c.json(result.value);
   return c.json({ folders: result.value.folders.filter((folder) => readableFolderIds.has(folder.id)) });
+});
+
+harnessRoutes.post("/folders", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const key = c.get("apiKey");
+  if (key && !key.canCreateFolders) return c.json({ error: "Forbidden" }, 403);
+
+  const body = await c.req.json().catch(() => null) as { title?: string } | null;
+  const title = body?.title?.trim();
+  if (!title) return c.json({ error: "Folder title is required" }, 400);
+
+  const folder = { id: createId("folder"), userId: user.id, title, createdAt: new Date(), updatedAt: new Date() };
+  await db.insert(folders).values(folder);
+
+  if (key) {
+    await db.insert(apiKeyFolderPermissions).values({
+      id: createId("agent_perm"),
+      apiKeyId: key.id,
+      folderId: folder.id,
+      canRead: true,
+      canCreate: true,
+      canEdit: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  return c.json({ folder }, 201);
 });
 
 harnessRoutes.get("/notes/search", async (c) => {

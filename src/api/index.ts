@@ -78,6 +78,7 @@ app.use("/api/notes/:noteId", writeBodyLimit);
 app.use("/api/notes/:noteId/edit", writeBodyLimit);
 app.use("/api/api-keys", writeBodyLimit);
 app.use("/api/api-keys/:keyId", writeBodyLimit);
+app.use("/api/harness/folders", writeBodyLimit);
 app.use("/api/harness/notes", writeBodyLimit);
 app.use("/api/harness/notes/:noteId/edit", writeBodyLimit);
 app.use("/api/attachments/notes/:noteId/images", uploadBodyLimit);
