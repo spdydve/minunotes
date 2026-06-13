@@ -137,7 +137,7 @@ export async function searchDocuments(input: { userId: string; query: string; li
   })
     .from(notes)
     .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
-    .where(and(eq(notes.userId, input.userId), eq(notes.type, type), or(like(notes.title, pattern), like(notes.content, pattern))))
+    .where(and(eq(notes.userId, input.userId), eq(notes.type, type), or(like(notes.title, pattern), like(notes.content, pattern), like(folders.title, pattern))))
     .orderBy(desc(notes.updatedAt), asc(notes.title))
     .limit(input.limit ?? 25);
 
