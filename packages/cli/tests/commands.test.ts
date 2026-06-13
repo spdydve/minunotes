@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { main } from "../src/index";
 
@@ -48,6 +51,22 @@ describe("CLI commands", () => {
     await main(["notes", "create", "--folder", "folder-1", "--title", "Hello"], client as never);
 
     expect(client.notes.create).toHaveBeenCalledWith("folder-1", { title: "Hello", content: undefined });
+  });
+
+  it("updates notes from a content file", async () => {
+    const client = mockClient();
+    const dir = mkdtempSync(join(tmpdir(), "minunotes-cli-"));
+    const file = join(dir, "note.md");
+    writeFileSync(file, "updated body", "utf8");
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      await main(["notes", "update", "note-1", "--content", file], client as never);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+
+    expect(client.notes.update).toHaveBeenCalledWith("note-1", { content: "updated body" });
   });
 
   it("edits notes", async () => {

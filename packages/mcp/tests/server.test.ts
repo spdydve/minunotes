@@ -53,6 +53,15 @@ describe("createNotesMcpServer", () => {
     });
   });
 
+  it("creates notes", async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_create_note.handler({ folderId: "folder-1", title: "Hello", content: "Body" } as never);
+
+    expect(client.notes.create).toHaveBeenCalledWith("folder-1", { title: "Hello", content: "Body" });
+  });
+
   it("edits notes", async () => {
     const client = mockClient();
     const server = createNotesMcpServer(client as never);
@@ -60,5 +69,14 @@ describe("createNotesMcpServer", () => {
     await tools(server).notes_edit_note.handler({ noteId: "note-1", edits: [{ type: "append", text: "hello" }], baseHash: "hash" } as never);
 
     expect(client.notes.edit).toHaveBeenCalledWith("note-1", [{ type: "append", text: "hello" }], "hash");
+  });
+
+  it("reads note lines", async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_read_lines.handler({ noteId: "note-1", from: 2, to: 4 } as never);
+
+    expect(client.notes.lines).toHaveBeenCalledWith("note-1", { from: 2, to: 4 });
   });
 });

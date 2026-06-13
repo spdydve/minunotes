@@ -43,6 +43,18 @@ describe("NotesClient", () => {
     }));
   });
 
+  it("creates scoped folders from object input", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ folder: { id: "folder-1" } }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.folders.create({ title: "Agent Workspace" });
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/folders", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ title: "Agent Workspace" }),
+    }));
+  });
+
   it("creates notes through the harness", async () => {
     const fetch = vi.fn(async () => jsonResponse({ note: { id: "note-1" }, contentHash: "hash" }));
     const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
@@ -74,6 +86,31 @@ describe("NotesClient", () => {
     await client.search.notes("hello world");
 
     expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/notes/search?q=hello%20world", expect.any(Object));
+  });
+
+  it("updates notes by replacing the current harness content with the current hash", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ note: { id: "note-1", content: "old content" }, contentHash: "hash-1" }))
+      .mockResolvedValueOnce(jsonResponse({ note: { id: "note-1", content: "new content" }, contentHash: "hash-2" }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.notes.update("note 1", { content: "new content" });
+
+    expect(fetch).toHaveBeenNthCalledWith(1, "https://example.com/api/harness/notes/note%201", expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(2, "https://example.com/api/harness/notes/note%201/edit", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ edits: [{ type: "replace_range", from: 0, to: "old content".length, text: "new content" }], baseHash: "hash-1" }),
+    }));
+  });
+
+  it("reads note events with an optional limit", async () => {
+    const fetch = vi.fn(async () => jsonResponse({ noteId: "note-1", events: [] }));
+    const client = new NotesClient({ baseUrl: "https://example.com/api", apiKey: "test-key", fetch });
+
+    await client.notes.events("note 1", 10);
+
+    expect(fetch).toHaveBeenCalledWith("https://example.com/api/harness/notes/note%201/events?limit=10", expect.any(Object));
   });
 
   it("throws typed API errors", async () => {
