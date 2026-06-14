@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; depth?: number }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [apiAccessOpen, setApiAccessOpen] = useState(false);
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -31,7 +32,7 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
         <ActionMenuIconButton icon="settings" aria-label={`Settings for ${folder.title}`} />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-48 p-1">
-        {depth < 4 && !folder.isPrivate ? <CreateFolderDialog parentFolder={folder} trigger={(openCreate) => <ActionMenuButton onClick={() => { setOpen(false); openCreate(); }}><span className="flex items-center gap-2"><FolderPlus className="h-4 w-4" />New subfolder</span></ActionMenuButton>} /> : null}
+        {depth < 4 && !folder.isPrivate ? <ActionMenuButton onClick={() => { setOpen(false); setCreateOpen(true); }}><span className="flex items-center gap-2"><FolderPlus className="h-4 w-4" />New subfolder</span></ActionMenuButton> : null}
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setRenameOpen(true); }}>Rename</ActionMenuButton>
         <ActionMenuButton disabled title="Folder moving is coming with folder tree support.">Move</ActionMenuButton>
@@ -45,6 +46,7 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
         />
       </PopoverContent>
     </Popover>
+    <CreateFolderDialog parentFolder={folder} open={createOpen} onOpenChange={setCreateOpen} />
     <RenameFolderDialog folder={folder} open={renameOpen} onOpenChange={setRenameOpen} />
     <FolderApiAccessDialog folder={folder} open={apiAccessOpen} onOpenChange={setApiAccessOpen} />
   </>;

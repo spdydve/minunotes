@@ -6,14 +6,16 @@ import { createPortal } from "react-dom";
 import { api, type Folder } from "../lib/api";
 import { Button } from "./ui/button";
 
-export function CreateFolderDialog({ parentFolder, triggerLabel = "New folder", trigger }: { parentFolder?: Folder; triggerLabel?: string; trigger?: (open: () => void) => ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function CreateFolderDialog({ parentFolder, triggerLabel = "New folder", trigger, open: controlledOpen, onOpenChange }: { parentFolder?: Folder; triggerLabel?: string; trigger?: (open: () => void) => ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const qc = useQueryClient();
   const mutation = useMutation({ mutationFn: (title: string) => api.createFolder(title, parentFolder?.id ?? null), onSuccess: () => qc.invalidateQueries({ queryKey: ["folders"] }) });
   const form = useForm({ defaultValues: { title: "" }, onSubmit: async ({ value }) => { await mutation.mutateAsync(value.title); form.reset(); setOpen(false); } });
   const close = () => { form.reset(); setOpen(false); };
   return <>
-    {trigger ? trigger(() => { form.reset(); setOpen(true); }) : <Button className="inline-flex items-center gap-2" onClick={() => { form.reset(); setOpen(true); }}><Plus className="h-4 w-4" />{triggerLabel}</Button>}
+    {trigger ? trigger(() => { form.reset(); setOpen(true); }) : controlledOpen === undefined ? <Button className="inline-flex items-center gap-2" onClick={() => { form.reset(); setOpen(true); }}><Plus className="h-4 w-4" />{triggerLabel}</Button> : null}
     {open ? createPortal(<div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
       <form className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5" onSubmit={(e) => { e.preventDefault(); form.handleSubmit(); }}>
         <h2 className="text-lg font-semibold">{parentFolder ? "Create subfolder" : "Create folder"}</h2>
