@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { FolderPlus } from "lucide-react";
 import type { Folder } from "../lib/api";
 import { api } from "../lib/api";
 import { CreateFolderDialog } from "./create-folder-dialog";
@@ -30,9 +31,9 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
         <ActionMenuIconButton icon="settings" aria-label={`Settings for ${folder.title}`} />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-48 p-1">
+        {depth < 4 && !folder.isPrivate ? <CreateFolderDialog parentFolder={folder} trigger={(openCreate) => <ActionMenuButton onClick={() => { setOpen(false); openCreate(); }}><span className="flex items-center gap-2"><FolderPlus className="h-4 w-4" />New subfolder</span></ActionMenuButton>} /> : null}
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setRenameOpen(true); }}>Rename</ActionMenuButton>
-        {depth < 4 && !folder.isPrivate ? <CreateFolderDialog parentFolder={folder} triggerLabel="New subfolder" /> : null}
         <ActionMenuButton disabled title="Folder moving is coming with folder tree support.">Move</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Template settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setApiAccessOpen(true); }}>API Access</ActionMenuButton>
