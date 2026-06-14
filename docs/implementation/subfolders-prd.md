@@ -4,13 +4,15 @@
 Add a simple, bounded folder hierarchy for organizing notes without turning Notes into a full filesystem.
 
 ## Structure
-Folders support a maximum depth of 3 folder levels:
+Folders support a maximum depth of 5 folder levels:
 
 ```text
 Project        level 0 / top-level folder
-└── Unit       level 1 / subfolder
-    └── Detail level 2 / subfolder
-        └── Notes
+└── Area       level 1 / subfolder
+    └── Topic  level 2 / subfolder
+        └── Detail level 3 / subfolder
+            └── Item level 4 / subfolder
+                └── Notes
 ```
 
 Notes can live in any folder level.
@@ -59,6 +61,6 @@ This avoids accidental deletion of nested structures.
 ## UX Notes
 - Sidebar should indent by level.
 - Show “New subfolder” only when folder depth is less than 2.
-- Hide or disable “New subfolder” at level 2.
+- Hide or disable “New subfolder” at level 4.
 - Move dialogs and API access dialogs should show folders with indentation.
 - Private folders should show a subtle private/lock indicator.

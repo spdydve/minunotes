@@ -74,7 +74,7 @@ export async function validateFolderParent(input: { userId: string; parentFolder
   if (tree.privateFolderIds.has(parent.id)) return { ok: false as const, status: 403 as const, error: "Cannot create subfolders under a private folder" };
 
   const parentDepth = getFolderDepth(parent.id, tree.byId);
-  if (!Number.isFinite(parentDepth) || parentDepth >= 2) return { ok: false as const, status: 400 as const, error: "Maximum folder depth reached" };
+  if (!Number.isFinite(parentDepth) || parentDepth >= 4) return { ok: false as const, status: 400 as const, error: "Maximum folder depth reached" };
 
   return { ok: true as const, parent, depth: parentDepth + 1 };
 }

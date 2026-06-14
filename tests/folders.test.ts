@@ -48,24 +48,29 @@ afterEach(async () => {
 });
 
 describe("folder hierarchy", () => {
-  it("creates folders up to depth 2 and rejects deeper folders", async () => {
+  it("creates folders up to depth 4 and rejects deeper folders", async () => {
     const { app } = await setupFolderApp();
 
-    const projectResponse = await app.request("/api/folders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Project" }) });
-    expect(projectResponse.status).toBe(201);
-    const { folder: project } = await projectResponse.json() as { folder: { id: string; parentFolderId: string | null } };
-    expect(project.parentFolderId).toBeNull();
+    let parentFolderId: string | null = null;
+    const folderIds: string[] = [];
+    for (const title of ["Project", "Area", "Topic", "Detail", "Item"]) {
+      const response = await app.request("/api/folders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, parentFolderId }),
+      });
+      expect(response.status).toBe(201);
+      const { folder } = await response.json() as { folder: { id: string; parentFolderId: string | null } };
+      expect(folder.parentFolderId).toBe(parentFolderId);
+      folderIds.push(folder.id);
+      parentFolderId = folder.id;
+    }
 
-    const unitResponse = await app.request("/api/folders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Unit", parentFolderId: project.id }) });
-    expect(unitResponse.status).toBe(201);
-    const { folder: unit } = await unitResponse.json() as { folder: { id: string; parentFolderId: string | null } };
-    expect(unit.parentFolderId).toBe(project.id);
-
-    const detailResponse = await app.request("/api/folders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Detail", parentFolderId: unit.id }) });
-    expect(detailResponse.status).toBe(201);
-    const { folder: detail } = await detailResponse.json() as { folder: { id: string } };
-
-    const tooDeepResponse = await app.request("/api/folders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Too deep", parentFolderId: detail.id }) });
+    const tooDeepResponse = await app.request("/api/folders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Too deep", parentFolderId: folderIds.at(-1) }),
+    });
     expect(tooDeepResponse.status).toBe(400);
   });
 

@@ -1,7 +1,7 @@
 # Subfolders Implementation Plan
 
 ## Overview
-Implement bounded folder nesting with a maximum folder depth of 3 levels: Project → Unit → Detail.
+Implement bounded folder nesting with a maximum folder depth of 5 levels.
 
 Do not perform implementation edits until this plan is approved.
 
@@ -52,8 +52,8 @@ Support creating folders with optional `parentFolderId`.
 
 Validation:
 - Parent folder must belong to current user.
-- Parent folder depth must be 0 or 1.
-- Creating below depth 2 is rejected.
+- Parent folder depth must be 0 through 3.
+- Creating below depth 4 is rejected.
 - Folder depth is computed from parent chain.
 
 ### Folder listing
@@ -90,11 +90,11 @@ Private folders and their descendants are never accessible to API keys, MCP, or 
 
 ### Sidebar
 - Build a folder tree from flat folders.
-- Render max 3 levels.
+- Render max 5 levels.
 - Indent child folders.
 - Allow selecting any folder level.
 - Show folder actions per folder.
-- Show “New subfolder” only for depth 0 and 1 folders.
+- Show “New subfolder” only for depth 0 through 3 folders.
 
 ### Create folder dialog
 - Existing “New folder” creates a top-level folder.
@@ -128,15 +128,15 @@ Verification:
 
 ### Phase 2 — Sidebar + Folder Creation UX
 - [x] Build folder tree helper in frontend or component-local utility.
-- [x] Render nested sidebar up to depth 2.
+- [x] Render nested sidebar up to depth 4.
 - [x] Add “New subfolder” action for depth 0/1 folders.
-- [x] Hide/disable subfolder creation at depth 2.
+- [x] Hide/disable subfolder creation at depth 4.
 - [x] Keep top-level “New folder” behavior.
 
 Verification:
 - [ ] `pnpm typecheck`
-- [ ] Manual: create Project → Unit → Detail.
-- [ ] Manual: verify no create option below Detail.
+- [ ] Manual: create five folder levels.
+- [ ] Manual: verify no create option below level 5.
 
 ### Phase 3 — Move Dialog + API Access UX
 - [ ] Update move note dialog to show indented folder hierarchy.

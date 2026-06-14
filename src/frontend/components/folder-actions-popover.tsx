@@ -32,7 +32,7 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
       <PopoverContent align="end" className="w-48 p-1">
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setRenameOpen(true); }}>Rename</ActionMenuButton>
-        {depth < 2 && !folder.isPrivate ? <CreateFolderDialog parentFolder={folder} triggerLabel="New subfolder" /> : null}
+        {depth < 4 && !folder.isPrivate ? <CreateFolderDialog parentFolder={folder} triggerLabel="New subfolder" /> : null}
         <ActionMenuButton disabled title="Folder moving is coming with folder tree support.">Move</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Template settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setApiAccessOpen(true); }}>API Access</ActionMenuButton>

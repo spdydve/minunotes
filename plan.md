@@ -351,7 +351,7 @@ For MVP, **private folders are never accessible to agents/integrations**. Privat
 ## Product decisions
 - Keep MinuNotes lightweight; do not add workspaces yet.
 - Top-level folders can act like informal project/control-plane boundaries.
-- Add bounded folder nesting, max depth 3: Project → Unit → Detail.
+- Add bounded folder nesting, max depth 5.
 - Access grants are branch-based, not single-folder-only:
   - Selected Folder B grants Folder B and all non-private descendants.
 - Private folders are excluded from all agent/integration access:
@@ -460,7 +460,7 @@ Behavior:
 - [x] Generate migration.
 - [x] Update folder create routes to accept optional `parentFolderId`.
 - [x] Validate parent ownership and max depth.
-- [x] Reject creating below depth 2.
+- [x] Reject creating below depth 4.
 - [x] Update folder list output to include `parentFolderId` and `isPrivate`.
 - [x] Update folder patch/settings route to rename and toggle `isPrivate`.
 - [x] Block folder deletion if it has child folders.
@@ -494,7 +494,7 @@ Verification:
 - [x] Build frontend folder tree helper.
 - [x] Render sidebar hierarchy with indentation.
 - [x] Add “New subfolder” action for depth 0/1 folders.
-- [x] Hide/disable subfolder action at depth 2.
+- [x] Hide/disable subfolder action at depth 4.
 - [x] Update create folder dialog to support parent context.
 - [x] Show private status in sidebar/settings with subtle lock/private indicator.
 - [x] Add private toggle in folder settings with copy: “Private folders are not accessible to agents or integrations.”
@@ -502,8 +502,8 @@ Verification:
 
 Verification:
 - [x] `pnpm typecheck`.
-- [ ] Manual: create Project → Unit → Detail.
-- [ ] Manual: confirm no subfolder create below Detail.
+- [ ] Manual: create five folder levels.
+- [ ] Manual: confirm no subfolder create below level 5.
 - [ ] Manual: toggle private and verify copy/indicator.
 
 ### Phase 4 — API key UX: All vs Selected
