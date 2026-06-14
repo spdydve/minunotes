@@ -553,3 +553,57 @@ Verification:
 
 ## Approval
 Approved by user and implementation started on `subfolders-agent-access-model`.
+
+---
+
+# Folder Content View Plan
+
+## Objective
+Update the folder page to show both child folders and notes in the main content area, similar to Google Drive or S3. When a user opens a folder, they should see immediate subfolders first, then notes/files directly inside that folder.
+
+## Product behavior
+- Folder page displays two content types:
+  - child folders where `parentFolderId === current folder id`
+  - notes directly inside the current folder
+- Child folders appear before notes.
+- Clicking a child folder navigates into that folder.
+- Folder rows/cards should show a folder icon and optional private lock indicator.
+- Notes continue opening as they do today.
+- Empty state should distinguish between:
+  - no subfolders and no notes
+  - subfolders exist but no notes
+- Top-level sidebar remains unchanged.
+- No recursive descendant rollup in the folder page for MVP; only immediate children.
+
+## Files likely to modify/create
+- `src/frontend/routes/folders.$folderId.tsx`
+  - compute child folders from `api.folders()` response
+  - render child folders and notes together or as two sections
+- Potential new reusable component:
+  - `src/frontend/components/folder-content-list.tsx`
+  - or inline in route for first implementation
+- Potential updates only if needed:
+  - `src/frontend/components/notes-table.tsx`
+  - `src/frontend/components/folder-actions-popover.tsx`
+  - `src/frontend/styles.css`
+
+## Implementation checklist
+- [x] Add child folder derivation in folder route.
+- [x] Add folder rows/cards above notes.
+- [x] Include folder icon, title, private indicator, and actions menu.
+- [x] Navigate to child folder on click.
+- [x] Keep existing note table for notes.
+- [x] Update empty state copy for no folders/no notes.
+- [x] Ensure layout works on mobile and desktop.
+
+## Verification
+- [ ] `pnpm typecheck`.
+- [ ] `pnpm test`.
+- [ ] `pnpm build`.
+- [ ] Manual: parent folder with subfolders and notes shows both.
+- [ ] Manual: parent folder with only subfolders does not show “No notes yet” as the main message.
+- [ ] Manual: clicking child folder navigates correctly.
+- [ ] Manual: private child folder shows lock indicator.
+
+## Approval
+Approved and implemented on `subfolders-agent-access-model`.
