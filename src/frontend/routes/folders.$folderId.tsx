@@ -1,9 +1,9 @@
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Folder as FolderIcon, Lock } from "lucide-react";
-import { ApiError, api, type Folder } from "../lib/api";
+import { FileText, Folder as FolderIcon, Lock } from "lucide-react";
+import { ApiError, api, type Folder, type Note } from "../lib/api";
 import { FolderActionsPopover } from "../components/folder-actions-popover";
-import { NotesTable } from "../components/notes-table";
+import { NoteActionsPopover } from "../components/note-actions-popover";
 import { Button } from "../components/ui/button";
 import { EmptyState } from "../components/ui/empty-state";
 import { rootRoute } from "./__root";
@@ -41,32 +41,77 @@ function isEffectivelyPrivate(folder: Folder, folders: Folder[]) {
   return false;
 }
 
-function ChildFolderList({ folders, allFolders }: { folders: Folder[]; allFolders: Folder[] }) {
-  if (folders.length === 0) return null;
+type FolderItem = { kind: "folder"; folder: Folder };
+type NoteItem = { kind: "note"; note: Note };
+type ContentItem = FolderItem | NoteItem;
 
-  return <div className="mb-6">
-    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Folders</h3>
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {folders.map((folder) => {
-        const privateFolder = isEffectivelyPrivate(folder, allFolders);
-        return <div key={folder.id} className="group flex items-center gap-2 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-3 transition-colors hover:bg-[var(--notes-hover)]">
-          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)]">
-              <FolderIcon className="h-4 w-4" />
-            </span>
+function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: ContentItem[]; allFolders: Folder[]; onDeleteNote: (note: Note) => void }) {
+  return <>
+    <div className="space-y-2 md:hidden">
+      {items.map((item) => item.kind === "folder" ? <div key={`folder-${item.folder.id}`} className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <Link to="/folders/$folderId" params={{ folderId: item.folder.id }} className="flex min-w-0 flex-1 items-start gap-3">
+            <span className="rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)]"><FolderIcon className="h-4 w-4" /></span>
             <span className="min-w-0">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-medium">{folder.title}</span>
-                {privateFolder ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
+              <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
+                <span className="truncate">{item.folder.title}</span>
+                {isEffectivelyPrivate(item.folder, allFolders) ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
               </span>
-              <span className="block text-xs text-[var(--notes-muted)]">Folder</span>
+              <span className="mt-1 block text-xs text-[var(--notes-muted)]">Folder · Updated {new Date(item.folder.updatedAt).toLocaleString()}</span>
             </span>
           </Link>
-          <FolderActionsPopover folder={folder} depth={folderDepth(folder, allFolders)} />
-        </div>;
-      })}
+          <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} />
+        </div>
+      </div> : <div key={`note-${item.note.id}`} className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <Link to="/notes/$noteId" params={{ noteId: item.note.id }} className="flex min-w-0 flex-1 items-start gap-3">
+            <span className="rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)]"><FileText className="h-4 w-4" /></span>
+            <span className="min-w-0">
+              <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
+                <span className="truncate">{item.note.title}</span>
+                {item.note.updatedByActorType === "agent" ? <span className="shrink-0 rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
+              </span>
+              <span className="mt-1 block text-xs text-[var(--notes-muted)]">Note · Updated {new Date(item.note.updatedAt).toLocaleString()}</span>
+            </span>
+          </Link>
+          <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />
+        </div>
+      </div>)}
     </div>
-  </div>;
+
+    <div className="hidden overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] md:block">
+      <table className="w-full border-collapse text-sm">
+        <thead className="bg-[var(--notes-table-header-bg)]">
+          <tr>
+            <th className="border-b border-[var(--notes-border)] px-5 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Name</th>
+            <th className="border-b border-[var(--notes-border)] px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Type</th>
+            <th className="border-b border-[var(--notes-border)] px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Updated</th>
+            <th className="border-b border-[var(--notes-border)] px-5 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => <tr key={item.kind === "folder" ? `folder-${item.folder.id}` : `note-${item.note.id}`} className="transition-colors hover:bg-[var(--notes-table-row-hover)]">
+            <td className="border-b border-[var(--notes-table-row-border)] px-5 py-3 align-middle">
+              {item.kind === "folder" ? <Link to="/folders/$folderId" params={{ folderId: item.folder.id }} className="flex min-w-0 items-center gap-3 font-medium hover:text-[var(--notes-blue)]">
+                <FolderIcon className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
+                <span className="truncate">{item.folder.title}</span>
+                {isEffectivelyPrivate(item.folder, allFolders) ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
+              </Link> : <Link to="/notes/$noteId" params={{ noteId: item.note.id }} className="flex min-w-0 items-center gap-3 font-medium hover:text-[var(--notes-blue)]">
+                <FileText className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
+                <span className="truncate">{item.note.title}</span>
+                {item.note.updatedByActorType === "agent" ? <span className="shrink-0 rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
+              </Link>}
+            </td>
+            <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{item.kind === "folder" ? "Folder" : "Note"}</td>
+            <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{new Date(item.kind === "folder" ? item.folder.updatedAt : item.note.updatedAt).toLocaleString()}</td>
+            <td className="border-b border-[var(--notes-table-row-border)] px-5 py-3 align-middle text-right">
+              <div className="flex justify-end">{item.kind === "folder" ? <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} /> : <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />}</div>
+            </td>
+          </tr>)}
+        </tbody>
+      </table>
+    </div>
+  </>;
 }
 
 function FolderView() {
@@ -87,14 +132,22 @@ function FolderView() {
       nav({ to: "/notes/$noteId", params: { noteId: note.id } });
     },
   });
+  const remove = useMutation({
+    mutationFn: ({ noteId }: { noteId: string }) => api.deleteNote(noteId),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["notes", folderId] });
+      qc.invalidateQueries({ queryKey: ["note", variables.noteId] });
+    },
+  });
+
   if (isLoading) return <p className="notes-muted text-sm">Loading folder...</p>;
   if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Folder not found"><p>This folder does not exist or you do not have access to it.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
 
   const allFolders = foldersData?.folders ?? [];
   const folder = allFolders.find((item) => item.id === folderId);
   const childFolders = allFolders.filter((item) => item.parentFolderId === folderId).sort((a, b) => a.title.localeCompare(b.title));
-  const notes = data?.notes ?? [];
-  const hasContent = childFolders.length > 0 || notes.length > 0;
+  const notes = [...(data?.notes ?? [])].sort((a, b) => a.title.localeCompare(b.title));
+  const items: ContentItem[] = [...childFolders.map((child) => ({ kind: "folder" as const, folder: child })), ...notes.map((note) => ({ kind: "note" as const, note }))];
 
   return <section className="mx-auto w-full max-w-5xl">
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -106,12 +159,7 @@ function FolderView() {
       </div>
     </div>
 
-    <ChildFolderList folders={childFolders} allFolders={allFolders} />
-
-    {notes.length ? <div>
-      {childFolders.length > 0 ? <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Notes</h3> : null}
-      <NotesTable notes={notes} />
-    </div> : hasContent ? null : <EmptyState>No folders or notes yet.</EmptyState>}
+    {items.length ? <FolderContentsTable items={items} allFolders={allFolders} onDeleteNote={(note) => remove.mutate({ noteId: note.id })} /> : <EmptyState>No folders or notes yet.</EmptyState>}
   </section>;
 }
 
