@@ -1,10 +1,10 @@
 import { Hono, type Context } from "hono";
-import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { apiKeyFolderPermissions, folders, type ApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
+import { canApiKeyAccessFolder, getApiKeyAccessibleFolderIds, validateFolderParent } from "../lib/folder-access";
 import { createId } from "../lib/id";
 
 type Variables = {
@@ -27,24 +27,15 @@ function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType;
 }
 
 async function hasFolderPermission(c: Context<{ Variables: Variables }>, folderId: string, permission: "read" | "create" | "edit") {
-  const key = c.get("apiKey");
-  if (!key) return true;
-
-  const [row] = await db.select().from(apiKeyFolderPermissions)
-    .where(and(eq(apiKeyFolderPermissions.apiKeyId, key.id), eq(apiKeyFolderPermissions.folderId, folderId)))
-    .limit(1);
-  if (!row) return false;
-  if (permission === "read") return row.canRead;
-  if (permission === "create") return row.canCreate;
-  return row.canEdit;
+  const user = c.get("user");
+  if (!user) return false;
+  return canApiKeyAccessFolder({ apiKey: c.get("apiKey"), userId: user.id, folderId, permission });
 }
 
 async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
-  const key = c.get("apiKey");
-  if (!key) return null;
-  const rows = await db.select().from(apiKeyFolderPermissions)
-    .where(and(eq(apiKeyFolderPermissions.apiKeyId, key.id), eq(apiKeyFolderPermissions.canRead, true)));
-  return new Set(rows.map((row) => row.folderId));
+  const user = c.get("user");
+  if (!user) return null;
+  return getApiKeyAccessibleFolderIds({ apiKey: c.get("apiKey"), userId: user.id, permission: "read" });
 }
 
 harnessRoutes.get("/folders", async (c) => {
@@ -64,11 +55,15 @@ harnessRoutes.post("/folders", async (c) => {
   const key = c.get("apiKey");
   if (key && !key.canCreateFolders) return c.json({ error: "Forbidden" }, 403);
 
-  const body = await c.req.json().catch(() => null) as { title?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; parentFolderId?: string | null } | null;
   const title = body?.title?.trim();
   if (!title) return c.json({ error: "Folder title is required" }, 400);
 
-  const folder = { id: createId("folder"), userId: user.id, title, createdAt: new Date(), updatedAt: new Date() };
+  const parent = await validateFolderParent({ userId: user.id, parentFolderId: body?.parentFolderId ?? null });
+  if (!parent.ok) return c.json({ error: parent.error }, parent.status);
+  if (key && body?.parentFolderId && !(await hasFolderPermission(c, body.parentFolderId, "create"))) return c.json({ error: "Forbidden" }, 403);
+
+  const folder = { id: createId("folder"), userId: user.id, parentFolderId: body?.parentFolderId ?? null, title, isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
   await db.insert(folders).values(folder);
 
   if (key) {

@@ -18,15 +18,15 @@ Notes can live in any folder level.
 ## Non-goals
 - No unlimited folder nesting.
 - No path-based folder URLs required.
-- No inherited API permissions in the first version.
+- No workspace-level permission system in the first version.
 - No complex drag-and-drop tree management initially.
 - No cross-folder rollup views initially.
 
 ## Key Decisions
 - Store hierarchy with `parentFolderId` on folders.
 - Enforce max folder depth in the API.
-- Keep API key permissions explicit per folder.
-- Parent folder access does not grant child folder access.
+- API key permissions use simple access modes: all non-private folders or selected non-private folder branches.
+- Selected folder access grants that folder and its non-private descendants.
 - Clicking a folder shows notes directly inside that folder only.
 - Parent folders with child folders cannot be deleted until children are moved/deleted.
 
@@ -37,18 +37,16 @@ Notes can live in any folder level.
 - As a user, I cannot create folders below the detail level.
 - As a user, I can move notes into any allowed folder level.
 - As a user, I can see the folder hierarchy in the sidebar.
-- As a user, I can grant API key access to specific folders/subfolders.
+- As a user, I can grant API key access to all non-private folders or selected non-private folder branches.
+- As a user, I can mark a folder private so agents and integrations cannot access it.
 
 ## Permission Behavior
-API key folder permissions remain explicit:
+API key access uses two modes:
 
-- Permission to Project does not imply Unit or Detail access.
-- Permission to Unit does not imply Detail access.
-- Permission to Detail grants only that Detail folder.
+- **All**: access all non-private folders, including future non-private folders.
+- **Selected**: access selected non-private folder branches.
 
-Future optional enhancement:
-- Add a bulk action like “Grant selected folder and descendants.”
-- Do not add implicit inheritance unless there is a strong product need.
+Private folders are never accessible to API keys, MCP, or integrations in the MVP. Private status applies to the folder and its descendants.
 
 ## Delete Behavior
 Initial recommendation:
@@ -63,3 +61,4 @@ This avoids accidental deletion of nested structures.
 - Show “New subfolder” only when folder depth is less than 2.
 - Hide or disable “New subfolder” at level 2.
 - Move dialogs and API access dialogs should show folders with indentation.
+- Private folders should show a subtle private/lock indicator.

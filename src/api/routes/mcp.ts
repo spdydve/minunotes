@@ -62,7 +62,7 @@ function createHostedMcpClient(origin: string, apiKey: string): NotesMcpClient {
   return {
     folders: {
       list: () => request("/folders"),
-      create: ({ title }) => request("/folders", { method: "POST", body: JSON.stringify({ title }) }),
+      create: ({ title, parentFolderId }) => request("/folders", { method: "POST", body: JSON.stringify({ title, parentFolderId }) }),
     },
     notes: {
       search: (query) => request(`/notes/search?q=${encodeURIComponent(query)}`),

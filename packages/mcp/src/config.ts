@@ -61,7 +61,7 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
   return {
     folders: {
       list: () => request("/harness/folders"),
-      create: ({ title }) => request("/harness/folders", { method: "POST", body: JSON.stringify({ title }) }),
+      create: ({ title, parentFolderId }) => request("/harness/folders", { method: "POST", body: JSON.stringify({ title, parentFolderId }) }),
     },
     notes: {
       search: (query) => request(`/harness/notes/search?q=${encodeURIComponent(query)}`),

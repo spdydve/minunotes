@@ -42,6 +42,11 @@ function FolderSettingsView() {
     },
   });
 
+  const privacy = useMutation({
+    mutationFn: (isPrivate: boolean) => api.updateFolder(folderId, { isPrivate }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["folders"] }),
+  });
+
   const remove = useMutation({
     mutationFn: () => api.deleteFolder(folderId),
     onSuccess: () => {
@@ -65,6 +70,13 @@ function FolderSettingsView() {
     <div className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
       <h3 className="font-semibold">General</h3>
       <p className="notes-muted mt-1 text-sm">Manage this folder and its integrations.</p>
+      <label className="mt-4 flex items-start gap-3 rounded-md border border-[var(--notes-border)] p-3 text-sm">
+        <input className="mt-1" type="checkbox" checked={folder.isPrivate} disabled={privacy.isPending} onChange={(event) => privacy.mutate(event.target.checked)} />
+        <span>
+          <span className="block font-medium">Private folder</span>
+          <span className="notes-muted mt-1 block text-xs">Private folders and their subfolders are not accessible to API keys, MCP, or integrations.</span>
+        </span>
+      </label>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => setRenameOpen(true)}>Rename</Button>
         <Button variant="secondary" disabled title="Folder moving is coming with folder tree support.">Move</Button>

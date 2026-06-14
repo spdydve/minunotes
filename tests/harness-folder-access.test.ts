@@ -9,14 +9,14 @@ type TestContext = Awaited<ReturnType<typeof setupHarnessApp>>;
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 12; index += 1) {
+  for (let index = 0; index <= 13; index += 1) {
     const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
     if (!file) throw new Error(`Missing migration ${index}`);
     await libsql.executeMultiple(await readFile(file, "utf8"));
   }
 }
 
-async function setupHarnessApp(input: { canCreateFolders: boolean }) {
+async function setupHarnessApp(input: { canCreateFolders: boolean; accessMode?: "all" | "selected" }) {
   vi.resetModules();
   const dir = await mkdtemp(path.join(tmpdir(), "notes-harness-folders-"));
   tempDirs.push(dir);
@@ -39,6 +39,7 @@ async function setupHarnessApp(input: { canCreateFolders: boolean }) {
     hash: "hash",
     salt: "salt",
     canCreateFolders: input.canCreateFolders,
+    accessMode: input.accessMode ?? ("selected" as const),
     createdAt: new Date(),
     updatedAt: new Date(),
     lastUsedAt: null,
@@ -111,5 +112,45 @@ describe("agent-created folder access", () => {
     expect(createNoteResponse.status).toBe(201);
     const { note } = await createNoteResponse.json() as { note: { folderId: string; title: string } };
     expect(note).toEqual(expect.objectContaining({ folderId: folder.id, title: "Agent note" }));
+  });
+
+  it("allows all-access keys to read non-private folders but excludes private folders", async () => {
+    const { app, db, schema } = await setupHarnessApp({ canCreateFolders: true, accessMode: "all" });
+
+    const publicFolder = { id: "folder_public", userId: "user_test", parentFolderId: null, title: "Public", isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
+    const privateFolder = { id: "folder_private", userId: "user_test", parentFolderId: null, title: "Private", isPrivate: true, createdAt: new Date(), updatedAt: new Date() };
+    await db.insert(schema.folders).values([publicFolder, privateFolder]);
+
+    const response = await app.request("/api/harness/folders");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { folders: Array<{ id: string }> };
+    expect(body.folders.map((folder) => folder.id)).toContain(publicFolder.id);
+    expect(body.folders.map((folder) => folder.id)).not.toContain(privateFolder.id);
+  });
+
+  it("treats selected folder permissions as non-private branch access", async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: "selected" });
+
+    const parent = { id: "folder_parent", userId: "user_test", parentFolderId: null, title: "Parent", isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
+    const child = { id: "folder_child", userId: "user_test", parentFolderId: parent.id, title: "Child", isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
+    const privateChild = { id: "folder_private_child", userId: "user_test", parentFolderId: parent.id, title: "Private child", isPrivate: true, createdAt: new Date(), updatedAt: new Date() };
+    await db.insert(schema.folders).values([parent, child, privateChild]);
+    await db.insert(schema.apiKeyFolderPermissions).values({
+      id: "agent_perm_parent",
+      apiKeyId: apiKey.id,
+      folderId: parent.id,
+      canRead: true,
+      canCreate: true,
+      canEdit: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const response = await app.request("/api/harness/folders");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { folders: Array<{ id: string }> };
+    expect(body.folders.map((folder) => folder.id)).toContain(parent.id);
+    expect(body.folders.map((folder) => folder.id)).toContain(child.id);
+    expect(body.folders.map((folder) => folder.id)).not.toContain(privateChild.id);
   });
 });

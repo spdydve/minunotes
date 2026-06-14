@@ -151,10 +151,10 @@ export const harnessOpenApiSpec = {
     },
     schemas: {
       ErrorResponse: { type: "object", required: ["error"], properties: { error: { type: "string" } } },
-      Folder: { type: "object", required: ["id", "title", "createdAt", "updatedAt"], properties: { id: { type: "string" }, title: { type: "string" }, createdAt: { type: "string" }, updatedAt: { type: "string" } } },
+      Folder: { type: "object", required: ["id", "parentFolderId", "title", "isPrivate", "createdAt", "updatedAt"], properties: { id: { type: "string" }, parentFolderId: { type: ["string", "null"] }, title: { type: "string" }, isPrivate: { type: "boolean", description: "Private folders are not accessible to API keys, MCP, or integrations." }, createdAt: { type: "string" }, updatedAt: { type: "string" } } },
       FoldersResponse: { type: "object", required: ["folders"], properties: { folders: { type: "array", items: { $ref: "#/components/schemas/Folder" } } } },
       FolderResponse: { type: "object", required: ["folder"], properties: { folder: { $ref: "#/components/schemas/Folder" } } },
-      CreateFolderRequest: { type: "object", required: ["title"], properties: { title: { type: "string" } } },
+      CreateFolderRequest: { type: "object", required: ["title"], properties: { title: { type: "string" }, parentFolderId: { type: ["string", "null"], description: "Optional parent folder. Maximum depth is three folder levels." } } },
       Note: { type: "object", required: ["id", "folderId", "title", "content", "type", "isApiEditable", "createdAt", "updatedAt"], properties: { id: { type: "string" }, folderId: { type: "string" }, title: { type: "string" }, content: { type: "string" }, type: { type: "string", enum: ["note", "template"] }, isApiEditable: { type: "boolean" }, updatedByActorType: { type: ["string", "null"] }, updatedByActorId: { type: ["string", "null"] }, createdAt: { type: "string" }, updatedAt: { type: "string" }, folderTitle: { type: "string" } } },
       NoteResponse: { type: "object", required: ["note", "contentHash"], properties: { note: { $ref: "#/components/schemas/Note" }, contentHash: { type: "string" } } },
       SearchNotesResponse: { type: "object", required: ["notes"], properties: { notes: { type: "array", items: { $ref: "#/components/schemas/Note" } } } },

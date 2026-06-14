@@ -25,9 +25,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export type Folder = { id: string; title: string; createdAt: string; updatedAt: string };
+export type Folder = { id: string; parentFolderId: string | null; title: string; isPrivate: boolean; createdAt: string; updatedAt: string };
 export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
-export type ApiKey = { id: string; name: string; uid: string; canCreateFolders: boolean; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
+export type ApiKey = { id: string; name: string; uid: string; canCreateFolders: boolean; accessMode: "all" | "selected"; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
 export type NoteType = "note" | "template";
 export type Note = { id: string; folderId: string; title: string; content: string; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
@@ -58,12 +58,13 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
 
 export const api = {
   apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
-  createApiKey: (data: { name: string; canCreateFolders?: boolean; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
-  updateApiKey: (keyId: string, data: { name?: string; canCreateFolders?: boolean; permissions?: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  createApiKey: (data: { name: string; accessMode?: "all" | "selected"; canCreateFolders?: boolean; permissions: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),
+  updateApiKey: (keyId: string, data: { name?: string; accessMode?: "all" | "selected"; canCreateFolders?: boolean; permissions?: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }> }) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: "PATCH", body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: "DELETE" }),
   folders: () => request<{ folders: Folder[] }>("/folders"),
-  createFolder: (title: string) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title }) }),
+  createFolder: (title: string, parentFolderId?: string | null) => request<{ folder: Folder }>("/folders", { method: "POST", body: JSON.stringify({ title, parentFolderId }) }),
   renameFolder: (folderId: string, title: string) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+  updateFolder: (folderId: string, data: { title?: string; isPrivate?: boolean }) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteFolder: (folderId: string) => request<{ ok: true }>(`/folders/${folderId}`, { method: "DELETE" }),
   templates: () => request<{ templates: Note[] }>("/notes/templates"),
   folderTemplates: (folderId: string) => request<{ templates: Note[] }>(`/folders/${folderId}/templates`),

@@ -25,6 +25,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, PermissionValue>>({});
+  const [accessMode, setAccessMode] = useState<"all" | "selected">("all");
   const [canCreateFolders, setCanCreateFolders] = useState(false);
   const [saving, setSaving] = useState(false);
   const isEditing = !!apiKey;
@@ -33,7 +34,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
   const folderMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return folders.filter((folder) => !selectedFolderIds.has(folder.id) && folder.title.toLowerCase().includes(q)).slice(0, 8);
+    return folders.filter((folder) => !folder.isPrivate && !selectedFolderIds.has(folder.id) && folder.title.toLowerCase().includes(q)).slice(0, 8);
   }, [folders, query, selectedFolderIds]);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
     setCreatedKey(null);
     setCopied(false);
     setCanCreateFolders(apiKey?.canCreateFolders ?? false);
+    setAccessMode(apiKey?.accessMode ?? "all");
     setPermissions(Object.fromEntries((apiKey?.permissions ?? []).map((permission) => [permission.folderId, { canRead: permission.canRead, canCreate: permission.canCreate, canEdit: permission.canEdit }])));
   }, [apiKey, open]);
 
@@ -64,10 +66,10 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
     setSaving(true);
     try {
       if (apiKey) {
-        await api.updateApiKey(apiKey.id, { name, canCreateFolders, permissions: selectedPermissions() });
+        await api.updateApiKey(apiKey.id, { name, accessMode, canCreateFolders, permissions: accessMode === "selected" ? selectedPermissions() : [] });
         setOpen(false);
       } else {
-        const result = await api.createApiKey({ name, canCreateFolders, permissions: selectedPermissions() });
+        const result = await api.createApiKey({ name, accessMode, canCreateFolders, permissions: accessMode === "selected" ? selectedPermissions() : [] });
         setCreatedKey(result.key);
       }
       onSaved();
@@ -115,18 +117,29 @@ export function ApiKeyAccessDialog({ folders, apiKey, onSaved, trigger }: { fold
 
           <div className="mt-4">
             <label className="text-sm font-medium">Folder access</label>
-            <input className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800" placeholder="Search folders to add..." value={query} onChange={(e) => setQuery(e.target.value)} />
-            {folderMatches.length > 0 ? <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-800">
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <label className="flex items-start gap-2 rounded-md border border-slate-200 p-3 text-sm dark:border-slate-800">
+                <input className="mt-1" type="radio" checked={accessMode === "all"} onChange={() => setAccessMode("all")} />
+                <span><span className="block font-medium">All non-private folders</span><span className="text-xs text-slate-500">Includes future non-private folders.</span></span>
+              </label>
+              <label className="flex items-start gap-2 rounded-md border border-slate-200 p-3 text-sm dark:border-slate-800">
+                <input className="mt-1" type="radio" checked={accessMode === "selected"} onChange={() => setAccessMode("selected")} />
+                <span><span className="block font-medium">Selected folder branches</span><span className="text-xs text-slate-500">Selected folders include non-private subfolders.</span></span>
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Private folders are never accessible to API keys, MCP, or integrations.</p>
+            {accessMode === "selected" ? <input className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800" placeholder="Search non-private folders to add..." value={query} onChange={(e) => setQuery(e.target.value)} /> : null}
+            {accessMode === "selected" && folderMatches.length > 0 ? <div className="mt-2 rounded-md border border-slate-200 dark:border-slate-800">
               {folderMatches.map((folder) => <button key={folder.id} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-900" onClick={() => addFolder(folder)}>
                 <span>{folder.title}</span><Plus className="h-4 w-4 text-slate-500" />
               </button>)}
-            </div> : query.trim() ? <p className="mt-2 text-xs text-slate-500">No matching folders.</p> : null}
+            </div> : accessMode === "selected" && query.trim() ? <p className="mt-2 text-xs text-slate-500">No matching non-private folders.</p> : null}
           </div>
 
-          <div className="mt-4 space-y-2">
+          {accessMode === "selected" ? <div className="mt-4 space-y-2">
             {selectedFolders.map((folder) => <FolderPermissionRow key={folder.id} folder={folder} value={permissions[folder.id]} onChange={(value) => setPermissions((current) => ({ ...current, [folder.id]: value }))} onRemove={() => removeFolder(folder.id)} />)}
-            {selectedFolders.length === 0 ? <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-800">No folders selected. Search and add folders above.</p> : null}
-          </div>
+            {selectedFolders.length === 0 ? <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-800">No folders selected. Search and add non-private folders above.</p> : null}
+          </div> : null}
           <div className="mt-4 flex justify-end"><Button disabled={!name.trim() || saving} onClick={submit}>{isEditing ? "Save changes" : "Create key"}</Button></div>
         </>}
       </div>

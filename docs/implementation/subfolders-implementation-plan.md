@@ -80,8 +80,11 @@ Before deleting a folder:
 Move note endpoint should allow moving to any folder level owned by the user.
 
 ### API key permissions
-Keep folder permissions explicit.
-No inherited permissions.
+Use simple access modes:
+- `all`: access all non-private folders.
+- `selected`: access selected non-private folder branches.
+
+Private folders and their descendants are never accessible to API keys, MCP, or integrations in the MVP.
 
 ## Frontend Behavior
 
@@ -104,18 +107,18 @@ No inherited permissions.
 
 ### API access dialogs
 - Display folders as an indented list.
-- Selection remains explicit per folder.
-- Consider showing helper text: “Access does not include subfolders unless selected.”
+- Selection uses branch roots for selected access mode.
+- Show helper text: “Selected folders include non-private subfolders. Private folders are not accessible to agents or integrations.”
 
 ## Phased Checklist
 
 ### Phase 1 — Database + API
-- [ ] Add `parentFolderId` to folder schema.
-- [ ] Add migration.
-- [ ] Update folder create route to accept `parentFolderId`.
-- [ ] Add max-depth validation.
-- [ ] Update folder delete route to block deletion when children exist.
-- [ ] Ensure folder list returns parent IDs.
+- [x] Add `parentFolderId` to folder schema.
+- [x] Add migration.
+- [x] Update folder create route to accept `parentFolderId`.
+- [x] Add max-depth validation.
+- [x] Update folder delete route to block deletion when children exist.
+- [x] Ensure folder list returns parent IDs.
 - [ ] Add API tests for creation, max depth, deletion blocking, and ownership checks.
 
 Verification:
@@ -124,11 +127,11 @@ Verification:
 - [ ] `pnpm db:migrate`
 
 ### Phase 2 — Sidebar + Folder Creation UX
-- [ ] Build folder tree helper in frontend or component-local utility.
-- [ ] Render nested sidebar up to depth 2.
-- [ ] Add “New subfolder” action for depth 0/1 folders.
-- [ ] Hide/disable subfolder creation at depth 2.
-- [ ] Keep top-level “New folder” behavior.
+- [x] Build folder tree helper in frontend or component-local utility.
+- [x] Render nested sidebar up to depth 2.
+- [x] Add “New subfolder” action for depth 0/1 folders.
+- [x] Hide/disable subfolder creation at depth 2.
+- [x] Keep top-level “New folder” behavior.
 
 Verification:
 - [ ] `pnpm typecheck`

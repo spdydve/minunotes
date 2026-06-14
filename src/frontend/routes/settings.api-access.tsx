@@ -55,7 +55,7 @@ function ApiAccessSettingsView() {
           >
             <div className="min-w-0">
               <p className="truncate font-medium">{key.name}</p>
-              {/*<p className="text-xs text-slate-500">{key.permissions.length} folder permission{key.permissions.length === 1 ? "" : "s"}</p>*/}
+              <p className="text-xs text-slate-500">{key.accessMode === "all" ? "All non-private folders" : `${key.permissions.length} selected folder branch${key.permissions.length === 1 ? "" : "es"}`}</p>
             </div>
             <code className="text-xs text-[var(--notes-muted)]"><span className="md:hidden">UID </span>{key.uid}</code>
             <span className="text-xs text-[var(--notes-muted)]"><span className="md:hidden">Created </span>

@@ -7,7 +7,7 @@ Use this skill when the user wants an agent to read, search, create, or edit not
 You need these environment variables or equivalent secrets:
 
 - `MINUNOTES_API_URL` — API origin or API base, for example `https://api-dev-notes.dpklabs.com`.
-- `MINUNOTES_API_KEY` — MinuNotes API key with scoped folder permissions. Folder creation requires the key's explicit folder-creation permission.
+- `MINUNOTES_API_KEY` — MinuNotes API key with access to all non-private folders or selected non-private folder branches. Folder creation requires the key's explicit folder-creation permission.
 
 Normalize `MINUNOTES_API_URL` by removing any trailing slash. Harness routes live under `/api/harness`.
 
@@ -31,6 +31,7 @@ Use JSON for request/response bodies.
 - Report the folder ID, note ID, and final changed markdown or section summary after edits.
 - If an API key lacks permission, report the permission issue instead of retrying unrelated actions.
 - Do not create folders unless the user explicitly asks or grants permission for folder creation.
+- Private folders are not accessible through the harness API, MCP, or integrations.
 
 ## Common commands
 
@@ -48,12 +49,12 @@ List accessible folders:
 curl -s "${AUTH[@]}" "$API/api/harness/folders"
 ```
 
-Create a folder, only when explicitly requested and when the API key allows folder creation. The created folder is automatically accessible to the same API key:
+Create a folder, only when explicitly requested and when the API key allows folder creation. The created folder is automatically accessible to the same API key. Use `parentFolderId` to create a subfolder when needed:
 
 ```bash
 curl -s "${AUTH[@]}" \
   -X POST "$API/api/harness/folders" \
-  -d '{"title":"Agent Workspace"}'
+  -d '{"title":"Agent Workspace","parentFolderId":null}'
 ```
 
 Search notes by title/content/folder title:

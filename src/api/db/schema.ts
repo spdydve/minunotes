@@ -50,10 +50,12 @@ export const verification = sqliteTable("verification", {
 export const folders = sqliteTable("folders", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  parentFolderId: text("parent_folder_id"),
   title: text("title").notNull(),
+  isPrivate: integer("is_private", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [index("folders_user_id_idx").on(table.userId)]);
+}, (table) => [index("folders_user_id_idx").on(table.userId), index("folders_parent_folder_id_idx").on(table.parentFolderId)]);
 
 export const apiKeys = sqliteTable("api_keys", {
   id: text("id").primaryKey(),
@@ -63,6 +65,7 @@ export const apiKeys = sqliteTable("api_keys", {
   hash: text("hash").notNull(),
   salt: text("salt").notNull(),
   canCreateFolders: integer("can_create_folders", { mode: "boolean" }).notNull().default(false),
+  accessMode: text("access_mode", { enum: ["all", "selected"] }).notNull().default("all"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),

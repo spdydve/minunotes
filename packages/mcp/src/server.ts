@@ -18,7 +18,7 @@ function toolResult(data: unknown) {
 export type NotesMcpClient = {
   folders: {
     list: () => Promise<unknown>;
-    create: (input: { title: string }) => Promise<unknown>;
+    create: (input: { title: string; parentFolderId?: string }) => Promise<unknown>;
   };
   notes: {
     search: (query: string) => Promise<unknown>;
@@ -50,12 +50,12 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     "notes_create_folder",
     {
       title: "Create folder",
-      description: "Create a folder if the configured API key has folder creation permission. The new folder is automatically scoped to this key.",
-      inputSchema: { title: z.string() },
+      description: "Create a folder or subfolder if the configured API key has folder creation permission. The new folder is automatically scoped to this key.",
+      inputSchema: { title: z.string(), parentFolderId: z.string().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
-    async ({ title }) => toolResult(await client.folders.create({ title })),
+    async ({ title, parentFolderId }) => toolResult(await client.folders.create({ title, parentFolderId })),
   );
 
   server.registerTool(

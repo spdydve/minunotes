@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { PanelLeftClose } from "lucide-react";
-import { api } from "../lib/api";
+import { Lock, PanelLeftClose } from "lucide-react";
+import { useMemo } from "react";
+import { api, type Folder } from "../lib/api";
 import { authClient } from "../lib/auth-client";
 import { CreateFolderDialog } from "./create-folder-dialog";
 import { FolderActionsPopover } from "./folder-actions-popover";
@@ -9,6 +10,40 @@ import { SearchDialog } from "./search-dialog";
 import { ThemeSelect } from "./theme-select";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+
+type FolderNode = Folder & { children: FolderNode[]; depth: number; effectivePrivate: boolean };
+
+function buildFolderTree(folders: Folder[]) {
+  const nodes = new Map(folders.map((folder) => [folder.id, { ...folder, children: [], depth: 0, effectivePrivate: folder.isPrivate } as FolderNode]));
+  const roots: FolderNode[] = [];
+
+  for (const node of nodes.values()) {
+    const parent = node.parentFolderId ? nodes.get(node.parentFolderId) : null;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+
+  const sortNodes = (items: FolderNode[]) => items.sort((a, b) => a.title.localeCompare(b.title));
+  const visit = (node: FolderNode, depth: number, parentPrivate: boolean) => {
+    node.depth = depth;
+    node.effectivePrivate = parentPrivate || node.isPrivate;
+    sortNodes(node.children);
+    for (const child of node.children) visit(child, depth + 1, node.effectivePrivate);
+  };
+  sortNodes(roots);
+  for (const root of roots) visit(root, 0, false);
+  return roots;
+}
+
+function flattenTree(nodes: FolderNode[]) {
+  const rows: FolderNode[] = [];
+  const visit = (node: FolderNode) => {
+    rows.push(node);
+    for (const child of node.children) visit(child);
+  };
+  for (const node of nodes) visit(node);
+  return rows;
+}
 
 export function FolderSidebar({
   userEmail,
@@ -24,6 +59,7 @@ export function FolderSidebar({
     queryFn: api.folders,
   });
   const nav = useNavigate();
+  const folderRows = useMemo(() => flattenTree(buildFolderTree(data?.folders ?? [])), [data?.folders]);
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:h-screen md:w-72">
@@ -53,20 +89,22 @@ export function FolderSidebar({
         >
           Templates
         </Link>
-        {(data?.folders ?? []).map((folder) => (
+        {folderRows.map((folder) => (
           <div
             key={folder.id}
             className="flex items-center gap-2 rounded-md hover:bg-[var(--notes-hover)]"
+            style={{ paddingLeft: `${folder.depth * 0.75}rem` }}
           >
             <Link
               to="/folders/$folderId"
               params={{ folderId: folder.id }}
-              className="min-w-0 flex-1 px-3 py-2 text-sm"
+              className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-sm"
               onClick={onNavigate}
             >
-              {folder.title}
+              <span className="truncate">{folder.title}</span>
+              {folder.effectivePrivate ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
             </Link>
-            <FolderActionsPopover folder={folder} />
+            <FolderActionsPopover folder={folder} depth={folder.depth} />
           </div>
         ))}
       </nav>

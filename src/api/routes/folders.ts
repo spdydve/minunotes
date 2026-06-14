@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes, templateFolderAssignments } from "../db/schema";
 import { createDocument, listDocuments, listFolders } from "../harness/commands";
+import { validateFolderParent } from "../lib/folder-access";
 import { createId } from "../lib/id";
 import { auth } from "../lib/auth";
 
@@ -31,11 +32,14 @@ folderRoutes.post("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; parentFolderId?: string | null } | null;
   const title = body?.title?.trim();
   if (!title) return c.json({ error: "Folder title is required" }, 400);
 
-  const folder = { id: createId("folder"), userId: user.id, title, createdAt: new Date(), updatedAt: new Date() };
+  const parent = await validateFolderParent({ userId: user.id, parentFolderId: body?.parentFolderId ?? null });
+  if (!parent.ok) return c.json({ error: parent.error }, parent.status);
+
+  const folder = { id: createId("folder"), userId: user.id, parentFolderId: body?.parentFolderId ?? null, title, isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
   await db.insert(folders).values(folder);
   return c.json({ folder }, 201);
 });
@@ -44,12 +48,13 @@ folderRoutes.patch("/:folderId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; isPrivate?: boolean } | null;
   const title = body?.title?.trim();
-  if (!title) return c.json({ error: "Folder title is required" }, 400);
+  if (body?.title !== undefined && !title) return c.json({ error: "Folder title is required" }, 400);
+  if (!body || (title === undefined && body.isPrivate === undefined)) return c.json({ error: "No folder updates provided" }, 400);
 
   const [folder] = await db.update(folders)
-    .set({ title, updatedAt: new Date() })
+    .set({ ...(title !== undefined ? { title } : {}), ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}), updatedAt: new Date() })
     .where(and(eq(folders.id, c.req.param("folderId")), eq(folders.userId, user.id)))
     .returning();
 
@@ -99,6 +104,9 @@ folderRoutes.delete("/:folderId", async (c) => {
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const folderId = c.req.param("folderId");
+  const childFolders = await db.select({ id: folders.id }).from(folders).where(and(eq(folders.parentFolderId, folderId), eq(folders.userId, user.id))).limit(1);
+  if (childFolders.length > 0) return c.json({ error: "Move or delete subfolders before deleting this folder" }, 400);
+
   await db.delete(notes).where(and(eq(notes.folderId, folderId), eq(notes.userId, user.id)));
   await db.delete(folders).where(and(eq(folders.id, folderId), eq(folders.userId, user.id)));
   return c.json({ ok: true });

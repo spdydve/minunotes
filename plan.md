@@ -335,3 +335,221 @@ Keep the experimental SDK/CLI work preserved on `keep/sdk-cli-wrapper-experiment
 
 ## Approval
 Approved and implemented on `sdk-cli-mcp-continuation`.
+
+---
+
+# Subfolders + Agent Access Model Plan
+
+## Objective
+Implement subfolders and simplify agent/API access around two durable modes:
+
+- **All**: agents can access all non-private folder branches.
+- **Selected**: agents can access selected non-private folder branches.
+
+For MVP, **private folders are never accessible to agents/integrations**. Private status applies to the folder and its descendants. This keeps MinuNotes ergonomic for trusted personal agents while preserving a clear safety boundary for sensitive notes.
+
+## Product decisions
+- Keep MinuNotes lightweight; do not add workspaces yet.
+- Top-level folders can act like informal project/control-plane boundaries.
+- Add bounded folder nesting, max depth 3: Project → Unit → Detail.
+- Access grants are branch-based, not single-folder-only:
+  - Selected Folder B grants Folder B and all non-private descendants.
+- Private folders are excluded from all agent/integration access:
+  - excluded from `All`
+  - cannot be selected in `Selected`
+  - descendants inherit private exclusion
+  - agent-created folders cannot be created under private branches
+- API key UX should optimize for the common trusted-agent case:
+  - default access mode: `All` non-private folders
+  - optional `Selected` mode for narrower keys
+- OAuth later should reuse the same access model.
+
+## Existing plans being revised
+The existing subfolders docs currently say API permissions are explicit and not inherited. This plan supersedes that for the agent access model:
+
+- old: permission to parent does not grant child access
+- new: selected folder grants that non-private folder branch
+
+Docs to update during implementation:
+- `docs/implementation/subfolders-prd.md`
+- `docs/implementation/subfolders-implementation-plan.md`
+
+## Data model proposal
+
+### `folders`
+Add:
+- `parentFolderId: string | null`
+- `isPrivate: boolean default false`
+
+Notes:
+- depth enforced in application logic
+- private effective state is computed by walking ancestors
+- no private override for descendants in MVP
+
+### `api_keys`
+Add:
+- `accessMode: "all" | "selected"`, default `all`
+
+Keep:
+- `canCreateFolders`
+
+### `api_key_folder_permissions`
+Keep rows for selected branch roots, but reinterpret them as branch grants.
+
+Current columns can remain for MVP:
+- `canRead`
+- `canCreate`
+- `canEdit`
+
+Behavior:
+- rows apply to the selected folder and non-private descendants
+- private branch roots should not be insertable
+- private descendants should always be denied even if an ancestor is selected
+
+## Files likely to modify/create
+
+### Database/migrations
+- `src/api/db/schema.ts`
+- new migration under `drizzle/`
+- `drizzle/meta/_journal.json`
+
+### API permissions/core
+- `src/api/routes/api-keys.ts`
+- `src/api/routes/harness.ts`
+- `src/api/routes/folders.ts`
+- `src/api/harness/commands.ts`
+- possible new helper:
+  - `src/api/lib/folder-access.ts`
+
+### API docs/specs
+- `src/api/openapi/harness.ts`
+- `docs/skills/minunotes-harness/SKILL.md`
+- `docs/guides/using-minunotes-with-agents.md`
+- `src/frontend/docs/resources/agent-integrations.mdx`
+- `src/frontend/docs/resources/harness-api.mdx`
+- `src/frontend/docs/resources/mcp.mdx` if needed
+
+### Frontend data/API
+- `src/frontend/lib/api.ts`
+
+### Frontend folder UI
+- `src/frontend/components/folder-sidebar.tsx`
+- `src/frontend/components/create-folder-dialog.tsx`
+- `src/frontend/components/folder-actions-popover.tsx`
+- `src/frontend/components/rename-folder-dialog.tsx` only if private toggle belongs there
+- `src/frontend/routes/folders.$folderId.settings.tsx`
+
+### Frontend note/folder selection UI
+- `src/frontend/components/api-key-access-dialog.tsx`
+- `src/frontend/components/folder-api-access-dialog.tsx`
+- `src/frontend/components/move-note-dialog.tsx`
+
+### Tests
+- `tests/api-access.test.ts`
+- `tests/harness-folder-access.test.ts`
+- new or existing folder route tests, likely `tests/folders.test.ts`
+- `tests/mcp-route.test.ts` if hosted MCP assumptions change
+- `tests/openapi.test.ts` if spec changes
+
+## Implementation checklist
+
+### Phase 1 — Schema + folder API
+- [x] Add `folders.parentFolderId`.
+- [x] Add `folders.isPrivate`.
+- [x] Add `apiKeys.accessMode` with default `all`.
+- [x] Generate migration.
+- [x] Update folder create routes to accept optional `parentFolderId`.
+- [x] Validate parent ownership and max depth.
+- [x] Reject creating below depth 2.
+- [x] Update folder list output to include `parentFolderId` and `isPrivate`.
+- [x] Update folder patch/settings route to rename and toggle `isPrivate`.
+- [x] Block folder deletion if it has child folders.
+- [x] Add tests for hierarchy, max depth, private toggle, and deletion blocking.
+
+Verification:
+- [ ] `pnpm db:generate`.
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+
+### Phase 2 — Shared branch/private access helper
+- [x] Add helper to load a user's folder tree/ancestors.
+- [x] Add helper to compute effective private folders.
+- [x] Add helper to answer whether an API key can read/create/edit a folder.
+- [x] Implement access mode behavior:
+  - [x] `all`: allow non-private folders by capability.
+  - [x] `selected`: allow selected branch roots and non-private descendants by per-row capability.
+- [x] Ensure private folders always deny agent access.
+- [x] Ensure selected private folders cannot be saved as permissions.
+- [x] Ensure agent-created folders under allowed non-private parents auto-access correctly.
+- [x] Update harness routes to use helper.
+- [x] Update search/read/list filters to exclude private folders for agents.
+- [x] Add/adjust tests for all-vs-selected and private exclusions.
+
+Verification:
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+- [ ] Manual/API smoke with one `all` key and one `selected` key.
+
+### Phase 3 — Frontend folder tree + private UX
+- [x] Build frontend folder tree helper.
+- [x] Render sidebar hierarchy with indentation.
+- [x] Add “New subfolder” action for depth 0/1 folders.
+- [x] Hide/disable subfolder action at depth 2.
+- [x] Update create folder dialog to support parent context.
+- [x] Show private status in sidebar/settings with subtle lock/private indicator.
+- [x] Add private toggle in folder settings with copy: “Private folders are not accessible to agents or integrations.”
+- [x] Ensure private descendants visually communicate inherited privacy where practical.
+
+Verification:
+- [x] `pnpm typecheck`.
+- [ ] Manual: create Project → Unit → Detail.
+- [ ] Manual: confirm no subfolder create below Detail.
+- [ ] Manual: toggle private and verify copy/indicator.
+
+### Phase 4 — API key UX: All vs Selected
+- [x] Update API key dialog to default to `All` access mode.
+- [x] Add access mode selection:
+  - [x] All non-private folders
+  - [x] Selected folder branches
+- [x] Hide folder selector unless `Selected` is chosen.
+- [ ] Render selected folder branches in tree form.
+- [x] Prevent private folders from being selected.
+- [x] Update existing key edit behavior.
+- [x] Update folder-specific API access dialog to respect branch grants or de-emphasize if global dialog is primary.
+- [x] Update copy to explain private folders and branch access.
+
+Verification:
+- [x] `pnpm typecheck`.
+- [ ] Manual: create all-access key.
+- [ ] Manual: create selected-branch key.
+- [ ] Manual/API: selected parent can access child, but not private child.
+
+### Phase 5 — Move dialogs + docs/spec polish
+- [ ] Update move note dialog to show indented folder hierarchy.
+- [x] Update OpenAPI spec for folder fields and API key access mode if exposed.
+- [x] Update resources/docs for private folders and access modes.
+- [x] Update skill docs to describe all/selected/private behavior.
+- [x] Update existing subfolder PRD/implementation docs to match product decision.
+
+Verification:
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+- [x] `pnpm build`.
+- [ ] Manual MCP smoke: all-access key cannot see private notes.
+- [ ] Manual MCP smoke: selected branch key can read selected descendant.
+
+## Open questions before implementation
+- Should existing API keys migrate to `accessMode = "selected"` to preserve current exact permissions, or `all` to match new default?
+  - recommended: existing keys should become `selected` if they have permissions, preserving behavior as much as possible.
+  - existing keys with no permissions should become `all` only if this is acceptable; safer default is `selected` with no access.
+- Should folder privacy be editable from sidebar action menu, settings page, or both?
+  - recommended: settings page first; sidebar can show indicator.
+- Should agent-created folders support `parentFolderId` immediately?
+  - recommended: yes, but only under non-private branches where the key has create access or when using all-access mode.
+- Should users be able to create private folders directly from the create dialog?
+  - recommended: not initially; create then mark private in settings.
+- Should folder names be unique within a parent?
+  - recommended: defer uniqueness; allow duplicates for now.
+
+## Approval
+Approved by user and implementation started on `subfolders-agent-access-model`.

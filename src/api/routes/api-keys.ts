@@ -4,6 +4,7 @@ import { db } from "../db/client";
 import { apiKeyFolderPermissions, apiKeys, folders, type ApiKey } from "../db/schema";
 import { generateApiKey, hashApiKey } from "../lib/api-keys";
 import { auth } from "../lib/auth";
+import { filterSelectablePermissionRows } from "../lib/folder-access";
 import { createId } from "../lib/id";
 
 type Variables = {
@@ -12,12 +13,19 @@ type Variables = {
   apiKey: ApiKey | null;
 };
 
+type PermissionInput = { folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean };
+type AccessMode = "all" | "selected";
+
 export const apiKeyRoutes = new Hono<{ Variables: Variables }>();
 
 function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get("user");
   if (!user) return null;
   return user;
+}
+
+function parseAccessMode(value: unknown): AccessMode | undefined {
+  return value === "selected" || value === "all" ? value : undefined;
 }
 
 apiKeyRoutes.get("/", async (c) => {
@@ -29,6 +37,7 @@ apiKeyRoutes.get("/", async (c) => {
     name: apiKeys.name,
     uid: apiKeys.uid,
     canCreateFolders: apiKeys.canCreateFolders,
+    accessMode: apiKeys.accessMode,
     createdAt: apiKeys.createdAt,
     lastUsedAt: apiKeys.lastUsedAt,
     revokedAt: apiKeys.revokedAt,
@@ -47,10 +56,11 @@ apiKeyRoutes.post("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { name?: string; canCreateFolders?: boolean; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
+  const body = await c.req.json().catch(() => null) as { name?: string; accessMode?: AccessMode; canCreateFolders?: boolean; permissions?: PermissionInput[] } | null;
   const name = body?.name?.trim();
   if (!name) return c.json({ error: "API key name is required" }, 400);
 
+  const accessMode = parseAccessMode(body?.accessMode) ?? "all";
   const { key, uid } = generateApiKey();
   const { hash, salt } = hashApiKey(key);
   const apiKey = {
@@ -61,6 +71,7 @@ apiKeyRoutes.post("/", async (c) => {
     hash,
     salt,
     canCreateFolders: body?.canCreateFolders ?? false,
+    accessMode,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastUsedAt: null,
@@ -69,7 +80,7 @@ apiKeyRoutes.post("/", async (c) => {
 
   await db.insert(apiKeys).values(apiKey);
 
-  const requestedPermissions = body?.permissions ?? [];
+  const requestedPermissions = accessMode === "selected" ? await filterSelectablePermissionRows({ userId: user.id, permissions: body?.permissions ?? [] }) : [];
   const permissionRows = [];
   for (const permission of requestedPermissions) {
     if (!permission.folderId) continue;
@@ -88,14 +99,14 @@ apiKeyRoutes.post("/", async (c) => {
   }
   if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
 
-  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, canCreateFolders: apiKey.canCreateFolders, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
+  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, canCreateFolders: apiKey.canCreateFolders, accessMode: apiKey.accessMode, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
 });
 
 apiKeyRoutes.patch("/:keyId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { name?: string; canCreateFolders?: boolean; permissions?: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> } | null;
+  const body = await c.req.json().catch(() => null) as { name?: string; accessMode?: AccessMode; canCreateFolders?: boolean; permissions?: PermissionInput[] } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const name = body.name?.trim();
@@ -105,12 +116,22 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
   const [existing] = await db.select().from(apiKeys).where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt))).limit(1);
   if (!existing) return c.json({ error: "API key not found" }, 404);
 
-  if (name !== undefined || body.canCreateFolders !== undefined) await db.update(apiKeys).set({ ...(name !== undefined ? { name } : {}), ...(body.canCreateFolders !== undefined ? { canCreateFolders: body.canCreateFolders } : {}), updatedAt: new Date() }).where(eq(apiKeys.id, keyId));
+  const accessMode = parseAccessMode(body.accessMode);
+  if (name !== undefined || body.canCreateFolders !== undefined || accessMode !== undefined) {
+    await db.update(apiKeys).set({
+      ...(name !== undefined ? { name } : {}),
+      ...(body.canCreateFolders !== undefined ? { canCreateFolders: body.canCreateFolders } : {}),
+      ...(accessMode !== undefined ? { accessMode } : {}),
+      updatedAt: new Date(),
+    }).where(eq(apiKeys.id, keyId));
+  }
 
+  const effectiveAccessMode = accessMode ?? existing.accessMode;
   let permissionRows: Array<typeof apiKeyFolderPermissions.$inferInsert> | undefined;
-  if (body.permissions !== undefined) {
+  if (body.permissions !== undefined || accessMode === "all") {
     permissionRows = [];
-    for (const permission of body.permissions) {
+    const requestedPermissions = effectiveAccessMode === "selected" ? await filterSelectablePermissionRows({ userId: user.id, permissions: body.permissions ?? [] }) : [];
+    for (const permission of requestedPermissions) {
       if (!permission.folderId) continue;
       const [folder] = await db.select({ id: folders.id }).from(folders).where(and(eq(folders.id, permission.folderId), eq(folders.userId, user.id))).limit(1);
       if (!folder) continue;
@@ -134,6 +155,7 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
     name: apiKeys.name,
     uid: apiKeys.uid,
     canCreateFolders: apiKeys.canCreateFolders,
+    accessMode: apiKeys.accessMode,
     createdAt: apiKeys.createdAt,
     lastUsedAt: apiKeys.lastUsedAt,
     revokedAt: apiKeys.revokedAt,

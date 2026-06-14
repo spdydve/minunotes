@@ -53,7 +53,7 @@ Use hosted MCP for cloud agents, ChatGPT-style integrations, Lambda/container ag
 Tools include:
 
 - `notes_list_folders`
-- `notes_create_folder`
+- `notes_create_folder` (supports optional `parentFolderId` for subfolders)
 - `notes_search`
 - `notes_get_note`
 - `notes_create_note`
@@ -66,6 +66,7 @@ Tools include:
 Implementation notes:
 
 - Uses the official `@modelcontextprotocol/sdk`.
+- Honors MinuNotes access modes: all non-private folders or selected non-private folder branches. Private folders are not accessible to MCP.
 - Uses stdio transport for local process-spawned MCP clients.
 - Uses Streamable HTTP transport for hosted `/api/mcp` clients.
 - Returns both `structuredContent` and text content.
