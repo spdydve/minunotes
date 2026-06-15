@@ -79,6 +79,51 @@ export async function validateFolderParent(input: { userId: string; parentFolder
   return { ok: true as const, parent, depth: parentDepth + 1 };
 }
 
+export async function validateFolderMove(input: { userId: string; folderId: string; parentFolderId: string | null }) {
+  const tree = await loadFolderAccessTree(input.userId);
+  const folder = tree.byId.get(input.folderId);
+  if (!folder) return { ok: false as const, status: 404 as const, error: "Folder not found" };
+
+  if (input.parentFolderId === folder.id) return { ok: false as const, status: 400 as const, error: "Cannot move a folder into itself" };
+
+  let newDepth = 0;
+  if (input.parentFolderId) {
+    const parent = tree.byId.get(input.parentFolderId);
+    if (!parent) return { ok: false as const, status: 404 as const, error: "Parent folder not found" };
+    if (isDescendantOrSelf(parent.id, folder.id, tree.byId)) return { ok: false as const, status: 400 as const, error: "Cannot move a folder into one of its descendants" };
+    if (tree.privateFolderIds.has(parent.id)) return { ok: false as const, status: 403 as const, error: "Cannot move folders under a private folder" };
+    const parentDepth = getFolderDepth(parent.id, tree.byId);
+    if (!Number.isFinite(parentDepth)) return { ok: false as const, status: 400 as const, error: "Invalid folder hierarchy" };
+    newDepth = parentDepth + 1;
+  }
+
+  const subtreeHeight = getFolderSubtreeHeight(folder.id, tree.folders);
+  if (newDepth + subtreeHeight > 4) return { ok: false as const, status: 400 as const, error: "Maximum folder depth reached" };
+
+  return { ok: true as const, folder, parentFolderId: input.parentFolderId };
+}
+
+function getFolderSubtreeHeight(folderId: string, rows: Pick<Folder, "id" | "parentFolderId">[]) {
+  const childrenByParent = new Map<string, Array<Pick<Folder, "id" | "parentFolderId">>>();
+  for (const row of rows) {
+    if (!row.parentFolderId) continue;
+    const children = childrenByParent.get(row.parentFolderId) ?? [];
+    children.push(row);
+    childrenByParent.set(row.parentFolderId, children);
+  }
+
+  const visit = (id: string, seen: Set<string>): number => {
+    if (seen.has(id)) return Number.POSITIVE_INFINITY;
+    const nextSeen = new Set(seen);
+    nextSeen.add(id);
+    const children = childrenByParent.get(id) ?? [];
+    if (children.length === 0) return 0;
+    return Math.max(...children.map((child) => 1 + visit(child.id, nextSeen)));
+  };
+
+  return visit(folderId, new Set());
+}
+
 export async function canApiKeyAccessFolder(input: { apiKey: ApiKey | null; userId: string; folderId: string; permission: FolderPermissionKind }) {
   if (!input.apiKey) return true;
 

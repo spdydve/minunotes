@@ -47,6 +47,17 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
+async function createFolder(app: Hono, title: string, parentFolderId?: string | null) {
+  const response = await app.request("/api/folders", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, parentFolderId }),
+  });
+  expect(response.status).toBe(201);
+  const { folder } = await response.json() as { folder: { id: string; parentFolderId: string | null } };
+  return folder;
+}
+
 describe("folder hierarchy", () => {
   it("creates folders up to depth 4 and rejects deeper folders", async () => {
     const { app } = await setupFolderApp();
@@ -77,9 +88,8 @@ describe("folder hierarchy", () => {
   it("toggles private folders and blocks deleting folders with children", async () => {
     const { app } = await setupFolderApp();
 
-    const parentResponse = await app.request("/api/folders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Parent" }) });
-    const { folder: parent } = await parentResponse.json() as { folder: { id: string } };
-    await app.request("/api/folders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: "Child", parentFolderId: parent.id }) });
+    const parent = await createFolder(app, "Parent");
+    await createFolder(app, "Child", parent.id);
 
     const privateResponse = await app.request(`/api/folders/${parent.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ isPrivate: true }) });
     expect(privateResponse.status).toBe(200);
@@ -88,5 +98,59 @@ describe("folder hierarchy", () => {
 
     const deleteResponse = await app.request(`/api/folders/${parent.id}`, { method: "DELETE" });
     expect(deleteResponse.status).toBe(400);
+  });
+
+  it("moves folders to another parent and top level", async () => {
+    const { app } = await setupFolderApp();
+
+    const first = await createFolder(app, "First");
+    const second = await createFolder(app, "Second");
+    const child = await createFolder(app, "Child", first.id);
+
+    const moveUnderSecond = await app.request(`/api/folders/${child.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentFolderId: second.id }) });
+    expect(moveUnderSecond.status).toBe(200);
+    const { folder: moved } = await moveUnderSecond.json() as { folder: { parentFolderId: string | null } };
+    expect(moved.parentFolderId).toBe(second.id);
+
+    const moveTopLevel = await app.request(`/api/folders/${child.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentFolderId: null }) });
+    expect(moveTopLevel.status).toBe(200);
+    const { folder: topLevel } = await moveTopLevel.json() as { folder: { parentFolderId: string | null } };
+    expect(topLevel.parentFolderId).toBeNull();
+  });
+
+  it("rejects moving folders into themselves or descendants", async () => {
+    const { app } = await setupFolderApp();
+
+    const parent = await createFolder(app, "Parent");
+    const child = await createFolder(app, "Child", parent.id);
+
+    const intoSelf = await app.request(`/api/folders/${parent.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentFolderId: parent.id }) });
+    expect(intoSelf.status).toBe(400);
+
+    const intoDescendant = await app.request(`/api/folders/${parent.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentFolderId: child.id }) });
+    expect(intoDescendant.status).toBe(400);
+  });
+
+  it("rejects moves that exceed max depth or target private folders", async () => {
+    const { app } = await setupFolderApp();
+
+    let parentFolderId: string | null = null;
+    for (const title of ["A", "B", "C", "D"]) {
+      const folder = await createFolder(app, title, parentFolderId);
+      parentFolderId = folder.id;
+    }
+    const deepParentId = parentFolderId;
+    const subtreeRoot = await createFolder(app, "Subtree");
+    await createFolder(app, "Subtree child", subtreeRoot.id);
+
+    const tooDeep = await app.request(`/api/folders/${subtreeRoot.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentFolderId: deepParentId }) });
+    expect(tooDeep.status).toBe(400);
+
+    const privateParent = await createFolder(app, "Private parent");
+    const privateResponse = await app.request(`/api/folders/${privateParent.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ isPrivate: true }) });
+    expect(privateResponse.status).toBe(200);
+
+    const intoPrivate = await app.request(`/api/folders/${subtreeRoot.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ parentFolderId: privateParent.id }) });
+    expect(intoPrivate.status).toBe(403);
   });
 });

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { folders, notes, templateFolderAssignments } from "../db/schema";
 import { createDocument, listDocuments, listFolders } from "../harness/commands";
-import { validateFolderParent } from "../lib/folder-access";
+import { validateFolderMove, validateFolderParent } from "../lib/folder-access";
 import { createId } from "../lib/id";
 import { auth } from "../lib/auth";
 
@@ -48,13 +48,18 @@ folderRoutes.patch("/:folderId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string; isPrivate?: boolean } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; isPrivate?: boolean; parentFolderId?: string | null } | null;
   const title = body?.title?.trim();
   if (body?.title !== undefined && !title) return c.json({ error: "Folder title is required" }, 400);
-  if (!body || (title === undefined && body.isPrivate === undefined)) return c.json({ error: "No folder updates provided" }, 400);
+  if (!body || (title === undefined && body.isPrivate === undefined && body.parentFolderId === undefined)) return c.json({ error: "No folder updates provided" }, 400);
+
+  if (body.parentFolderId !== undefined) {
+    const move = await validateFolderMove({ userId: user.id, folderId: c.req.param("folderId"), parentFolderId: body.parentFolderId });
+    if (!move.ok) return c.json({ error: move.error }, move.status);
+  }
 
   const [folder] = await db.update(folders)
-    .set({ ...(title !== undefined ? { title } : {}), ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}), updatedAt: new Date() })
+    .set({ ...(title !== undefined ? { title } : {}), ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}), ...(body.parentFolderId !== undefined ? { parentFolderId: body.parentFolderId } : {}), updatedAt: new Date() })
     .where(and(eq(folders.id, c.req.param("folderId")), eq(folders.userId, user.id)))
     .returning();
 
