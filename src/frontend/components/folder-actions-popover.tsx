@@ -31,7 +31,7 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
   return <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <ActionMenuIconButton icon="settings" aria-label={`Settings for ${folder.title}`} />
+        <ActionMenuIconButton icon="more" aria-label={`Actions for ${folder.title}`} />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-48 p-1">
         {depth < 4 && !folder.isPrivate ? <ActionMenuButton onClick={() => { setOpen(false); setCreateOpen(true); }}><span className="flex items-center gap-2"><FolderPlus className="h-4 w-4" />New subfolder</span></ActionMenuButton> : null}
