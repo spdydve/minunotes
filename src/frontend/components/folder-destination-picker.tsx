@@ -67,7 +67,7 @@ export function FolderDestinationPicker({
 
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center gap-1 text-sm">
-      <button type="button" className="rounded-md px-2 py-1 text-sm transition-colors hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-50" disabled={!allowTopLevel} onClick={() => onCurrentFolderIdChange(null)}>Top level</button>
+      <button type="button" className="rounded-md px-2 py-1 text-sm transition-colors hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-50" disabled={!allowTopLevel} onClick={() => onCurrentFolderIdChange(null)}>Root</button>
       {breadcrumbs.map((folder) => <span key={folder.id} className="flex items-center gap-1">
         <ChevronRight className="h-3 w-3 text-[var(--notes-muted)]" />
         <button type="button" className="max-w-32 truncate rounded-md px-2 py-1 text-sm transition-colors hover:bg-[var(--notes-hover)]" onClick={() => onCurrentFolderIdChange(folder.id)}>{folder.title}</button>

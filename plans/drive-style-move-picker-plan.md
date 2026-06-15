@@ -5,13 +5,13 @@ Replace the flat folder move picker with a Google Drive-style destination browse
 
 ## UX target
 - Open move dialog from folder or note actions.
-- Dialog starts at top level.
+- Dialog starts at Root.
 - Shows only immediate child folders for the current destination.
 - Click a folder row to navigate into it.
-- Breadcrumbs show current path, e.g. `Top level / Projects / Client`.
+- Breadcrumbs show current path, e.g. `Root / Projects / Client`.
 - Search finds folders by title and allows jumping to a result.
 - Primary action: `Move here`.
-- Current destination is the folder currently being viewed, or top level.
+- Current destination is the folder currently being viewed, or Root.
 - Invalid destinations are disabled or blocked with clear messages.
 
 ## Scope
@@ -26,7 +26,7 @@ Replace the flat folder move picker with a Google Drive-style destination browse
 - Cannot move a folder into a descendant.
 - Cannot exceed max folder depth of 5 levels.
 - Cannot move under an effectively private folder.
-- Can move to top level if depth cap remains valid.
+- Can move to Root if depth cap remains valid.
 
 ### Note moves
 - Can move to any user-owned destination folder that is allowed by product rules.
@@ -69,7 +69,7 @@ Replace the flat folder move picker with a Google Drive-style destination browse
 - [x] `pnpm typecheck`
 - [x] `pnpm test`
 - [x] `pnpm build`
-- [ ] Manual smoke: move folder to top level.
+- [ ] Manual smoke: move folder to Root.
 - [ ] Manual smoke: move folder into another folder by navigating.
 - [ ] Manual smoke: move folder using search result.
 - [ ] Manual smoke: invalid folder destinations are blocked.
@@ -79,7 +79,7 @@ Replace the flat folder move picker with a Google Drive-style destination browse
 ## Open questions
 - Should note moves allow private folders as destinations? Recommended: yes for owner UI.
 - Should search select a destination immediately, or jump the browser into that folder? Recommended: jump into the folder so `Move here` remains consistent.
-- Should the dialog default to current parent or top level? Recommended: current parent, with breadcrumbs visible.
+- Should the dialog default to current parent or Root? Recommended: current parent, with breadcrumbs visible.
 
 ## Approval
 Approved and implemented on `main`.
