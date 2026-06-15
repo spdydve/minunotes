@@ -1,35 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Folder as FolderIcon, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ApiError, api, type Folder } from "../lib/api";
 import { Button } from "./ui/button";
-
-type FolderNode = Folder & { children: FolderNode[]; depth: number; effectivePrivate: boolean };
-
-function buildFolderRows(folders: Folder[]) {
-  const nodes = new Map(folders.map((folder) => [folder.id, { ...folder, children: [], depth: 0, effectivePrivate: folder.isPrivate } as FolderNode]));
-  const roots: FolderNode[] = [];
-
-  for (const node of nodes.values()) {
-    const parent = node.parentFolderId ? nodes.get(node.parentFolderId) : null;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  }
-
-  const rows: FolderNode[] = [];
-  const visit = (node: FolderNode, depth: number, parentPrivate: boolean) => {
-    node.depth = depth;
-    node.effectivePrivate = parentPrivate || node.isPrivate;
-    rows.push(node);
-    node.children.sort((a, b) => a.title.localeCompare(b.title));
-    for (const child of node.children) visit(child, depth + 1, node.effectivePrivate);
-  };
-
-  roots.sort((a, b) => a.title.localeCompare(b.title));
-  for (const root of roots) visit(root, 0, false);
-  return rows;
-}
+import { FolderDestinationPicker, type FolderNode } from "./folder-destination-picker";
 
 function isDescendantOrSelf(folderId: string, rootFolderId: string, folders: Folder[]) {
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
@@ -73,20 +47,21 @@ function destinationDisabledReason(destination: FolderNode, folder: Folder, fold
 }
 
 export function MoveFolderDialog({ folder, open, onOpenChange }: { folder: Folder; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [selectedParentId, setSelectedParentId] = useState<string | null>(folder.parentFolderId);
+  const [destinationFolderId, setDestinationFolderId] = useState<string | null>(folder.parentFolderId);
   const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["folders"], queryFn: api.folders, enabled: open });
   const folders = data?.folders ?? [];
-  const rows = useMemo(() => buildFolderRows(folders), [folders]);
   const height = useMemo(() => subtreeHeight(folder.id, folders), [folder.id, folders]);
   const currentParentId = folders.find((item) => item.id === folder.id)?.parentFolderId ?? folder.parentFolderId;
-  const topLevelDisabled = height > 4;
-  const selectedDestination = selectedParentId ? rows.find((item) => item.id === selectedParentId) : null;
-  const selectedDisabledReason = selectedDestination ? destinationDisabledReason(selectedDestination, folder, folders, height) : topLevelDisabled ? "Maximum folder depth reached" : null;
+  const destinationFolder = destinationFolderId ? folders.find((item) => item.id === destinationFolderId) : null;
+  const topLevelDisabledReason = height > 4 ? "Maximum folder depth reached" : null;
+  const destinationDisabledReasonText = destinationFolder
+    ? destinationDisabledReason({ ...destinationFolder, children: [], depth: getFolderDepth(destinationFolder, folders), effectivePrivate: isEffectivelyPrivate(destinationFolder, folders) }, folder, folders, height)
+    : topLevelDisabledReason;
 
   const move = useMutation({
-    mutationFn: () => api.moveFolder(folder.id, selectedParentId),
+    mutationFn: () => api.moveFolder(folder.id, destinationFolderId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["folders"] });
       onOpenChange(false);
@@ -96,7 +71,7 @@ export function MoveFolderDialog({ folder, open, onOpenChange }: { folder: Folde
 
   const close = () => {
     setError(null);
-    setSelectedParentId(currentParentId);
+    setDestinationFolderId(currentParentId);
     onOpenChange(false);
   };
 
@@ -105,30 +80,56 @@ export function MoveFolderDialog({ folder, open, onOpenChange }: { folder: Folde
   return createPortal(<div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
     <div className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
       <h2 className="text-lg font-semibold">Move folder</h2>
-      <p className="mt-1 text-sm text-[var(--notes-muted)]">Choose a new location for {folder.title}.</p>
+      <p className="mt-1 text-sm text-[var(--notes-muted)]">Navigate to a destination, then choose Move here.</p>
       {error ? <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+      {destinationDisabledReasonText ? <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">{destinationDisabledReasonText}</p> : null}
 
-      <div className="mt-4 space-y-2">
-        <label className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${topLevelDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-[var(--notes-hover)]"}`}>
-          <input type="radio" name="folder-destination" checked={selectedParentId === null} disabled={topLevelDisabled} onChange={() => setSelectedParentId(null)} />
-          <FolderIcon className="h-4 w-4 text-[var(--notes-muted)]" />
-          <span>Top level</span>
-        </label>
-        {rows.map((destination) => {
-          const disabledReason = destinationDisabledReason(destination, folder, folders, height);
-          return <label key={destination.id} className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${disabledReason ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-[var(--notes-hover)]"}`} title={disabledReason ?? undefined} style={{ paddingLeft: `${0.75 + destination.depth * 0.75}rem` }}>
-            <input type="radio" name="folder-destination" checked={selectedParentId === destination.id} disabled={Boolean(disabledReason)} onChange={() => setSelectedParentId(destination.id)} />
-            <FolderIcon className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
-            <span className="min-w-0 flex-1 truncate">{destination.title}</span>
-            {destination.effectivePrivate ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" /> : null}
-          </label>;
-        })}
+      <div className="mt-4">
+        <FolderDestinationPicker
+          folders={folders}
+          currentFolderId={destinationFolderId}
+          onCurrentFolderIdChange={setDestinationFolderId}
+          getDisabledReason={(destination) => destinationDisabledReason(destination, folder, folders, height)}
+        />
       </div>
 
       <div className="mt-4 flex justify-end gap-2">
         <Button type="button" onClick={close}>Cancel</Button>
-        <Button type="button" disabled={move.isPending || selectedParentId === currentParentId || Boolean(selectedDisabledReason)} onClick={() => { setError(null); move.mutate(); }}>Move</Button>
+        <Button type="button" disabled={move.isPending || destinationFolderId === currentParentId || Boolean(destinationDisabledReasonText)} onClick={() => { setError(null); move.mutate(); }}>Move here</Button>
       </div>
     </div>
   </div>, document.body);
+}
+
+function getFolderDepth(folder: Folder, folders: Folder[]) {
+  const byId = new Map(folders.map((item) => [item.id, item]));
+  let depth = 0;
+  let current: Folder | undefined = folder;
+  const seen = new Set<string>();
+
+  while (current.parentFolderId) {
+    if (seen.has(current.id)) return Number.POSITIVE_INFINITY;
+    seen.add(current.id);
+    const parent = byId.get(current.parentFolderId);
+    if (!parent) break;
+    depth += 1;
+    current = parent;
+  }
+
+  return depth;
+}
+
+function isEffectivelyPrivate(folder: Folder, folders: Folder[]) {
+  const byId = new Map(folders.map((item) => [item.id, item]));
+  let current: Folder | undefined = folder;
+  const seen = new Set<string>();
+
+  while (current) {
+    if (current.isPrivate) return true;
+    if (!current.parentFolderId || seen.has(current.id)) return false;
+    seen.add(current.id);
+    current = byId.get(current.parentFolderId);
+  }
+
+  return false;
 }
