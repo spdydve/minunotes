@@ -33,5 +33,7 @@ export const harnessAuthenticationMiddleware = createMiddleware(async (c, next) 
     }
   }
 
+  if (apiKey) return c.json({ error: "Invalid API key" }, 401);
+
   await authenticationMiddleware(c, next);
 });
