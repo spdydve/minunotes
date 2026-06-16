@@ -186,7 +186,7 @@ function NoteView() {
   const updatedMeta = data.note.type === "template"
     ? "Template"
     : data.note.updatedByActorType === "agent"
-    ? `Last updated via API key${data.note.updatedByActorId ? ` (${data.note.updatedByActorId})` : ""}`
+    ? `Last updated via API key${data.note.updatedByActorUid ? ` (${data.note.updatedByActorUid})` : ""}`
     : data.note.updatedByActorType === "system"
       ? "Last updated by system"
       : null;

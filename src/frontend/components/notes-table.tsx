@@ -22,16 +22,13 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
     columnHelper.accessor("title", {
       header: "Title",
       cell: (info) => (
-        <div className="flex items-center gap-2">
-          <Link
-            className="font-medium text-[var(--notes-text)] transition-colors hover:text-[var(--notes-blue)]"
-            to="/notes/$noteId"
-            params={{ noteId: info.row.original.id }}
-          >
-            {info.getValue()}
-          </Link>
-          {info.row.original.updatedByActorType === "agent" ? <span className="rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
-        </div>
+        <Link
+          className="font-medium text-[var(--notes-text)] transition-colors hover:text-[var(--notes-blue)]"
+          to="/notes/$noteId"
+          params={{ noteId: info.row.original.id }}
+        >
+          {info.getValue()}
+        </Link>
       ),
     }),
     columnHelper.accessor("createdAt", {
@@ -82,12 +79,9 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
           <div key={note.id} className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Link className="truncate font-medium hover:text-[var(--notes-blue)]" to="/notes/$noteId" params={{ noteId: note.id }}>
-                    {note.title}
-                  </Link>
-                  {note.updatedByActorType === "agent" ? <span className="shrink-0 rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
-                </div>
+                <Link className="truncate font-medium hover:text-[var(--notes-blue)]" to="/notes/$noteId" params={{ noteId: note.id }}>
+                  {note.title}
+                </Link>
                 <p className="mt-1 text-xs text-[var(--notes-muted)]">Created {new Date(note.createdAt).toLocaleString()}</p>
                 <p className="mt-1 text-xs text-[var(--notes-muted)]">Updated {new Date(note.updatedAt).toLocaleString()}</p>
               </div>

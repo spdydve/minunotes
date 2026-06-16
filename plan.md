@@ -1,195 +1,73 @@
-# Plan: API access scopes + folder read-only
+# Plan: note actor display + sidebar accordion
 
 ## Goal
-Simplify agent/API access around three clear scope types and add folder-level read-only controls across the UI.
+Improve navigation and update metadata UX:
+- Do not show internal API key IDs in “last updated by” text.
+- Prefer public API key UID when showing API edits.
+- Replace generic API pills in tables with clearer last-edited metadata.
+- Make sidebar folders/subfolders collapsible with accordion behavior.
 
-## Product model
-
-### API key scopes
-1. **Global** (`all`)
-   - Applies to all non-private folders.
-   - Permissions: `read`, `create`, `edit`.
-   - Respects private folders and folder read-only.
-
-2. **Project roots** (`top_level`)
-   - User selects one or more top-level folders as project roots.
-   - Access applies to each selected root and its non-private descendants.
-   - If a selected root is later moved under another folder, the grant remains tied to that root folder and descendants.
-   - Permissions: `read`, `create`, `edit`.
-   - Respects private folders and folder read-only.
-
-3. **Specific folders** (`specific`)
-   - User selects exact folders.
-   - Access applies only to those selected folders.
-   - Permissions: `read`, `create`, `edit`.
-   - Respects private folders.
-   - Can supersede folder read-only for create/edit. This is the intentional exception-grant mode.
-
-### Folder read-only
-- Add folder-level setting: **Read-only for agents**.
-- Applies to the folder and descendants for broad scopes (`all`, `top_level`).
-- Blocks API key create/edit even if the key has create/edit permission.
-- Does not block logged-in user edits.
-- Does not block `specific` scope grants.
-- Private always wins over all scopes.
-- Existing note-level `isApiEditable` still blocks note editing regardless of scope.
-
-## UX decisions
-
-### API access settings page/modal
-- Central API key settings remains the only API access management surface.
-- Remove folder-specific API access workflows from folder menus/settings.
-- Scope selector:
-  - All non-private folders
-  - Project roots
-  - Specific folders
-- Permissions section appears once per key:
-  - Read
-  - Create
-  - Edit
-- For **Project roots**:
-  - Show top-level folders only in picker.
-  - Selected list shows project root names.
-  - Copy: “Includes non-private subfolders. Read-only folders block create/edit.”
-- For **Specific folders**:
-  - Show all non-private folders in picker.
-  - Selected list shows exact folder paths.
-  - Copy: “Specific folder grants can write to read-only folders if Create/Edit is enabled.”
-
-### Folder read-only controls
-Add “Read-only for agents” toggle wherever folder settings/actions are managed:
-- Folder settings page general section.
-- Folder action popup menu: “Make agent read-only” / “Allow agent writes”.
-- Folder contents rows/cards: show a subtle read-only indicator for effectively read-only folders.
-- Sidebar: show a subtle indicator alongside private lock where applicable.
-- Move/create dialogs: show read-only indicator for destination context, but do not block user moves.
-- API key folder pickers: show read-only indicator. For project roots/global, read-only matters; for specific grants, it is allowed as an exception.
-
-## Data model changes
-
-### `folders`
-- Add `isAgentReadOnly boolean default false`.
-- Effective read-only is inherited from ancestors for broad-scope checks and UI indicators.
-
-### `api_keys.access_mode`
-- Expand enum from `all | selected` to `all | top_level | specific`.
-- Migration maps existing `selected` keys to `specific` to preserve current exact-folder behavior.
-
-### `api_key_folder_permissions`
-- Continue using explicit rows for selected project roots or selected specific folders.
-- Meaning depends on key scope:
-  - `top_level`: rows are project root grants.
-  - `specific`: rows are exact folder grants.
-
-## Backend behavior
-
-### Access resolution
-- Private/effectively-private check always runs first and denies access.
-- `all`:
-  - Read: any non-private folder if key can read.
-  - Create/Edit: requires key permission and folder is not effectively agent-read-only.
-- `top_level`:
-  - Folder matches if it is selected root or descendant of selected root.
-  - Create/Edit blocked by effective agent-read-only.
-- `specific`:
-  - Folder matches exact selected folder ID only.
-  - Create/Edit not blocked by folder read-only.
-- Note edit still also requires `note.isApiEditable === true`.
-
-### Folder creation
-- Keep separate `canCreateFolders` gate for calling `POST /harness/folders`.
-- If creating under a parent folder:
-  - Must have create permission for that parent under the current scope.
-  - `all`/`top_level` cannot create under read-only folders.
-  - `specific` can create under specifically granted folder if create is enabled.
-- Newly created folders by API key are auto-granted to that key:
-  - For `specific`: add exact permission row for created folder.
-  - For `top_level`: if created under an existing project root, no extra row required, but adding one is optional. Prefer no extra row to keep root grants clean.
-  - For `all`: no extra row required.
+## UX decisions to confirm
+- Note detail header should show: `Last edited via API key <uid>` when the actor is an API key.
+- Note/folder tables should avoid a standalone `API` pill and instead show update metadata in the Updated/Last edited area.
+- Sidebar should default expand enough to show the current route path, with users able to collapse/expand folder branches.
+- Folder expansion can be local UI state for this iteration; no persistence required.
 
 ## Files to modify
 
-### Database/migrations
-- `src/api/db/schema.ts`
-- New migration in `drizzle/`
-- Possibly `drizzle/meta/*` if generated by drizzle-kit.
-
-### Backend access/API
-- `src/api/lib/folder-access.ts`
-- `src/api/routes/api-keys.ts`
+### API / data shape
+- `src/api/harness/commands.ts`
+  - Consider whether note reads should include a public actor display field.
+- `src/api/routes/notes.ts`
+  - For authenticated app note reads/listing, enrich notes with API key public UID for `updatedByActorId` when actor is `agent`.
 - `src/api/routes/folders.ts`
+  - Folder notes listing may need enriched note metadata.
 - `src/api/routes/harness.ts`
-- `src/api/openapi/harness.ts`
+  - Harness note responses can continue returning internal actor metadata, or use the same public display field if safe.
 - `src/frontend/lib/api.ts`
+  - Add optional note metadata, e.g. `updatedByActorUid?: string | null` or `updatedByDisplay?: string | null`.
 
-### Frontend UI
-- `src/frontend/components/api-key-access-dialog.tsx`
-- `src/frontend/routes/settings.api-access.tsx`
-- `src/frontend/routes/folders.$folderId.settings.tsx`
-- `src/frontend/components/folder-actions-popover.tsx`
-- `src/frontend/components/folder-sidebar.tsx`
+### Frontend note metadata
+- `src/frontend/routes/notes.$noteId.tsx`
+  - Replace internal API key ID display with public UID.
+- `src/frontend/components/notes-table.tsx`
+  - Replace API pill with last-edited metadata using actor type/UID where available.
 - `src/frontend/routes/folders.$folderId.tsx`
-- `src/frontend/components/folder-destination-picker.tsx`
-- `src/frontend/components/move-folder-dialog.tsx`
-- Possibly `src/frontend/components/search-dialog.tsx` if showing folder badges there.
+  - Same metadata treatment for folder contents table/card note rows.
 
-### Docs/resources
-- `src/frontend/docs/resources/agent-integrations.mdx`
-- `src/frontend/docs/resources/harness-api.mdx`
-- `docs/implementation/subfolders-prd.md`
-- `docs/implementation/subfolders-implementation-plan.md`
-- `docs/skills/minunotes-harness/SKILL.md`
-- `packages/mcp/README.md`
-
-### Tests
-- `tests/harness-folder-access.test.ts`
-- `tests/folders.test.ts`
-- `tests/auth-object-access.test.ts`
-- Add/update API key route tests if present/needed.
+### Sidebar accordion
+- `src/frontend/components/folder-sidebar.tsx`
+  - Render recursive accordion tree instead of flattened always-expanded rows.
+  - Add expand/collapse buttons for folders with children.
+  - Auto-expand ancestors for the current folder route.
+  - Preserve existing folder actions, private/read-only indicators, and indentation.
 
 ## Implementation checklist
 
-### Phase 1 — Schema + types
-- [x] Add `folders.isAgentReadOnly`.
-- [x] Expand API key access mode to `all | top_level | specific`.
-- [x] Add migration mapping existing `selected` to `specific`.
-- [x] Update frontend API types.
+### Phase 1 — API actor public UID
+- [x] Find all app note list/read responses used by tables/detail views.
+- [x] Add API key UID lookup for agent-updated notes.
+- [x] Return optional public actor UID/display field without exposing internal key ID in UI.
+- [x] Keep backwards compatibility for existing note shape.
 
-### Phase 2 — Backend access semantics
-- [x] Implement effective private + effective read-only helpers.
-- [x] Implement access checks for `all`, `top_level`, and `specific`.
-- [x] Ensure broad-scope create/edit blocks on read-only.
-- [x] Ensure specific-scope create/edit can supersede read-only.
-- [x] Keep note-level `isApiEditable` enforcement.
-- [x] Update API key create/update validation by scope.
-- [x] Update harness folder listing and note operations.
+### Phase 2 — Note/table metadata UI
+- [x] Update note detail “last updated” line to use public UID.
+- [x] Remove standalone API pill in `NotesTable`.
+- [x] Remove standalone API pill in folder contents table/cards.
+- [x] Keep concise table layout.
 
-### Phase 3 — Folder read-only UI
-- [x] Add toggle to folder settings page.
-- [x] Add action to folder popup menu.
-- [x] Add read-only indicators in sidebar and folder contents.
-- [x] Add indicators in move/destination pickers.
-
-### Phase 4 — API key UI
-- [x] Replace current Specific Folders-only modal with scope-based modal.
-- [x] Global scope: permissions only.
-- [x] Project roots scope: top-level folder picker + permissions once.
-- [x] Specific folders scope: exact folder picker + permissions once.
-- [x] Update settings page summaries.
-
-### Phase 5 — Docs/tests
-- [x] Update docs/resources and MCP README.
-- [x] Add tests for global respecting read-only.
-- [x] Add tests for top-level roots including descendants and respecting read-only.
-- [x] Add tests for specific grants superseding read-only.
-- [x] Add tests for private always blocking.
+### Phase 3 — Sidebar accordion
+- [x] Convert folder sidebar rendering to recursive tree.
+- [x] Add chevron expand/collapse controls for folders with children.
+- [x] Auto-expand current folder ancestors.
+- [x] Keep Templates and settings section unchanged.
+- [x] Verify mobile sidebar behavior still works.
 
 ## Verification
 - [x] `pnpm typecheck`
 - [x] `pnpm test`
 - [x] `pnpm build`
-- [x] Manual: global key can read but cannot create/edit in read-only folders.
-- [x] Manual: project-root key can access descendants and respects read-only.
-- [x] Manual: specific-folder key can create/edit in a read-only folder when granted.
-- [x] Manual: private folders are hidden/blocked in every scope.
-- [x] Manual: folder read-only indicator appears in sidebar, folder table/cards, settings, and pickers.
+- [x] Manual: note updated by API shows public UID, not internal API key ID.
+- [x] Manual: note tables no longer show standalone API pill.
+- [x] Manual: sidebar folders can expand/collapse.
+- [x] Manual: current folder path is visible after direct navigation/refresh.

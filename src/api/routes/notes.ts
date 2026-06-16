@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client";
-import { folders, notes, templateFolderAssignments } from "../db/schema";
+import { apiKeys, folders, notes, templateFolderAssignments } from "../db/schema";
 import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
@@ -17,6 +17,12 @@ function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get("user");
   if (!user) return null;
   return user;
+}
+
+async function withPublicActorUid<T extends { userId: string; updatedByActorType: string | null; updatedByActorId: string | null }>(note: T) {
+  if (note.updatedByActorType !== "agent" || !note.updatedByActorId) return { ...note, updatedByActorUid: null };
+  const [key] = await db.select({ uid: apiKeys.uid }).from(apiKeys).where(and(eq(apiKeys.id, note.updatedByActorId), eq(apiKeys.userId, note.userId))).limit(1);
+  return { ...note, updatedByActorUid: key?.uid ?? null };
 }
 
 noteRoutes.get("/templates", async (c) => {
@@ -86,7 +92,7 @@ noteRoutes.get("/:noteId", async (c) => {
 
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json(result.value);
+  return c.json({ ...result.value, note: await withPublicActorUid(result.value.note) });
 });
 
 noteRoutes.get("/:noteId/status", async (c) => {

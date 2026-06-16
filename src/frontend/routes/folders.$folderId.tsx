@@ -98,7 +98,6 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
             <span className="min-w-0">
               <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
                 <span className="truncate">{item.note.title}</span>
-                {item.note.updatedByActorType === "agent" ? <span className="shrink-0 rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
               </span>
               <span className="mt-1 block text-xs text-[var(--notes-muted)]">Note · Updated {new Date(item.note.updatedAt).toLocaleString()}</span>
             </span>
@@ -129,7 +128,6 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
               </Link> : <Link to="/notes/$noteId" params={{ noteId: item.note.id }} className="flex min-w-0 items-center gap-3 font-medium hover:text-[var(--notes-blue)]">
                 <FileText className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
                 <span className="truncate">{item.note.title}</span>
-                {item.note.updatedByActorType === "agent" ? <span className="shrink-0 rounded border border-[var(--notes-blue)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--notes-blue)]">API</span> : null}
               </Link>}
             </td>
             <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{item.kind === "folder" ? "Folder" : "Note"}</td>
