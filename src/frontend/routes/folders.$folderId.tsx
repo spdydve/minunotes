@@ -89,7 +89,7 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
               <span className="mt-1 block text-xs text-[var(--notes-muted)]">Folder · Updated {new Date(item.folder.updatedAt).toLocaleString()}</span>
             </span>
           </Link>
-          <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} />
+          <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} icon="settings" />
         </div>
       </div> : <div key={`note-${item.note.id}`} className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
         <div className="flex items-start justify-between gap-3">
@@ -133,7 +133,7 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
             <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{item.kind === "folder" ? "Folder" : "Note"}</td>
             <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{new Date(item.kind === "folder" ? item.folder.updatedAt : item.note.updatedAt).toLocaleString()}</td>
             <td className="border-b border-[var(--notes-table-row-border)] px-5 py-3 align-middle text-right">
-              <div className="flex justify-end">{item.kind === "folder" ? <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} /> : <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />}</div>
+              <div className="flex justify-end">{item.kind === "folder" ? <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} icon="settings" /> : <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />}</div>
             </td>
           </tr>)}
         </tbody>
@@ -183,7 +183,7 @@ function FolderView() {
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button onClick={() => create.mutate()}>New note</Button>
         <Button variant="secondary" onClick={() => nav({ to: "/folders/$folderId/new-from-template", params: { folderId } })}>From template</Button>
-        {folder ? <FolderActionsPopover folder={folder} depth={folderDepth(folder, allFolders)} /> : null}
+        {folder ? <FolderActionsPopover folder={folder} depth={folderDepth(folder, allFolders)} icon="settings" /> : null}
       </div>
     </div>
 
