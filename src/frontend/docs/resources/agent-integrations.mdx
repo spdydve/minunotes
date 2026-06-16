@@ -11,9 +11,13 @@ MinuNotes supports several integration paths for agents and tools. They all use 
 
 ## Permissions model
 
-Create one API key per agent or project. Keys can use **All** access for all non-private folders, or **Selected** access for specific non-private folder branches. Enable folder creation only when an agent is explicitly allowed to create folders.
+Create one API key per agent or project. Keys can use **All non-private folders**, **Project roots**, or **Specific folders**.
 
-Private folders are never accessible to agents or integrations in the MVP. Agent-created folders are automatically accessible to the same API key.
+Project roots are top-level folders that behave like lightweight workspaces for agents. A project-root grant includes that folder and its non-private subfolders. Specific folder grants are exact exceptions for a small set of folders.
+
+Each key has Read, Create, and Edit permissions for its selected scope. Folder-level “Read-only for agents” blocks Create/Edit for All and Project-root keys, while Specific folder keys can be used as intentional write exceptions. Enable folder creation only when an agent is explicitly allowed to create folders.
+
+Private folders are never accessible to agents or integrations. Private status also applies to child folders.
 
 ## Core endpoints
 

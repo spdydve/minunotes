@@ -1,6 +1,6 @@
 # Harness API
 
-The harness API is the core MinuNotes surface for agents, scripts, OpenAPI tools, and MCP adapters. API keys can access all non-private folders or selected non-private folder branches.
+The harness API is the core MinuNotes surface for agents, scripts, OpenAPI tools, and MCP adapters. API keys can access all non-private folders, selected project roots, or explicit specific folders.
 
 ## Auth
 
@@ -13,7 +13,13 @@ Content-Type: application/json
 
 ## Folder access
 
-API keys are scoped to selected folders. A key can have read, create, and edit permissions per folder.
+API keys can use one of two folder access modes:
+
+- **All non-private folders**: access every non-private folder, including future non-private folders.
+- **Project roots**: access selected top-level folders and their non-private subfolders.
+- **Specific folders**: access only folders explicitly listed on the key.
+
+Folder-level read-only blocks Create/Edit for All and Project-root scopes. Specific folder grants can be used as explicit write exceptions. Private folders are excluded from API, MCP, and integration access. A private parent also makes its child folders private for API access.
 
 Folder creation is separate. Only keys with folder-creation permission can call:
 

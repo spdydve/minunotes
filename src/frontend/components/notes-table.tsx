@@ -64,8 +64,13 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
     }),
   ];
 
+  const sortedNotes = [...notes].sort((a, b) => {
+    const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    return updatedDiff || a.title.localeCompare(b.title);
+  });
+
   const table = useReactTable({
-    data: notes,
+    data: sortedNotes,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
@@ -73,7 +78,7 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
   return (
     <>
       <div className="space-y-2 md:hidden">
-        {notes.map((note) => (
+        {sortedNotes.map((note) => (
           <div key={note.id} className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

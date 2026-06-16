@@ -2,10 +2,10 @@ import { ChevronRight, Folder as FolderIcon, Lock, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Folder } from "../lib/api";
 
-type FolderNode = Folder & { children: FolderNode[]; depth: number; effectivePrivate: boolean };
+type FolderNode = Folder & { children: FolderNode[]; depth: number; effectivePrivate: boolean; effectiveAgentReadOnly: boolean };
 
 function buildFolderRows(folders: Folder[]) {
-  const nodes = new Map(folders.map((folder) => [folder.id, { ...folder, children: [], depth: 0, effectivePrivate: folder.isPrivate } as FolderNode]));
+  const nodes = new Map(folders.map((folder) => [folder.id, { ...folder, children: [], depth: 0, effectivePrivate: folder.isPrivate, effectiveAgentReadOnly: folder.isAgentReadOnly } as FolderNode]));
   const roots: FolderNode[] = [];
 
   for (const node of nodes.values()) {
@@ -15,16 +15,17 @@ function buildFolderRows(folders: Folder[]) {
   }
 
   const rows: FolderNode[] = [];
-  const visit = (node: FolderNode, depth: number, parentPrivate: boolean) => {
+  const visit = (node: FolderNode, depth: number, parentPrivate: boolean, parentAgentReadOnly: boolean) => {
     node.depth = depth;
     node.effectivePrivate = parentPrivate || node.isPrivate;
+    node.effectiveAgentReadOnly = parentAgentReadOnly || node.isAgentReadOnly;
     rows.push(node);
     node.children.sort((a, b) => a.title.localeCompare(b.title));
-    for (const child of node.children) visit(child, depth + 1, node.effectivePrivate);
+    for (const child of node.children) visit(child, depth + 1, node.effectivePrivate, node.effectiveAgentReadOnly);
   };
 
   roots.sort((a, b) => a.title.localeCompare(b.title));
-  for (const root of roots) visit(root, 0, false);
+  for (const root of roots) visit(root, 0, false, false);
   return rows;
 }
 
@@ -93,6 +94,7 @@ export function FolderDestinationPicker({
           <FolderIcon className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
           <span className="min-w-0 flex-1 truncate">{folder.title}</span>
           {folder.effectivePrivate ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
+          {!folder.effectivePrivate && folder.effectiveAgentReadOnly ? <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-600">RO</span> : null}
           <ChevronRight className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
         </button>;
       }) : <p className="px-3 py-6 text-center text-sm text-[var(--notes-muted)]">{query.trim() ? "No matching folders." : "No folders here."}</p>}

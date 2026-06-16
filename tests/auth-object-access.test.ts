@@ -7,7 +7,7 @@ import { Hono } from "hono";
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 13; index += 1) {
+  for (let index = 0; index <= 14; index += 1) {
     const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
     if (!file) throw new Error(`Missing migration ${index}`);
     await libsql.executeMultiple(await readFile(file, "utf8"));
@@ -36,7 +36,7 @@ async function setupObjectAccessApp() {
   const folderB = { id: "folder_b", userId: userB.id, parentFolderId: null, title: "B Folder", isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
   const noteA = { id: "note_a", folderId: folderA.id, userId: userA.id, title: "A Note", content: "A content", type: "note" as const, isApiEditable: true, updatedByActorType: null, updatedByActorId: null, createdAt: new Date(), updatedAt: new Date() };
   const noteB = { id: "note_b", folderId: folderB.id, userId: userB.id, title: "B Note", content: "B content", type: "note" as const, isApiEditable: true, updatedByActorType: null, updatedByActorId: null, createdAt: new Date(), updatedAt: new Date() };
-  const apiKeyA = { id: "agent_key_a", userId: userA.id, name: "A key", uid: "AAAAAAAA", hash: "hash", salt: "salt", canCreateFolders: true, accessMode: "all" as const, createdAt: new Date(), updatedAt: new Date(), lastUsedAt: null, revokedAt: null };
+  const apiKeyA = { id: "agent_key_a", userId: userA.id, name: "A key", uid: "AAAAAAAA", hash: "hash", salt: "salt", canCreateFolders: true, canRead: true, canCreate: true, canEdit: true, accessMode: "all" as const, createdAt: new Date(), updatedAt: new Date(), lastUsedAt: null, revokedAt: null };
   const attachmentB = { id: "att_b", userId: userB.id, noteId: noteB.id, folderId: folderB.id, provider: "filesystem", filename: "b.png", mimeType: "image/png", size: 10, contentHash: "hash", storageKey: "users/user_b/notes/note_b/attachments/att_b-b.png", status: "ready", referencedAt: null, unreferencedAt: null, deletedAt: null, createdAt: new Date(), updatedAt: new Date() };
 
   await db.insert(schema.user).values([userA, userB]);

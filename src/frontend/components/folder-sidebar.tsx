@@ -11,10 +11,10 @@ import { ThemeSelect } from "./theme-select";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
-type FolderNode = Folder & { children: FolderNode[]; depth: number; effectivePrivate: boolean };
+type FolderNode = Folder & { children: FolderNode[]; depth: number; effectivePrivate: boolean; effectiveAgentReadOnly: boolean };
 
 function buildFolderTree(folders: Folder[]) {
-  const nodes = new Map(folders.map((folder) => [folder.id, { ...folder, children: [], depth: 0, effectivePrivate: folder.isPrivate } as FolderNode]));
+  const nodes = new Map(folders.map((folder) => [folder.id, { ...folder, children: [], depth: 0, effectivePrivate: folder.isPrivate, effectiveAgentReadOnly: folder.isAgentReadOnly } as FolderNode]));
   const roots: FolderNode[] = [];
 
   for (const node of nodes.values()) {
@@ -24,14 +24,15 @@ function buildFolderTree(folders: Folder[]) {
   }
 
   const sortNodes = (items: FolderNode[]) => items.sort((a, b) => a.title.localeCompare(b.title));
-  const visit = (node: FolderNode, depth: number, parentPrivate: boolean) => {
+  const visit = (node: FolderNode, depth: number, parentPrivate: boolean, parentAgentReadOnly: boolean) => {
     node.depth = depth;
     node.effectivePrivate = parentPrivate || node.isPrivate;
+    node.effectiveAgentReadOnly = parentAgentReadOnly || node.isAgentReadOnly;
     sortNodes(node.children);
-    for (const child of node.children) visit(child, depth + 1, node.effectivePrivate);
+    for (const child of node.children) visit(child, depth + 1, node.effectivePrivate, node.effectiveAgentReadOnly);
   };
   sortNodes(roots);
-  for (const root of roots) visit(root, 0, false);
+  for (const root of roots) visit(root, 0, false, false);
   return roots;
 }
 
@@ -103,6 +104,7 @@ export function FolderSidebar({
             >
               <span className="truncate">{folder.title}</span>
               {folder.effectivePrivate ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
+              {!folder.effectivePrivate && folder.effectiveAgentReadOnly ? <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-600" aria-label="Read-only for agents">RO</span> : null}
             </Link>
             <FolderActionsPopover folder={folder} depth={folder.depth} />
           </div>

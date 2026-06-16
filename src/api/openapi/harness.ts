@@ -151,7 +151,7 @@ export const harnessOpenApiSpec = {
     },
     schemas: {
       ErrorResponse: { type: "object", required: ["error"], properties: { error: { type: "string" } } },
-      Folder: { type: "object", required: ["id", "parentFolderId", "title", "isPrivate", "createdAt", "updatedAt"], properties: { id: { type: "string" }, parentFolderId: { type: ["string", "null"] }, title: { type: "string" }, isPrivate: { type: "boolean", description: "Private folders are not accessible to API keys, MCP, or integrations." }, createdAt: { type: "string" }, updatedAt: { type: "string" } } },
+      Folder: { type: "object", required: ["id", "parentFolderId", "title", "isPrivate", "isAgentReadOnly", "createdAt", "updatedAt"], properties: { id: { type: "string" }, parentFolderId: { type: ["string", "null"] }, title: { type: "string" }, isPrivate: { type: "boolean", description: "Private folders are not accessible to API keys, MCP, or integrations." }, isAgentReadOnly: { type: "boolean", description: "Broad API key scopes can read but not create or edit in this folder." }, createdAt: { type: "string" }, updatedAt: { type: "string" } } },
       FoldersResponse: { type: "object", required: ["folders"], properties: { folders: { type: "array", items: { $ref: "#/components/schemas/Folder" } } } },
       FolderResponse: { type: "object", required: ["folder"], properties: { folder: { $ref: "#/components/schemas/Folder" } } },
       CreateFolderRequest: { type: "object", required: ["title"], properties: { title: { type: "string" }, parentFolderId: { type: ["string", "null"], description: "Optional parent folder. Maximum depth is five folder levels." } } },

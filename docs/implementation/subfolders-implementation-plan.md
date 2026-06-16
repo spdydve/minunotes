@@ -27,7 +27,7 @@ Do not perform implementation edits until this plan is approved.
 - `src/frontend/components/folder-actions-popover.tsx`
 - `src/frontend/components/move-note-dialog.tsx`
 - `src/frontend/components/api-key-access-dialog.tsx`
-- `src/frontend/components/folder-api-access-dialog.tsx`
+- Central API key settings modal handles folder access
 - `src/frontend/lib/api.ts`
 - potentially `src/frontend/routes/folders.$folderId.tsx`
 
@@ -82,7 +82,8 @@ Move note endpoint should allow moving to any folder level owned by the user.
 ### API key permissions
 Use simple access modes:
 - `all`: access all non-private folders.
-- `selected`: access selected non-private folder branches.
+- `top_level`: access selected project roots and non-private descendants.
+- `specific`: access exact selected non-private folders.
 
 Private folders and their descendants are never accessible to API keys, MCP, or integrations in the MVP.
 
@@ -107,8 +108,9 @@ Private folders and their descendants are never accessible to API keys, MCP, or 
 
 ### API access dialogs
 - Display folders as an indented list.
-- Selection uses branch roots for selected access mode.
-- Show helper text: “Selected folders include non-private subfolders. Private folders are not accessible to agents or integrations.”
+- Project-root selection uses top-level folders.
+- Specific folder selection uses exact selected folders.
+- Show helper text: “Private folders are not accessible to agents or integrations. Read-only folders block broad write access.”
 
 ## Phased Checklist
 

@@ -9,14 +9,14 @@ type TestContext = Awaited<ReturnType<typeof setupHarnessApp>>;
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 13; index += 1) {
+  for (let index = 0; index <= 14; index += 1) {
     const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
     if (!file) throw new Error(`Missing migration ${index}`);
     await libsql.executeMultiple(await readFile(file, "utf8"));
   }
 }
 
-async function setupHarnessApp(input: { canCreateFolders: boolean; accessMode?: "all" | "selected" }) {
+async function setupHarnessApp(input: { canCreateFolders: boolean; accessMode?: "all" | "top_level" | "specific" }) {
   vi.resetModules();
   const dir = await mkdtemp(path.join(tmpdir(), "notes-harness-folders-"));
   tempDirs.push(dir);
@@ -39,7 +39,10 @@ async function setupHarnessApp(input: { canCreateFolders: boolean; accessMode?: 
     hash: "hash",
     salt: "salt",
     canCreateFolders: input.canCreateFolders,
-    accessMode: input.accessMode ?? ("selected" as const),
+    canRead: true,
+    canCreate: true,
+    canEdit: true,
+    accessMode: input.accessMode ?? ("specific" as const),
     createdAt: new Date(),
     updatedAt: new Date(),
     lastUsedAt: null,
@@ -128,17 +131,100 @@ describe("agent-created folder access", () => {
     expect(body.folders.map((folder) => folder.id)).not.toContain(privateFolder.id);
   });
 
-  it("treats selected folder permissions as non-private branch access", async () => {
-    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: "selected" });
+  it("allows global read access but blocks writes in read-only folders", async () => {
+    const { app, db, schema } = await setupHarnessApp({ canCreateFolders: false, accessMode: "all" });
+
+    const folder = { id: "folder_global_readonly", userId: "user_test", parentFolderId: null, title: "Read only", isPrivate: false, isAgentReadOnly: true, createdAt: new Date(), updatedAt: new Date() };
+    await db.insert(schema.folders).values(folder);
+
+    const foldersResponse = await app.request("/api/harness/folders");
+    const foldersBody = await foldersResponse.json() as { folders: Array<{ id: string }> };
+    expect(foldersBody.folders.map((item) => item.id)).toContain(folder.id);
+
+    const createNoteResponse = await app.request("/api/harness/notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folderId: folder.id, title: "Blocked" }),
+    });
+    expect(createNoteResponse.status).toBe(403);
+  });
+
+  it("allows top-level project roots to read descendants but blocks writes in read-only folders", async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: "top_level" });
+
+    const parent = { id: "folder_project", userId: "user_test", parentFolderId: null, title: "Project", isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
+    const child = { id: "folder_child", userId: "user_test", parentFolderId: parent.id, title: "Child", isPrivate: false, isAgentReadOnly: true, createdAt: new Date(), updatedAt: new Date() };
+    await db.insert(schema.folders).values([parent, child]);
+    await db.insert(schema.apiKeyFolderPermissions).values({ id: "agent_perm_project", apiKeyId: apiKey.id, folderId: parent.id, canRead: true, canCreate: true, canEdit: true, createdAt: new Date(), updatedAt: new Date() });
+
+    const foldersResponse = await app.request("/api/harness/folders");
+    const foldersBody = await foldersResponse.json() as { folders: Array<{ id: string }> };
+    expect(foldersBody.folders.map((folder) => folder.id)).toContain(child.id);
+
+    const createNoteResponse = await app.request("/api/harness/notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folderId: child.id, title: "Blocked" }),
+    });
+    expect(createNoteResponse.status).toBe(403);
+  });
+
+  it("allows specific folder grants to write in read-only folders", async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: "specific" });
+
+    const folder = { id: "folder_specific", userId: "user_test", parentFolderId: null, title: "Specific", isPrivate: false, isAgentReadOnly: true, createdAt: new Date(), updatedAt: new Date() };
+    await db.insert(schema.folders).values(folder);
+    await db.insert(schema.apiKeyFolderPermissions).values({ id: "agent_perm_specific", apiKeyId: apiKey.id, folderId: folder.id, canRead: true, canCreate: true, canEdit: true, createdAt: new Date(), updatedAt: new Date() });
+
+    const createNoteResponse = await app.request("/api/harness/notes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folderId: folder.id, title: "Allowed" }),
+    });
+    expect(createNoteResponse.status).toBe(201);
+  });
+
+  it("treats specific folder permissions as exact non-private folder access", async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: "specific" });
 
     const parent = { id: "folder_parent", userId: "user_test", parentFolderId: null, title: "Parent", isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
     const child = { id: "folder_child", userId: "user_test", parentFolderId: parent.id, title: "Child", isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
     const privateChild = { id: "folder_private_child", userId: "user_test", parentFolderId: parent.id, title: "Private child", isPrivate: true, createdAt: new Date(), updatedAt: new Date() };
     await db.insert(schema.folders).values([parent, child, privateChild]);
+    await db.insert(schema.apiKeyFolderPermissions).values([
+      {
+        id: "agent_perm_parent",
+        apiKeyId: apiKey.id,
+        folderId: parent.id,
+        canRead: true,
+        canCreate: true,
+        canEdit: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: "agent_perm_private_child",
+        apiKeyId: apiKey.id,
+        folderId: privateChild.id,
+        canRead: true,
+        canCreate: true,
+        canEdit: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const response = await app.request("/api/harness/folders");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { folders: Array<{ id: string }> };
+    expect(body.folders.map((folder) => folder.id)).toContain(parent.id);
+    expect(body.folders.map((folder) => folder.id)).not.toContain(child.id);
+    expect(body.folders.map((folder) => folder.id)).not.toContain(privateChild.id);
+
     await db.insert(schema.apiKeyFolderPermissions).values({
-      id: "agent_perm_parent",
+      id: "agent_perm_child",
       apiKeyId: apiKey.id,
-      folderId: parent.id,
+      folderId: child.id,
       canRead: true,
       canCreate: true,
       canEdit: true,
@@ -146,11 +232,8 @@ describe("agent-created folder access", () => {
       updatedAt: new Date(),
     });
 
-    const response = await app.request("/api/harness/folders");
-    expect(response.status).toBe(200);
-    const body = await response.json() as { folders: Array<{ id: string }> };
-    expect(body.folders.map((folder) => folder.id)).toContain(parent.id);
-    expect(body.folders.map((folder) => folder.id)).toContain(child.id);
-    expect(body.folders.map((folder) => folder.id)).not.toContain(privateChild.id);
+    const explicitChildResponse = await app.request("/api/harness/folders");
+    const explicitChildBody = await explicitChildResponse.json() as { folders: Array<{ id: string }> };
+    expect(explicitChildBody.folders.map((folder) => folder.id)).toContain(child.id);
   });
 });

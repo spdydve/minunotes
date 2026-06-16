@@ -27,8 +27,8 @@ Notes can live in any folder level.
 ## Key Decisions
 - Store hierarchy with `parentFolderId` on folders.
 - Enforce max folder depth in the API.
-- API key permissions use simple access modes: all non-private folders or selected non-private folder branches.
-- Selected folder access grants that folder and its non-private descendants.
+- API key permissions use simple access modes: all non-private folders, project roots, or specific selected folders.
+- Specific folder access grants only folders explicitly listed on the key.
 - Clicking a folder shows notes directly inside that folder only.
 - Parent folders with child folders cannot be deleted until children are moved/deleted.
 
@@ -39,14 +39,15 @@ Notes can live in any folder level.
 - As a user, I cannot create folders below the detail level.
 - As a user, I can move notes into any allowed folder level.
 - As a user, I can see the folder hierarchy in the sidebar.
-- As a user, I can grant API key access to all non-private folders or selected non-private folder branches.
+- As a user, I can grant API key access to all non-private folders, project roots, or specific selected folders.
 - As a user, I can mark a folder private so agents and integrations cannot access it.
 
 ## Permission Behavior
 API key access uses two modes:
 
 - **All**: access all non-private folders, including future non-private folders.
-- **Selected**: access selected non-private folder branches.
+- **Project roots**: access selected top-level folders and non-private descendants.
+- **Specific folders**: access exact selected non-private folders.
 
 Private folders are never accessible to API keys, MCP, or integrations in the MVP. Private status applies to the folder and its descendants.
 

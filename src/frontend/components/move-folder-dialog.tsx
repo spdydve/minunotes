@@ -38,6 +38,21 @@ function subtreeHeight(folderId: string, folders: Folder[]) {
   return visit(folderId);
 }
 
+function isEffectivelyAgentReadOnly(folder: Folder, folders: Folder[]) {
+  const byId = new Map(folders.map((item) => [item.id, item]));
+  let current: Folder | undefined = folder;
+  const seen = new Set<string>();
+
+  while (current) {
+    if (current.isAgentReadOnly) return true;
+    if (!current.parentFolderId || seen.has(current.id)) return false;
+    seen.add(current.id);
+    current = byId.get(current.parentFolderId);
+  }
+
+  return false;
+}
+
 function destinationDisabledReason(destination: FolderNode, folder: Folder, folders: Folder[], height: number) {
   if (destination.id === folder.id) return "Cannot move a folder into itself";
   if (isDescendantOrSelf(destination.id, folder.id, folders)) return "Cannot move a folder into its descendant";
@@ -57,7 +72,7 @@ export function MoveFolderDialog({ folder, open, onOpenChange }: { folder: Folde
   const destinationFolder = destinationFolderId ? folders.find((item) => item.id === destinationFolderId) : null;
   const topLevelDisabledReason = height > 4 ? "Maximum folder depth reached" : null;
   const destinationDisabledReasonText = destinationFolder
-    ? destinationDisabledReason({ ...destinationFolder, children: [], depth: getFolderDepth(destinationFolder, folders), effectivePrivate: isEffectivelyPrivate(destinationFolder, folders) }, folder, folders, height)
+    ? destinationDisabledReason({ ...destinationFolder, children: [], depth: getFolderDepth(destinationFolder, folders), effectivePrivate: isEffectivelyPrivate(destinationFolder, folders), effectiveAgentReadOnly: isEffectivelyAgentReadOnly(destinationFolder, folders) }, folder, folders, height)
     : topLevelDisabledReason;
 
   const move = useMutation({

@@ -7,7 +7,7 @@ Use this skill when the user wants an agent to read, search, create, or edit not
 You need these environment variables or equivalent secrets:
 
 - `MINUNOTES_API_URL` — API origin or API base, for example `https://api-dev-notes.dpklabs.com`.
-- `MINUNOTES_API_KEY` — MinuNotes API key with access to all non-private folders or selected non-private folder branches. Folder creation requires the key's explicit folder-creation permission.
+- `MINUNOTES_API_KEY` — MinuNotes API key with access to all non-private folders, selected project roots, or specific selected non-private folders. Folder creation requires the key's explicit folder-creation permission.
 
 Normalize `MINUNOTES_API_URL` by removing any trailing slash. Harness routes live under `/api/harness`.
 

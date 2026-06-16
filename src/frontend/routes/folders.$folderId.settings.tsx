@@ -5,7 +5,6 @@ import { ApiError, api } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { DeleteConfirmDialog } from "../components/delete-confirm-dialog";
 import { EmptyState } from "../components/ui/empty-state";
-import { FolderApiAccessDialog } from "../components/folder-api-access-dialog";
 import { RenameFolderDialog } from "../components/rename-folder-dialog";
 import { rootRoute } from "./__root";
 
@@ -15,7 +14,6 @@ function FolderSettingsView() {
   const qc = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [renameOpen, setRenameOpen] = useState(false);
-  const [apiAccessOpen, setApiAccessOpen] = useState(false);
   const folders = useQuery({ queryKey: ["folders"], queryFn: api.folders });
   const templates = useQuery({ queryKey: ["templates"], queryFn: api.templates });
   const assigned = useQuery({ queryKey: ["folder-templates", folderId], queryFn: () => api.folderTemplates(folderId) });
@@ -46,6 +44,10 @@ function FolderSettingsView() {
     mutationFn: (isPrivate: boolean) => api.updateFolder(folderId, { isPrivate }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["folders"] }),
   });
+  const agentReadOnly = useMutation({
+    mutationFn: (isAgentReadOnly: boolean) => api.updateFolder(folderId, { isAgentReadOnly }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["folders"] }),
+  });
 
   const remove = useMutation({
     mutationFn: () => api.deleteFolder(folderId),
@@ -69,18 +71,26 @@ function FolderSettingsView() {
 
     <div className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4">
       <h3 className="font-semibold">General</h3>
-      <p className="notes-muted mt-1 text-sm">Manage this folder and its integrations.</p>
-      <label className="mt-4 flex items-start gap-3 rounded-md border border-[var(--notes-border)] p-3 text-sm">
-        <input className="mt-1" type="checkbox" checked={folder.isPrivate} disabled={privacy.isPending} onChange={(event) => privacy.mutate(event.target.checked)} />
-        <span>
-          <span className="block font-medium">Private folder</span>
-          <span className="notes-muted mt-1 block text-xs">Private folders and their subfolders are not accessible to API keys, MCP, or integrations.</span>
-        </span>
-      </label>
+      <p className="notes-muted mt-1 text-sm">Manage this folder.</p>
+      <div className="mt-4 space-y-2">
+        <label className="flex items-start gap-3 rounded-md border border-[var(--notes-border)] p-3 text-sm">
+          <input className="mt-1" type="checkbox" checked={folder.isPrivate} disabled={privacy.isPending} onChange={(event) => privacy.mutate(event.target.checked)} />
+          <span>
+            <span className="block font-medium">Private folder</span>
+            <span className="notes-muted mt-1 block text-xs">Private folders and their subfolders are not accessible to API keys, MCP, or integrations.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 rounded-md border border-[var(--notes-border)] p-3 text-sm">
+          <input className="mt-1" type="checkbox" checked={folder.isAgentReadOnly} disabled={agentReadOnly.isPending} onChange={(event) => agentReadOnly.mutate(event.target.checked)} />
+          <span>
+            <span className="block font-medium">Read-only for agents</span>
+            <span className="notes-muted mt-1 block text-xs">Global and project-root API keys can read this folder, but cannot create or edit notes here. Specific folder grants can still write.</span>
+          </span>
+        </label>
+      </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => setRenameOpen(true)}>Rename</Button>
         <Button variant="secondary" disabled title="Folder moving is coming with folder tree support.">Move</Button>
-        <Button variant="secondary" onClick={() => setApiAccessOpen(true)}>API Access</Button>
       </div>
     </div>
 
@@ -98,7 +108,6 @@ function FolderSettingsView() {
     </div>
 
     <RenameFolderDialog folder={folder} open={renameOpen} onOpenChange={setRenameOpen} />
-    <FolderApiAccessDialog folder={folder} open={apiAccessOpen} onOpenChange={setApiAccessOpen} />
   </section>;
 }
 

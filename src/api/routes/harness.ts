@@ -63,17 +63,17 @@ harnessRoutes.post("/folders", async (c) => {
   if (!parent.ok) return c.json({ error: parent.error }, parent.status);
   if (key && body?.parentFolderId && !(await hasFolderPermission(c, body.parentFolderId, "create"))) return c.json({ error: "Forbidden" }, 403);
 
-  const folder = { id: createId("folder"), userId: user.id, parentFolderId: body?.parentFolderId ?? null, title, isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
+  const folder = { id: createId("folder"), userId: user.id, parentFolderId: body?.parentFolderId ?? null, title, isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
   await db.insert(folders).values(folder);
 
-  if (key) {
+  if (key && key.accessMode === "specific") {
     await db.insert(apiKeyFolderPermissions).values({
       id: createId("agent_perm"),
       apiKeyId: key.id,
       folderId: folder.id,
-      canRead: true,
-      canCreate: true,
-      canEdit: true,
+      canRead: key.canRead,
+      canCreate: key.canCreate,
+      canEdit: key.canEdit,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

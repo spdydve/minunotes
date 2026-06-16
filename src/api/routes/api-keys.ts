@@ -14,7 +14,7 @@ type Variables = {
 };
 
 type PermissionInput = { folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean };
-type AccessMode = "all" | "selected";
+type AccessMode = "all" | "top_level" | "specific";
 
 export const apiKeyRoutes = new Hono<{ Variables: Variables }>();
 
@@ -25,7 +25,29 @@ function getUser(c: Context<{ Variables: Variables }>) {
 }
 
 function parseAccessMode(value: unknown): AccessMode | undefined {
-  return value === "selected" || value === "all" ? value : undefined;
+  if (value === "selected") return "specific";
+  return value === "specific" || value === "top_level" || value === "all" ? value : undefined;
+}
+
+function permissionValue(body: { canRead?: boolean; canCreate?: boolean; canEdit?: boolean } | null | undefined) {
+  return {
+    canRead: body?.canRead ?? true,
+    canCreate: body?.canCreate ?? false,
+    canEdit: body?.canEdit ?? false,
+  };
+}
+
+function permissionRowsFromFolders(input: { keyId: string; permissions: PermissionInput[]; canRead: boolean; canCreate: boolean; canEdit: boolean }) {
+  return input.permissions.flatMap((permission) => permission.folderId ? [{
+    id: createId("agent_perm"),
+    apiKeyId: input.keyId,
+    folderId: permission.folderId,
+    canRead: input.canRead,
+    canCreate: input.canCreate,
+    canEdit: input.canEdit,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }] : []);
 }
 
 apiKeyRoutes.get("/", async (c) => {
@@ -37,6 +59,9 @@ apiKeyRoutes.get("/", async (c) => {
     name: apiKeys.name,
     uid: apiKeys.uid,
     canCreateFolders: apiKeys.canCreateFolders,
+    canRead: apiKeys.canRead,
+    canCreate: apiKeys.canCreate,
+    canEdit: apiKeys.canEdit,
     accessMode: apiKeys.accessMode,
     createdAt: apiKeys.createdAt,
     lastUsedAt: apiKeys.lastUsedAt,
@@ -56,11 +81,12 @@ apiKeyRoutes.post("/", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { name?: string; accessMode?: AccessMode; canCreateFolders?: boolean; permissions?: PermissionInput[] } | null;
+  const body = await c.req.json().catch(() => null) as { name?: string; accessMode?: AccessMode | "selected"; canCreateFolders?: boolean; canRead?: boolean; canCreate?: boolean; canEdit?: boolean; permissions?: PermissionInput[] } | null;
   const name = body?.name?.trim();
   if (!name) return c.json({ error: "API key name is required" }, 400);
 
   const accessMode = parseAccessMode(body?.accessMode) ?? "all";
+  const keyPermissions = permissionValue(body);
   const { key, uid } = generateApiKey();
   const { hash, salt } = hashApiKey(key);
   const apiKey = {
@@ -71,6 +97,7 @@ apiKeyRoutes.post("/", async (c) => {
     hash,
     salt,
     canCreateFolders: body?.canCreateFolders ?? false,
+    ...keyPermissions,
     accessMode,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -80,33 +107,18 @@ apiKeyRoutes.post("/", async (c) => {
 
   await db.insert(apiKeys).values(apiKey);
 
-  const requestedPermissions = accessMode === "selected" ? await filterSelectablePermissionRows({ userId: user.id, permissions: body?.permissions ?? [] }) : [];
-  const permissionRows = [];
-  for (const permission of requestedPermissions) {
-    if (!permission.folderId) continue;
-    const [folder] = await db.select({ id: folders.id }).from(folders).where(and(eq(folders.id, permission.folderId), eq(folders.userId, user.id))).limit(1);
-    if (!folder) continue;
-    permissionRows.push({
-      id: createId("agent_perm"),
-      apiKeyId: apiKey.id,
-      folderId: folder.id,
-      canRead: permission.canRead ?? false,
-      canCreate: permission.canCreate ?? false,
-      canEdit: permission.canEdit ?? false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
+  const requestedPermissions = accessMode !== "all" ? await filterSelectablePermissionRows({ userId: user.id, accessMode, permissions: body?.permissions ?? [] }) : [];
+  const permissionRows = permissionRowsFromFolders({ keyId: apiKey.id, permissions: requestedPermissions, ...keyPermissions });
   if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
 
-  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, canCreateFolders: apiKey.canCreateFolders, accessMode: apiKey.accessMode, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
+  return c.json({ key, apiKey: { id: apiKey.id, name: apiKey.name, uid: apiKey.uid, canCreateFolders: apiKey.canCreateFolders, ...keyPermissions, accessMode: apiKey.accessMode, createdAt: apiKey.createdAt, lastUsedAt: apiKey.lastUsedAt, revokedAt: apiKey.revokedAt, permissions: permissionRows } }, 201);
 });
 
 apiKeyRoutes.patch("/:keyId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { name?: string; accessMode?: AccessMode; canCreateFolders?: boolean; permissions?: PermissionInput[] } | null;
+  const body = await c.req.json().catch(() => null) as { name?: string; accessMode?: AccessMode | "selected"; canCreateFolders?: boolean; canRead?: boolean; canCreate?: boolean; canEdit?: boolean; permissions?: PermissionInput[] } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const name = body.name?.trim();
@@ -117,10 +129,18 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
   if (!existing) return c.json({ error: "API key not found" }, 404);
 
   const accessMode = parseAccessMode(body.accessMode);
-  if (name !== undefined || body.canCreateFolders !== undefined || accessMode !== undefined) {
+  const nextPermissions = {
+    canRead: body.canRead ?? existing.canRead,
+    canCreate: body.canCreate ?? existing.canCreate,
+    canEdit: body.canEdit ?? existing.canEdit,
+  };
+  if (name !== undefined || body.canCreateFolders !== undefined || accessMode !== undefined || body.canRead !== undefined || body.canCreate !== undefined || body.canEdit !== undefined) {
     await db.update(apiKeys).set({
       ...(name !== undefined ? { name } : {}),
       ...(body.canCreateFolders !== undefined ? { canCreateFolders: body.canCreateFolders } : {}),
+      ...(body.canRead !== undefined ? { canRead: body.canRead } : {}),
+      ...(body.canCreate !== undefined ? { canCreate: body.canCreate } : {}),
+      ...(body.canEdit !== undefined ? { canEdit: body.canEdit } : {}),
       ...(accessMode !== undefined ? { accessMode } : {}),
       updatedAt: new Date(),
     }).where(eq(apiKeys.id, keyId));
@@ -128,24 +148,9 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
 
   const effectiveAccessMode = accessMode ?? existing.accessMode;
   let permissionRows: Array<typeof apiKeyFolderPermissions.$inferInsert> | undefined;
-  if (body.permissions !== undefined || accessMode === "all") {
-    permissionRows = [];
-    const requestedPermissions = effectiveAccessMode === "selected" ? await filterSelectablePermissionRows({ userId: user.id, permissions: body.permissions ?? [] }) : [];
-    for (const permission of requestedPermissions) {
-      if (!permission.folderId) continue;
-      const [folder] = await db.select({ id: folders.id }).from(folders).where(and(eq(folders.id, permission.folderId), eq(folders.userId, user.id))).limit(1);
-      if (!folder) continue;
-      permissionRows.push({
-        id: createId("agent_perm"),
-        apiKeyId: keyId,
-        folderId: folder.id,
-        canRead: permission.canRead ?? false,
-        canCreate: permission.canCreate ?? false,
-        canEdit: permission.canEdit ?? false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
+  if (body.permissions !== undefined || accessMode === "all" || body.canRead !== undefined || body.canCreate !== undefined || body.canEdit !== undefined) {
+    const requestedPermissions = effectiveAccessMode !== "all" ? await filterSelectablePermissionRows({ userId: user.id, accessMode: effectiveAccessMode, permissions: body.permissions ?? (await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, keyId))) }) : [];
+    permissionRows = permissionRowsFromFolders({ keyId, permissions: requestedPermissions, ...nextPermissions });
     await db.delete(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, keyId));
     if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
   }
@@ -155,6 +160,9 @@ apiKeyRoutes.patch("/:keyId", async (c) => {
     name: apiKeys.name,
     uid: apiKeys.uid,
     canCreateFolders: apiKeys.canCreateFolders,
+    canRead: apiKeys.canRead,
+    canCreate: apiKeys.canCreate,
+    canEdit: apiKeys.canEdit,
     accessMode: apiKeys.accessMode,
     createdAt: apiKeys.createdAt,
     lastUsedAt: apiKeys.lastUsedAt,

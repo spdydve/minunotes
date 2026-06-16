@@ -6,7 +6,6 @@ import type { Folder } from "../lib/api";
 import { api } from "../lib/api";
 import { CreateFolderDialog } from "./create-folder-dialog";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
-import { FolderApiAccessDialog } from "./folder-api-access-dialog";
 import { MoveFolderDialog } from "./move-folder-dialog";
 import { RenameFolderDialog } from "./rename-folder-dialog";
 import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
@@ -17,7 +16,6 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
   const [renameOpen, setRenameOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const [apiAccessOpen, setApiAccessOpen] = useState(false);
   const nav = useNavigate();
   const qc = useQueryClient();
   const remove = useMutation({
@@ -34,12 +32,11 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
         <ActionMenuIconButton icon="more" aria-label={`Actions for ${folder.title}`} />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-48 p-1">
-        {depth < 4 && !folder.isPrivate ? <ActionMenuButton onClick={() => { setOpen(false); setCreateOpen(true); }}><span className="flex items-center gap-2"><FolderPlus className="h-4 w-4" />New subfolder</span></ActionMenuButton> : null}
+        {depth < 4 && !folder.isPrivate ? <ActionMenuButton onClick={() => { setOpen(false); setCreateOpen(true); }}><span className="flex items-center gap-2"><FolderPlus className="h-4 w-4" />Add subfolder</span></ActionMenuButton> : null}
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Settings</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setRenameOpen(true); }}>Rename</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); setMoveOpen(true); }}>Move</ActionMenuButton>
         <ActionMenuButton onClick={() => { setOpen(false); nav({ to: "/folders/$folderId/settings", params: { folderId: folder.id } }); }}>Template settings</ActionMenuButton>
-        <ActionMenuButton onClick={() => { setOpen(false); setApiAccessOpen(true); }}>API Access</ActionMenuButton>
         <DeleteConfirmDialog
           label="folder"
           warning="All notes in this folder will be permanently lost."
@@ -51,6 +48,5 @@ export function FolderActionsPopover({ folder, depth = 0 }: { folder: Folder; de
     <CreateFolderDialog parentFolder={folder} open={createOpen} onOpenChange={setCreateOpen} />
     <MoveFolderDialog folder={folder} open={moveOpen} onOpenChange={setMoveOpen} />
     <RenameFolderDialog folder={folder} open={renameOpen} onOpenChange={setRenameOpen} />
-    <FolderApiAccessDialog folder={folder} open={apiAccessOpen} onOpenChange={setApiAccessOpen} />
   </>;
 }

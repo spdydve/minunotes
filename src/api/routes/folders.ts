@@ -39,7 +39,7 @@ folderRoutes.post("/", async (c) => {
   const parent = await validateFolderParent({ userId: user.id, parentFolderId: body?.parentFolderId ?? null });
   if (!parent.ok) return c.json({ error: parent.error }, parent.status);
 
-  const folder = { id: createId("folder"), userId: user.id, parentFolderId: body?.parentFolderId ?? null, title, isPrivate: false, createdAt: new Date(), updatedAt: new Date() };
+  const folder = { id: createId("folder"), userId: user.id, parentFolderId: body?.parentFolderId ?? null, title, isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
   await db.insert(folders).values(folder);
   return c.json({ folder }, 201);
 });
@@ -48,10 +48,10 @@ folderRoutes.patch("/:folderId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string; isPrivate?: boolean; parentFolderId?: string | null } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; isPrivate?: boolean; isAgentReadOnly?: boolean; parentFolderId?: string | null } | null;
   const title = body?.title?.trim();
   if (body?.title !== undefined && !title) return c.json({ error: "Folder title is required" }, 400);
-  if (!body || (title === undefined && body.isPrivate === undefined && body.parentFolderId === undefined)) return c.json({ error: "No folder updates provided" }, 400);
+  if (!body || (title === undefined && body.isPrivate === undefined && body.isAgentReadOnly === undefined && body.parentFolderId === undefined)) return c.json({ error: "No folder updates provided" }, 400);
 
   if (body.parentFolderId !== undefined) {
     const move = await validateFolderMove({ userId: user.id, folderId: c.req.param("folderId"), parentFolderId: body.parentFolderId });
@@ -59,7 +59,7 @@ folderRoutes.patch("/:folderId", async (c) => {
   }
 
   const [folder] = await db.update(folders)
-    .set({ ...(title !== undefined ? { title } : {}), ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}), ...(body.parentFolderId !== undefined ? { parentFolderId: body.parentFolderId } : {}), updatedAt: new Date() })
+    .set({ ...(title !== undefined ? { title } : {}), ...(body.isPrivate !== undefined ? { isPrivate: body.isPrivate } : {}), ...(body.isAgentReadOnly !== undefined ? { isAgentReadOnly: body.isAgentReadOnly } : {}), ...(body.parentFolderId !== undefined ? { parentFolderId: body.parentFolderId } : {}), updatedAt: new Date() })
     .where(and(eq(folders.id, c.req.param("folderId")), eq(folders.userId, user.id)))
     .returning();
 

@@ -66,7 +66,7 @@ Tools include:
 Implementation notes:
 
 - Uses the official `@modelcontextprotocol/sdk`.
-- Honors MinuNotes access modes: all non-private folders or selected non-private folder branches. Private folders are not accessible to MCP.
+- Honors MinuNotes access modes: all non-private folders, selected project roots, or specific selected non-private folders. Private folders are not accessible to MCP.
 - Uses stdio transport for local process-spawned MCP clients.
 - Uses Streamable HTTP transport for hosted `/api/mcp` clients.
 - Returns both `structuredContent` and text content.

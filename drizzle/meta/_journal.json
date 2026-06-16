@@ -99,6 +99,13 @@
       "when": 1781340000000,
       "tag": "0013_subfolders_agent_access",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1781570000000,
+      "tag": "0014_api_key_scopes_folder_read_only",
+      "breakpoints": true
     }
   ]
 }

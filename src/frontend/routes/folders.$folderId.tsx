@@ -41,9 +41,37 @@ function isEffectivelyPrivate(folder: Folder, folders: Folder[]) {
   return false;
 }
 
+function isEffectivelyAgentReadOnly(folder: Folder, folders: Folder[]) {
+  const byId = new Map(folders.map((item) => [item.id, item]));
+  let current: Folder | undefined = folder;
+  const seen = new Set<string>();
+
+  while (current) {
+    if (current.isAgentReadOnly) return true;
+    if (!current.parentFolderId || seen.has(current.id)) return false;
+    seen.add(current.id);
+    current = byId.get(current.parentFolderId);
+  }
+
+  return false;
+}
+
 type FolderItem = { kind: "folder"; folder: Folder };
 type NoteItem = { kind: "note"; note: Note };
 type ContentItem = FolderItem | NoteItem;
+
+function getContentItemUpdatedAt(item: ContentItem) {
+  return item.kind === "folder" ? item.folder.updatedAt : item.note.updatedAt;
+}
+
+function getContentItemTitle(item: ContentItem) {
+  return item.kind === "folder" ? item.folder.title : item.note.title;
+}
+
+function compareContentItemsByUpdatedDesc(a: ContentItem, b: ContentItem) {
+  const updatedDiff = new Date(getContentItemUpdatedAt(b)).getTime() - new Date(getContentItemUpdatedAt(a)).getTime();
+  return updatedDiff || getContentItemTitle(a).localeCompare(getContentItemTitle(b));
+}
 
 function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: ContentItem[]; allFolders: Folder[]; onDeleteNote: (note: Note) => void }) {
   return <>
@@ -56,6 +84,7 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
               <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
                 <span className="truncate">{item.folder.title}</span>
                 {isEffectivelyPrivate(item.folder, allFolders) ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
+                {!isEffectivelyPrivate(item.folder, allFolders) && isEffectivelyAgentReadOnly(item.folder, allFolders) ? <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-600">RO</span> : null}
               </span>
               <span className="mt-1 block text-xs text-[var(--notes-muted)]">Folder · Updated {new Date(item.folder.updatedAt).toLocaleString()}</span>
             </span>
@@ -96,6 +125,7 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
                 <FolderIcon className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
                 <span className="truncate">{item.folder.title}</span>
                 {isEffectivelyPrivate(item.folder, allFolders) ? <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" /> : null}
+                {!isEffectivelyPrivate(item.folder, allFolders) && isEffectivelyAgentReadOnly(item.folder, allFolders) ? <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-600">RO</span> : null}
               </Link> : <Link to="/notes/$noteId" params={{ noteId: item.note.id }} className="flex min-w-0 items-center gap-3 font-medium hover:text-[var(--notes-blue)]">
                 <FileText className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
                 <span className="truncate">{item.note.title}</span>
@@ -145,9 +175,9 @@ function FolderView() {
 
   const allFolders = foldersData?.folders ?? [];
   const folder = allFolders.find((item) => item.id === folderId);
-  const childFolders = allFolders.filter((item) => item.parentFolderId === folderId).sort((a, b) => a.title.localeCompare(b.title));
-  const notes = [...(data?.notes ?? [])].sort((a, b) => a.title.localeCompare(b.title));
-  const items: ContentItem[] = [...childFolders.map((child) => ({ kind: "folder" as const, folder: child })), ...notes.map((note) => ({ kind: "note" as const, note }))];
+  const childFolders = allFolders.filter((item) => item.parentFolderId === folderId);
+  const notes = data?.notes ?? [];
+  const items: ContentItem[] = [...childFolders.map((child) => ({ kind: "folder" as const, folder: child })), ...notes.map((note) => ({ kind: "note" as const, note }))].sort(compareContentItemsByUpdatedDesc);
 
   return <section className="mx-auto w-full max-w-5xl">
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
