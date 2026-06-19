@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -122,6 +122,23 @@ export const noteEvents = sqliteTable("note_events", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("note_events_note_id_idx").on(table.noteId), index("note_events_user_id_idx").on(table.userId), index("note_events_created_at_idx").on(table.createdAt)]);
 
+export const noteShareLinks = sqliteTable("note_share_links", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  noteId: text("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  token: text("token"),
+  permission: text("permission", { enum: ["read"] }).notNull().default("read"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiresAt: integer("expires_at", { mode: "timestamp" }),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+}, (table) => [
+  uniqueIndex("note_share_links_token_hash_idx").on(table.tokenHash),
+  index("note_share_links_note_id_idx").on(table.noteId),
+  index("note_share_links_user_id_idx").on(table.userId),
+]);
+
 export const attachments = sqliteTable("attachments", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
@@ -147,6 +164,7 @@ export const userRelations = relations(user, ({ many }) => ({
   folders: many(folders),
   notes: many(notes),
   noteEvents: many(noteEvents),
+  noteShareLinks: many(noteShareLinks),
   attachments: many(attachments),
   templateFolderAssignments: many(templateFolderAssignments),
   apiKeys: many(apiKeys),
@@ -181,6 +199,7 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   user: one(user, { fields: [notes.userId], references: [user.id] }),
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
   events: many(noteEvents),
+  shareLinks: many(noteShareLinks),
   attachments: many(attachments),
   templateAssignments: many(templateFolderAssignments),
 }));
@@ -196,6 +215,11 @@ export const noteEventRelations = relations(noteEvents, ({ one }) => ({
   user: one(user, { fields: [noteEvents.userId], references: [user.id] }),
 }));
 
+export const noteShareLinkRelations = relations(noteShareLinks, ({ one }) => ({
+  note: one(notes, { fields: [noteShareLinks.noteId], references: [notes.id] }),
+  user: one(user, { fields: [noteShareLinks.userId], references: [user.id] }),
+}));
+
 export const attachmentRelations = relations(attachments, ({ one }) => ({
   user: one(user, { fields: [attachments.userId], references: [user.id] }),
   note: one(notes, { fields: [attachments.noteId], references: [notes.id] }),
@@ -206,6 +230,7 @@ export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
+export type NoteShareLink = typeof noteShareLinks.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type ApiKeyFolderPermission = typeof apiKeyFolderPermissions.$inferSelect;

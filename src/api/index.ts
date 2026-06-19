@@ -17,6 +17,7 @@ import { folderRoutes } from "./routes/folders";
 import { harnessRoutes } from "./routes/harness";
 import { mcpRoutes } from "./routes/mcp";
 import { noteRoutes } from "./routes/notes";
+import { shareRoutes } from "./routes/share";
 
 const app = new Hono<{
   Variables: {
@@ -85,6 +86,7 @@ app.use("/api/folders/:folderId", writeBodyLimit);
 app.use("/api/folders/:folderId/notes", writeBodyLimit);
 app.use("/api/notes/:noteId", writeBodyLimit);
 app.use("/api/notes/:noteId/edit", writeBodyLimit);
+app.use("/api/notes/:noteId/share-link", writeBodyLimit);
 app.use("/api/api-keys", writeBodyLimit);
 app.use("/api/api-keys/:keyId", writeBodyLimit);
 app.use("/api/harness/folders", writeBodyLimit);
@@ -97,6 +99,7 @@ app.use("/api/attachments/notes/:noteId/image-uploads", writeBodyLimit);
 app.use("/api/attachments/:attachmentId/complete", writeBodyLimit);
 app.route("/api/folders", folderRoutes);
 app.route("/api/notes", noteRoutes);
+app.route("/api/share", shareRoutes);
 app.route("/api/attachments", attachmentRoutes);
 app.route("/api/api-keys", apiKeyRoutes);
 app.route("/api/harness", harnessRoutes);

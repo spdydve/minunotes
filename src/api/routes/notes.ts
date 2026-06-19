@@ -1,10 +1,12 @@
 import { Hono, type Context } from "hono";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, gt } from "drizzle-orm";
 import { db } from "../db/client";
-import { apiKeys, folders, notes, templateFolderAssignments } from "../db/schema";
+import { apiKeys, folders, noteShareLinks, notes, templateFolderAssignments } from "../db/schema";
 import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocument, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
+import { createId } from "../lib/id";
+import { buildShareUrl, generateShareToken, hashShareToken } from "../lib/share-tokens";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -23,6 +25,29 @@ async function withPublicActorUid<T extends { userId: string; updatedByActorType
   if (note.updatedByActorType !== "agent" || !note.updatedByActorId) return { ...note, updatedByActorUid: null };
   const [key] = await db.select({ uid: apiKeys.uid }).from(apiKeys).where(and(eq(apiKeys.id, note.updatedByActorId), eq(apiKeys.userId, note.userId))).limit(1);
   return { ...note, updatedByActorUid: key?.uid ?? null };
+}
+
+function activeShareWhere(noteId: string, userId: string) {
+  const now = new Date();
+  return and(
+    eq(noteShareLinks.noteId, noteId),
+    eq(noteShareLinks.userId, userId),
+    isNull(noteShareLinks.revokedAt),
+    or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now)),
+  );
+}
+
+function serializeShareLink(shareLink: typeof noteShareLinks.$inferSelect, url?: string | null) {
+  return {
+    id: shareLink.id,
+    noteId: shareLink.noteId,
+    permission: shareLink.permission,
+    createdAt: shareLink.createdAt,
+    updatedAt: shareLink.updatedAt,
+    expiresAt: shareLink.expiresAt,
+    revokedAt: shareLink.revokedAt,
+    url: url ?? (shareLink.token ? buildShareUrl(shareLink.token) : null),
+  };
 }
 
 noteRoutes.get("/templates", async (c) => {
@@ -102,6 +127,65 @@ noteRoutes.get("/:noteId/status", async (c) => {
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json({ noteId: result.value.note.id, contentHash: result.value.contentHash, updatedAt: result.value.note.updatedAt });
+});
+
+noteRoutes.get("/:noteId/share-link", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+
+  const [shareLink] = await db.select().from(noteShareLinks).where(activeShareWhere(noteId, user.id)).limit(1);
+  return c.json({ shareLink: shareLink ? serializeShareLink(shareLink) : null });
+});
+
+noteRoutes.post("/:noteId/share-link", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+
+  const body = await c.req.json().catch(() => null) as { regenerate?: boolean } | null;
+  const [existing] = await db.select().from(noteShareLinks).where(activeShareWhere(noteId, user.id)).limit(1);
+  if (existing && !body?.regenerate && existing.token) return c.json({ shareLink: serializeShareLink(existing) });
+
+  const token = generateShareToken();
+  const now = new Date();
+  if (existing && !body?.regenerate) {
+    const [shareLink] = await db.update(noteShareLinks).set({ token, tokenHash: hashShareToken(token), updatedAt: now }).where(eq(noteShareLinks.id, existing.id)).returning();
+    return c.json({ shareLink: serializeShareLink(shareLink) });
+  }
+
+  if (existing) await db.update(noteShareLinks).set({ revokedAt: now, updatedAt: now }).where(eq(noteShareLinks.id, existing.id));
+  const [shareLink] = await db.insert(noteShareLinks).values({
+    id: createId("share"),
+    userId: user.id,
+    noteId,
+    tokenHash: hashShareToken(token),
+    token,
+    permission: "read",
+    createdAt: now,
+    updatedAt: now,
+  }).returning();
+
+  return c.json({ shareLink: serializeShareLink(shareLink) }, 201);
+});
+
+noteRoutes.delete("/:noteId/share-link", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+
+  const now = new Date();
+  await db.update(noteShareLinks).set({ revokedAt: now, updatedAt: now }).where(activeShareWhere(noteId, user.id));
+  return c.json({ ok: true });
 });
 
 noteRoutes.get("/:noteId/events", async (c) => {

@@ -33,6 +33,8 @@ export type NoteType = "note" | "template";
 export type Note = { id: string; folderId: string; title: string; content: string; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; updatedByActorUid?: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
+export type NoteShareLink = { id: string; noteId: string; permission: "read"; createdAt: string; updatedAt: string; expiresAt: string | null; revokedAt: string | null; url: string | null };
+export type SharedNote = { title: string; content: string; updatedAt: string };
 export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
 export type Attachment = { id: string; userId: string; noteId: string; folderId: string; provider: string; filename: string; mimeType: string; size: number; contentHash: string; storageKey: string; status: "pending" | "ready"; createdAt: string; updatedAt: string };
 export type UploadImageResponse = { attachment: Attachment; markdownUrl: string; markdown: string };
@@ -77,6 +79,10 @@ export const api = {
   createNote: (folderId: string, data?: { title?: string; content?: string; type?: NoteType }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
+  noteShareLink: (noteId: string) => request<{ shareLink: NoteShareLink | null }>(`/notes/${noteId}/share-link`),
+  createNoteShareLink: (noteId: string, regenerate = false) => request<{ shareLink: NoteShareLink }>(`/notes/${noteId}/share-link`, { method: "POST", body: JSON.stringify({ regenerate }) }),
+  revokeNoteShareLink: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}/share-link`, { method: "DELETE" }),
+  sharedNote: (token: string) => request<{ note: SharedNote; share: { id: string; permission: "read"; createdAt: string } }>(`/share/${encodeURIComponent(token)}`),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),

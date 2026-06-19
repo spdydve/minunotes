@@ -9,6 +9,7 @@ export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const session = authClient.useSession();
   const isAuthRoute = pathname === "/auth";
+  const isPublicShareRoute = pathname.startsWith("/share/");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
 
@@ -20,7 +21,7 @@ export function AppShell() {
     setSidebarOpen(false);
   }, [pathname]);
 
-  if (isAuthRoute) return <Outlet />;
+  if (isAuthRoute || isPublicShareRoute) return <Outlet />;
   if (session.isPending) return <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">Loading...</div>;
   if (!session.data?.user) return <Navigate to="/auth" />;
 
