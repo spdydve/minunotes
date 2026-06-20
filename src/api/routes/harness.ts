@@ -3,6 +3,7 @@ import { db } from "../db/client";
 import { apiKeyFolderPermissions, folders, type ApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
+import { listBacklinks } from "../notes/links";
 import { auth } from "../lib/auth";
 import { canApiKeyAccessFolder, getApiKeyAccessibleFolderIds, validateFolderParent } from "../lib/folder-access";
 import { createId } from "../lib/id";
@@ -161,6 +162,24 @@ harnessRoutes.get("/notes/:noteId/events", async (c) => {
   const result = await listNoteEvents({ documentId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value);
+});
+
+harnessRoutes.get("/notes/:noteId/backlinks", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+
+  const backlinks = await listBacklinks({ userId: user.id, noteId: c.req.param("noteId") });
+  if (!backlinks) return c.json({ error: "Note not found" }, 404);
+
+  const readableFolderIds = await getReadableFolderIds(c);
+  return c.json({
+    noteId: c.req.param("noteId"),
+    backlinks: readableFolderIds ? backlinks.filter((backlink) => readableFolderIds.has(backlink.sourceFolderId)) : backlinks,
+  });
 });
 
 harnessRoutes.get("/notes/:noteId/lines", async (c) => {

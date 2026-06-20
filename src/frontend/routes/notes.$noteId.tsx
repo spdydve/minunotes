@@ -185,6 +185,39 @@ function NoteView() {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty, save.isPending]);
+
+  const wikiLinks = useMemo(() => {
+    const findExactNote = async (target: string) => {
+      const trimmed = target.trim();
+      if (!trimmed) return null;
+      const result = await api.searchNotes(trimmed, "note");
+      const matches = result.notes.filter((note) => note.type === "note" && note.title === trimmed);
+      return matches.length === 1 ? matches[0] : null;
+    };
+
+    return {
+      enabled: true,
+      openOnClick: true,
+      suggest: async (query: string) => {
+        const result = query.trim() ? await api.searchNotes(query.trim(), "note") : await api.recentNotes(8);
+        return result.notes.filter((note) => note.id !== noteId && note.type === "note").slice(0, 8).map((note) => ({
+          id: note.id,
+          target: note.title,
+          detail: "Note",
+        }));
+      },
+      resolve: async (target: string) => {
+        const note = await findExactNote(target).catch(() => null);
+        return note ? { status: "resolved" as const, href: `/notes/${note.id}`, title: note.title } : { status: "unresolved" as const, title: target };
+      },
+      onOpen: (target: string) => {
+        void findExactNote(target).then((note) => {
+          if (note) void nav({ to: "/notes/$noteId", params: { noteId: note.id } });
+        });
+      },
+    };
+  }, [nav, noteId]);
+
   if (isLoading) return <p className="notes-muted text-sm">Loading note...</p>;
   if (error instanceof ApiError && error.status === 404) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Note not found"><p>This note does not exist or you do not have access to it.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
   if (!data?.note) return <section className="grid min-h-[60vh] place-items-center"><EmptyState title="Unable to load note"><p>Try again or return to your notes.</p><Button className="mt-4" onClick={() => nav({ to: "/" })}>Back to notes</Button></EmptyState></section>;
@@ -213,10 +246,7 @@ function NoteView() {
         {imageUploadError ? <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">{imageUploadError}</div> : null}
       </>}
       onImageUpload={uploadImage}
-      onWikiLinkSearch={async (query) => {
-        const result = query.trim() ? await api.searchNotes(query.trim()) : await api.recentNotes(8);
-        return result.notes.filter((note) => note.id !== noteId && note.type === "note").slice(0, 8).map((note) => ({ id: note.id, title: note.title }));
-      }}
+      wikiLinks={wikiLinks}
       actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
     />;
 }

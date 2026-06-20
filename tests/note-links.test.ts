@@ -21,11 +21,12 @@ async function setupNoteLinksApp() {
   tempDirs.push(dir);
   vi.stubEnv("TURSO_DB_URL", `file:${path.join(dir, "test.db")}`);
 
-  const [{ db, libsql }, schema, { folderRoutes }, { noteRoutes }] = await Promise.all([
+  const [{ db, libsql }, schema, { folderRoutes }, { noteRoutes }, { harnessRoutes }] = await Promise.all([
     import("../src/api/db/client"),
     import("../src/api/db/schema"),
     import("../src/api/routes/folders"),
     import("../src/api/routes/notes"),
+    import("../src/api/routes/harness"),
   ]);
 
   await runMigrations(libsql);
@@ -47,6 +48,7 @@ async function setupNoteLinksApp() {
   });
   app.route("/api/folders", folderRoutes);
   app.route("/api/notes", noteRoutes);
+  app.route("/api/harness", harnessRoutes);
 
   return { app, db, schema, folderA, folderB };
 }
@@ -95,6 +97,18 @@ describe("note link indexing", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { backlinks: Array<{ sourceNoteId: string; sourceTitle: string; targetTitle: string; label: string | null }> };
     expect(body.backlinks).toEqual([{ sourceNoteId: source.id, sourceTitle: "Source Note", sourceFolderId: folderA.id, targetTitle: "Target Note", label: "target", linkType: "wikilink", id: expect.any(String), createdAt: expect.any(String), updatedAt: expect.any(String) }]);
+  });
+
+  it("returns backlinks through the harness API", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Target Note");
+    const source = await createNote(app, folderA.id, "Source Note", "See [[Target Note]].");
+
+    const response = await app.request(`/api/harness/notes/${target.id}/backlinks`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { noteId: string; backlinks: Array<{ sourceNoteId: string; sourceTitle: string; linkType: string }> };
+    expect(body.noteId).toBe(target.id);
+    expect(body.backlinks).toContainEqual(expect.objectContaining({ sourceNoteId: source.id, sourceTitle: "Source Note", linkType: "wikilink" }));
   });
 
   it("indexes unresolved links and resolves them when a matching note is created", async () => {

@@ -16,6 +16,7 @@ describe("harness OpenAPI spec", () => {
     expect(spec.components.securitySchemes.ApiKeyAuth).toMatchObject({ type: "apiKey", in: "header", name: "X-API-Key" });
     expect(spec.paths).toHaveProperty("/api/harness/folders");
     expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/edit");
+    expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/backlinks");
     expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/sections/{sectionId}");
   });
 

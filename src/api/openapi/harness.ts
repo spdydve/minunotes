@@ -92,6 +92,16 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note events", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteEventsResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
+    "/api/harness/notes/{noteId}/backlinks": {
+      get: {
+        tags: ["Notes"],
+        operationId: "listNoteBacklinks",
+        summary: "List backlinks to a note",
+        description: "Returns notes that link to the target note with wikilinks or internal note URLs. Results are filtered to source notes visible to the current API key.",
+        parameters: [{ $ref: "#/components/parameters/NoteId" }],
+        responses: { "200": { description: "Note backlinks", content: { "application/json": { schema: { $ref: "#/components/schemas/BacklinksResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
+      },
+    },
     "/api/harness/notes/{noteId}/lines": {
       get: {
         tags: ["Notes"],
@@ -165,6 +175,8 @@ export const harnessOpenApiSpec = {
       LineSearchResponse: { type: "object", required: ["query", "matches"], properties: { query: { type: "string" }, matches: { type: "array", items: { $ref: "#/components/schemas/LineSearchMatch" } } } },
       NoteEvent: { type: "object", properties: { id: { type: "string" }, noteId: { type: "string" }, userId: { type: "string" }, actorType: { type: "string" }, actorId: { type: ["string", "null"] }, eventType: { type: "string" }, summary: { type: "string" }, beforeHash: { type: ["string", "null"] }, afterHash: { type: ["string", "null"] }, createdAt: { type: "string" } } },
       NoteEventsResponse: { type: "object", required: ["noteId", "events"], properties: { noteId: { type: "string" }, events: { type: "array", items: { $ref: "#/components/schemas/NoteEvent" } } } },
+      Backlink: { type: "object", required: ["id", "sourceNoteId", "sourceTitle", "sourceFolderId", "targetTitle", "label", "linkType", "createdAt", "updatedAt"], properties: { id: { type: "string" }, sourceNoteId: { type: "string" }, sourceTitle: { type: "string" }, sourceFolderId: { type: "string" }, targetTitle: { type: "string" }, label: { type: ["string", "null"] }, linkType: { type: "string", enum: ["wikilink", "internal-url", "markdown-internal-url"] }, createdAt: { type: "string" }, updatedAt: { type: "string" } } },
+      BacklinksResponse: { type: "object", required: ["noteId", "backlinks"], properties: { noteId: { type: "string" }, backlinks: { type: "array", items: { $ref: "#/components/schemas/Backlink" } } } },
       DocumentSection: { type: "object", required: ["id", "heading", "level", "from", "to", "contentFrom", "contentTo"], properties: { id: { type: "string" }, heading: { type: "string" }, level: { type: "integer" }, from: { type: "integer" }, to: { type: "integer" }, contentFrom: { type: "integer" }, contentTo: { type: "integer" } } },
       OutlineResponse: { type: "object", required: ["noteId", "contentHash", "sections"], properties: { noteId: { type: "string" }, contentHash: { type: "string" }, sections: { type: "array", items: { $ref: "#/components/schemas/DocumentSection" } } } },
       SectionResponse: { type: "object", required: ["noteId", "contentHash", "section"], properties: { noteId: { type: "string" }, contentHash: { type: "string" }, section: { allOf: [{ $ref: "#/components/schemas/DocumentSection" }, { type: "object", properties: { markdown: { type: "string" }, content: { type: "string" } } }] } } },
