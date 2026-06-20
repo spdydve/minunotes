@@ -95,7 +95,9 @@ noteRoutes.get("/search", async (c) => {
   if (!q) return c.json({ notes: [] });
 
   const type = c.req.query("type") === "template" ? "template" : "note";
-  const result = await searchDocuments({ userId: user.id, query: q, limit: 25, type });
+  const requestedLimit = Number.parseInt(c.req.query("limit") ?? "", 10);
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
+  const result = await searchDocuments({ userId: user.id, query: q, limit, type });
   return c.json({ notes: result.value.documents });
 });
 

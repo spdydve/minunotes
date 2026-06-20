@@ -14,6 +14,7 @@ export type ParsedNoteLink = {
 };
 
 const WIKILINK_PATTERN = /\[\[([^\]\n]+)\]\]/g;
+const NOTE_ID_PATTERN = /^note_[a-zA-Z0-9]+$/;
 const MARKDOWN_INTERNAL_URL_PATTERN = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+\/notes\/(note_[a-zA-Z0-9]+))\)/g;
 const RAW_INTERNAL_URL_PATTERN = /(?<!\]\()https?:\/\/[^\s)]+\/notes\/(note_[a-zA-Z0-9]+)/g;
 
@@ -34,7 +35,7 @@ export function parseWikiLinks(markdown: string): ParsedNoteLink[] {
     const label = labelParts.length > 0 ? labelParts.join("|").trim() || null : null;
     links.push({
       targetTitle,
-      targetNoteId: null,
+      targetNoteId: NOTE_ID_PATTERN.test(targetTitle) ? targetTitle : null,
       label,
       linkType: "wikilink",
       raw: match[0],

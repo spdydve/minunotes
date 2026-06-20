@@ -187,10 +187,15 @@ function NoteView() {
   }, [isDirty, save.isPending]);
 
   const wikiLinks = useMemo(() => {
-    const findExactNote = async (target: string) => {
+    const noteIdPattern = /^note_[a-zA-Z0-9]+$/;
+    const findNote = async (target: string) => {
       const trimmed = target.trim();
       if (!trimmed) return null;
-      const result = await api.searchNotes(trimmed, "note");
+      if (noteIdPattern.test(trimmed)) {
+        const result = await api.note(trimmed).catch(() => null);
+        return result?.note?.type === "note" ? result.note : null;
+      }
+      const result = await api.searchNotes(trimmed, "note", 50);
       const matches = result.notes.filter((note) => note.type === "note" && note.title === trimmed);
       return matches.length === 1 ? matches[0] : null;
     };
@@ -199,19 +204,21 @@ function NoteView() {
       enabled: true,
       openOnClick: true,
       suggest: async (query: string) => {
-        const result = query.trim() ? await api.searchNotes(query.trim(), "note") : await api.recentNotes(8);
-        return result.notes.filter((note) => note.id !== noteId && note.type === "note").slice(0, 8).map((note) => ({
+        const trimmed = query.trim();
+        const result = trimmed ? await api.searchNotes(trimmed, "note", 50) : await api.recentNotes(20);
+        return result.notes.filter((note) => note.id !== noteId && note.type === "note").slice(0, 50).map((note) => ({
           id: note.id,
-          target: note.title,
-          detail: "Note",
+          target: note.title.includes("|") ? `${note.id}|${note.title}` : note.title,
+          label: note.title,
+          detail: "folderTitle" in note && typeof note.folderTitle === "string" ? note.folderTitle : "Note",
         }));
       },
       resolve: async (target: string) => {
-        const note = await findExactNote(target).catch(() => null);
+        const note = await findNote(target).catch(() => null);
         return note ? { status: "resolved" as const, href: `/notes/${note.id}`, title: note.title } : { status: "unresolved" as const, title: target };
       },
       onOpen: (target: string) => {
-        void findExactNote(target).then((note) => {
+        void findNote(target).then((note) => {
           if (note) void nav({ to: "/notes/$noteId", params: { noteId: note.id } });
         });
       },

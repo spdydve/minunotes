@@ -252,6 +252,21 @@ select {
     background: transparent;
     color: var(--notes-text);
 }
+.notes-minu-editor .cm-tooltip.cm-tooltip-autocomplete {
+    min-width: min(420px, calc(100vw - 32px));
+    max-width: min(640px, calc(100vw - 32px));
+}
+.notes-minu-editor .cm-tooltip-autocomplete ul li {
+    align-items: flex-start;
+}
+.notes-minu-editor .cm-tooltip-autocomplete .cm-completionLabel {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+.notes-minu-editor .cm-tooltip-autocomplete .cm-completionDetail {
+    flex: 0 0 auto;
+}
 .notes-minu-editor .cm-scroller {
     overflow-x: hidden !important;
 }

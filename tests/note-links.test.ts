@@ -72,8 +72,14 @@ afterEach(async () => {
 describe("note link parser", () => {
   it("parses plain and labeled wikilinks", () => {
     expect(parseWikiLinks("See [[Project Plan]] and [[Roadmap|the roadmap]].")).toMatchObject([
-      { targetTitle: "Project Plan", label: null, linkType: "wikilink" },
-      { targetTitle: "Roadmap", label: "the roadmap", linkType: "wikilink" },
+      { targetTitle: "Project Plan", targetNoteId: null, label: null, linkType: "wikilink" },
+      { targetTitle: "Roadmap", targetNoteId: null, label: "the roadmap", linkType: "wikilink" },
+    ]);
+  });
+
+  it("treats note-id wikilink targets as direct note links", () => {
+    expect(parseWikiLinks("See [[note_abc123|Name with | pipe]].")).toMatchObject([
+      { targetTitle: "note_abc123", targetNoteId: "note_abc123", label: "Name with | pipe", linkType: "wikilink" },
     ]);
   });
 
@@ -97,6 +103,17 @@ describe("note link indexing", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { backlinks: Array<{ sourceNoteId: string; sourceTitle: string; targetTitle: string; label: string | null }> };
     expect(body.backlinks).toEqual([{ sourceNoteId: source.id, sourceTitle: "Source Note", sourceFolderId: folderA.id, targetTitle: "Target Note", label: "target", linkType: "wikilink", id: expect.any(String), createdAt: expect.any(String), updatedAt: expect.any(String) }]);
+  });
+
+  it("indexes note-id wikilinks with labels that contain pipes", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Name with | pipe");
+    const source = await createNote(app, folderA.id, "Source Note", `See [[${target.id}|Name with | pipe]].`);
+
+    const response = await app.request(`/api/notes/${target.id}/backlinks`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { backlinks: Array<{ sourceNoteId: string; targetTitle: string; label: string | null }> };
+    expect(body.backlinks).toContainEqual(expect.objectContaining({ sourceNoteId: source.id, targetTitle: "Name with | pipe", label: "Name with | pipe" }));
   });
 
   it("returns backlinks through the harness API", async () => {

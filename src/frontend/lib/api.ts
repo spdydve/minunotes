@@ -92,7 +92,7 @@ export const api = {
   editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),
   saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
-  searchNotes: (q: string, type: NoteType = "note") => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}&type=${type}`),
+  searchNotes: (q: string, type: NoteType = "note", limit?: number) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ""}`),
   uploadNoteImage: async (noteId: string, file: File) => {
     try {
       const { uploads } = await request<{ uploads: SignedImageUpload[] }>(`/attachments/notes/${noteId}/image-uploads`, {

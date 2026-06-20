@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, or } from "drizzle-orm";
+import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
 import { folders, noteEvents, notes, type Note } from "../db/schema";
@@ -124,6 +124,7 @@ export async function searchDocuments(input: { userId: string; query: string; li
   }> }>;
 
   const pattern = `%${query}%`;
+  const prefixPattern = `${query}%`;
   const type = input.type ?? "note";
   const rows = await db.select({
     id: notes.id,
@@ -139,7 +140,17 @@ export async function searchDocuments(input: { userId: string; query: string; li
     .from(notes)
     .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
     .where(and(eq(notes.userId, input.userId), eq(notes.type, type), or(like(notes.title, pattern), like(notes.content, pattern), like(folders.title, pattern))))
-    .orderBy(desc(notes.updatedAt), asc(notes.title))
+    .orderBy(
+      sql`case
+        when lower(${notes.title}) = lower(${query}) then 0
+        when lower(${notes.title}) like lower(${prefixPattern}) then 1
+        when lower(${notes.title}) like lower(${pattern}) then 2
+        when lower(${folders.title}) like lower(${pattern}) then 3
+        else 4
+      end`,
+      desc(notes.updatedAt),
+      asc(notes.title),
+    )
     .limit(input.limit ?? 25);
 
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
