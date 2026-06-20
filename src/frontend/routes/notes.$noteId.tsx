@@ -2,6 +2,7 @@ import { createRoute, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../lib/api";
+import { BacklinksPanel } from "../components/backlinks-panel";
 import { NoteActionsPopover } from "../components/note-actions-popover";
 import { NoteEditor } from "../components/note-editor";
 import { Button } from "../components/ui/button";
@@ -16,6 +17,11 @@ function NoteView() {
     queryKey: ["note", noteId],
     queryFn: () => api.note(noteId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
+  });
+  const { data: backlinksData, isLoading: backlinksLoading } = useQuery({
+    queryKey: ["backlinks", noteId],
+    queryFn: () => api.backlinks(noteId),
+    enabled: Boolean(data?.note),
   });
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -58,6 +64,7 @@ function NoteView() {
     qc.invalidateQueries({ queryKey: ["notes", "recent"] });
     if (note.type === "template") qc.invalidateQueries({ queryKey: ["templates"] });
     qc.invalidateQueries({ queryKey: ["note-events", noteId] });
+    qc.invalidateQueries({ queryKey: ["backlinks"] });
   };
 
   const save = useMutation({
@@ -200,11 +207,16 @@ function NoteView() {
       onContentChange={setContent}
       initialEditing={!data.note.content.trim()}
       updatedMeta={updatedMeta}
+      headerExtra={<BacklinksPanel backlinks={backlinksData?.backlinks} isLoading={backlinksLoading} />}
       staleNotice={<>
         {isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
         {imageUploadError ? <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">{imageUploadError}</div> : null}
       </>}
       onImageUpload={uploadImage}
+      onWikiLinkSearch={async (query) => {
+        const result = query.trim() ? await api.searchNotes(query.trim()) : await api.recentNotes(8);
+        return result.notes.filter((note) => note.id !== noteId && note.type === "note").slice(0, 8).map((note) => ({ id: note.id, title: note.title }));
+      }}
       actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
     />;
 }

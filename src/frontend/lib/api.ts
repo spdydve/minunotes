@@ -36,6 +36,8 @@ export type NoteStatus = { noteId: string; contentHash: string; updatedAt: strin
 export type NoteShareLink = { id: string; noteId: string; permission: "read"; createdAt: string; updatedAt: string; expiresAt: string | null; revokedAt: string | null; url: string | null };
 export type SharedNote = { title: string; content: string; updatedAt: string };
 export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
+export type Backlink = { id: string; sourceNoteId: string; sourceTitle: string; sourceFolderId: string; targetTitle: string; label: string | null; linkType: "wikilink" | "internal-url" | "markdown-internal-url"; createdAt: string; updatedAt: string };
+export type BacklinksResponse = { noteId: string; backlinks: Backlink[] }; 
 export type Attachment = { id: string; userId: string; noteId: string; folderId: string; provider: string; filename: string; mimeType: string; size: number; contentHash: string; storageKey: string; status: "pending" | "ready"; createdAt: string; updatedAt: string };
 export type UploadImageResponse = { attachment: Attachment; markdownUrl: string; markdown: string };
 export type SignedImageUpload = UploadImageResponse & { signedUrl: string; method: "PUT"; headers: { "content-type": string } };
@@ -84,6 +86,7 @@ export const api = {
   revokeNoteShareLink: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}/share-link`, { method: "DELETE" }),
   sharedNote: (token: string) => request<{ note: SharedNote; share: { id: string; permission: "read"; createdAt: string } }>(`/share/${encodeURIComponent(token)}`),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
+  backlinks: (noteId: string) => request<BacklinksResponse>(`/notes/${noteId}/backlinks`),
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
   editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),

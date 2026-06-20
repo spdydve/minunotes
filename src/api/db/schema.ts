@@ -139,6 +139,23 @@ export const noteShareLinks = sqliteTable("note_share_links", {
   index("note_share_links_user_id_idx").on(table.userId),
 ]);
 
+export const noteLinks = sqliteTable("note_links", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  sourceNoteId: text("source_note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  targetNoteId: text("target_note_id").references(() => notes.id, { onDelete: "set null" }),
+  targetTitle: text("target_title").notNull(),
+  label: text("label"),
+  linkType: text("link_type", { enum: ["wikilink", "internal-url", "markdown-internal-url"] }).notNull().default("wikilink"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("note_links_user_id_idx").on(table.userId),
+  index("note_links_source_note_id_idx").on(table.sourceNoteId),
+  index("note_links_target_note_id_idx").on(table.targetNoteId),
+  index("note_links_user_target_title_idx").on(table.userId, table.targetTitle),
+]);
+
 export const attachments = sqliteTable("attachments", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
@@ -165,6 +182,7 @@ export const userRelations = relations(user, ({ many }) => ({
   notes: many(notes),
   noteEvents: many(noteEvents),
   noteShareLinks: many(noteShareLinks),
+  noteLinks: many(noteLinks),
   attachments: many(attachments),
   templateFolderAssignments: many(templateFolderAssignments),
   apiKeys: many(apiKeys),
@@ -200,6 +218,8 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
   events: many(noteEvents),
   shareLinks: many(noteShareLinks),
+  outgoingLinks: many(noteLinks, { relationName: "sourceNoteLinks" }),
+  incomingLinks: many(noteLinks, { relationName: "targetNoteLinks" }),
   attachments: many(attachments),
   templateAssignments: many(templateFolderAssignments),
 }));
@@ -220,6 +240,12 @@ export const noteShareLinkRelations = relations(noteShareLinks, ({ one }) => ({
   user: one(user, { fields: [noteShareLinks.userId], references: [user.id] }),
 }));
 
+export const noteLinkRelations = relations(noteLinks, ({ one }) => ({
+  user: one(user, { fields: [noteLinks.userId], references: [user.id] }),
+  sourceNote: one(notes, { fields: [noteLinks.sourceNoteId], references: [notes.id], relationName: "sourceNoteLinks" }),
+  targetNote: one(notes, { fields: [noteLinks.targetNoteId], references: [notes.id], relationName: "targetNoteLinks" }),
+}));
+
 export const attachmentRelations = relations(attachments, ({ one }) => ({
   user: one(user, { fields: [attachments.userId], references: [user.id] }),
   note: one(notes, { fields: [attachments.noteId], references: [notes.id] }),
@@ -231,6 +257,7 @@ export type Note = typeof notes.$inferSelect;
 export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
 export type NoteShareLink = typeof noteShareLinks.$inferSelect;
+export type NoteLink = typeof noteLinks.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type ApiKeyFolderPermission = typeof apiKeyFolderPermissions.$inferSelect;

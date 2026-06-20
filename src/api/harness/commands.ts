@@ -3,6 +3,7 @@ import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
 import { folders, noteEvents, notes, type Note } from "../db/schema";
 import { createId } from "../lib/id";
+import { reindexNoteLinks, resolveUnresolvedNoteLinks } from "../notes/links";
 import { applyDocumentEdits, type DocumentEdit } from "./edits";
 import { hashMarkdown } from "./hash";
 import { getLineRange, searchLines } from "./line-search";
@@ -232,6 +233,8 @@ export async function createDocument(input: {
   if (note.content.includes("/api/attachments/")) {
     await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
   }
+  await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
+  await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
 
   const contentHash = hashMarkdown(note.content);
   await insertNoteEvent({
@@ -315,6 +318,8 @@ export async function updateDocument(input: UpdateDocumentInput) {
   if (contentChanged) {
     await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
   }
+  if (contentChanged) await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
+  if (titleChanged) await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
 
   const contentHash = hashMarkdown(note.content);
   const actorType = input.actorType ?? "user";

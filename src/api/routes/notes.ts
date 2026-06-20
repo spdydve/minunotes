@@ -6,6 +6,7 @@ import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocu
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 import { createId } from "../lib/id";
+import { listBacklinks } from "../notes/links";
 import { buildShareUrl, generateShareToken, hashShareToken } from "../lib/share-tokens";
 
 type Variables = {
@@ -186,6 +187,15 @@ noteRoutes.delete("/:noteId/share-link", async (c) => {
   const now = new Date();
   await db.update(noteShareLinks).set({ revokedAt: now, updatedAt: now }).where(activeShareWhere(noteId, user.id));
   return c.json({ ok: true });
+});
+
+noteRoutes.get("/:noteId/backlinks", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const backlinks = await listBacklinks({ userId: user.id, noteId: c.req.param("noteId") });
+  if (!backlinks) return c.json({ error: "Note not found" }, 404);
+  return c.json({ noteId: c.req.param("noteId"), backlinks });
 });
 
 noteRoutes.get("/:noteId/events", async (c) => {

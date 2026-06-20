@@ -1,8 +1,22 @@
 import { MarkdownEditor, type MarkdownEditorHandle } from "@dpklabs/minueditor";
 import { Heading1, Heading2, Heading3, Image, List, ListChecks, ListOrdered, Plus, Quote, Redo2, Table2, Type, Undo2, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { editorCodeHighlighter } from "../lib/code-highlighter";
 import { editorCodeLanguages } from "../lib/editor-languages";
+
+type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>["onViewReady"]>>[0];
+
+export type WikiLinkSuggestion = { id: string; title: string };
+
+type WikiLinkSuggestState = {
+  query: string;
+  from: number;
+  to: number;
+  top: number;
+  left: number;
+  suggestions: WikiLinkSuggestion[];
+  loading: boolean;
+};
 
 export function NoteEditor({
   title,
@@ -15,6 +29,8 @@ export function NoteEditor({
   actions,
   staleNotice,
   updatedMeta,
+  headerExtra,
+  onWikiLinkSearch,
 }: {
   title: string;
   content: string;
@@ -26,6 +42,8 @@ export function NoteEditor({
   actions: ReactNode;
   staleNotice?: ReactNode;
   updatedMeta?: ReactNode;
+  headerExtra?: ReactNode;
+  onWikiLinkSearch?: (query: string) => Promise<WikiLinkSuggestion[]>;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -36,10 +54,24 @@ export function NoteEditor({
   const [imageAlt, setImageAlt] = useState("");
   const [imagePickerError, setImagePickerError] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [wikiLinkSuggest, setWikiLinkSuggest] = useState<WikiLinkSuggestState | null>(null);
+  const [wikiLinkSelectedIndex, setWikiLinkSelectedIndex] = useState(0);
+  const wikiLinkSuggestRef = useRef<WikiLinkSuggestState | null>(null);
+  const wikiLinkSelectedIndexRef = useRef(0);
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
+  const editorViewRef = useRef<EditorViewLike | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorKeydownCleanupRef = useRef<(() => void) | null>(null);
   const titleValue = title === "Untitled note" || title === "Untitled template" ? "" : title;
+
+  useEffect(() => {
+    wikiLinkSuggestRef.current = wikiLinkSuggest;
+    setWikiLinkSelectedIndex(0);
+  }, [wikiLinkSuggest?.from, wikiLinkSuggest?.to, wikiLinkSuggest?.query]);
+
+  useEffect(() => {
+    wikiLinkSelectedIndexRef.current = wikiLinkSelectedIndex;
+  }, [wikiLinkSelectedIndex]);
 
   useEffect(() => () => editorKeydownCleanupRef.current?.(), []);
 
@@ -122,6 +154,20 @@ export function NoteEditor({
     closeImagePicker();
   };
 
+  const insertWikiLinkSuggestion = (suggestion: WikiLinkSuggestion) => {
+    const view = editorViewRef.current;
+    const current = wikiLinkSuggestRef.current;
+    if (!view || !current) return;
+    const insert = `[[${suggestion.title}]]`;
+    view.dispatch({
+      changes: { from: current.from, to: current.to, insert },
+      selection: { anchor: current.from + insert.length },
+      scrollIntoView: true,
+    });
+    view.focus();
+    setWikiLinkSuggest(null);
+  };
+
   return (
     <section className="mx-auto w-full max-w-6xl">
       <div className="border-b border-[var(--notes-border)] bg-[var(--notes-bg)] pb-4 md:sticky md:-top-6 md:z-20 md:-mt-6 md:pt-6">
@@ -147,6 +193,7 @@ export function NoteEditor({
         {updatedMeta ? (
           <div className="notes-muted mt-2 text-xs">{updatedMeta}</div>
         ) : null}
+        {headerExtra}
       </div>
       <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
         <MarkdownEditor
@@ -172,6 +219,7 @@ export function NoteEditor({
           } : undefined}
           onViewReady={(view) => {
             setEditorReady(true);
+            editorViewRef.current = view;
             editorKeydownCleanupRef.current?.();
             const handlePartialTaskEnter = (event: KeyboardEvent) => {
               if (event.key !== "Enter" || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
@@ -205,6 +253,79 @@ export function NoteEditor({
                 scrollIntoView: true,
               });
             };
+            const detectWikiLinkTrigger = async () => {
+              if (!onWikiLinkSearch) return;
+              const selection = view.state.selection.main;
+              if (!selection.empty) {
+                setWikiLinkSuggest(null);
+                return;
+              }
+
+              const line = view.state.doc.lineAt(selection.from);
+              const beforeCursor = view.state.doc.sliceString(line.from, selection.from);
+              const match = beforeCursor.match(/\[\[([^\]\n]*)$/);
+              if (!match) {
+                setWikiLinkSuggest(null);
+                return;
+              }
+
+              const query = match[1] ?? "";
+              const from = selection.from - match[0].length;
+              const to = selection.from;
+              const coords = view.coordsAtPos(selection.from);
+              setWikiLinkSuggest({ query, from, to, top: (coords?.bottom ?? 0) + 6, left: coords?.left ?? 0, suggestions: [], loading: true });
+              const suggestions = await onWikiLinkSearch(query).catch(() => []);
+              setWikiLinkSelectedIndex(0);
+              setWikiLinkSuggest((current) => current && current.from === from && current.to === to ? { ...current, suggestions, loading: false } : current);
+            };
+
+            const handleWikiLinkKeyup = () => {
+              void detectWikiLinkTrigger();
+            };
+
+            const handleWikiLinkKeydown = (event: KeyboardEvent) => {
+              if (event.key === "[" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                const selection = view.state.selection.main;
+                if (selection.empty) {
+                  const line = view.state.doc.lineAt(selection.from);
+                  const beforeCursor = view.state.doc.sliceString(line.from, selection.from);
+                  if (beforeCursor.endsWith("[")) {
+                    event.preventDefault();
+                    view.dispatch({
+                      changes: { from: selection.from, to: selection.from, insert: "[]]" },
+                      selection: { anchor: selection.from + 1 },
+                      scrollIntoView: true,
+                    });
+                    window.setTimeout(() => void detectWikiLinkTrigger(), 0);
+                    return;
+                  }
+                }
+              }
+
+              const current = wikiLinkSuggestRef.current;
+              if (!current) return;
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setWikiLinkSuggest(null);
+                return;
+              }
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                const max = Math.max(0, current.suggestions.length - 1);
+                setWikiLinkSelectedIndex((index) => Math.min(max, index + 1));
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setWikiLinkSelectedIndex((index) => Math.max(0, index - 1));
+                return;
+              }
+              if ((event.key === "Enter" || event.key === "Tab") && current.suggestions[wikiLinkSelectedIndexRef.current]) {
+                event.preventDefault();
+                insertWikiLinkSuggestion(current.suggestions[wikiLinkSelectedIndexRef.current]);
+              }
+            };
+
             const handleTaskCopy = (event: ClipboardEvent) => {
               const ranges = view.state.selection.ranges.filter((range) => !range.empty);
               if (ranges.length === 0) return;
@@ -231,16 +352,44 @@ export function NoteEditor({
               event.clipboardData?.setData("text/plain", text);
             };
             view.contentDOM.addEventListener("keydown", handlePartialTaskEnter, { capture: true });
+            view.contentDOM.addEventListener("keydown", handleWikiLinkKeydown, { capture: true });
+            view.contentDOM.addEventListener("keyup", handleWikiLinkKeyup, { capture: true });
+            view.contentDOM.addEventListener("click", handleWikiLinkKeyup, { capture: true });
             view.contentDOM.addEventListener("copy", handleTaskCopy, { capture: true });
             editorKeydownCleanupRef.current = () => {
               view.contentDOM.removeEventListener("keydown", handlePartialTaskEnter, { capture: true });
+              view.contentDOM.removeEventListener("keydown", handleWikiLinkKeydown, { capture: true });
+              view.contentDOM.removeEventListener("keyup", handleWikiLinkKeyup, { capture: true });
+              view.contentDOM.removeEventListener("click", handleWikiLinkKeyup, { capture: true });
               view.contentDOM.removeEventListener("copy", handleTaskCopy, { capture: true });
+              if (editorViewRef.current === view) editorViewRef.current = null;
             };
             if (!initialEditing && view.hasFocus) view.contentDOM.blur();
           }}
           className="notes-minu-editor"
         />
       </div>
+      {wikiLinkSuggest ? (
+        <div className="fixed z-[70] max-h-64 w-72 overflow-hidden rounded-xl border border-[var(--notes-border)] bg-[var(--notes-panel)] p-1 text-sm shadow-xl" style={{ top: wikiLinkSuggest.top, left: Math.min(wikiLinkSuggest.left, window.innerWidth - 300) }}>
+          <div className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Link note</div>
+          {wikiLinkSuggest.loading ? <div className="px-3 py-2 text-[var(--notes-muted)]">Searching...</div> : null}
+          {!wikiLinkSuggest.loading && wikiLinkSuggest.suggestions.length === 0 ? <div className="px-3 py-2 text-[var(--notes-muted)]">No matching notes</div> : null}
+          {!wikiLinkSuggest.loading ? wikiLinkSuggest.suggestions.map((suggestion, index) => (
+            <button
+              key={suggestion.id}
+              type="button"
+              className={`block w-full rounded-lg px-3 py-2 text-left font-medium ${index === wikiLinkSelectedIndex ? "bg-[var(--notes-hover)] text-[var(--notes-text)]" : "hover:bg-[var(--notes-hover)]"}`}
+              onMouseEnter={() => setWikiLinkSelectedIndex(index)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                insertWikiLinkSuggestion(suggestion);
+              }}
+            >
+              {suggestion.title}
+            </button>
+          )) : null}
+        </div>
+      ) : null}
       {imagePickerOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-6">
           <div className="max-h-[min(82vh,42rem)] w-full max-w-lg overflow-hidden rounded-t-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:rounded-2xl">

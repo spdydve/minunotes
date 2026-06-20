@@ -1,0 +1,137 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Hono } from "hono";
+import { parseInternalNoteUrls, parseWikiLinks } from "../src/api/notes/links";
+
+const tempDirs: string[] = [];
+
+async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
+  for (let index = 0; index <= 17; index += 1) {
+    const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
+    if (!file) throw new Error(`Missing migration ${index}`);
+    await libsql.executeMultiple(await readFile(file, "utf8"));
+  }
+}
+
+async function setupNoteLinksApp() {
+  vi.resetModules();
+  const dir = await mkdtemp(path.join(tmpdir(), "notes-links-"));
+  tempDirs.push(dir);
+  vi.stubEnv("TURSO_DB_URL", `file:${path.join(dir, "test.db")}`);
+
+  const [{ db, libsql }, schema, { folderRoutes }, { noteRoutes }] = await Promise.all([
+    import("../src/api/db/client"),
+    import("../src/api/db/schema"),
+    import("../src/api/routes/folders"),
+    import("../src/api/routes/notes"),
+  ]);
+
+  await runMigrations(libsql);
+
+  const userA = { id: "user_a", name: "User A", email: "a@example.com", emailVerified: true, image: null, createdAt: new Date(), updatedAt: new Date() };
+  const userB = { id: "user_b", name: "User B", email: "b@example.com", emailVerified: true, image: null, createdAt: new Date(), updatedAt: new Date() };
+  const folderA = { id: "folder_a", userId: userA.id, parentFolderId: null, title: "A Folder", isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
+  const folderB = { id: "folder_b", userId: userB.id, parentFolderId: null, title: "B Folder", isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
+
+  await db.insert(schema.user).values([userA, userB]);
+  await db.insert(schema.folders).values([folderA, folderB]);
+
+  const app = new Hono();
+  app.use("*", async (c, next) => {
+    const currentUser = c.req.header("x-user") === "b" ? userB : userA;
+    c.set("user", currentUser);
+    c.set("session", { id: `session_${currentUser.id}`, userId: currentUser.id });
+    await next();
+  });
+  app.route("/api/folders", folderRoutes);
+  app.route("/api/notes", noteRoutes);
+
+  return { app, db, schema, folderA, folderB };
+}
+
+async function createNote(app: Hono, folderId: string, title: string, content = "") {
+  const response = await app.request(`/api/folders/${folderId}/notes`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, content }),
+  });
+  expect(response.status).toBe(201);
+  const { note } = await response.json() as { note: { id: string; title: string; content: string } };
+  return note;
+}
+
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+describe("note link parser", () => {
+  it("parses plain and labeled wikilinks", () => {
+    expect(parseWikiLinks("See [[Project Plan]] and [[Roadmap|the roadmap]].")).toMatchObject([
+      { targetTitle: "Project Plan", label: null, linkType: "wikilink" },
+      { targetTitle: "Roadmap", label: "the roadmap", linkType: "wikilink" },
+    ]);
+  });
+
+  it("parses raw and markdown internal note URLs", () => {
+    const raw = "http://localhost:5173/notes/note_abc123";
+    const markdown = "[Note B](http://localhost:5173/notes/note_def456)";
+    expect(parseInternalNoteUrls(`${raw}\n${markdown}`)).toMatchObject([
+      { targetNoteId: "note_def456", label: "Note B", linkType: "markdown-internal-url" },
+      { targetNoteId: "note_abc123", label: null, linkType: "internal-url" },
+    ]);
+  });
+});
+
+describe("note link indexing", () => {
+  it("indexes resolved links and returns backlinks", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Target Note");
+    const source = await createNote(app, folderA.id, "Source Note", "See [[Target Note|target]].");
+
+    const response = await app.request(`/api/notes/${target.id}/backlinks`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { backlinks: Array<{ sourceNoteId: string; sourceTitle: string; targetTitle: string; label: string | null }> };
+    expect(body.backlinks).toEqual([{ sourceNoteId: source.id, sourceTitle: "Source Note", sourceFolderId: folderA.id, targetTitle: "Target Note", label: "target", linkType: "wikilink", id: expect.any(String), createdAt: expect.any(String), updatedAt: expect.any(String) }]);
+  });
+
+  it("indexes unresolved links and resolves them when a matching note is created", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    await createNote(app, folderA.id, "Source Note", "See [[Future Note]].");
+    const target = await createNote(app, folderA.id, "Future Note");
+
+    const response = await app.request(`/api/notes/${target.id}/backlinks`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { backlinks: Array<{ sourceTitle: string; targetTitle: string }> };
+    expect(body.backlinks).toMatchObject([{ sourceTitle: "Source Note", targetTitle: "Future Note" }]);
+  });
+
+  it("indexes internal note URLs and returns backlinks", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Target Note");
+    const source = await createNote(app, folderA.id, "Source Note", `See http://localhost:5173/notes/${target.id}\n\n[Target](/notes/${target.id})`);
+
+    const response = await app.request(`/api/notes/${target.id}/backlinks`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { backlinks: Array<{ sourceNoteId: string; sourceTitle: string; linkType: string }> };
+    expect(body.backlinks).toContainEqual(expect.objectContaining({ sourceNoteId: source.id, sourceTitle: "Source Note", linkType: "internal-url" }));
+  });
+
+  it("does not expose backlinks across users", async () => {
+    const { app, folderA, folderB } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Target Note");
+    await createNote(app, folderA.id, "Source Note", "See [[Target Note]].");
+
+    const otherUserRead = await app.request(`/api/notes/${target.id}/backlinks`, { headers: { "x-user": "b" } });
+    expect(otherUserRead.status).toBe(404);
+
+    const otherTarget = await app.request(`/api/folders/${folderB.id}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-user": "b" },
+      body: JSON.stringify({ title: "Target Note", content: "" }),
+    });
+    expect(otherTarget.status).toBe(201);
+  });
+});
