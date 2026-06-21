@@ -17,6 +17,7 @@ describe("harness OpenAPI spec", () => {
     expect(spec.paths).toHaveProperty("/api/harness/folders");
     expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/edit");
     expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/backlinks");
+    expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/tags");
     expect(spec.paths).toHaveProperty("/api/harness/notes/{noteId}/sections/{sectionId}");
   });
 

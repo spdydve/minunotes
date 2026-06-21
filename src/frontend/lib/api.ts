@@ -37,7 +37,8 @@ export type NoteShareLink = { id: string; noteId: string; permission: "read"; cr
 export type SharedNote = { title: string; content: string; updatedAt: string };
 export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
 export type Backlink = { id: string; sourceNoteId: string; sourceTitle: string; sourceFolderId: string; targetTitle: string; label: string | null; linkType: "wikilink" | "internal-url" | "markdown-internal-url"; createdAt: string; updatedAt: string };
-export type BacklinksResponse = { noteId: string; backlinks: Backlink[] }; 
+export type BacklinksResponse = { noteId: string; backlinks: Backlink[] };
+export type Tag = { id: string; name: string; normalizedName: string; noteCount?: number }; 
 export type Attachment = { id: string; userId: string; noteId: string; folderId: string; provider: string; filename: string; mimeType: string; size: number; contentHash: string; storageKey: string; status: "pending" | "ready"; createdAt: string; updatedAt: string };
 export type UploadImageResponse = { attachment: Attachment; markdownUrl: string; markdown: string };
 export type SignedImageUpload = UploadImageResponse & { signedUrl: string; method: "PUT"; headers: { "content-type": string } };
@@ -86,13 +87,16 @@ export const api = {
   revokeNoteShareLink: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}/share-link`, { method: "DELETE" }),
   sharedNote: (token: string) => request<{ note: SharedNote; share: { id: string; permission: "read"; createdAt: string } }>(`/share/${encodeURIComponent(token)}`),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
+  tags: () => request<{ tags: Tag[] }>("/notes/tags"),
+  noteTags: (noteId: string) => request<{ tags: Tag[] }>(`/notes/${noteId}/tags`),
+  updateNoteTags: (noteId: string, tags: string[]) => request<{ tags: Tag[] }>(`/notes/${noteId}/tags`, { method: "PUT", body: JSON.stringify({ tags }) }),
   backlinks: (noteId: string) => request<BacklinksResponse>(`/notes/${noteId}/backlinks`),
   noteOutline: (noteId: string) => request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) => request<SectionResponse>(`/notes/${noteId}/sections/${encodeURIComponent(sectionId)}`),
   editNote: (noteId: string, data: { edits: DocumentEdit[]; baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}/edit`, { method: "POST", body: JSON.stringify(data) }),
-  saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  saveNote: (noteId: string, data: Partial<Pick<Note, "title" | "content" | "isApiEditable" | "createdAt">> & { baseHash?: string }) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) => request<NoteResponse>(`/notes/${noteId}`, { method: "PATCH", body: JSON.stringify({ folderId }) }),
-  searchNotes: (q: string, type: NoteType = "note", limit?: number) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ""}`),
+  searchNotes: (q: string, type: NoteType = "note", limit?: number, tag?: string) => request<{ notes: SearchNote[] }>(`/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ""}${tag ? `&tag=${encodeURIComponent(tag)}` : ""}`),
   uploadNoteImage: async (noteId: string, file: File) => {
     try {
       const { uploads } = await request<{ uploads: SignedImageUpload[] }>(`/attachments/notes/${noteId}/image-uploads`, {

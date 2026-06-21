@@ -67,6 +67,12 @@ function NoteView() {
     qc.invalidateQueries({ queryKey: ["backlinks"] });
   };
 
+  const applyDetailsUpdate = (response: { note: NonNullable<typeof data>["note"]; contentHash: string }) => {
+    setTitle(response.note.title);
+    setContent(response.note.content);
+    applySavedNote(response);
+  };
+
   const save = useMutation({
     mutationFn: (next: { title: string; content: string }) => api.saveNote(noteId, next),
     onSuccess: applySavedNote,
@@ -254,7 +260,7 @@ function NoteView() {
       </>}
       onImageUpload={uploadImage}
       wikiLinks={wikiLinks}
-      actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} />}
+      actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} onNoteUpdated={applyDetailsUpdate} />}
     />;
 }
 

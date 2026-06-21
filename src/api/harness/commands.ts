@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
-import { folders, noteEvents, notes, type Note } from "../db/schema";
+import { folders, noteEvents, noteTags, notes, tags, type Note } from "../db/schema";
 import { createId } from "../lib/id";
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from "../notes/links";
 import { applyDocumentEdits, type DocumentEdit } from "./edits";
@@ -139,14 +139,18 @@ export async function searchDocuments(input: { userId: string; query: string; li
   })
     .from(notes)
     .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
-    .where(and(eq(notes.userId, input.userId), eq(notes.type, type), or(like(notes.title, pattern), like(notes.content, pattern), like(folders.title, pattern))))
+    .leftJoin(noteTags, and(eq(noteTags.noteId, notes.id), eq(noteTags.userId, input.userId)))
+    .leftJoin(tags, and(eq(tags.id, noteTags.tagId), eq(tags.userId, input.userId)))
+    .where(and(eq(notes.userId, input.userId), eq(notes.type, type), or(like(notes.title, pattern), like(notes.content, pattern), like(folders.title, pattern), like(tags.name, pattern))))
+    .groupBy(notes.id)
     .orderBy(
       sql`case
         when lower(${notes.title}) = lower(${query}) then 0
         when lower(${notes.title}) like lower(${prefixPattern}) then 1
         when lower(${notes.title}) like lower(${pattern}) then 2
-        when lower(${folders.title}) like lower(${pattern}) then 3
-        else 4
+        when lower(${tags.name}) like lower(${pattern}) then 3
+        when lower(${folders.title}) like lower(${pattern}) then 4
+        else 5
       end`,
       desc(notes.updatedAt),
       asc(notes.title),
@@ -278,6 +282,7 @@ export interface UpdateDocumentInput {
   markdown?: string;
   folderId?: string;
   isApiEditable?: boolean;
+  createdAt?: Date;
   baseHash?: string;
   actorType?: ActorType;
   actorId?: string;
@@ -289,7 +294,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
   if (!current.ok) return current;
 
   const currentHash = current.value.contentHash;
-  const isApiMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isApiEditable !== undefined);
+  const isApiMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isApiEditable !== undefined || input.createdAt !== undefined);
   if (isApiMutation && current.value.note.type === "template") {
     return { ok: false, status: 403, error: "Templates cannot be edited through the API" } satisfies DocumentCommandResult<never>;
   }
@@ -310,6 +315,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
   const contentChanged = input.markdown !== undefined && input.markdown !== current.value.note.content;
   const folderChanged = input.folderId !== undefined && input.folderId !== current.value.note.folderId;
   const isApiEditableChanged = input.isApiEditable !== undefined && input.isApiEditable !== current.value.note.isApiEditable;
+  const createdAtChanged = input.createdAt !== undefined && input.createdAt.getTime() !== current.value.note.createdAt.getTime();
 
   const [note] = await db.update(notes)
     .set({
@@ -317,6 +323,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
       ...(input.markdown !== undefined ? { content: input.markdown } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
       ...(input.isApiEditable !== undefined ? { isApiEditable: input.isApiEditable } : {}),
+      ...(input.createdAt !== undefined ? { createdAt: input.createdAt } : {}),
       updatedByActorType: input.actorType ?? "user",
       updatedByActorId: input.actorId,
       updatedAt: new Date(),
@@ -334,7 +341,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
 
   const contentHash = hashMarkdown(note.content);
   const actorType = input.actorType ?? "user";
-  if (titleChanged || contentChanged || folderChanged || isApiEditableChanged) {
+  if (titleChanged || contentChanged || folderChanged || isApiEditableChanged || createdAtChanged) {
     const eventType = input.eventType ?? getUpdateEventType(input, current.value.note);
     await insertNoteEvent({
       noteId: note.id,

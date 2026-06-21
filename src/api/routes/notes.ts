@@ -7,6 +7,7 @@ import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 import { createId } from "../lib/id";
 import { listBacklinks } from "../notes/links";
+import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
 import { buildShareUrl, generateShareToken, hashShareToken } from "../lib/share-tokens";
 
 type Variables = {
@@ -50,6 +51,13 @@ function serializeShareLink(shareLink: typeof noteShareLinks.$inferSelect, url?:
     url: url ?? (shareLink.token ? buildShareUrl(shareLink.token) : null),
   };
 }
+
+noteRoutes.get("/tags", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  return c.json({ tags: await listUserTags({ userId: user.id }) });
+});
 
 noteRoutes.get("/templates", async (c) => {
   const user = getUser(c);
@@ -98,7 +106,12 @@ noteRoutes.get("/search", async (c) => {
   const requestedLimit = Number.parseInt(c.req.query("limit") ?? "", 10);
   const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
   const result = await searchDocuments({ userId: user.id, query: q, limit, type });
-  return c.json({ notes: result.value.documents });
+  const tag = c.req.query("tag")?.trim();
+  if (!tag) return c.json({ notes: result.value.documents });
+
+  const tagged = await noteIdsForTag({ userId: user.id, tag });
+  const taggedIds = new Set(tagged.map((row) => row.noteId));
+  return c.json({ notes: result.value.documents.filter((note) => taggedIds.has(note.id)) });
 });
 
 noteRoutes.get("/recent", async (c) => {
@@ -112,6 +125,28 @@ noteRoutes.get("/recent", async (c) => {
     .limit(Number.isFinite(limit) && limit > 0 ? Math.min(limit, 50) : 10);
 
   return c.json({ notes: rows });
+});
+
+noteRoutes.get("/:noteId/tags", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+  return c.json({ tags: await listNoteTags({ userId: user.id, noteId }) });
+});
+
+noteRoutes.put("/:noteId/tags", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+  const body = await c.req.json().catch(() => null) as { tags?: string[] } | null;
+  if (!body || !Array.isArray(body.tags)) return c.json({ error: "Tags array is required" }, 400);
+  return c.json({ tags: await setNoteTags({ userId: user.id, noteId, tags: body.tags }) });
 });
 
 noteRoutes.get("/:noteId", async (c) => {
@@ -269,11 +304,13 @@ noteRoutes.patch("/:noteId", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string; isApiEditable?: boolean; baseHash?: string } | null;
+  const body = await c.req.json().catch(() => null) as { title?: string; content?: string; folderId?: string; isApiEditable?: boolean; createdAt?: string; baseHash?: string } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
 
   const title = body.title?.trim();
   if (body.title !== undefined && !title) return c.json({ error: "Note title is required" }, 400);
+  const createdAt = body.createdAt !== undefined ? new Date(body.createdAt) : undefined;
+  if (body.createdAt !== undefined && (!createdAt || Number.isNaN(createdAt.getTime()))) return c.json({ error: "Invalid created date" }, 400);
 
   const result = await updateDocument({
     documentId: c.req.param("noteId"),
@@ -282,6 +319,7 @@ noteRoutes.patch("/:noteId", async (c) => {
     markdown: body.content,
     folderId: body.folderId,
     isApiEditable: body.isApiEditable,
+    createdAt,
     baseHash: body.baseHash,
     actorType: "user",
   });

@@ -1,12 +1,14 @@
 import { Hono, type Context } from "hono";
 import { db } from "../db/client";
-import { apiKeyFolderPermissions, folders, type ApiKey } from "../db/schema";
+import { apiKeyFolderPermissions, folders, notes, type ApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { listBacklinks } from "../notes/links";
+import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
 import { auth } from "../lib/auth";
 import { canApiKeyAccessFolder, getApiKeyAccessibleFolderIds, validateFolderParent } from "../lib/folder-access";
 import { createId } from "../lib/id";
+import { and, eq, inArray } from "drizzle-orm";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -38,6 +40,20 @@ async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
   if (!user) return null;
   return getApiKeyAccessibleFolderIds({ apiKey: c.get("apiKey"), userId: user.id, permission: "read" });
 }
+
+harnessRoutes.get("/tags", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const readableFolderIds = await getReadableFolderIds(c);
+  if (!readableFolderIds) return c.json({ tags: await listUserTags({ userId: user.id }) });
+
+  const readableIds = [...readableFolderIds];
+  if (readableIds.length === 0) return c.json({ tags: [] });
+  const visibleNotes = await db.select({ id: notes.id }).from(notes)
+    .where(and(eq(notes.userId, user.id), inArray(notes.folderId, readableIds)));
+  return c.json({ tags: await listUserTags({ userId: user.id, noteIds: visibleNotes.map((note) => note.id) }) });
+});
 
 harnessRoutes.get("/folders", async (c) => {
   const user = getUser(c);
@@ -91,9 +107,11 @@ harnessRoutes.get("/notes/search", async (c) => {
   if (!q) return c.json({ notes: [] });
 
   const result = await searchDocuments({ userId: user.id, query: q, limit: 25 });
+  const tag = c.req.query("tag")?.trim();
+  const taggedIds = tag ? new Set((await noteIdsForTag({ userId: user.id, tag })).map((row) => row.noteId)) : null;
   const readableFolderIds = await getReadableFolderIds(c);
-  if (!readableFolderIds) return c.json({ notes: result.value.documents });
-  return c.json({ notes: result.value.documents.filter((note) => readableFolderIds.has(note.folderId)) });
+  const filtered = result.value.documents.filter((note) => (!taggedIds || taggedIds.has(note.id)) && (!readableFolderIds || readableFolderIds.has(note.folderId)));
+  return c.json({ notes: filtered });
 });
 
 harnessRoutes.get("/notes/search-lines", async (c) => {
@@ -138,6 +156,30 @@ harnessRoutes.post("/notes", async (c) => {
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value, 201);
+});
+
+harnessRoutes.get("/notes/:noteId/tags", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id, folderId: notes.folderId }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+  if (!(await hasFolderPermission(c, note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+  return c.json({ tags: await listNoteTags({ userId: user.id, noteId }) });
+});
+
+harnessRoutes.put("/notes/:noteId/tags", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const [note] = await db.select({ id: notes.id, folderId: notes.folderId, isApiEditable: notes.isApiEditable }).from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, user.id))).limit(1);
+  if (!note) return c.json({ error: "Note not found" }, 404);
+  if (!(await hasFolderPermission(c, note.folderId, "edit")) || !note.isApiEditable) return c.json({ error: "Forbidden" }, 403);
+  const body = await c.req.json().catch(() => null) as { tags?: string[] } | null;
+  if (!body || !Array.isArray(body.tags)) return c.json({ error: "Tags array is required" }, 400);
+  return c.json({ tags: await setNoteTags({ userId: user.id, noteId, tags: body.tags }) });
 });
 
 harnessRoutes.get("/notes/:noteId", async (c) => {

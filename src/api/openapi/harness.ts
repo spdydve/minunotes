@@ -10,8 +10,17 @@ export const harnessOpenApiSpec = {
   tags: [
     { name: "Folders" },
     { name: "Notes" },
+    { name: "Tags" },
   ],
   paths: {
+    "/api/harness/tags": {
+      get: {
+        tags: ["Tags"],
+        operationId: "listTags",
+        summary: "List tags",
+        responses: { "200": { description: "Tags", content: { "application/json": { schema: { $ref: "#/components/schemas/TagsResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
+      },
+    },
     "/api/harness/folders": {
       get: {
         tags: ["Folders"],
@@ -41,7 +50,7 @@ export const harnessOpenApiSpec = {
         tags: ["Notes"],
         operationId: "searchNotes",
         summary: "Search notes",
-        parameters: [{ name: "q", in: "query", required: true, schema: { type: "string" } }],
+        parameters: [{ name: "q", in: "query", required: true, schema: { type: "string" } }, { name: "tag", in: "query", schema: { type: "string" } }],
         responses: { "200": { description: "Matching notes", content: { "application/json": { schema: { $ref: "#/components/schemas/SearchNotesResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
       },
     },
@@ -81,6 +90,23 @@ export const harnessOpenApiSpec = {
         summary: "Read a note",
         parameters: [{ $ref: "#/components/parameters/NoteId" }],
         responses: { "200": { description: "Note", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
+      },
+    },
+    "/api/harness/notes/{noteId}/tags": {
+      get: {
+        tags: ["Tags"],
+        operationId: "listNoteTags",
+        summary: "List note tags",
+        parameters: [{ $ref: "#/components/parameters/NoteId" }],
+        responses: { "200": { description: "Note tags", content: { "application/json": { schema: { $ref: "#/components/schemas/TagsResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
+      },
+      put: {
+        tags: ["Tags"],
+        operationId: "updateNoteTags",
+        summary: "Replace note tags",
+        parameters: [{ $ref: "#/components/parameters/NoteId" }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/UpdateTagsRequest" } } } },
+        responses: { "200": { description: "Updated note tags", content: { "application/json": { schema: { $ref: "#/components/schemas/TagsResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
     "/api/harness/notes/{noteId}/events": {
@@ -168,6 +194,9 @@ export const harnessOpenApiSpec = {
       Note: { type: "object", required: ["id", "folderId", "title", "content", "type", "isApiEditable", "createdAt", "updatedAt"], properties: { id: { type: "string" }, folderId: { type: "string" }, title: { type: "string" }, content: { type: "string" }, type: { type: "string", enum: ["note", "template"] }, isApiEditable: { type: "boolean" }, updatedByActorType: { type: ["string", "null"] }, updatedByActorId: { type: ["string", "null"] }, createdAt: { type: "string" }, updatedAt: { type: "string" }, folderTitle: { type: "string" } } },
       NoteResponse: { type: "object", required: ["note", "contentHash"], properties: { note: { $ref: "#/components/schemas/Note" }, contentHash: { type: "string" } } },
       SearchNotesResponse: { type: "object", required: ["notes"], properties: { notes: { type: "array", items: { $ref: "#/components/schemas/Note" } } } },
+      Tag: { type: "object", required: ["id", "name", "normalizedName"], properties: { id: { type: "string" }, name: { type: "string" }, normalizedName: { type: "string" }, noteCount: { type: "integer" } } },
+      TagsResponse: { type: "object", required: ["tags"], properties: { tags: { type: "array", items: { $ref: "#/components/schemas/Tag" } } } },
+      UpdateTagsRequest: { type: "object", required: ["tags"], properties: { tags: { type: "array", items: { type: "string" } } } },
       CreateNoteRequest: { type: "object", required: ["folderId"], properties: { folderId: { type: "string" }, title: { type: "string" }, content: { type: "string" } } },
       NumberedLine: { type: "object", required: ["line", "text"], properties: { line: { type: "integer" }, text: { type: "string" } } },
       LinesResponse: { type: "object", properties: { noteId: { type: "string" }, contentHash: { type: "string" }, from: { type: "integer" }, to: { type: "integer" }, lineCount: { type: "integer" }, lines: { type: "array", items: { $ref: "#/components/schemas/NumberedLine" } } } },

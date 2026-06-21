@@ -1,93 +1,109 @@
-# Plan: note links and backlinks
+# Tags + Note Details Implementation Plan
 
 ## Goal
-Add Obsidian-style note links to MinuNotes with durable link indexing. Start with `[[Note Title]]` wikilinks and backlinks, then leave graph/internal URL polish for later phases.
+Add first-class tags and a lightweight note details panel without adding a Notion-style custom properties/database system.
 
-## MVP scope
-- Support wikilinks in note content:
-  - `[[Note Title]]`
-  - `[[Note Title|Display Label]]`
-- Index outgoing note links whenever a note is created or updated through app/harness paths.
-- Resolve links by `userId` + target note title.
-- Store unresolved links with `targetNoteId = null`.
-- Show backlinks on the note detail page.
-- Do not implement graph view in this phase.
-- Do not implement rich editor wikilink rendering in this phase unless it is low-risk with current MinuEditor APIs.
+## Scope
+- Explicit note tags stored in the database.
+- Tag read/update/filter support in app API and harness API.
+- Note details/info UI for built-in note metadata and tags.
+- No arbitrary key/value properties, folder schemas, formulas, relations, or database views.
 
 ## Files to modify/create
 
 ### Database
-- `src/api/db/schema.ts`
-  - Add `noteLinks` table.
-- `drizzle/0017_note_links.sql`
-  - Add migration.
-- `drizzle/meta/_journal.json`
-  - Register migration.
+- `drizzle/0018_note_tags.sql` — create tag tables/indexes.
+- `drizzle/meta/_journal.json` — register migration.
+- `src/api/db/schema.ts` — add `tags` and `noteTags` schema + relations.
 
-### Link parsing/indexing
-- New file: `src/api/notes/links.ts`
-  - Parse wikilinks.
-  - Resolve target notes by title.
-  - Rebuild outgoing links for a source note.
-  - Fetch backlinks for a target note.
-- Tests:
-  - New `tests/note-links.test.ts` or similar.
-
-### Backend integration
-- `src/api/harness/commands.ts`
-  - Reindex links after create/update/edit operations that change note content/title.
-  - Re-resolve unresolved links when a note title is created/changed.
-- `src/api/routes/notes.ts`
-  - Add endpoint:
-    - `GET /api/notes/:noteId/backlinks`
-  - Possibly add outgoing links endpoint later if needed.
+### API/domain
+- `src/api/notes/tags.ts` — tag normalization, list/set helpers, note serialization helpers.
+- `src/api/routes/notes.ts` — add note tag endpoints and optional tag filtering.
+- `src/api/routes/harness.ts` — add harness tag endpoints/filtering with folder permission checks.
+- `src/api/harness/commands.ts` — include tags in note read/search/create/update results where appropriate.
+- `src/api/openapi/harness.ts` — document harness tag endpoints/filtering.
 
 ### Frontend
-- `src/frontend/lib/api.ts`
-  - Add backlink response type and helper.
-- New file: `src/frontend/components/backlinks-panel.tsx`
-  - Show source note title, optional matched link label/title, and navigate to source note.
-- `src/frontend/routes/notes.$noteId.tsx`
-  - Render backlinks panel below/near editor metadata or in a compact section.
+- `src/frontend/lib/api.ts` — add tag types and client methods.
+- `src/frontend/components/note-details-dialog.tsx` — built-in details panel/dialog.
+- `src/frontend/components/note-actions-popover.tsx` — add “Details” action.
+- `src/frontend/routes/notes.$noteId.tsx` — pass data/update hooks to details UI and refresh note caches.
+- Potentially `src/frontend/styles.css` only if tag chips/details need shared styles.
 
-## Implementation checklist
+### Tests
+- `tests/note-tags.test.ts` — app API tag CRUD/filtering and harness permission behavior.
+- `tests/openapi.test.ts` — harness OpenAPI path coverage.
+- Update existing tests if note response shape changes.
 
-### Phase 1 — Link parser and DB index
-- [x] Add `note_links` schema and migration.
-- [x] Add wikilink parser for `[[Title]]` and `[[Title|Label]]`.
-- [x] Add tests for parser edge cases.
-- [x] Add link reindex function that replaces outgoing links for one source note.
-- [x] Add tests for resolved and unresolved links.
+## Proposed data model
 
-### Phase 2 — Reindex integration
-- [x] Reindex links after app note create/update/edit.
-- [x] Reindex links after harness note create/edit.
-- [x] Re-resolve unresolved links when matching notes are created or renamed.
-- [x] Add/update integration tests.
+### `tags`
+- `id`
+- `user_id`
+- `name` — display name
+- `normalized_name` — lower/trim/collapsed spacing, unique per user
+- `created_at`
+- `updated_at`
 
-### Phase 3 — Backlinks API/UI
-- [x] Add `GET /api/notes/:noteId/backlinks`.
-- [x] Add API helper/type in frontend client.
-- [x] Add backlinks panel component.
-- [x] Show backlinks on note page.
-- [x] Add API tests for ownership and backlink results.
+### `note_tags`
+- `id`
+- `user_id`
+- `note_id`
+- `tag_id`
+- `created_at`
+- unique `(note_id, tag_id)`
+- indexes on `user_id`, `note_id`, `tag_id`
 
-### Phase 4 — Polish/deferred decisions
-- [x] Decide whether unresolved wikilinks should create notes in this iteration or remain indexed only.
-- [x] Decide whether current MinuEditor can safely render wikilinks as clickable links without package changes.
-- [x] Leave graph view for later.
+## Proposed API
 
-## Verification
-- [x] `pnpm db:migrate`
-- [x] `pnpm typecheck`
-- [x] `pnpm test`
-- [x] `pnpm build`
-- [ ] Manual: create Note A with `[[Note B]]`; Note B shows backlink from Note A.
-- [ ] Manual: create Note A with `[[Missing Note]]`; unresolved link is indexed without breaking save.
-- [ ] Manual: create/rename Missing Note to matching title; backlink resolves.
-- [ ] Manual: another user cannot see backlinks to/from notes they do not own.
+### App API
+- `GET /api/tags` or `GET /api/notes/tags` — list user tags with counts if cheap.
+- `GET /api/notes/:noteId/tags` — list tags on a note.
+- `PUT /api/notes/:noteId/tags` — replace tags for a note with `{ tags: string[] }`.
+- `GET /api/notes/search?q=...&tag=...` — optional tag filter.
+- Consider `GET /api/notes/recent?tag=...` only if needed.
 
-## Open decisions before implementation
-- Should title matching be case-sensitive or case-insensitive? Recommendation: case-insensitive for resolution, preserve original text in `targetTitle`.
-- Should duplicate note titles resolve to the most recently updated note, oldest note, or remain unresolved? Recommendation: resolve only when exactly one matching title exists; otherwise unresolved.
-- Where should backlinks appear in the note UI? Recommendation: compact panel below the header/editor area, collapsed or subtle when empty.
+### Harness API
+- `GET /api/harness/tags` — list visible tags, filtered by readable folders if possible.
+- `GET /api/harness/notes/:noteId/tags` — list note tags after read permission check.
+- `PUT /api/harness/notes/:noteId/tags` — replace note tags after edit permission check.
+- `GET /api/harness/notes/search?q=...&tag=...` — tag filter, still folder-permission filtered.
+
+## UI proposal
+
+### Details dialog/panel
+Open from note actions as “Details”. Show built-in metadata only:
+- Title
+- Folder
+- Type: Note/Template
+- Created at
+- Updated at
+- Updated by
+- API editable
+- Share status/link access summary
+- Tags editor
+
+### Tags editor
+- Simple chip input.
+- Existing tag autocomplete if available.
+- Save on explicit submit or debounced update; prefer explicit Save for first version.
+- Normalize duplicates client-side and server-side.
+
+## Verification steps
+- `pnpm typecheck`
+- `pnpm test tests/note-tags.test.ts tests/openapi.test.ts`
+- `pnpm test`
+- `pnpm build`
+- Manual checks:
+  - Add/remove tags from note details.
+  - Tags persist after reload.
+  - Search/filter by tag returns expected notes.
+  - Harness can read/update tags with authorized key.
+  - Harness cannot read/update tags outside allowed folders.
+  - Details dialog shows expected built-in metadata and does not expose custom properties.
+
+## Open questions
+- Endpoint naming: `/api/tags` vs `/api/notes/tags`.
+- Whether note read/search responses should include tags by default or load tags separately.
+- Whether tag filtering should support multiple tags initially.
+- Whether templates should support tags in MVP.
