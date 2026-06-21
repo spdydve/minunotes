@@ -35,7 +35,7 @@ export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type NoteShareLink = { id: string; noteId: string; permission: "read"; createdAt: string; updatedAt: string; expiresAt: string | null; revokedAt: string | null; url: string | null };
 export type SharedNote = { title: string; content: string; updatedAt: string };
-export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
+export type NoteEvent = { id: string; noteId: string; userId: string; actorType: "user" | "agent" | "system"; actorId: string | null; eventType: "create" | "update" | "edit_patch" | "move" | "toggle_api_editable" | "restore"; summary: string; beforeHash: string | null; afterHash: string | null; createdAt: string };
 export type Backlink = { id: string; sourceNoteId: string; sourceTitle: string; sourceFolderId: string; targetTitle: string; label: string | null; linkType: "wikilink" | "internal-url" | "markdown-internal-url"; createdAt: string; updatedAt: string };
 export type NoteLink = { id: string; sourceNoteId: string; targetNoteId: string | null; targetTitle: string; label: string | null; linkType: "wikilink" | "internal-url" | "markdown-internal-url"; createdAt: string; updatedAt: string };
 export type BacklinksResponse = { noteId: string; backlinks: Backlink[] };
@@ -44,7 +44,10 @@ export type Tag = { id: string; name: string; normalizedName: string; noteCount?
 export type Attachment = { id: string; userId: string; noteId: string; folderId: string; provider: string; filename: string; mimeType: string; size: number; contentHash: string; storageKey: string; status: "pending" | "ready"; createdAt: string; updatedAt: string };
 export type UploadImageResponse = { attachment: Attachment; markdownUrl: string; markdown: string };
 export type SignedImageUpload = UploadImageResponse & { signedUrl: string; method: "PUT"; headers: { "content-type": string } };
+export type NoteVersionSummary = { id: string; noteId: string; title: string; reason: "create" | "autosave_checkpoint" | "before_agent_edit" | "before_restore" | "manual"; actorType: "user" | "agent" | "system"; actorId: string | null; stateHash: string; createdAt: string };
+export type NoteVersion = NoteVersionSummary & { content: string; folderId: string; createdAtValue: string; isApiEditable: boolean };
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
+export type NoteVersionsResponse = { noteId: string; versions: NoteVersionSummary[] };
 export type DocumentEdit =
   | { type: "append"; text: string }
   | { type: "replace_text"; oldText: string; newText: string }
@@ -89,6 +92,9 @@ export const api = {
   revokeNoteShareLink: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}/share-link`, { method: "DELETE" }),
   sharedNote: (token: string) => request<{ note: SharedNote; share: { id: string; permission: "read"; createdAt: string } }>(`/share/${encodeURIComponent(token)}`),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
+  noteVersions: (noteId: string, limit = 100) => request<NoteVersionsResponse>(`/notes/${noteId}/versions?limit=${limit}`),
+  noteVersion: (noteId: string, versionId: string) => request<{ version: NoteVersion }>(`/notes/${noteId}/versions/${versionId}`),
+  restoreNoteVersion: (noteId: string, versionId: string) => request<NoteResponse & { version: NoteVersion }>(`/notes/${noteId}/versions/${versionId}/restore`, { method: "POST", body: JSON.stringify({}) }),
   tags: () => request<{ tags: Tag[] }>("/notes/tags"),
   noteTags: (noteId: string) => request<{ tags: Tag[] }>(`/notes/${noteId}/tags`),
   updateNoteTags: (noteId: string, tags: string[]) => request<{ tags: Tag[] }>(`/notes/${noteId}/tags`, { method: "PUT", body: JSON.stringify({ tags }) }),

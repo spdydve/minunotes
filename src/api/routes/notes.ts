@@ -8,6 +8,7 @@ import { auth } from "../lib/auth";
 import { createId } from "../lib/id";
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from "../notes/links";
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
+import { getNoteVersion, listNoteVersions, restoreNoteVersion, serializeVersion } from "../notes/versions";
 import { buildShareUrl, generateShareToken, hashShareToken } from "../lib/share-tokens";
 
 type Variables = {
@@ -163,6 +164,34 @@ noteRoutes.get("/:noteId", async (c) => {
   const result = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json({ ...result.value, note: await withPublicActorUid(result.value.note) });
+});
+
+noteRoutes.get("/:noteId/versions", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const limit = Number.parseInt(c.req.query("limit") ?? "", 10);
+  const versions = await listNoteVersions({ noteId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : undefined });
+  if (!versions) return c.json({ error: "Note not found" }, 404);
+  return c.json({ noteId: c.req.param("noteId"), versions });
+});
+
+noteRoutes.get("/:noteId/versions/:versionId", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const version = await getNoteVersion({ noteId: c.req.param("noteId"), versionId: c.req.param("versionId"), userId: user.id });
+  if (!version) return c.json({ error: "Version not found" }, 404);
+  return c.json({ version: serializeVersion(version) });
+});
+
+noteRoutes.post("/:noteId/versions/:versionId/restore", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const result = await restoreNoteVersion({ noteId: c.req.param("noteId"), versionId: c.req.param("versionId"), userId: user.id, actorType: "user" });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ note: await withPublicActorUid(result.value.note), contentHash: result.value.contentHash, version: result.value.version });
 });
 
 noteRoutes.get("/:noteId/status", async (c) => {

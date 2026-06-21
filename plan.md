@@ -1,109 +1,136 @@
-# Tags + Note Details Implementation Plan
+# Version History + Restore Implementation Plan
 
 ## Goal
-Add first-class tags and a lightweight note details panel without adding a Notion-style custom properties/database system.
+Add bounded, restorable note history focused on safety, especially before agent edits and restores, without storing every autosave forever.
 
 ## Scope
-- Explicit note tags stored in the database.
-- Tag read/update/filter support in app API and harness API.
-- Note details/info UI for built-in note metadata and tags.
-- No arbitrary key/value properties, folder schemas, formulas, relations, or database views.
+- [x] Add restorable note snapshots separate from the existing event log.
+- [x] Snapshot on note creation, before agent edits, before restore, and periodic user checkpoints.
+- [x] Deduplicate snapshots by state hash.
+- [x] Enforce a per-note retention cap.
+- [x] Add app APIs and UI to list, view, and restore versions.
+- [x] Keep the first implementation simple: full snapshots, not diffs.
 
 ## Files to modify/create
 
 ### Database
-- `drizzle/0018_note_tags.sql` — create tag tables/indexes.
+- `drizzle/0019_note_versions.sql` — create `note_versions` table and indexes.
 - `drizzle/meta/_journal.json` — register migration.
-- `src/api/db/schema.ts` — add `tags` and `noteTags` schema + relations.
+- `src/api/db/schema.ts` — add `noteVersions` schema/relations.
 
 ### API/domain
-- `src/api/notes/tags.ts` — tag normalization, list/set helpers, note serialization helpers.
-- `src/api/routes/notes.ts` — add note tag endpoints and optional tag filtering.
-- `src/api/routes/harness.ts` — add harness tag endpoints/filtering with folder permission checks.
-- `src/api/harness/commands.ts` — include tags in note read/search/create/update results where appropriate.
-- `src/api/openapi/harness.ts` — document harness tag endpoints/filtering.
+- `src/api/notes/versions.ts` — snapshot, list, read, restore, dedupe, and pruning helpers.
+- `src/api/routes/notes.ts` — app version endpoints.
+- `src/api/routes/harness.ts` — create pre-agent snapshots around harness edits; optionally expose harness version endpoints if simple.
+- `src/api/harness/commands.ts` — ensure command-based edits use the same snapshot path if applicable.
+- `src/api/notes/links.ts` — verify restore reindexes links after content changes; likely call existing helpers only.
+- `src/api/openapi/harness.ts` — only if harness version endpoints are added.
 
 ### Frontend
-- `src/frontend/lib/api.ts` — add tag types and client methods.
-- `src/frontend/components/note-details-dialog.tsx` — built-in details panel/dialog.
-- `src/frontend/components/note-actions-popover.tsx` — add “Details” action.
-- `src/frontend/routes/notes.$noteId.tsx` — pass data/update hooks to details UI and refresh note caches.
-- Potentially `src/frontend/styles.css` only if tag chips/details need shared styles.
+- `src/frontend/lib/api.ts` — version types/client methods.
+- `src/frontend/components/note-versions-dialog.tsx` or `src/frontend/routes/notes.$noteId.activity.tsx` — UI to list/view/restore versions.
+- `src/frontend/components/note-actions-popover.tsx` — add “Version history” action if using a dialog.
+- `src/frontend/routes/notes.$noteId.tsx` — wire action, restore refresh, and cache invalidation if needed.
 
 ### Tests
-- `tests/note-tags.test.ts` — app API tag CRUD/filtering and harness permission behavior.
-- `tests/openapi.test.ts` — harness OpenAPI path coverage.
-- Update existing tests if note response shape changes.
+- `tests/note-versions.test.ts` — snapshot creation, dedupe, retention, restore, reindex behavior.
+- `tests/harness.test.ts` or relevant existing harness tests — verify pre-agent edit snapshots and permissions.
+- `tests/openapi.test.ts` — only if harness version endpoints are added.
 
 ## Proposed data model
 
-### `tags`
-- `id`
-- `user_id`
-- `name` — display name
-- `normalized_name` — lower/trim/collapsed spacing, unique per user
-- `created_at`
-- `updated_at`
-
-### `note_tags`
+### `note_versions`
 - `id`
 - `user_id`
 - `note_id`
-- `tag_id`
-- `created_at`
-- unique `(note_id, tag_id)`
-- indexes on `user_id`, `note_id`, `tag_id`
+- `title`
+- `content`
+- `folder_id`
+- `created_at_value` — note's editable created date at snapshot time.
+- `is_api_editable`
+- `tags_json` — include tags if low-risk; otherwise defer.
+- `state_hash`
+- `reason` — `create`, `autosave_checkpoint`, `before_agent_edit`, `before_restore`, `manual`.
+- `actor_type` — `user`, `agent`, `system`.
+- `actor_id`
+- `created_at` — snapshot creation time.
 
-## Proposed API
+Indexes:
+- `(user_id, note_id, created_at)`
+- `(note_id, created_at)`
+- `(note_id, state_hash)`
+
+## Proposed APIs
 
 ### App API
-- `GET /api/tags` or `GET /api/notes/tags` — list user tags with counts if cheap.
-- `GET /api/notes/:noteId/tags` — list tags on a note.
-- `PUT /api/notes/:noteId/tags` — replace tags for a note with `{ tags: string[] }`.
-- `GET /api/notes/search?q=...&tag=...` — optional tag filter.
-- Consider `GET /api/notes/recent?tag=...` only if needed.
+- `GET /api/notes/:noteId/versions` — list version metadata.
+- `GET /api/notes/:noteId/versions/:versionId` — read full snapshot.
+- `POST /api/notes/:noteId/versions/:versionId/restore` — restore selected version.
 
 ### Harness API
-- `GET /api/harness/tags` — list visible tags, filtered by readable folders if possible.
-- `GET /api/harness/notes/:noteId/tags` — list note tags after read permission check.
-- `PUT /api/harness/notes/:noteId/tags` — replace note tags after edit permission check.
-- `GET /api/harness/notes/search?q=...&tag=...` — tag filter, still folder-permission filtered.
+MVP option: do not expose restore/list to harness yet. Still create pre-agent snapshots internally.
+
+If added now:
+- `GET /api/harness/notes/:noteId/versions`
+- `GET /api/harness/notes/:noteId/versions/:versionId`
+- `POST /api/harness/notes/:noteId/versions/:versionId/restore`
+
+Harness restore must require edit permission and respect `isApiEditable`.
+
+## Snapshot rules
+
+- Create snapshot on note creation.
+- Create `before_agent_edit` snapshot before a harness edit changes restorable state.
+- Create `before_restore` snapshot before applying a restore.
+- For user autosave/content edits, create `autosave_checkpoint` only if latest snapshot is older than 10 minutes and state changed.
+- Never create a snapshot if the computed state hash equals the latest version hash.
+- After adding a snapshot, prune old non-pinned versions above 100 per note.
+
+## Restore behavior
+
+1. Check user owns/can edit the note.
+2. Load target version.
+3. Create `before_restore` snapshot of current note state.
+4. Apply version title/content/folder/API editable/details included in MVP.
+5. Reindex note links and attachment references if content changed.
+6. Record a note event.
+7. Return updated note and content hash.
 
 ## UI proposal
 
-### Details dialog/panel
-Open from note actions as “Details”. Show built-in metadata only:
-- Title
-- Folder
-- Type: Note/Template
-- Created at
-- Updated at
-- Updated by
-- API editable
-- Share status/link access summary
-- Tags editor
+MVP UI can be a dialog from Note actions:
+- “Version history” menu item.
+- List versions with timestamp, reason, and actor.
+- Select a version to preview content.
+- Restore button with confirmation.
 
-### Tags editor
-- Simple chip input.
-- Existing tag autocomplete if available.
-- Save on explicit submit or debounced update; prefer explicit Save for first version.
-- Normalize duplicates client-side and server-side.
+Defer visual diffs and pinned versions.
 
 ## Verification steps
-- `pnpm typecheck`
-- `pnpm test tests/note-tags.test.ts tests/openapi.test.ts`
-- `pnpm test`
-- `pnpm build`
+
+- [x] `pnpm typecheck`
+- [x] `pnpm test tests/note-versions.test.ts`
+- [x] `pnpm test tests/note-links.test.ts` via targeted combined run
+- [x] `pnpm test`
+- [x] `pnpm build`
 - Manual checks:
-  - Add/remove tags from note details.
-  - Tags persist after reload.
-  - Search/filter by tag returns expected notes.
-  - Harness can read/update tags with authorized key.
-  - Harness cannot read/update tags outside allowed folders.
-  - Details dialog shows expected built-in metadata and does not expose custom properties.
+  - Create note creates initial version.
+  - Repeated identical saves do not create duplicate versions.
+  - Harness edit creates pre-edit version.
+  - Restore reverts note content/title and creates a before-restore snapshot.
+  - Restored note backlinks/outgoing links are reindexed.
+  - Version list never exceeds retention cap after pruning.
 
 ## Open questions
-- Endpoint naming: `/api/tags` vs `/api/notes/tags`.
-- Whether note read/search responses should include tags by default or load tags separately.
-- Whether tag filtering should support multiple tags initially.
-- Whether templates should support tags in MVP.
+
+- Include tags in MVP snapshots or defer?
+- Add harness version list/restore endpoints now or only internal agent safety snapshots?
+- Put UI in Activity route or a dedicated Version History dialog?
+- Should user checkpoints be exactly 10 minutes or 15 minutes?
+
+## Proposed MVP answer to open questions
+
+- Defer tags unless implementation is very small.
+- Do not expose harness version endpoints in MVP; only create pre-agent snapshots.
+- Use a Version History dialog from note actions.
+- Use 10-minute user checkpoint threshold.

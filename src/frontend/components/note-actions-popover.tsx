@@ -6,6 +6,7 @@ import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { MoveNoteDialog } from "./move-note-dialog";
 import { NoteDetailsDialog } from "./note-details-dialog";
 import { NoteShareDialog } from "./note-share-dialog";
+import { NoteVersionsDialog } from "./note-versions-dialog";
 import { ActionMenuButton, ActionMenuIconButton, ActionMenuItemLabel } from "./ui/action-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
@@ -14,6 +15,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
   const [copiedLink, setCopiedLink] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const copyNoteLink = async () => {
@@ -45,6 +47,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
         <ActionMenuButton onClick={() => { setShareOpen(true); setOpen(false); }}>Share</ActionMenuButton>
         <MoveNoteDialog note={note} onOpenChange={setOpen} trigger={<ActionMenuItemLabel>Move note</ActionMenuItemLabel>} />
         <ActionMenuButton disabled={duplicate.isPending} onClick={() => { duplicate.mutate(); setOpen(false); }}>Duplicate</ActionMenuButton>
+        <ActionMenuButton onClick={() => { setVersionsOpen(true); setOpen(false); }}>Version history</ActionMenuButton>
         <ActionMenuButton onClick={() => { navigate({ to: "/notes/$noteId/activity", params: { noteId: note.id } }); setOpen(false); }}>View activity</ActionMenuButton>
         {onToggleApiEditable ? <ActionMenuButton onClick={() => { onToggleApiEditable(); setOpen(false); }}>{note.isApiEditable ? "Disable API edits" : "Enable API edits"}</ActionMenuButton> : null}
         <DeleteConfirmDialog label="note" warning="This note will be permanently lost." onConfirm={onDelete} onOpenChange={setOpen} trigger={<ActionMenuItemLabel destructive>Delete note</ActionMenuItemLabel>} />
@@ -52,5 +55,6 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
     </Popover>
     <NoteDetailsDialog note={note} open={detailsOpen} onOpenChange={setDetailsOpen} onNoteUpdated={onNoteUpdated} />
     <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} />
+    <NoteVersionsDialog note={note} open={versionsOpen} onOpenChange={setVersionsOpen} onNoteUpdated={onNoteUpdated} />
   </>;
 }

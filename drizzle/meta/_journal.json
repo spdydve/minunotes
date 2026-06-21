@@ -134,6 +134,13 @@
       "when": 1781840000000,
       "tag": "0018_note_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1781850000000,
+      "tag": "0019_note_versions",
+      "breakpoints": true
     }
   ]
 }

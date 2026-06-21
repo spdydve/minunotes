@@ -1,15 +1,16 @@
-import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, like, or, sql } from "drizzle-orm";
 import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
 import { folders, noteEvents, noteTags, notes, tags, type Note } from "../db/schema";
 import { createId } from "../lib/id";
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from "../notes/links";
+import { createNoteVersion, maybeCreateUserCheckpoint } from "../notes/versions";
 import { applyDocumentEdits, type DocumentEdit } from "./edits";
 import { hashMarkdown } from "./hash";
 import { getLineRange, searchLines } from "./line-search";
 
 export type ActorType = "user" | "agent" | "system";
-export type NoteEventType = "create" | "update" | "edit_patch" | "move" | "toggle_api_editable";
+export type NoteEventType = "create" | "update" | "edit_patch" | "move" | "toggle_api_editable" | "restore";
 
 export type DocumentCommandResult<T> =
   | { ok: true; value: T }
@@ -182,6 +183,7 @@ export function getNoteEventSummary(eventType: NoteEventType, details: {
   if (eventType === "create") return "Created note";
   if (eventType === "edit_patch") return "Patched note content";
   if (eventType === "move") return "Moved note to another folder";
+  if (eventType === "restore") return "Restored note version";
   if (eventType === "toggle_api_editable") return details.isApiEditable ? "Enabled API editing" : "Disabled API editing";
 
   const changed = [
@@ -204,6 +206,32 @@ async function insertNoteEvent(input: {
   beforeHash?: string;
   afterHash?: string;
 }) {
+  const now = new Date();
+  const shouldCoalesce = input.actorType === "user" && (input.eventType === "update" || input.eventType === "edit_patch");
+  if (shouldCoalesce) {
+    const cutoff = new Date(now.getTime() - 10 * 60 * 1000);
+    const [recent] = await db.select().from(noteEvents)
+      .where(and(
+        eq(noteEvents.noteId, input.noteId),
+        eq(noteEvents.userId, input.userId),
+        eq(noteEvents.actorType, "user"),
+        inArray(noteEvents.eventType, ["update", "edit_patch"]),
+        gt(noteEvents.createdAt, cutoff),
+      ))
+      .orderBy(desc(noteEvents.createdAt))
+      .limit(1);
+
+    if (recent) {
+      await db.update(noteEvents).set({
+        eventType: input.eventType,
+        summary: input.summary,
+        afterHash: input.afterHash,
+        createdAt: now,
+      }).where(eq(noteEvents.id, recent.id));
+      return;
+    }
+  }
+
   await db.insert(noteEvents).values({
     id: createId("note_event"),
     noteId: input.noteId,
@@ -214,7 +242,7 @@ async function insertNoteEvent(input: {
     summary: input.summary,
     beforeHash: input.beforeHash,
     afterHash: input.afterHash,
-    createdAt: new Date(),
+    createdAt: now,
   });
 }
 
@@ -252,6 +280,7 @@ export async function createDocument(input: {
   await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
 
   const contentHash = hashMarkdown(note.content);
+  await createNoteVersion({ note: note as Note, reason: "create", actorType: note.updatedByActorType ?? "user", actorId: note.updatedByActorId });
   await insertNoteEvent({
     noteId: note.id,
     userId: note.userId,
@@ -317,6 +346,13 @@ export async function updateDocument(input: UpdateDocumentInput) {
   const isApiEditableChanged = input.isApiEditable !== undefined && input.isApiEditable !== current.value.note.isApiEditable;
   const createdAtChanged = input.createdAt !== undefined && input.createdAt.getTime() !== current.value.note.createdAt.getTime();
 
+  const stateChanged = titleChanged || contentChanged || folderChanged || isApiEditableChanged || createdAtChanged;
+  if (stateChanged && input.actorType === "agent") {
+    await createNoteVersion({ note: current.value.note, reason: "before_agent_edit", actorType: "agent", actorId: input.actorId });
+  } else if (stateChanged && (input.actorType ?? "user") === "user") {
+    await maybeCreateUserCheckpoint({ note: current.value.note, actorId: input.actorId });
+  }
+
   const [note] = await db.update(notes)
     .set({
       ...(input.title !== undefined ? { title: input.title } : {}),
@@ -341,7 +377,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
 
   const contentHash = hashMarkdown(note.content);
   const actorType = input.actorType ?? "user";
-  if (titleChanged || contentChanged || folderChanged || isApiEditableChanged || createdAtChanged) {
+  if (stateChanged) {
     const eventType = input.eventType ?? getUpdateEventType(input, current.value.note);
     await insertNoteEvent({
       noteId: note.id,

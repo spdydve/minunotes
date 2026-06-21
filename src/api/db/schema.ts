@@ -122,6 +122,26 @@ export const noteEvents = sqliteTable("note_events", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("note_events_note_id_idx").on(table.noteId), index("note_events_user_id_idx").on(table.userId), index("note_events_created_at_idx").on(table.createdAt)]);
 
+export const noteVersions = sqliteTable("note_versions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  noteId: text("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
+  createdAtValue: integer("created_at_value", { mode: "timestamp" }).notNull(),
+  isApiEditable: integer("is_api_editable", { mode: "boolean" }).notNull().default(true),
+  stateHash: text("state_hash").notNull(),
+  reason: text("reason", { enum: ["create", "autosave_checkpoint", "before_agent_edit", "before_restore", "manual"] }).notNull(),
+  actorType: text("actor_type", { enum: ["user", "agent", "system"] }).notNull(),
+  actorId: text("actor_id"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("note_versions_user_note_created_at_idx").on(table.userId, table.noteId, table.createdAt),
+  index("note_versions_note_created_at_idx").on(table.noteId, table.createdAt),
+  index("note_versions_note_state_hash_idx").on(table.noteId, table.stateHash),
+]);
+
 export const noteShareLinks = sqliteTable("note_share_links", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
@@ -203,6 +223,7 @@ export const userRelations = relations(user, ({ many }) => ({
   folders: many(folders),
   notes: many(notes),
   noteEvents: many(noteEvents),
+  noteVersions: many(noteVersions),
   noteShareLinks: many(noteShareLinks),
   noteLinks: many(noteLinks),
   tags: many(tags),
@@ -241,6 +262,7 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   user: one(user, { fields: [notes.userId], references: [user.id] }),
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
   events: many(noteEvents),
+  versions: many(noteVersions),
   shareLinks: many(noteShareLinks),
   tags: many(noteTags),
   outgoingLinks: many(noteLinks, { relationName: "sourceNoteLinks" }),
@@ -258,6 +280,12 @@ export const templateFolderAssignmentRelations = relations(templateFolderAssignm
 export const noteEventRelations = relations(noteEvents, ({ one }) => ({
   note: one(notes, { fields: [noteEvents.noteId], references: [notes.id] }),
   user: one(user, { fields: [noteEvents.userId], references: [user.id] }),
+}));
+
+export const noteVersionRelations = relations(noteVersions, ({ one }) => ({
+  note: one(notes, { fields: [noteVersions.noteId], references: [notes.id] }),
+  user: one(user, { fields: [noteVersions.userId], references: [user.id] }),
+  folder: one(folders, { fields: [noteVersions.folderId], references: [folders.id] }),
 }));
 
 export const noteShareLinkRelations = relations(noteShareLinks, ({ one }) => ({
@@ -292,6 +320,7 @@ export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
+export type NoteVersion = typeof noteVersions.$inferSelect;
 export type NoteShareLink = typeof noteShareLinks.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type NoteTag = typeof noteTags.$inferSelect;
