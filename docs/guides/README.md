@@ -4,4 +4,5 @@ User-facing guides for configuring and using MinuNotes.
 
 ## Available guides
 
+- [Organizing Notes](./organizing-notes.md)
 - [Using MinuNotes with Agents](./using-minunotes-with-agents.md)

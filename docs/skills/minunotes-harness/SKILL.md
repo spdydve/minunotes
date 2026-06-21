@@ -1,15 +1,15 @@
 # MinuNotes Harness Skill
 
-Use this skill when the user wants an agent to read, search, create, or edit notes in MinuNotes through the harness API.
+Use this skill when the user wants an agent to work with MinuNotes notes through the harness API.
 
 ## Requirements
 
-You need these environment variables or equivalent secrets:
+Environment variables:
 
-- `MINUNOTES_API_URL` — API origin or API base, for example `https://api-dev-notes.dpklabs.com`.
-- `MINUNOTES_API_KEY` — MinuNotes API key with access to all non-private folders, selected project roots, or specific selected non-private folders. Folder creation requires the key's explicit folder-creation permission.
+- `MINUNOTES_API_URL` — API origin/base, for example `https://api-dev-notes.dpklabs.com`.
+- `MINUNOTES_API_KEY` — API key scoped to all non-private folders, selected project roots, or specific folders.
 
-Normalize `MINUNOTES_API_URL` by removing any trailing slash. Harness routes live under `/api/harness`.
+Normalize the API URL by removing any trailing slash. Harness routes live under `/api/harness`.
 
 Send the API key on every request:
 
@@ -17,25 +17,22 @@ Send the API key on every request:
 X-API-Key: <MINUNOTES_API_KEY>
 ```
 
-Use JSON for request/response bodies.
-
 ## Safety and editing rules
 
 - Use only the harness/API. Do not use browser access unless explicitly asked.
 - Never fabricate note contents. Read/search first, then act.
-- Always read a note and capture `contentHash` before editing.
-- Include `baseHash` when editing to avoid overwriting concurrent changes.
+- Always read a note and capture `contentHash` before editing note content.
+- Include `baseHash` when editing content to avoid overwriting concurrent changes.
 - Prefer small, targeted edits.
-- Preserve markdown structure, headings, links, and image URLs.
-- For app-owned images, preserve normal URL markdown such as `/api/attachments/.../content`.
-- Report the folder ID, note ID, and final changed markdown or section summary after edits.
-- If an API key lacks permission, report the permission issue instead of retrying unrelated actions.
-- Do not create folders unless the user explicitly asks or grants permission for folder creation.
-- Private folders are not accessible through the harness API, MCP, or integrations.
+- Preserve markdown structure, headings, links, wikilinks, and image URLs.
+- Use `[[Note Title]]` for note links when appropriate. Use `[[Note Title|label]]` when the visible label should differ.
+- Search/read before creating wikilinks to avoid duplicate-title ambiguity.
+- Tags are lightweight labels. Tag names normalize to lowercase words with optional dashes, for example `plan` or `release-notes`.
+- For app-owned images, preserve URLs such as `/api/attachments/.../content`.
+- Report folder ID, note ID, and final changed markdown or section summary after edits.
+- If permission is denied, report the permission issue instead of retrying unrelated actions.
 
-## Common commands
-
-Set shell helpers:
+## Shell helpers
 
 ```bash
 API="${MINUNOTES_API_URL%/}"
@@ -43,104 +40,81 @@ KEY="$MINUNOTES_API_KEY"
 AUTH=(-H "X-API-Key: $KEY" -H "Content-Type: application/json")
 ```
 
+## Common commands
+
 List accessible folders:
 
 ```bash
 curl -s "${AUTH[@]}" "$API/api/harness/folders"
 ```
 
-Create a folder, only when explicitly requested and when the API key allows folder creation. The created folder is automatically accessible to the same API key. Use `parentFolderId` to create a subfolder when needed:
-
-```bash
-curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/folders" \
-  -d '{"title":"Agent Workspace","parentFolderId":null}'
-```
-
-Search notes by title/content/folder title:
+Search notes by title/content/folder/tag text:
 
 ```bash
 curl -s "${AUTH[@]}" "$API/api/harness/notes/search?q=project"
 ```
 
-Search lines across notes:
+Filter search by tag:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/notes/search-lines?q=todo&context=2&limit=10"
+curl -s "${AUTH[@]}" "$API/api/harness/notes/search?q=project&tag=release-notes"
 ```
 
-Create a note:
+Create/read/edit notes:
 
 ```bash
 curl -s "${AUTH[@]}" \
   -X POST "$API/api/harness/notes" \
   -d '{"folderId":"folder_xxx","title":"Agent Harness Smoke Test","content":"# Agent Harness Smoke Test\n\n- [ ] Created by harness\n"}'
+
+curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx"
+
+curl -s "${AUTH[@]}" \
+  -X POST "$API/api/harness/notes/note_xxx/edit" \
+  -d '{"baseHash":"hash_from_read","edits":[{"type":"replace_text","oldText":"old","newText":"new"}]}'
 ```
 
-Read a note:
+Tags:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx"
+curl -s "${AUTH[@]}" "$API/api/harness/tags"
+curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/tags"
+curl -s "${AUTH[@]}" \
+  -X PUT "$API/api/harness/notes/note_xxx/tags" \
+  -d '{"tags":["project","release-notes"]}'
 ```
 
-Get a note outline:
+Graph context:
+
+```bash
+curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/backlinks"
+curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/links"
+curl -s "${AUTH[@]}" "$API/api/harness/notes/orphans"
+```
+
+Read outline/section/lines:
 
 ```bash
 curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/outline"
-```
-
-Read a section:
-
-```bash
 curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/sections/section-id"
-```
-
-Read lines:
-
-```bash
 curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/lines?from=1&to=80"
 ```
-
-Edit a note using exact text replacement:
-
-```bash
-curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/notes/note_xxx/edit" \
-  -d '{
-    "baseHash":"hash_from_read",
-    "edits":[
-      {"type":"replace_text","oldText":"- [ ] Created by harness","newText":"- [x] Created by harness"}
-    ]
-  }'
-```
-
-Append text:
-
-```bash
-curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/notes/note_xxx/edit" \
-  -d '{
-    "baseHash":"hash_from_read",
-    "edits":[{"type":"append","text":"\n- Added by agent\n"}]
-  }'
-```
-
-## OpenAPI
-
-A static OpenAPI document for these harness endpoints is available at:
-
-- `GET /api/openapi.json`
-- `GET /api/harness/openapi.json`
 
 ## Endpoint reference
 
 - `GET /api/harness/folders`
 - `POST /api/harness/folders`
-- `GET /api/harness/notes/search?q=...`
+- `GET /api/harness/tags`
+- `GET /api/harness/notes/search?q=...&tag=...`
 - `GET /api/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
 - `POST /api/harness/notes`
+- `GET /api/harness/notes/orphans`
 - `GET /api/harness/notes/:noteId`
 - `GET /api/harness/notes/:noteId/events?limit=25`
+- `GET /api/harness/notes/:noteId/tags`
+- `PUT /api/harness/notes/:noteId/tags`
+- `GET /api/harness/notes/:noteId/backlinks`
+- `GET /api/harness/notes/:noteId/links`
 - `GET /api/harness/notes/:noteId/lines?from=1&to=80`
 - `GET /api/harness/notes/:noteId/search-lines?q=...&context=2&limit=25&caseSensitive=false`
 - `GET /api/harness/notes/:noteId/outline`
@@ -161,7 +135,7 @@ Prefer `replace_text` when the target text is unique. Use `replace_range` only a
 ## Error handling
 
 - `401`: missing/invalid API key.
-- `403`: API key lacks folder permission or folder-creation permission.
+- `403`: API key lacks folder permission, or the target folder/note is read-only for this key.
 - `404`: note/folder/section not found.
 - `409`: stale `baseHash`; reread the note and retry with the new hash.
 - `500`: server error; report endpoint and response body.

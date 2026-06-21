@@ -127,12 +127,15 @@ const MinuNotes = {
 For any edit task, the agent should:
 
 1. List or search for relevant notes.
-2. Read the target note.
-3. Save the returned `contentHash`.
-4. Make the smallest practical edit.
-5. Send `baseHash: contentHash` with the edit request.
-6. Read the note again.
-7. Report the note ID, changed section, and final markdown or summary.
+2. Use backlinks/outgoing links when relationship context matters.
+3. Read the target note.
+4. Save the returned `contentHash`.
+5. Make the smallest practical edit.
+6. Send `baseHash: contentHash` with the edit request.
+7. Read the note again.
+8. Report the note ID, changed section, and final markdown or summary.
+
+For organization tasks, agents can also read/update note tags through the harness API. Tags are lightweight labels, normalized to lowercase words with optional dashes, for example `plan` or `release-notes`.
 
 ## MCP and OpenAPI options
 
@@ -149,6 +152,16 @@ GET /api/harness/openapi.json
 ```
 
 All paths keep business logic and permissions centralized in `/api/harness/*`.
+
+Useful graph and organization endpoints include:
+
+- `GET /api/harness/tags`
+- `GET /api/harness/notes/search?q=...&tag=...`
+- `GET /api/harness/notes/:noteId/tags`
+- `PUT /api/harness/notes/:noteId/tags`
+- `GET /api/harness/notes/:noteId/backlinks`
+- `GET /api/harness/notes/:noteId/links`
+- `GET /api/harness/notes/orphans`
 
 ## Best practices
 
