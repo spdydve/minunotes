@@ -3,7 +3,7 @@ import { db } from "../db/client";
 import { apiKeyFolderPermissions, folders, notes, type ApiKey } from "../db/schema";
 import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
-import { listBacklinks } from "../notes/links";
+import { listBacklinks, listOrphanNotes, listOutgoingLinks } from "../notes/links";
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
 import { auth } from "../lib/auth";
 import { canApiKeyAccessFolder, getApiKeyAccessibleFolderIds, validateFolderParent } from "../lib/folder-access";
@@ -158,6 +158,15 @@ harnessRoutes.post("/notes", async (c) => {
   return c.json(result.value, 201);
 });
 
+harnessRoutes.get("/notes/orphans", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const rows = await listOrphanNotes({ userId: user.id });
+  const readableFolderIds = await getReadableFolderIds(c);
+  return c.json({ notes: readableFolderIds ? rows.filter((note) => readableFolderIds.has(note.folderId)) : rows });
+});
+
 harnessRoutes.get("/notes/:noteId/tags", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
@@ -204,6 +213,28 @@ harnessRoutes.get("/notes/:noteId/events", async (c) => {
   const result = await listNoteEvents({ documentId: c.req.param("noteId"), userId: user.id, limit: Number.isFinite(limit) && limit > 0 ? limit : undefined });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value);
+});
+
+harnessRoutes.get("/notes/:noteId/links", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const noteId = c.req.param("noteId");
+  const current = await readDocument({ documentId: noteId, userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "read"))) return c.json({ error: "Forbidden" }, 403);
+
+  const links = await listOutgoingLinks({ userId: user.id, noteId });
+  if (!links) return c.json({ error: "Note not found" }, 404);
+  const readableFolderIds = await getReadableFolderIds(c);
+  if (!readableFolderIds) return c.json({ noteId, links });
+
+  const targetIds = links.map((link) => link.targetNoteId).filter((id): id is string => Boolean(id));
+  const visibleTargets = targetIds.length
+    ? await db.select({ id: notes.id }).from(notes).where(and(eq(notes.userId, user.id), inArray(notes.id, targetIds), inArray(notes.folderId, [...readableFolderIds])))
+    : [];
+  const visibleTargetIds = new Set(visibleTargets.map((note) => note.id));
+  return c.json({ noteId, links: links.map((link) => link.targetNoteId && !visibleTargetIds.has(link.targetNoteId) ? { ...link, targetNoteId: null } : link) });
 });
 
 harnessRoutes.get("/notes/:noteId/backlinks", async (c) => {

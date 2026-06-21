@@ -8,7 +8,7 @@ import { parseInternalNoteUrls, parseWikiLinks } from "../src/api/notes/links";
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 17; index += 1) {
+  for (let index = 0; index <= 18; index += 1) {
     const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
     if (!file) throw new Error(`Missing migration ${index}`);
     await libsql.executeMultiple(await readFile(file, "utf8"));
@@ -126,6 +126,48 @@ describe("note link indexing", () => {
     const body = await response.json() as { noteId: string; backlinks: Array<{ sourceNoteId: string; sourceTitle: string; linkType: string }> };
     expect(body.noteId).toBe(target.id);
     expect(body.backlinks).toContainEqual(expect.objectContaining({ sourceNoteId: source.id, sourceTitle: "Source Note", linkType: "wikilink" }));
+  });
+
+  it("returns outgoing links with resolved and unresolved targets", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Target Note");
+    const source = await createNote(app, folderA.id, "Source Note", "See [[Target Note]] and [[Missing Note]].");
+
+    const response = await app.request(`/api/notes/${source.id}/links`);
+    expect(response.status).toBe(200);
+    const body = await response.json() as { noteId: string; links: Array<{ targetNoteId: string | null; targetTitle: string; linkType: string }> };
+    expect(body.noteId).toBe(source.id);
+    expect(body.links).toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetNoteId: target.id, targetTitle: "Target Note", linkType: "wikilink" }),
+      expect.objectContaining({ targetNoteId: null, targetTitle: "Missing Note", linkType: "wikilink" }),
+    ]));
+  });
+
+  it("returns orphan notes with no incoming links", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const linked = await createNote(app, folderA.id, "Linked Note");
+    const orphan = await createNote(app, folderA.id, "Orphan Note");
+    await createNote(app, folderA.id, "Source Note", "See [[Linked Note]].");
+
+    const response = await app.request("/api/notes/orphans");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { notes: Array<{ id: string; title: string }> };
+    expect(body.notes).toContainEqual(expect.objectContaining({ id: orphan.id, title: "Orphan Note" }));
+    expect(body.notes).not.toContainEqual(expect.objectContaining({ id: linked.id }));
+  });
+
+  it("returns graph endpoints through the harness API", async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, "Target Note");
+    const source = await createNote(app, folderA.id, "Source Note", "See [[Target Note]].");
+
+    const linksResponse = await app.request(`/api/harness/notes/${source.id}/links`);
+    expect(linksResponse.status).toBe(200);
+    await expect(linksResponse.json()).resolves.toMatchObject({ noteId: source.id, links: [expect.objectContaining({ targetNoteId: target.id, targetTitle: "Target Note" })] });
+
+    const orphansResponse = await app.request("/api/harness/notes/orphans");
+    expect(orphansResponse.status).toBe(200);
+    await expect(orphansResponse.json()).resolves.toMatchObject({ notes: expect.any(Array) });
   });
 
   it("indexes unresolved links and resolves them when a matching note is created", async () => {

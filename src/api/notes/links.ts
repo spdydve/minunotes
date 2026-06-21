@@ -145,6 +145,41 @@ export async function resolveUnresolvedNoteLinks(input: { userId: string; title:
     .where(and(eq(noteLinks.userId, input.userId), isNull(noteLinks.targetNoteId), sql`lower(${noteLinks.targetTitle}) = ${normalized}`));
 }
 
+export async function listOutgoingLinks(input: { userId: string; noteId: string }) {
+  const source = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId))).limit(1);
+  if (source.length === 0) return null;
+
+  return db.select({
+    id: noteLinks.id,
+    sourceNoteId: noteLinks.sourceNoteId,
+    targetNoteId: noteLinks.targetNoteId,
+    targetTitle: noteLinks.targetTitle,
+    label: noteLinks.label,
+    linkType: noteLinks.linkType,
+    createdAt: noteLinks.createdAt,
+    updatedAt: noteLinks.updatedAt,
+  }).from(noteLinks)
+    .where(and(eq(noteLinks.userId, input.userId), eq(noteLinks.sourceNoteId, input.noteId)))
+    .orderBy(noteLinks.targetTitle);
+}
+
+export async function listOrphanNotes(input: { userId: string }) {
+  return db.select({
+    id: notes.id,
+    folderId: notes.folderId,
+    title: notes.title,
+    type: notes.type,
+    createdAt: notes.createdAt,
+    updatedAt: notes.updatedAt,
+  }).from(notes)
+    .where(and(
+      eq(notes.userId, input.userId),
+      eq(notes.type, "note"),
+      sql`not exists (select 1 from ${noteLinks} where ${noteLinks.targetNoteId} = ${notes.id} and ${noteLinks.userId} = ${input.userId})`,
+    ))
+    .orderBy(notes.title);
+}
+
 export async function listBacklinks(input: { userId: string; noteId: string }) {
   const target = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId))).limit(1);
   if (target.length === 0) return null;

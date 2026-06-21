@@ -6,7 +6,7 @@ import { editDocument, listNoteEvents, readDocument, searchDocuments, updateDocu
 import { findSection, parseSections } from "../harness/sections";
 import { auth } from "../lib/auth";
 import { createId } from "../lib/id";
-import { listBacklinks } from "../notes/links";
+import { listBacklinks, listOrphanNotes, listOutgoingLinks } from "../notes/links";
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
 import { buildShareUrl, generateShareToken, hashShareToken } from "../lib/share-tokens";
 
@@ -127,6 +127,13 @@ noteRoutes.get("/recent", async (c) => {
   return c.json({ notes: rows });
 });
 
+noteRoutes.get("/orphans", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  return c.json({ notes: await listOrphanNotes({ userId: user.id }) });
+});
+
 noteRoutes.get("/:noteId/tags", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
@@ -224,6 +231,15 @@ noteRoutes.delete("/:noteId/share-link", async (c) => {
   const now = new Date();
   await db.update(noteShareLinks).set({ revokedAt: now, updatedAt: now }).where(activeShareWhere(noteId, user.id));
   return c.json({ ok: true });
+});
+
+noteRoutes.get("/:noteId/links", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const links = await listOutgoingLinks({ userId: user.id, noteId: c.req.param("noteId") });
+  if (!links) return c.json({ error: "Note not found" }, 404);
+  return c.json({ noteId: c.req.param("noteId"), links });
 });
 
 noteRoutes.get("/:noteId/backlinks", async (c) => {
