@@ -1,5 +1,7 @@
 # Implementation Notes
 
+- [Version History and Restore Plan](./version-history-restore.md)
+
 Reusable implementation notes for editor and harness features.
 
 ## Documents

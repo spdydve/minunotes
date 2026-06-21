@@ -1,0 +1,45 @@
+# Wikilinks and backlinks
+
+Wikilinks connect notes together. Backlinks show which notes reference the current note.
+
+## Link to another note
+
+```md
+[[Note Title]]
+```
+
+Use a label when the visible text should be different:
+
+```md
+[[Note Title|visible label]]
+```
+
+Typing `[[` opens note suggestions. Selecting a suggestion inserts the link.
+
+## Open linked notes
+
+Clicking a resolved wikilink opens the target note.
+
+A wikilink resolves when MinuNotes can uniquely match the target title to one note. If multiple notes have the same title, the link may remain unresolved.
+
+## Pasted note URLs
+
+MinuNotes also indexes internal note URLs as links. If you paste a MinuNotes note URL into another note, it can appear as a backlink on the target note.
+
+## Backlinks
+
+When a note has backlinks, a `Backlinks N` button appears near the top of the note on desktop/tablet. Open it to see notes that reference the current note.
+
+If a note has no backlinks, no backlinks button is shown.
+
+## Graph context for agents
+
+Agents can inspect note relationships through the harness API:
+
+```txt
+GET /api/harness/notes/:noteId/backlinks
+GET /api/harness/notes/:noteId/links
+GET /api/harness/notes/orphans
+```
+
+Outgoing links include unresolved wikilinks with `targetNoteId: null`.

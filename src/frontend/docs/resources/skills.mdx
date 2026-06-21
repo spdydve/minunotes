@@ -1,0 +1,72 @@
+# Skills
+
+Skills are portable instructions that teach an agent how to use MinuNotes through the harness API.
+
+Use the MinuNotes Harness Skill when an agent needs to read, search, create, edit, tag, or inspect linked notes without browser access.
+
+## When to use the skill
+
+Use it for tasks like:
+
+- Search my notes for a topic.
+- Save this summary to MinuNotes.
+- Update a note section.
+- Add or remove tags.
+- Find backlinks or outgoing links.
+- Inspect orphan notes.
+
+## Required secrets
+
+Agents need:
+
+```bash
+MINUNOTES_API_URL="https://notes.dpklabs.com"
+MINUNOTES_API_KEY="ntak_..."
+```
+
+The API key should be scoped to only the folders the agent needs.
+
+## Core rules for agents
+
+- Use only the harness API unless browser access is explicitly requested.
+- Read before editing.
+- Capture `contentHash` before editing content.
+- Send `baseHash` with content edits.
+- Prefer small, targeted edits.
+- Preserve Markdown, wikilinks, and image URLs.
+- Report note IDs and changed sections after edits.
+
+## Useful endpoints
+
+```txt
+GET /api/harness/folders
+GET /api/harness/notes/search?q=...
+POST /api/harness/notes
+GET /api/harness/notes/:noteId
+POST /api/harness/notes/:noteId/edit
+GET /api/harness/tags
+PUT /api/harness/notes/:noteId/tags
+GET /api/harness/notes/:noteId/backlinks
+GET /api/harness/notes/:noteId/links
+GET /api/harness/notes/orphans
+```
+
+## Portable skill file
+
+The skill text is available in the repository docs:
+
+```txt
+docs/skills/minunotes-harness/SKILL.md
+```
+
+Give that file to agents that support portable skills or system instructions.
+
+## OpenAPI and MCP alternatives
+
+Agents can also use:
+
+- Hosted MCP at `/api/mcp`
+- OpenAPI documents at `/api/openapi.json` and `/api/harness/openapi.json`
+- Direct REST calls to `/api/harness/*`
+
+All of these use the same scoped API-key permission model.
