@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { apiKeyFolderPermissions, folders, type ApiKey, type Folder } from "../db/schema";
+import { apiKeyFolderPermissions, folders, oauthAuthorizationFolderPermissions, type ApiKey, type Folder, type OAuthAuthorization } from "../db/schema";
 
 export type FolderPermissionKind = "read" | "create" | "edit";
 
@@ -141,63 +141,99 @@ function getFolderSubtreeHeight(folderId: string, rows: Pick<Folder, "id" | "par
   return visit(folderId, new Set());
 }
 
+function actorAllowsPermission(actor: Pick<ApiKey | OAuthAuthorization, "canRead" | "canCreate" | "canEdit">, permission: FolderPermissionKind) {
+  if (permission === "read") return actor.canRead;
+  if (permission === "create") return actor.canCreate;
+  return actor.canEdit;
+}
+
 function apiKeyAllowsPermission(apiKey: ApiKey, permission: FolderPermissionKind) {
-  if (permission === "read") return apiKey.canRead;
-  if (permission === "create") return apiKey.canCreate;
-  return apiKey.canEdit;
+  return actorAllowsPermission(apiKey, permission);
 }
 
 function isWritePermission(permission: FolderPermissionKind) {
   return permission === "create" || permission === "edit";
 }
 
-export async function canApiKeyAccessFolder(input: { apiKey: ApiKey | null; userId: string; folderId: string; permission: FolderPermissionKind }) {
-  if (!input.apiKey) return true;
-  if (!apiKeyAllowsPermission(input.apiKey, input.permission)) return false;
+async function canScopedActorAccessFolder(input: { actor: Pick<ApiKey | OAuthAuthorization, "id" | "accessMode" | "canRead" | "canCreate" | "canEdit">; permissionRows: Array<{ folderId: string }>; userId: string; folderId: string; permission: FolderPermissionKind }) {
+  if (!actorAllowsPermission(input.actor, input.permission)) return false;
 
   const tree = await loadFolderAccessTree(input.userId);
   if (!tree.byId.has(input.folderId)) return false;
   if (tree.privateFolderIds.has(input.folderId)) return false;
 
-  if (input.apiKey.accessMode === "all") {
+  if (input.actor.accessMode === "all") {
     if (isWritePermission(input.permission) && tree.agentReadOnlyFolderIds.has(input.folderId)) return false;
     return true;
   }
 
-  const rows = await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, input.apiKey.id));
-  if (input.apiKey.accessMode === "top_level") {
-    const matchesRoot = rows.some((row) => !tree.privateFolderIds.has(row.folderId) && isDescendantOrSelf(input.folderId, row.folderId, tree.byId));
+  if (input.actor.accessMode === "top_level") {
+    const matchesRoot = input.permissionRows.some((row) => !tree.privateFolderIds.has(row.folderId) && isDescendantOrSelf(input.folderId, row.folderId, tree.byId));
     if (!matchesRoot) return false;
     if (isWritePermission(input.permission) && tree.agentReadOnlyFolderIds.has(input.folderId)) return false;
     return true;
   }
 
-  return rows.some((row) => row.folderId === input.folderId && !tree.privateFolderIds.has(row.folderId));
+  return input.permissionRows.some((row) => row.folderId === input.folderId && !tree.privateFolderIds.has(row.folderId));
 }
 
-export async function getApiKeyAccessibleFolderIds(input: { apiKey: ApiKey | null; userId: string; permission: FolderPermissionKind }) {
-  if (!input.apiKey) return null;
-  if (!apiKeyAllowsPermission(input.apiKey, input.permission)) return new Set<string>();
+async function getScopedActorAccessibleFolderIds(input: { actor: Pick<ApiKey | OAuthAuthorization, "id" | "accessMode" | "canRead" | "canCreate" | "canEdit">; permissionRows: Array<{ folderId: string }>; userId: string; permission: FolderPermissionKind }) {
+  if (!actorAllowsPermission(input.actor, input.permission)) return new Set<string>();
 
   const tree = await loadFolderAccessTree(input.userId);
   const nonPrivateFolders = tree.folders.filter((folder) => !tree.privateFolderIds.has(folder.id));
-  const folderAllowedForPermission = (folder: Folder) => !isWritePermission(input.permission) || !tree.agentReadOnlyFolderIds.has(folder.id) || input.apiKey?.accessMode === "specific";
+  const folderAllowedForPermission = (folder: Folder) => !isWritePermission(input.permission) || !tree.agentReadOnlyFolderIds.has(folder.id) || input.actor.accessMode === "specific";
 
-  if (input.apiKey.accessMode === "all") {
+  if (input.actor.accessMode === "all") {
     return new Set(nonPrivateFolders.filter(folderAllowedForPermission).map((folder) => folder.id));
   }
 
-  const rows = await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, input.apiKey.id));
-  if (input.apiKey.accessMode === "top_level") {
+  if (input.actor.accessMode === "top_level") {
     return new Set(nonPrivateFolders
-      .filter((folder) => folderAllowedForPermission(folder) && rows.some((row) => !tree.privateFolderIds.has(row.folderId) && isDescendantOrSelf(folder.id, row.folderId, tree.byId)))
+      .filter((folder) => folderAllowedForPermission(folder) && input.permissionRows.some((row) => !tree.privateFolderIds.has(row.folderId) && isDescendantOrSelf(folder.id, row.folderId, tree.byId)))
       .map((folder) => folder.id));
   }
 
   const nonPrivateFolderIds = new Set(nonPrivateFolders.map((folder) => folder.id));
-  return new Set(rows
+  return new Set(input.permissionRows
     .filter((row) => nonPrivateFolderIds.has(row.folderId))
     .map((row) => row.folderId));
+}
+
+export async function canApiKeyAccessFolder(input: { apiKey: ApiKey | null; userId: string; folderId: string; permission: FolderPermissionKind }) {
+  if (!input.apiKey) return true;
+  const rows = await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, input.apiKey.id));
+  return canScopedActorAccessFolder({ actor: input.apiKey, permissionRows: rows, userId: input.userId, folderId: input.folderId, permission: input.permission });
+}
+
+export async function getApiKeyAccessibleFolderIds(input: { apiKey: ApiKey | null; userId: string; permission: FolderPermissionKind }) {
+  if (!input.apiKey) return null;
+  const rows = await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, input.apiKey.id));
+  return getScopedActorAccessibleFolderIds({ actor: input.apiKey, permissionRows: rows, userId: input.userId, permission: input.permission });
+}
+
+export async function canOAuthAuthorizationAccessFolder(input: { authorization: OAuthAuthorization | null; userId: string; folderId: string; permission: FolderPermissionKind }) {
+  if (!input.authorization) return true;
+  const rows = await db.select().from(oauthAuthorizationFolderPermissions).where(eq(oauthAuthorizationFolderPermissions.authorizationId, input.authorization.id));
+  return canScopedActorAccessFolder({ actor: input.authorization, permissionRows: rows, userId: input.userId, folderId: input.folderId, permission: input.permission });
+}
+
+export async function getOAuthAuthorizationAccessibleFolderIds(input: { authorization: OAuthAuthorization | null; userId: string; permission: FolderPermissionKind }) {
+  if (!input.authorization) return null;
+  const rows = await db.select().from(oauthAuthorizationFolderPermissions).where(eq(oauthAuthorizationFolderPermissions.authorizationId, input.authorization.id));
+  return getScopedActorAccessibleFolderIds({ actor: input.authorization, permissionRows: rows, userId: input.userId, permission: input.permission });
+}
+
+export async function canIntegrationAccessFolder(input: { apiKey: ApiKey | null; oauthAuthorization: OAuthAuthorization | null; userId: string; folderId: string; permission: FolderPermissionKind }) {
+  if (input.apiKey) return canApiKeyAccessFolder({ apiKey: input.apiKey, userId: input.userId, folderId: input.folderId, permission: input.permission });
+  if (input.oauthAuthorization) return canOAuthAuthorizationAccessFolder({ authorization: input.oauthAuthorization, userId: input.userId, folderId: input.folderId, permission: input.permission });
+  return true;
+}
+
+export async function getIntegrationAccessibleFolderIds(input: { apiKey: ApiKey | null; oauthAuthorization: OAuthAuthorization | null; userId: string; permission: FolderPermissionKind }) {
+  if (input.apiKey) return getApiKeyAccessibleFolderIds({ apiKey: input.apiKey, userId: input.userId, permission: input.permission });
+  if (input.oauthAuthorization) return getOAuthAuthorizationAccessibleFolderIds({ authorization: input.oauthAuthorization, userId: input.userId, permission: input.permission });
+  return null;
 }
 
 export async function filterSelectablePermissionRows(input: { userId: string; accessMode: ApiKey["accessMode"]; permissions: Array<{ folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> }) {

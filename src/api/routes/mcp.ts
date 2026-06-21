@@ -1,7 +1,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
 import { createNotesMcpServer, type NotesMcpClient } from "../../../packages/mcp/src/server";
-import type { ApiKey } from "../db/schema";
+import type { ApiKey, OAuthAuthorization } from "../db/schema";
 import { getApiKeyFromHeaders } from "../lib/api-keys";
 import { auth } from "../lib/auth";
 
@@ -9,6 +9,7 @@ type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
   apiKey: ApiKey | null;
+  oauthAuthorization: OAuthAuthorization | null;
 };
 
 export const mcpRoutes = new Hono<{ Variables: Variables }>();
@@ -18,9 +19,10 @@ mcpRoutes.all("/", async (c) => {
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const apiKey = getApiKeyFromHeaders(c.req.raw.headers);
-  if (!apiKey || !c.get("apiKey")) return c.json({ error: "Hosted MCP requires X-API-Key authentication" }, 401);
+  const bearer = c.req.raw.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if ((!apiKey || !c.get("apiKey")) && (!bearer || !c.get("oauthAuthorization"))) return c.json({ error: "Hosted MCP requires X-API-Key or Bearer authentication" }, 401);
 
-  const client = createHostedMcpClient(new URL(c.req.url).origin, apiKey);
+  const client = createHostedMcpClient(new URL(c.req.url).origin, apiKey ? { "x-api-key": apiKey } : { authorization: `Bearer ${bearer}` });
   const server = createNotesMcpServer(client);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -40,13 +42,13 @@ function toQueryString(input: Record<string, string | number | boolean | undefin
   return query ? `?${query}` : "";
 }
 
-function createHostedMcpClient(origin: string, apiKey: string): NotesMcpClient {
+function createHostedMcpClient(origin: string, authHeaders: Record<string, string>): NotesMcpClient {
   async function request(path: string, init: RequestInit = {}) {
     const response = await fetch(`${origin}/api/harness${path}`, {
       ...init,
       headers: {
         "content-type": "application/json",
-        "x-api-key": apiKey,
+        ...authHeaders,
         ...init.headers,
       },
     });

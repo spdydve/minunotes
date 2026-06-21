@@ -1,8 +1,9 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { db } from "../db/client";
-import { apiKeys, user } from "../db/schema";
+import { apiKeys, oauthAuthorizations, oauthTokens, user } from "../db/schema";
 import { getApiKeyFromHeaders, parseApiKey, verifyApiKey } from "../lib/api-keys";
+import { hashOAuthToken } from "../lib/oauth";
 import { auth } from "../lib/auth";
 
 export const authenticationMiddleware = createMiddleware(async (c, next) => {
@@ -10,10 +11,12 @@ export const authenticationMiddleware = createMiddleware(async (c, next) => {
   c.set("user", session?.user ?? null);
   c.set("session", session?.session ?? null);
   c.set("apiKey", null);
+  c.set("oauthAuthorization", null);
   await next();
 });
 
 export const harnessAuthenticationMiddleware = createMiddleware(async (c, next) => {
+  const headerApiKey = c.req.raw.headers.get("x-api-key")?.trim() ?? null;
   const apiKey = getApiKeyFromHeaders(c.req.raw.headers);
   const parsed = apiKey ? parseApiKey(apiKey) : null;
 
@@ -28,12 +31,40 @@ export const harnessAuthenticationMiddleware = createMiddleware(async (c, next) 
       c.set("user", row.user);
       c.set("session", null);
       c.set("apiKey", row.apiKey);
+      c.set("oauthAuthorization", null);
       await next();
       return;
     }
   }
 
-  if (apiKey) return c.json({ error: "Invalid API key" }, 401);
+  if (headerApiKey) return c.json({ error: "Invalid API key" }, 401);
+
+  const authorization = c.req.raw.headers.get("authorization");
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (bearer) {
+    const [row] = await db.select({ token: oauthTokens, authorization: oauthAuthorizations, user }).from(oauthTokens)
+      .innerJoin(oauthAuthorizations, eq(oauthTokens.authorizationId, oauthAuthorizations.id))
+      .innerJoin(user, eq(oauthAuthorizations.userId, user.id))
+      .where(and(
+        eq(oauthTokens.accessTokenHash, hashOAuthToken(bearer)),
+        isNull(oauthTokens.revokedAt),
+        isNull(oauthAuthorizations.revokedAt),
+        gt(oauthTokens.accessTokenExpiresAt, new Date()),
+      ))
+      .limit(1);
+
+    if (row) {
+      await db.update(oauthAuthorizations).set({ lastUsedAt: new Date() }).where(eq(oauthAuthorizations.id, row.authorization.id));
+      c.set("user", row.user);
+      c.set("session", null);
+      c.set("apiKey", null);
+      c.set("oauthAuthorization", row.authorization);
+      await next();
+      return;
+    }
+
+    return c.json({ error: "Invalid bearer token" }, 401);
+  }
 
   await authenticationMiddleware(c, next);
 });

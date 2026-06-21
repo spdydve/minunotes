@@ -9,7 +9,7 @@ API keys remain the right fit for local/private agents, scripts, CI, and trusted
 ## Benefits
 
 - **User-controlled consent**: users can approve a connection from the MinuNotes UI instead of manually copying secrets.
-- **Scoped access**: OAuth grants can use the same folder/project/specific-folder permission model as API keys.
+- **Scoped access**: OAuth grants should use the same current permission model as API keys: all non-private folders, selected project roots, or specific folders, with read/create/edit permissions and optional folder creation.
 - **Revocation UX**: users can disconnect an app from settings without hunting down copied keys.
 - **Short-lived access tokens**: access tokens can expire and be refreshed, reducing risk compared with permanent API keys.
 - **Third-party compatibility**: OAuth is expected by many hosted integrations, including ChatGPT-style connectors and MCP clients using bearer auth.
@@ -47,7 +47,21 @@ The existing API key path should continue unchanged.
 - Add first-class OAuth clients, authorizations, codes, tokens, and folder permissions.
 - Use Authorization Code + PKCE first.
 - Use opaque DB-backed access/refresh tokens first.
-- Share the existing folder access model with API keys as much as possible.
+- Reuse the existing API-key folder access model exactly where possible.
+- OAuth authorizations should support the same access modes as API keys:
+  - all non-private folders
+  - selected project roots and their non-private descendants
+  - specific folders
+- OAuth authorizations should support the same permission flags as API keys:
+  - read
+  - create notes
+  - edit notes
+  - create folders
+- OAuth authorizations should respect the same folder-level rules:
+  - private folders are never exposed
+  - private parent folders make descendants inaccessible
+  - folder-level “read-only for agents” blocks create/edit for all/project-root grants
+  - explicit specific-folder grants can act as intentional write exceptions if we choose to mirror API-key behavior exactly
 - Introduce an integration actor abstraction that can represent either:
   - API key actor
   - OAuth authorization actor
@@ -75,6 +89,10 @@ New tables likely needed:
 - `user_id`
 - `client_id`
 - `scope`
+- `access_mode` — mirror API keys: `all`, `top_level`, or `specific`
+- `can_read`
+- `can_create`
+- `can_edit`
 - `can_create_folders`
 - `created_at`
 - `updated_at`
@@ -156,26 +174,29 @@ New tables likely needed:
 ## Implementation phases
 
 ### Phase 1: OAuth foundations, no public UI polish
-- [ ] Add OAuth schema and migration.
-- [ ] Add OAuth token hashing/generation helpers.
-- [ ] Add Authorization Code + PKCE route skeleton.
-- [ ] Add token exchange route.
-- [ ] Add revoke route.
-- [ ] Add discovery metadata endpoints.
-- [ ] Add tests for PKCE validation, redirect URI validation, token issuance, token revocation.
+- [x] Add OAuth schema and migration.
+- [x] Add OAuth token hashing/generation helpers.
+- [x] Add Authorization Code + PKCE route skeleton.
+- [x] Add token exchange route.
+- [x] Add revoke route.
+- [x] Add discovery metadata endpoints.
+- [x] Add tests for PKCE validation, redirect URI validation, token issuance, token revocation.
 
 ### Phase 2: Shared integration actor permissions
-- [ ] Introduce shared actor resolution for API key and OAuth bearer tokens.
-- [ ] Keep existing `X-API-Key` behavior working.
-- [ ] Add `Authorization: Bearer <token>` support for harness and hosted MCP.
-- [ ] Update folder/note permission checks to work with OAuth authorization permissions.
-- [ ] Add tests proving API key and OAuth actor permissions match.
+- [x] Introduce shared actor resolution for API key and OAuth bearer tokens.
+- [x] Keep existing `X-API-Key` behavior working.
+- [x] Add `Authorization: Bearer <token>` support for harness and hosted MCP.
+- [x] Update folder/note permission checks to work with OAuth authorization permissions.
+- [x] Mirror current API-key access modes: all non-private, project roots, and specific folders.
+- [x] Mirror current API-key permission flags: read, create, edit, and create folders.
+- [x] Mirror current folder privacy/read-only behavior, including project-root descendants and specific-folder exceptions.
+- [x] Add tests proving API key and OAuth actor permissions match.
 
 ### Phase 3: Consent and connected app management
 - [ ] Add OAuth consent UI for selecting folder permissions and folder creation capability.
-- [ ] Add connected apps list in settings.
-- [ ] Add revoke connected app action.
-- [ ] Add tests for consent creation and revocation.
+- [x] Add connected apps list in settings.
+- [x] Add revoke connected app action.
+- [x] Add tests for consent creation and revocation.
 
 ### Phase 4: ChatGPT/MCP compatibility
 - [ ] Verify ChatGPT connector OAuth expectations and metadata endpoints.
@@ -201,11 +222,13 @@ New tables likely needed:
 - Should OAuth access tokens be opaque DB-backed tokens initially, or signed JWTs?
 - How should refresh token rotation be handled in the first implementation?
 - Should OAuth authorizations internally create hidden API keys, or should they use first-class OAuth permission tables?
+- Should OAuth mirror API-key specific-folder write exceptions exactly, or should connected apps use stricter read-only inheritance?
 
 ## Recommended initial decisions
 
 - Use opaque DB-backed tokens first.
 - Use first-class OAuth permission tables rather than hidden API keys.
+- Mirror the current API-key permission model unless there is a clear security reason to diverge.
 - Support Authorization Code + PKCE only at first.
 - Treat ChatGPT as a static configured OAuth client during early development.
 - Keep API keys indefinitely for local/private agents and MCP clients.
@@ -213,13 +236,14 @@ New tables likely needed:
 
 ## Verification plan
 
-- [ ] `pnpm typecheck`.
-- [ ] `pnpm test`.
-- [ ] `pnpm build`.
-- [ ] OAuth unit/integration tests pass.
-- [ ] Existing API key harness tests pass unchanged.
-- [ ] Existing hosted MCP tests pass with `X-API-Key`.
-- [ ] New hosted MCP tests pass with `Authorization: Bearer`.
+- [x] `pnpm typecheck`.
+- [x] `pnpm test`.
+- [x] `pnpm build`.
+- [x] OAuth unit/integration tests pass.
+- [x] Existing API key harness tests pass unchanged.
+- [x] OAuth permission tests cover all non-private, project-root, specific-folder, private-folder, and read-only-folder behavior.
+- [x] Existing hosted MCP tests pass with `X-API-Key`.
+- [x] New hosted MCP tests pass with `Authorization: Bearer`.
 - [ ] Manual ChatGPT connector smoke test after Phase 4.
 
 ## Approval

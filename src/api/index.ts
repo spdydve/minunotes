@@ -1,7 +1,7 @@
 import { handle } from "hono/aws-lambda";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { type ApiKey } from "./db/schema";
+import { type ApiKey, type OAuthAuthorization } from "./db/schema";
 import { libsql } from "./db/client";
 import { auth } from "./lib/auth";
 import { authenticationMiddleware, harnessAuthenticationMiddleware } from "./middleware/authentication";
@@ -17,6 +17,7 @@ import { folderRoutes } from "./routes/folders";
 import { harnessRoutes } from "./routes/harness";
 import { mcpRoutes } from "./routes/mcp";
 import { noteRoutes } from "./routes/notes";
+import { oauthRoutes } from "./routes/oauth";
 import { shareRoutes } from "./routes/share";
 
 const app = new Hono<{
@@ -24,6 +25,7 @@ const app = new Hono<{
     user: typeof auth.$Infer.Session.user | null;
     session: typeof auth.$Infer.Session.session | null;
     apiKey: ApiKey | null;
+    oauthAuthorization: OAuthAuthorization | null;
   };
 }>();
 
@@ -65,7 +67,12 @@ app.get("/health", async (c) => {
 });
 app.use("/api/auth", authRateLimit);
 app.use("/api/auth/*", authRateLimit);
+app.use("/api/oauth/token", authRateLimit);
+app.use("/api/oauth/revoke", authRateLimit);
 app.route("/api/auth", authRoutes);
+app.use("/api/oauth/authorize", authenticationMiddleware);
+app.use("/api/oauth/authorizations", authenticationMiddleware);
+app.use("/api/oauth/authorizations/*", authenticationMiddleware);
 app.use("/api/folders", authenticationMiddleware);
 app.use("/api/folders/*", authenticationMiddleware);
 app.use("/api/notes/*", authenticationMiddleware);
@@ -100,6 +107,7 @@ app.use("/api/attachments/:attachmentId/complete", writeBodyLimit);
 app.route("/api/folders", folderRoutes);
 app.route("/api/notes", noteRoutes);
 app.route("/api/share", shareRoutes);
+app.route("/api/oauth", oauthRoutes);
 app.route("/api/attachments", attachmentRoutes);
 app.route("/api/api-keys", apiKeyRoutes);
 app.route("/api/harness", harnessRoutes);

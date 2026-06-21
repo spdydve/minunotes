@@ -1,12 +1,12 @@
 import { Hono, type Context } from "hono";
 import { db } from "../db/client";
-import { apiKeyFolderPermissions, folders, notes, type ApiKey } from "../db/schema";
+import { apiKeyFolderPermissions, folders, notes, oauthAuthorizationFolderPermissions, type ApiKey, type OAuthAuthorization } from "../db/schema";
 import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from "../notes/links";
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
 import { auth } from "../lib/auth";
-import { canApiKeyAccessFolder, getApiKeyAccessibleFolderIds, validateFolderParent } from "../lib/folder-access";
+import { canIntegrationAccessFolder, getIntegrationAccessibleFolderIds, validateFolderParent } from "../lib/folder-access";
 import { createId } from "../lib/id";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -14,6 +14,7 @@ type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
   apiKey: ApiKey | null;
+  oauthAuthorization: OAuthAuthorization | null;
 };
 
 export const harnessRoutes = new Hono<{ Variables: Variables }>();
@@ -26,19 +27,20 @@ function getUser(c: Context<{ Variables: Variables }>) {
 
 function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType; actorId?: string } {
   const key = c.get("apiKey");
-  return key ? { actorType: "agent", actorId: key.id } : { actorType: "user" };
+  const oauthAuthorization = c.get("oauthAuthorization");
+  return key ? { actorType: "agent", actorId: key.id } : oauthAuthorization ? { actorType: "agent", actorId: oauthAuthorization.id } : { actorType: "user" };
 }
 
 async function hasFolderPermission(c: Context<{ Variables: Variables }>, folderId: string, permission: "read" | "create" | "edit") {
   const user = c.get("user");
   if (!user) return false;
-  return canApiKeyAccessFolder({ apiKey: c.get("apiKey"), userId: user.id, folderId, permission });
+  return canIntegrationAccessFolder({ apiKey: c.get("apiKey"), oauthAuthorization: c.get("oauthAuthorization"), userId: user.id, folderId, permission });
 }
 
 async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
   const user = c.get("user");
   if (!user) return null;
-  return getApiKeyAccessibleFolderIds({ apiKey: c.get("apiKey"), userId: user.id, permission: "read" });
+  return getIntegrationAccessibleFolderIds({ apiKey: c.get("apiKey"), oauthAuthorization: c.get("oauthAuthorization"), userId: user.id, permission: "read" });
 }
 
 harnessRoutes.get("/tags", async (c) => {
@@ -70,7 +72,9 @@ harnessRoutes.post("/folders", async (c) => {
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
   const key = c.get("apiKey");
+  const oauthAuthorization = c.get("oauthAuthorization");
   if (key && !key.canCreateFolders) return c.json({ error: "Forbidden" }, 403);
+  if (oauthAuthorization && !oauthAuthorization.canCreateFolders) return c.json({ error: "Forbidden" }, 403);
 
   const body = await c.req.json().catch(() => null) as { title?: string; parentFolderId?: string | null } | null;
   const title = body?.title?.trim();
@@ -91,6 +95,18 @@ harnessRoutes.post("/folders", async (c) => {
       canRead: key.canRead,
       canCreate: key.canCreate,
       canEdit: key.canEdit,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+  if (oauthAuthorization && oauthAuthorization.accessMode === "specific") {
+    await db.insert(oauthAuthorizationFolderPermissions).values({
+      id: createId("oauth_perm"),
+      authorizationId: oauthAuthorization.id,
+      folderId: folder.id,
+      canRead: oauthAuthorization.canRead,
+      canCreate: oauthAuthorization.canCreate,
+      canEdit: oauthAuthorization.canEdit,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

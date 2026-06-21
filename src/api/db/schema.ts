@@ -87,6 +87,73 @@ export const apiKeyFolderPermissions = sqliteTable("api_key_folder_permissions",
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("api_key_folder_permissions_api_key_id_idx").on(table.apiKeyId), index("api_key_folder_permissions_folder_id_idx").on(table.folderId)]);
 
+export const oauthClients = sqliteTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  redirectUris: text("redirect_uris").notNull(),
+  clientType: text("client_type", { enum: ["public", "confidential"] }).notNull().default("public"),
+  clientSecretHash: text("client_secret_hash"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+});
+
+export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  clientId: text("client_id").notNull().references(() => oauthClients.id, { onDelete: "cascade" }),
+  scope: text("scope").notNull().default(""),
+  accessMode: text("access_mode", { enum: ["all", "top_level", "specific"] }).notNull().default("specific"),
+  canRead: integer("can_read", { mode: "boolean" }).notNull().default(true),
+  canCreate: integer("can_create", { mode: "boolean" }).notNull().default(false),
+  canEdit: integer("can_edit", { mode: "boolean" }).notNull().default(false),
+  canCreateFolders: integer("can_create_folders", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+}, (table) => [index("oauth_authorizations_user_id_idx").on(table.userId), index("oauth_authorizations_client_id_idx").on(table.clientId)]);
+
+export const oauthAuthorizationFolderPermissions = sqliteTable("oauth_authorization_folder_permissions", {
+  id: text("id").primaryKey(),
+  authorizationId: text("authorization_id").notNull().references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
+  folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
+  canRead: integer("can_read", { mode: "boolean" }).notNull().default(false),
+  canCreate: integer("can_create", { mode: "boolean" }).notNull().default(false),
+  canEdit: integer("can_edit", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("oauth_authorization_folder_permissions_authorization_id_idx").on(table.authorizationId), index("oauth_authorization_folder_permissions_folder_id_idx").on(table.folderId)]);
+
+export const oauthAuthorizationCodes = sqliteTable("oauth_authorization_codes", {
+  id: text("id").primaryKey(),
+  codeHash: text("code_hash").notNull(),
+  clientId: text("client_id").notNull().references(() => oauthClients.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  scope: text("scope").notNull().default(""),
+  codeChallenge: text("code_challenge").notNull(),
+  codeChallengeMethod: text("code_challenge_method").notNull(),
+  authorizationId: text("authorization_id").notNull().references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  usedAt: integer("used_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("oauth_authorization_codes_code_hash_idx").on(table.codeHash), index("oauth_authorization_codes_authorization_id_idx").on(table.authorizationId)]);
+
+export const oauthTokens = sqliteTable("oauth_tokens", {
+  id: text("id").primaryKey(),
+  authorizationId: text("authorization_id").notNull().references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
+  accessTokenHash: text("access_token_hash").notNull(),
+  refreshTokenHash: text("refresh_token_hash").notNull(),
+  scope: text("scope").notNull().default(""),
+  accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }).notNull(),
+  refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }).notNull(),
+  revokedAt: integer("revoked_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("oauth_tokens_access_token_hash_idx").on(table.accessTokenHash), uniqueIndex("oauth_tokens_refresh_token_hash_idx").on(table.refreshTokenHash), index("oauth_tokens_authorization_id_idx").on(table.authorizationId)]);
+
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
   folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
@@ -231,6 +298,7 @@ export const userRelations = relations(user, ({ many }) => ({
   attachments: many(attachments),
   templateFolderAssignments: many(templateFolderAssignments),
   apiKeys: many(apiKeys),
+  oauthAuthorizations: many(oauthAuthorizations),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -256,6 +324,34 @@ export const apiKeyRelations = relations(apiKeys, ({ many, one }) => ({
 export const apiKeyFolderPermissionRelations = relations(apiKeyFolderPermissions, ({ one }) => ({
   apiKey: one(apiKeys, { fields: [apiKeyFolderPermissions.apiKeyId], references: [apiKeys.id] }),
   folder: one(folders, { fields: [apiKeyFolderPermissions.folderId], references: [folders.id] }),
+}));
+
+export const oauthClientRelations = relations(oauthClients, ({ many }) => ({
+  authorizations: many(oauthAuthorizations),
+  codes: many(oauthAuthorizationCodes),
+}));
+
+export const oauthAuthorizationRelations = relations(oauthAuthorizations, ({ many, one }) => ({
+  user: one(user, { fields: [oauthAuthorizations.userId], references: [user.id] }),
+  client: one(oauthClients, { fields: [oauthAuthorizations.clientId], references: [oauthClients.id] }),
+  folderPermissions: many(oauthAuthorizationFolderPermissions),
+  codes: many(oauthAuthorizationCodes),
+  tokens: many(oauthTokens),
+}));
+
+export const oauthAuthorizationFolderPermissionRelations = relations(oauthAuthorizationFolderPermissions, ({ one }) => ({
+  authorization: one(oauthAuthorizations, { fields: [oauthAuthorizationFolderPermissions.authorizationId], references: [oauthAuthorizations.id] }),
+  folder: one(folders, { fields: [oauthAuthorizationFolderPermissions.folderId], references: [folders.id] }),
+}));
+
+export const oauthAuthorizationCodeRelations = relations(oauthAuthorizationCodes, ({ one }) => ({
+  client: one(oauthClients, { fields: [oauthAuthorizationCodes.clientId], references: [oauthClients.id] }),
+  user: one(user, { fields: [oauthAuthorizationCodes.userId], references: [user.id] }),
+  authorization: one(oauthAuthorizations, { fields: [oauthAuthorizationCodes.authorizationId], references: [oauthAuthorizations.id] }),
+}));
+
+export const oauthTokenRelations = relations(oauthTokens, ({ one }) => ({
+  authorization: one(oauthAuthorizations, { fields: [oauthTokens.authorizationId], references: [oauthAuthorizations.id] }),
 }));
 
 export const noteRelations = relations(notes, ({ many, one }) => ({
@@ -328,3 +424,8 @@ export type NoteLink = typeof noteLinks.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type ApiKeyFolderPermission = typeof apiKeyFolderPermissions.$inferSelect;
+export type OAuthClient = typeof oauthClients.$inferSelect;
+export type OAuthAuthorization = typeof oauthAuthorizations.$inferSelect;
+export type OAuthAuthorizationFolderPermission = typeof oauthAuthorizationFolderPermissions.$inferSelect;
+export type OAuthAuthorizationCode = typeof oauthAuthorizationCodes.$inferSelect;
+export type OAuthToken = typeof oauthTokens.$inferSelect;
