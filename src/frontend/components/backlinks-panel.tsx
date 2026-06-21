@@ -11,14 +11,7 @@ export function BacklinksPanel({ backlinks, isLoading }: { backlinks?: Backlink[
   const [open, setOpen] = useState(false);
   const count = backlinks?.length ?? 0;
 
-  if (isLoading) {
-    return <div className="mt-3 hidden items-center gap-2 rounded-full border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] px-3 py-1.5 text-xs text-[var(--notes-muted)] md:inline-flex">
-      <Link2 className="h-3.5 w-3.5" />
-      Loading backlinks...
-    </div>;
-  }
-
-  if (!backlinks || count === 0) return null;
+  if (isLoading || !backlinks || count === 0) return null;
 
   return <>
     <button
