@@ -30,7 +30,7 @@ export type ApiKeyPermission = { id: string; apiKeyId: string; folderId: string;
 export type ApiKeyAccessMode = "all" | "top_level" | "specific";
 export type ApiKey = { id: string; name: string; uid: string; canCreateFolders: boolean; canRead: boolean; canCreate: boolean; canEdit: boolean; accessMode: ApiKeyAccessMode; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; permissions: ApiKeyPermission[] };
 export type OAuthAuthorizationPermission = { id: string; authorizationId: string; folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string };
-export type OAuthClient = { id: string; name: string; description: string | null; redirectUris: string; clientType: "public" | "confidential"; createdAt: string; updatedAt: string; revokedAt: string | null };
+export type OAuthClient = { id: string; userId: string | null; name: string; description: string | null; redirectUris: string; clientType: "public" | "confidential"; createdAt: string; updatedAt: string; revokedAt: string | null };
 export type OAuthAuthorization = { id: string; userId: string; clientId: string; scope: string; accessMode: ApiKeyAccessMode; canCreateFolders: boolean; canRead: boolean; canCreate: boolean; canEdit: boolean; createdAt: string; updatedAt: string; revokedAt: string | null; lastUsedAt: string | null; client: OAuthClient; permissions: OAuthAuthorizationPermission[] };
 export type NoteType = "note" | "template";
 export type Note = { id: string; folderId: string; title: string; content: string; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; updatedByActorUid?: string | null; createdAt: string; updatedAt: string };
@@ -72,6 +72,9 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
 
 export const api = {
   apiKeys: () => request<{ keys: ApiKey[] }>("/api-keys"),
+  oauthClients: () => request<{ clients: OAuthClient[] }>("/oauth/clients"),
+  createOAuthClient: (data: { name: string; description?: string | null; redirectUris: string[] }) => request<{ client: OAuthClient }>("/oauth/clients", { method: "POST", body: JSON.stringify(data) }),
+  revokeOAuthClient: (clientId: string) => request<{ ok: true }>(`/oauth/clients/${clientId}`, { method: "DELETE" }),
   oauthAuthorizations: () => request<{ authorizations: OAuthAuthorization[] }>("/oauth/authorizations"),
   revokeOAuthAuthorization: (authorizationId: string) => request<{ ok: true }>(`/oauth/authorizations/${authorizationId}`, { method: "DELETE" }),
   createApiKey: (data: { name: string; accessMode?: ApiKeyAccessMode; canCreateFolders?: boolean; canRead?: boolean; canCreate?: boolean; canEdit?: boolean; permissions: Array<{ folderId: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }> }) => request<{ key: string; apiKey: ApiKey }>("/api-keys", { method: "POST", body: JSON.stringify(data) }),

@@ -44,6 +44,64 @@ oauthRoutes.get("/.well-known/oauth-authorization-server", (c) => {
   });
 });
 
+oauthRoutes.get("/clients", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const clients = await db.select().from(oauthClients)
+    .where(eq(oauthClients.userId, user.id))
+    .orderBy(desc(oauthClients.createdAt));
+  return c.json({ clients });
+});
+
+oauthRoutes.post("/clients", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { name?: string; description?: string | null; redirectUris?: string[] } | null;
+  const name = body?.name?.trim();
+  if (!name) return c.json({ error: "App name is required" }, 400);
+  const redirectUris = [...new Set((body?.redirectUris ?? []).map((uri) => uri.trim()).filter(Boolean))];
+  if (redirectUris.length === 0) return c.json({ error: "At least one redirect URI is required" }, 400);
+  for (const uri of redirectUris) {
+    try {
+      const parsed = new URL(uri);
+      if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") return c.json({ error: "Redirect URIs must use HTTPS unless they target localhost" }, 400);
+    } catch {
+      return c.json({ error: "Redirect URIs must be valid URLs" }, 400);
+    }
+  }
+
+  const now = new Date();
+  const [client] = await db.insert(oauthClients).values({
+    id: createId("oauth_client"),
+    userId: user.id,
+    name,
+    description: body?.description?.trim() || null,
+    redirectUris: JSON.stringify(redirectUris),
+    clientType: "public",
+    createdAt: now,
+    updatedAt: now,
+  }).returning();
+  return c.json({ client }, 201);
+});
+
+oauthRoutes.delete("/clients/:clientId", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const now = new Date();
+  const [client] = await db.update(oauthClients).set({ revokedAt: now, updatedAt: now })
+    .where(and(eq(oauthClients.id, c.req.param("clientId")), eq(oauthClients.userId, user.id), isNull(oauthClients.revokedAt)))
+    .returning({ id: oauthClients.id });
+  if (!client) return c.json({ error: "OAuth app not found" }, 404);
+
+  const authorizations = await db.select({ id: oauthAuthorizations.id }).from(oauthAuthorizations).where(eq(oauthAuthorizations.clientId, client.id));
+  await db.update(oauthAuthorizations).set({ revokedAt: now, updatedAt: now }).where(eq(oauthAuthorizations.clientId, client.id));
+  for (const authorization of authorizations) await db.update(oauthTokens).set({ revokedAt: now, updatedAt: now }).where(eq(oauthTokens.authorizationId, authorization.id));
+  return c.json({ ok: true });
+});
+
 oauthRoutes.get("/authorizations", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: "Unauthorized" }, 401);

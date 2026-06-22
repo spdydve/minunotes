@@ -8,7 +8,7 @@ import { Hono } from "hono";
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 20; index += 1) {
+  for (let index = 0; index <= 21; index += 1) {
     const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
     if (!file) throw new Error(`Missing migration ${index}`);
     await libsql.executeMultiple(await readFile(file, "utf8"));
@@ -70,6 +70,27 @@ afterEach(async () => {
 });
 
 describe("oauth foundations", () => {
+  it("creates and revokes user-owned OAuth apps", async () => {
+    const { app } = await setupApp();
+
+    const create = await app.request("/api/oauth/clients", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Test OAuth App", description: "Created in test", redirectUris: ["https://client.example/callback"] }),
+    });
+    expect(create.status).toBe(201);
+    const createBody = await create.json() as { client: { id: string; name: string; userId: string; redirectUris: string } };
+    expect(createBody.client.name).toBe("Test OAuth App");
+    expect(JSON.parse(createBody.client.redirectUris)).toEqual(["https://client.example/callback"]);
+
+    const list = await app.request("/api/oauth/clients");
+    expect(list.status).toBe(200);
+    await expect(list.json()).resolves.toMatchObject({ clients: [{ id: createBody.client.id, name: "Test OAuth App" }] });
+
+    const revoke = await app.request(`/api/oauth/clients/${createBody.client.id}`, { method: "DELETE" });
+    expect(revoke.status).toBe(200);
+  });
+
   it("uses bearer tokens for harness access with API-key-style permissions", async () => {
     const { authApp, db, schema, user, hashOAuthToken } = await setupApp();
     const token = "mnoac_test_token";

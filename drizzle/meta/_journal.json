@@ -148,6 +148,13 @@
       "when": 1781860000000,
       "tag": "0020_oauth_foundations",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1781861000000,
+      "tag": "0021_oauth_client_owners",
+      "breakpoints": true
     }
   ]
 }

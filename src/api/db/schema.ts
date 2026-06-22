@@ -89,6 +89,7 @@ export const apiKeyFolderPermissions = sqliteTable("api_key_folder_permissions",
 
 export const oauthClients = sqliteTable("oauth_clients", {
   id: text("id").primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   redirectUris: text("redirect_uris").notNull(),
@@ -97,7 +98,7 @@ export const oauthClients = sqliteTable("oauth_clients", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`CURRENT_TIMESTAMP`),
   revokedAt: integer("revoked_at", { mode: "timestamp" }),
-});
+}, (table) => [index("oauth_clients_user_id_idx").on(table.userId)]);
 
 export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
   id: text("id").primaryKey(),
@@ -326,7 +327,8 @@ export const apiKeyFolderPermissionRelations = relations(apiKeyFolderPermissions
   folder: one(folders, { fields: [apiKeyFolderPermissions.folderId], references: [folders.id] }),
 }));
 
-export const oauthClientRelations = relations(oauthClients, ({ many }) => ({
+export const oauthClientRelations = relations(oauthClients, ({ many, one }) => ({
+  user: one(user, { fields: [oauthClients.userId], references: [user.id] }),
   authorizations: many(oauthAuthorizations),
   codes: many(oauthAuthorizationCodes),
 }));
