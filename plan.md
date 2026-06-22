@@ -194,7 +194,7 @@ New tables likely needed:
 
 ### Phase 3: Consent and connected app management
 - [x] Add OAuth consent UI for selecting folder permissions and folder creation capability.
-- [x] Add connected apps list in settings.
+- [x] Add connected apps list in settings (currently hidden behind `VITE_ENABLE_OAUTH_APPS=true` while OAuth is tested).
 - [x] Add revoke connected app action.
 - [x] Add tests for consent creation and revocation.
 
@@ -212,6 +212,13 @@ New tables likely needed:
 - [ ] Add audit events for connect/revoke/token use if desired.
 - [ ] Add admin/developer client registration UX or static seeded clients.
 - [ ] Review OpenAPI security definitions for Bearer token support.
+
+## Cleanup / follow-up before broad release
+
+- [ ] Decide whether OAuth app creation should remain user-facing or become admin/preconfigured-only.
+- [ ] Keep `VITE_ENABLE_OAUTH_APPS` off in production until ChatGPT/MCP compatibility is validated.
+- [ ] Revisit OAuth resources/docs visibility before broad release.
+- [ ] Review and simplify OAuth app presets after real connector testing.
 
 ## Open questions
 
