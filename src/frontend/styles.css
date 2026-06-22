@@ -377,6 +377,18 @@ select {
 .notes-minu-renderer-placeholder {
     color: var(--notes-muted);
 }
+.notes-minu-renderer hr,
+.notes-mdx hr {
+    height: 0;
+    margin: 1.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--notes-border);
+    background: transparent;
+}
+.notes-minu-editor .me-hr,
+.notes-minu-editor .cm-line.me-hr-line::after {
+    border-top-color: var(--notes-border) !important;
+}
 .notes-minu-renderer table,
 .notes-minu-editor .me-table-render {
     width: 100%;
