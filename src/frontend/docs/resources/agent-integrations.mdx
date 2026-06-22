@@ -29,4 +29,4 @@ GET /api/openapi.json
 POST /api/mcp
 ```
 
-Use `X-API-Key` on every harness, OpenAPI-authenticated, or hosted MCP request.
+Use `X-API-Key` on harness, OpenAPI-authenticated, and trusted/local hosted MCP requests. OAuth connected apps use `Authorization: Bearer mnoac_...` for hosted MCP and harness requests.

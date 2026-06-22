@@ -3,6 +3,7 @@ import { Hono, type Context } from "hono";
 import { db } from "../db/client";
 import { oauthAuthorizationCodes, oauthAuthorizationFolderPermissions, oauthAuthorizations, oauthClients, oauthTokens, type ApiKey, type OAuthAuthorization } from "../db/schema";
 import { auth } from "../lib/auth";
+import { filterSelectablePermissionRows } from "../lib/folder-access";
 import { AUTHORIZATION_CODE_TTL_MS, ACCESS_TOKEN_TTL_MS, REFRESH_TOKEN_TTL_MS, findOAuthClient, generateOAuthToken, hashOAuthToken, isRedirectUriAllowed, oauthError, verifyPkce } from "../lib/oauth";
 import { createId } from "../lib/id";
 
@@ -28,6 +29,17 @@ function appendErrorRedirect(redirectUri: string, error: string, state?: string 
   url.searchParams.set("error", error);
   if (state) url.searchParams.set("state", state);
   return url.toString();
+}
+
+async function validateAuthorizeRequest(input: { clientId?: string; redirectUri?: string; responseType?: string; codeChallenge?: string; codeChallengeMethod?: string }) {
+  if (input.responseType !== "code") return { ok: false as const, status: 400 as const, error: oauthError("unsupported_response_type") };
+  if (!input.clientId || !input.redirectUri || !input.codeChallenge) return { ok: false as const, status: 400 as const, error: oauthError("invalid_request", "client_id, redirect_uri, and code_challenge are required") };
+  if (input.codeChallengeMethod !== "S256") return { ok: false as const, status: 400 as const, error: oauthError("invalid_request", "Only S256 PKCE is supported") };
+
+  const client = await findOAuthClient(input.clientId);
+  if (!client) return { ok: false as const, status: 400 as const, error: oauthError("invalid_client") };
+  if (!isRedirectUriAllowed(client, input.redirectUri)) return { ok: false as const, status: 400 as const, error: oauthError("invalid_request", "redirect_uri is not registered for this client") };
+  return { ok: true as const, client, redirectUri: input.redirectUri, clientId: input.clientId, codeChallenge: input.codeChallenge, codeChallengeMethod: input.codeChallengeMethod };
 }
 
 oauthRoutes.get("/.well-known/oauth-authorization-server", (c) => {
@@ -136,59 +148,102 @@ oauthRoutes.delete("/authorizations/:authorizationId", async (c) => {
   return c.json({ ok: true });
 });
 
-oauthRoutes.get("/authorize", async (c) => {
+oauthRoutes.get("/authorize/preview", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const clientId = c.req.query("client_id");
-  const redirectUri = c.req.query("redirect_uri");
-  const responseType = c.req.query("response_type");
-  const codeChallenge = c.req.query("code_challenge");
-  const codeChallengeMethod = c.req.query("code_challenge_method");
-  const state = c.req.query("state") ?? null;
-  const scope = c.req.query("scope") ?? "";
+  const result = await validateAuthorizeRequest({
+    clientId: c.req.query("client_id"),
+    redirectUri: c.req.query("redirect_uri"),
+    responseType: c.req.query("response_type"),
+    codeChallenge: c.req.query("code_challenge"),
+    codeChallengeMethod: c.req.query("code_challenge_method"),
+  });
+  if (!result.ok) return c.json(result.error, result.status);
+  return c.json({ client: result.client, request: { scope: c.req.query("scope") ?? "", state: c.req.query("state") ?? null, redirectUri: result.redirectUri } });
+});
 
-  if (responseType !== "code") return c.json(oauthError("unsupported_response_type"), 400);
-  if (!clientId || !redirectUri || !codeChallenge) return c.json(oauthError("invalid_request", "client_id, redirect_uri, and code_challenge are required"), 400);
-  if (codeChallengeMethod !== "S256") return c.json(oauthError("invalid_request", "Only S256 PKCE is supported"), 400);
+oauthRoutes.post("/authorize/approve", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const client = await findOAuthClient(clientId);
-  if (!client) return c.json(oauthError("invalid_client"), 400);
-  if (!isRedirectUriAllowed(client, redirectUri)) return c.json(oauthError("invalid_request", "redirect_uri is not registered for this client"), 400);
+  const body = await c.req.json().catch(() => null) as { clientId?: string; redirectUri?: string; responseType?: string; codeChallenge?: string; codeChallengeMethod?: string; state?: string | null; scope?: string; accessMode?: "all" | "top_level" | "specific"; canRead?: boolean; canCreate?: boolean; canEdit?: boolean; canCreateFolders?: boolean; folderIds?: string[] } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  const result = await validateAuthorizeRequest({ clientId: body.clientId, redirectUri: body.redirectUri, responseType: body.responseType, codeChallenge: body.codeChallenge, codeChallengeMethod: body.codeChallengeMethod });
+  if (!result.ok) return c.json(result.error, result.status);
+
+  const accessMode = body.accessMode === "all" || body.accessMode === "top_level" || body.accessMode === "specific" ? body.accessMode : "specific";
+  const canRead = body.canRead ?? true;
+  const canCreate = body.canCreate ?? false;
+  const canEdit = body.canEdit ?? false;
+  if (!canRead && !canCreate && !canEdit) return c.json({ error: "At least one permission is required" }, 400);
+  const folderIds = [...new Set(body.folderIds ?? [])];
+  if (accessMode !== "all" && folderIds.length === 0) return c.json({ error: "At least one folder is required" }, 400);
+  const selectedPermissions = accessMode === "all" ? [] : await filterSelectablePermissionRows({ userId: user.id, accessMode, permissions: folderIds.map((folderId) => ({ folderId, canRead, canCreate, canEdit })) });
+  if (accessMode !== "all" && selectedPermissions.length !== folderIds.length) return c.json({ error: "One or more folders cannot be selected" }, 400);
 
   const now = new Date();
   const [authorization] = await db.insert(oauthAuthorizations).values({
     id: createId("oauth_auth"),
     userId: user.id,
-    clientId,
-    scope,
-    accessMode: "specific",
-    canRead: true,
-    canCreate: false,
-    canEdit: false,
-    canCreateFolders: false,
+    clientId: result.clientId,
+    scope: body.scope ?? "",
+    accessMode,
+    canRead,
+    canCreate,
+    canEdit,
+    canCreateFolders: body.canCreateFolders ?? false,
     createdAt: now,
     updatedAt: now,
   }).returning();
+
+  if (accessMode !== "all" && selectedPermissions.length > 0) {
+    await db.insert(oauthAuthorizationFolderPermissions).values(selectedPermissions.flatMap(({ folderId }) => folderId ? [{
+      id: createId("oauth_perm"),
+      authorizationId: authorization.id,
+      folderId,
+      canRead,
+      canCreate,
+      canEdit,
+      createdAt: now,
+      updatedAt: now,
+    }] : []));
+  }
 
   const code = generateOAuthToken("mnocd");
   await db.insert(oauthAuthorizationCodes).values({
     id: createId("oauth_code"),
     codeHash: hashOAuthToken(code),
-    clientId,
+    clientId: result.clientId,
     userId: user.id,
-    redirectUri,
-    scope,
-    codeChallenge,
-    codeChallengeMethod,
+    redirectUri: result.redirectUri,
+    scope: body.scope ?? "",
+    codeChallenge: result.codeChallenge,
+    codeChallengeMethod: result.codeChallengeMethod,
     authorizationId: authorization.id,
     expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
     createdAt: now,
   });
 
-  const url = new URL(redirectUri);
+  const url = new URL(result.redirectUri);
   url.searchParams.set("code", code);
-  if (state) url.searchParams.set("state", state);
+  if (body.state) url.searchParams.set("state", body.state);
+  return c.json({ redirectUrl: url.toString() });
+});
+
+oauthRoutes.get("/authorize", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const result = await validateAuthorizeRequest({
+    clientId: c.req.query("client_id"),
+    redirectUri: c.req.query("redirect_uri"),
+    responseType: c.req.query("response_type"),
+    codeChallenge: c.req.query("code_challenge"),
+    codeChallengeMethod: c.req.query("code_challenge_method"),
+  });
+  if (!result.ok) return c.json(result.error, result.status);
+  const url = new URL("/oauth/authorize", getOrigin(c));
+  for (const [key, value] of new URL(c.req.url).searchParams.entries()) url.searchParams.set(key, value);
   return c.redirect(url.toString(), 302);
 });
 

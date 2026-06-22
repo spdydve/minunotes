@@ -193,7 +193,7 @@ New tables likely needed:
 - [x] Add tests proving API key and OAuth actor permissions match.
 
 ### Phase 3: Consent and connected app management
-- [ ] Add OAuth consent UI for selecting folder permissions and folder creation capability.
+- [x] Add OAuth consent UI for selecting folder permissions and folder creation capability.
 - [x] Add connected apps list in settings.
 - [x] Add revoke connected app action.
 - [x] Add tests for consent creation and revocation.

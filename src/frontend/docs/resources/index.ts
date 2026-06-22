@@ -3,6 +3,7 @@ import AgentIntegrations from "./agent-integrations.mdx";
 import HarnessApi from "./harness-api.mdx";
 import MarkdownEditor from "./markdown-editor.mdx";
 import Mcp from "./mcp.mdx";
+import OAuthManualTesting from "./oauth-manual-testing.mdx";
 import OpenApi from "./openapi.mdx";
 import Skills from "./skills.mdx";
 import SlashCommands from "./slash-commands.mdx";
@@ -80,6 +81,13 @@ export const resourceDocs = [
     description: "Hosted Streamable HTTP MCP and local stdio MCP usage.",
     category: "Agents",
     component: Mcp,
+  },
+  {
+    slug: "oauth-manual-testing",
+    title: "Manual integration testing",
+    description: "Smoke-test API keys, MCP, and OAuth connected app flows.",
+    category: "API",
+    component: OAuthManualTesting,
   },
 ] as const satisfies readonly ResourceDoc[];
 

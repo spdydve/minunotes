@@ -48,7 +48,7 @@ For MCP-capable hosted agents, use the hosted Streamable HTTP MCP endpoint inste
 https://<your-minunotes-host>/api/mcp
 ```
 
-Hosted MCP currently uses `X-API-Key` authentication and the same scoped folder permissions as `/api/harness/*`. Local MCP clients can still run the `notes-mcp` stdio binary.
+Hosted MCP accepts `X-API-Key` authentication for trusted/private clients and OAuth bearer tokens for connected apps. Both use the same scoped folder permissions as `/api/harness/*`. Local MCP clients can still run the `notes-mcp` stdio binary.
 
 Recommended helper shape:
 

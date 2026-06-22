@@ -12,7 +12,7 @@ GET /api/mcp
 DELETE /api/mcp
 ```
 
-Hosted MCP currently uses `X-API-Key` authentication and routes tool calls through `/api/harness/*`.
+Hosted MCP accepts either `X-API-Key: ntak_...` or `Authorization: Bearer mnoac_...` for OAuth connected apps, and routes tool calls through `/api/harness/*`.
 
 ## Local MCP
 

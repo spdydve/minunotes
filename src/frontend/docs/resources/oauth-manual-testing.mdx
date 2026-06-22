@@ -1,0 +1,111 @@
+# Manual integration testing
+
+Use these checks when validating API keys, hosted MCP, local MCP, and OAuth connected apps.
+
+## API key harness smoke test
+
+Create an API key in **Settings → API Access → API keys**. Then call the harness directly:
+
+```sh
+curl "$MINUNOTES_BASE_URL/api/harness/folders" \
+  -H "X-API-Key: ntak_..."
+```
+
+Expected result: a JSON list of folders allowed by that key. Private folders should never appear.
+
+## Hosted MCP with an API key
+
+Use hosted MCP for remote MCP-capable clients:
+
+```txt
+https://notes.dpklabs.com/api/mcp
+```
+
+Authenticate with:
+
+```txt
+X-API-Key: ntak_...
+```
+
+A local curl check can confirm the endpoint is reachable:
+
+```sh
+curl "$MINUNOTES_BASE_URL/api/mcp" \
+  -H "X-API-Key: ntak_..."
+```
+
+Your MCP client will handle protocol requests such as tool discovery and tool calls.
+
+## Local MCP with an API key
+
+Use local stdio MCP for desktop clients that launch a process:
+
+```sh
+export NOTES_API_URL="https://notes.dpklabs.com"
+export NOTES_API_KEY="ntak_..."
+notes-mcp
+```
+
+For local MinuNotes development, use your local URL:
+
+```sh
+export NOTES_API_URL="http://localhost:5173"
+export NOTES_API_KEY="ntak_..."
+notes-mcp
+```
+
+## OAuth browser consent smoke test
+
+Use OAuth for hosted or third-party connected apps where the user should approve access in the browser.
+
+1. Go to **Settings → API Access → Apps → Add App**.
+2. Create a custom app.
+3. Use a redirect URI such as:
+
+```txt
+https://example.com/minunotes-oauth-callback
+```
+
+4. Copy the generated client ID.
+5. Run the smoke script:
+
+```sh
+MINUNOTES_BASE_URL="http://localhost:5173" \
+MINUNOTES_OAUTH_CLIENT_ID="<client_id>" \
+pnpm oauth:smoke
+```
+
+For production or dev, change `MINUNOTES_BASE_URL`:
+
+```sh
+MINUNOTES_BASE_URL="https://notes.dpklabs.com" \
+MINUNOTES_OAUTH_CLIENT_ID="<client_id>" \
+pnpm oauth:smoke
+```
+
+The script prints an authorization URL. Open it while logged into MinuNotes, approve access, then copy the final redirected URL from the browser address bar and paste it back into the script.
+
+Expected result:
+
+- token exchange succeeds
+- `/api/harness/folders` succeeds with `Authorization: Bearer mnoac_...`
+- visible folders match the consent scope
+
+## Hosted MCP with OAuth
+
+Hosted MCP also accepts OAuth bearer tokens:
+
+```txt
+Authorization: Bearer mnoac_...
+```
+
+This is the path for OAuth-capable hosted connectors. API keys remain the simpler path for local scripts, trusted private agents, and local MCP clients.
+
+## What to verify
+
+- Private folders are excluded.
+- Project-root grants include non-private descendants.
+- Specific-folder grants only expose selected folders.
+- Read-only grants block create/edit calls.
+- Revoking a connected app blocks the bearer token.
+- Revoking an API key blocks API-key and MCP access using that key.

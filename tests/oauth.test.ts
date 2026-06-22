@@ -178,11 +178,25 @@ describe("oauth foundations", () => {
   it("exchanges an authorization code with PKCE and revokes a token", async () => {
     const { app } = await setupApp();
     const verifier = "a".repeat(64);
-    const authorize = await app.request(`/api/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent("https://client.example/callback")}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256&state=abc`);
+    const authorizePath = `/api/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent("https://client.example/callback")}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256&state=abc`;
+    const authorize = await app.request(authorizePath);
     expect(authorize.status).toBe(302);
     const location = authorize.headers.get("location");
     expect(location).toBeTruthy();
-    const redirected = new URL(location!);
+    expect(new URL(location!).pathname).toBe("/oauth/authorize");
+
+    const preview = await app.request(authorizePath.replace("/authorize?", "/authorize/preview?"));
+    expect(preview.status).toBe(200);
+    await expect(preview.json()).resolves.toMatchObject({ client: { name: "Client A" }, request: { state: "abc" } });
+
+    const approve = await app.request("/api/oauth/authorize/approve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ responseType: "code", clientId: "client_a", redirectUri: "https://client.example/callback", codeChallenge: pkceChallenge(verifier), codeChallengeMethod: "S256", state: "abc", accessMode: "all", canRead: true, canCreate: false, canEdit: false, canCreateFolders: false, folderIds: [] }),
+    });
+    expect(approve.status).toBe(200);
+    const { redirectUrl } = await approve.json() as { redirectUrl: string };
+    const redirected = new URL(redirectUrl);
     expect(redirected.searchParams.get("state")).toBe("abc");
     const code = redirected.searchParams.get("code");
     expect(code).toBeTruthy();
