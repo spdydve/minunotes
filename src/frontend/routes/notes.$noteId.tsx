@@ -1,9 +1,11 @@
 import { createRoute, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api } from "../lib/api";
 import { BacklinksPanel } from "../components/backlinks-panel";
 import { NoteActionsPopover } from "../components/note-actions-popover";
+import { NoteCanvasEditor } from "../components/note-canvas-editor";
 import { NoteEditor } from "../components/note-editor";
 import { Button } from "../components/ui/button";
 import { EmptyState } from "../components/ui/empty-state";
@@ -21,7 +23,7 @@ function NoteView() {
   const { data: backlinksData, isLoading: backlinksLoading } = useQuery({
     queryKey: ["backlinks", noteId],
     queryFn: () => api.backlinks(noteId),
-    enabled: Boolean(data?.note),
+    enabled: Boolean(data?.note && data.note.documentType === "markdown"),
   });
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -244,24 +246,42 @@ function NoteView() {
       ? "Last updated by system"
       : null;
 
-  return <NoteEditor
+  const staleNotice = <>
+    {isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
+    {imageUploadError ? <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">{imageUploadError}</div> : null}
+  </>;
+  const actions = <NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} onNoteUpdated={applyDetailsUpdate} />;
+
+  if (data.note.documentType.startsWith("canvas.")) {
+    return <NoteCanvasEditor
       key={noteId}
       title={title}
       content={content}
       saveState={saveState}
       onTitleChange={setTitle}
       onContentChange={setContent}
-      initialEditing={!data.note.content.trim()}
       updatedMeta={updatedMeta}
-      headerExtra={<BacklinksPanel backlinks={backlinksData?.backlinks} isLoading={backlinksLoading} />}
-      staleNotice={<>
-        {isStale ? <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"><span>This note was updated elsewhere. Reload to view the latest version.</span><button className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900" onClick={reloadLatest}>Reload</button></div> : null}
-        {imageUploadError ? <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">{imageUploadError}</div> : null}
-      </>}
-      onImageUpload={uploadImage}
-      wikiLinks={wikiLinks}
-      actions={<NoteActionsPopover note={data.note} icon="settings" onDelete={() => remove.mutate()} onToggleApiEditable={() => toggleApiEditable.mutate()} onNoteUpdated={applyDetailsUpdate} />}
+      staleNotice={staleNotice}
+      actions={actions}
+      navigation={<Button variant="secondary" className="inline-flex h-9 items-center gap-2 px-2.5 py-0" onClick={() => nav({ to: "/folders/$folderId", params: { folderId: data.note.folderId } })}><ArrowLeft className="h-4 w-4" /><span className="hidden sm:inline">Notes</span></Button>}
     />;
+  }
+
+  return <NoteEditor
+    key={noteId}
+    title={title}
+    content={content}
+    saveState={saveState}
+    onTitleChange={setTitle}
+    onContentChange={setContent}
+    initialEditing={!data.note.content.trim()}
+    updatedMeta={updatedMeta}
+    headerExtra={<BacklinksPanel backlinks={backlinksData?.backlinks} isLoading={backlinksLoading} />}
+    staleNotice={staleNotice}
+    onImageUpload={uploadImage}
+    wikiLinks={wikiLinks}
+    actions={actions}
+  />;
 }
 
 export const noteRoute = createRoute({ getParentRoute: () => rootRoute, path: "/notes/$noteId", component: NoteView });

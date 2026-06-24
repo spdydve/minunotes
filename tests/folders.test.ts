@@ -7,7 +7,7 @@ import { Hono } from "hono";
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 21; index += 1) {
+  for (let index = 0; index <= 22; index += 1) {
     const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
     if (!file) throw new Error(`Missing migration ${index}`);
     await libsql.executeMultiple(await readFile(file, "utf8"));
@@ -59,6 +59,35 @@ async function createFolder(app: Hono, title: string, parentFolderId?: string | 
 }
 
 describe("folder hierarchy", () => {
+  it("creates canvas notes as note-backed documents", async () => {
+    const { app } = await setupFolderApp();
+    const folder = await createFolder(app, "Diagrams");
+
+    const response = await app.request(`/api/folders/${folder.id}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ documentType: "canvas.default" }),
+    });
+    expect(response.status).toBe(201);
+    const { note } = await response.json() as { note: { title: string; documentType: string; content: string } };
+    expect(note.title).toBe("Untitled canvas");
+    expect(note.documentType).toBe("canvas.default");
+    expect(JSON.parse(note.content)).toEqual({ nodes: [], edges: [] });
+  });
+
+  it("rejects canvas templates", async () => {
+    const { app } = await setupFolderApp();
+    const folder = await createFolder(app, "Templates");
+
+    const response = await app.request(`/api/folders/${folder.id}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "template", documentType: "canvas.default" }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+
   it("creates folders up to depth 4 and rejects deeper folders", async () => {
     const { app } = await setupFolderApp();
 

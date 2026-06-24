@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@dpklabs/minueditor/theme.css";
 @import "@dpklabs/minueditor/themes/dark.css";
+@import "@dpklabs/minucanvas/theme.css";
 
 @layer base {
     html {
@@ -204,6 +205,23 @@ select {
     border: 1px dashed var(--notes-border);
     background: color-mix(in srgb, var(--notes-panel) 70%, transparent);
     color: var(--notes-muted);
+}
+
+.notes-minu-canvas {
+    --mc-canvas-bg: var(--notes-panel);
+    --mc-canvas-grid: color-mix(in srgb, var(--notes-border) 55%, transparent);
+    --mc-canvas-text: var(--notes-text);
+    --mc-canvas-muted: var(--notes-muted);
+    --mc-canvas-border: var(--notes-border);
+    --mc-canvas-accent: var(--notes-blue);
+    --mc-surface-bg: var(--notes-panel);
+    --mc-toolbar-bg: var(--notes-panel);
+    --mc-toolbar-border: var(--notes-border);
+    --mc-toolbar-color: var(--notes-text);
+    --mc-shape-fill: transparent;
+    --mc-shape-stroke: var(--notes-border);
+    --mc-shape-text: var(--notes-text);
+    --mc-line: var(--notes-muted);
 }
 
 .notes-minu-editor,

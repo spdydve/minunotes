@@ -1,4 +1,46 @@
-# OAuth Integrations Plan
+# MinuNotes Implementation Plan
+
+## Canvas note type plan
+
+Goal: add MinuCanvas as a note-backed tool, not a separate product object. Canvases remain notes with folder, title, tags, details, activity, version history, permissions, and future harness compatibility.
+
+### Decisions
+- Use one discriminator: `documentType`.
+- Initial values: `markdown`, `canvas.default`, `canvas.mindmap`.
+- Existing notes/templates migrate to `markdown`.
+- `notes.content` remains the persisted payload:
+  - `markdown` stores markdown text.
+  - `canvas.*` stores serialized JSON canvas document.
+- Start with UI support for `canvas.default`; leave `canvas.mindmap` as schema-ready follow-up unless very small to expose.
+- Keep Canvas first as an editor/viewer mode for notes; split view and advanced harness canvas ops are future work.
+
+### Files to modify/create
+- `drizzle/0022_note_document_type.sql` — add `notes.document_type`.
+- `drizzle/meta/_journal.json` — register migration.
+- `src/api/db/schema.ts` — add `documentType` column.
+- `src/api/harness/commands.ts` — create/read/update document type support and avoid markdown-only indexing for canvas content.
+- `src/api/routes/folders.ts` — allow creating canvas notes.
+- `src/api/routes/notes.ts` — allow/save document type where appropriate.
+- `src/frontend/lib/api.ts` — add `DocumentType` typing and creation payload.
+- `src/frontend/routes/folders.$folderId.tsx` — replace separate New note/from-template buttons with Notion-like New dropdown: Note, Template, Canvas.
+- `src/frontend/routes/notes.$noteId.tsx` — render markdown notes with MinuEditor and canvas notes with MinuCanvas.
+- `src/frontend/components/note-canvas-editor.tsx` — canvas editor wrapper.
+- `src/frontend/styles.css` — import MinuCanvas styles and theme bridge.
+- Tests that run migrations — update migration count to include `0022`.
+- Add or update tests for canvas-note creation and persistence.
+
+### Verification
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+- Manual checks:
+  - New → Note creates a markdown note.
+  - New → Template opens the existing template picker.
+  - New → Canvas creates a canvas note and opens the canvas editor.
+  - Canvas edits persist after reload.
+  - Existing markdown notes still render/edit normally.
+
+## OAuth Integrations Plan
 
 ## Why we are doing this
 

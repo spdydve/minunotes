@@ -90,12 +90,15 @@ folderRoutes.post("/:folderId/notes", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => ({})) as { title?: string; content?: string; type?: "note" | "template" };
+  const body = await c.req.json().catch(() => ({})) as { title?: string; content?: string; type?: "note" | "template"; documentType?: "markdown" | "canvas.default" | "canvas.mindmap" };
+  const documentType = body.documentType === "canvas.default" || body.documentType === "canvas.mindmap" ? body.documentType : "markdown";
+  if (body.type === "template" && documentType !== "markdown") return c.json({ error: "Templates must be markdown documents" }, 400);
   const result = await createDocument({
     userId: user.id,
     folderId: c.req.param("folderId"),
     title: body.title,
     markdown: body.content,
+    documentType,
     type: body.type === "template" ? "template" : "note",
     actorType: "user",
   });

@@ -25,6 +25,15 @@ export async function listFolders(input: { userId: string }) {
 }
 
 export type NoteType = "note" | "template";
+export type DocumentType = "markdown" | "canvas.default" | "canvas.mindmap";
+
+export function isCanvasDocumentType(documentType: string) {
+  return documentType.startsWith("canvas.");
+}
+
+export function emptyCanvasDocument() {
+  return JSON.stringify({ nodes: [], edges: [] });
+}
 
 export async function listDocuments(input: { userId: string; folderId?: string; type?: NoteType }) {
   const type = input.type ?? "note";
@@ -161,12 +170,12 @@ export async function searchDocuments(input: { userId: string; query: string; li
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
 }
 
-export function getUpdateEventType(input: Pick<UpdateDocumentInput, "title" | "markdown" | "folderId" | "isApiEditable">, current: Pick<Note, "title" | "content" | "folderId" | "isApiEditable">): NoteEventType {
-  if (input.folderId !== undefined && input.folderId !== current.folderId && input.title === undefined && input.markdown === undefined && input.isApiEditable === undefined) {
+export function getUpdateEventType(input: Pick<UpdateDocumentInput, "title" | "markdown" | "folderId" | "isApiEditable" | "documentType">, current: Pick<Note, "title" | "content" | "folderId" | "isApiEditable" | "documentType">): NoteEventType {
+  if (input.folderId !== undefined && input.folderId !== current.folderId && input.title === undefined && input.markdown === undefined && input.isApiEditable === undefined && input.documentType === undefined) {
     return "move";
   }
 
-  if (input.isApiEditable !== undefined && input.isApiEditable !== current.isApiEditable && input.title === undefined && input.markdown === undefined && input.folderId === undefined) {
+  if (input.isApiEditable !== undefined && input.isApiEditable !== current.isApiEditable && input.title === undefined && input.markdown === undefined && input.folderId === undefined && input.documentType === undefined) {
     return "toggle_api_editable";
   }
 
@@ -178,6 +187,7 @@ export function getNoteEventSummary(eventType: NoteEventType, details: {
   contentChanged?: boolean;
   folderChanged?: boolean;
   isApiEditableChanged?: boolean;
+  documentTypeChanged?: boolean;
   isApiEditable?: boolean;
 }) {
   if (eventType === "create") return "Created note";
@@ -191,6 +201,7 @@ export function getNoteEventSummary(eventType: NoteEventType, details: {
     details.contentChanged ? "content" : null,
     details.folderChanged ? "folder" : null,
     details.isApiEditableChanged ? "API editability" : null,
+    details.documentTypeChanged ? "document type" : null,
   ].filter(Boolean);
 
   return changed.length > 0 ? `Updated ${changed.join(", ")}` : "Updated note";
@@ -254,17 +265,20 @@ export async function createDocument(input: {
   actorType?: ActorType;
   actorId?: string;
   type?: NoteType;
+  documentType?: DocumentType;
 }) {
   const [folder] = await db.select().from(folders).where(and(eq(folders.id, input.folderId), eq(folders.userId, input.userId))).limit(1);
   if (!folder) return { ok: false, status: 404, error: "Folder not found" } satisfies DocumentCommandResult<never>;
 
-  const title = input.title?.trim() || "Untitled note";
+  const documentType = input.documentType ?? "markdown";
+  const title = input.title?.trim() || (documentType.startsWith("canvas.") ? "Untitled canvas" : "Untitled note");
   const note = {
     id: createId("note"),
     folderId: input.folderId,
     userId: input.userId,
     title,
-    content: input.markdown ?? "",
+    content: input.markdown ?? (documentType.startsWith("canvas.") ? emptyCanvasDocument() : ""),
+    documentType,
     type: input.type ?? "note",
     updatedByActorType: input.actorType ?? "user",
     updatedByActorId: input.actorId,
@@ -273,11 +287,13 @@ export async function createDocument(input: {
   };
 
   await db.insert(notes).values(note);
-  if (note.content.includes("/api/attachments/")) {
-    await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+  if (note.documentType === "markdown") {
+    if (note.content.includes("/api/attachments/")) {
+      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+    }
+    await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
+    await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
   }
-  await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
-  await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
 
   const contentHash = hashMarkdown(note.content);
   await createNoteVersion({ note: note as Note, reason: "create", actorType: note.updatedByActorType ?? "user", actorId: note.updatedByActorId });
@@ -311,6 +327,7 @@ export interface UpdateDocumentInput {
   markdown?: string;
   folderId?: string;
   isApiEditable?: boolean;
+  documentType?: DocumentType;
   createdAt?: Date;
   baseHash?: string;
   actorType?: ActorType;
@@ -323,7 +340,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
   if (!current.ok) return current;
 
   const currentHash = current.value.contentHash;
-  const isApiMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isApiEditable !== undefined || input.createdAt !== undefined);
+  const isApiMutation = input.actorType === "agent" && (input.title !== undefined || input.markdown !== undefined || input.folderId !== undefined || input.isApiEditable !== undefined || input.documentType !== undefined || input.createdAt !== undefined);
   if (isApiMutation && current.value.note.type === "template") {
     return { ok: false, status: 403, error: "Templates cannot be edited through the API" } satisfies DocumentCommandResult<never>;
   }
@@ -344,9 +361,10 @@ export async function updateDocument(input: UpdateDocumentInput) {
   const contentChanged = input.markdown !== undefined && input.markdown !== current.value.note.content;
   const folderChanged = input.folderId !== undefined && input.folderId !== current.value.note.folderId;
   const isApiEditableChanged = input.isApiEditable !== undefined && input.isApiEditable !== current.value.note.isApiEditable;
+  const documentTypeChanged = input.documentType !== undefined && input.documentType !== current.value.note.documentType;
   const createdAtChanged = input.createdAt !== undefined && input.createdAt.getTime() !== current.value.note.createdAt.getTime();
 
-  const stateChanged = titleChanged || contentChanged || folderChanged || isApiEditableChanged || createdAtChanged;
+  const stateChanged = titleChanged || contentChanged || folderChanged || isApiEditableChanged || documentTypeChanged || createdAtChanged;
   if (stateChanged && input.actorType === "agent") {
     await createNoteVersion({ note: current.value.note, reason: "before_agent_edit", actorType: "agent", actorId: input.actorId });
   } else if (stateChanged && (input.actorType ?? "user") === "user") {
@@ -359,6 +377,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
       ...(input.markdown !== undefined ? { content: input.markdown } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
       ...(input.isApiEditable !== undefined ? { isApiEditable: input.isApiEditable } : {}),
+      ...(input.documentType !== undefined ? { documentType: input.documentType } : {}),
       ...(input.createdAt !== undefined ? { createdAt: input.createdAt } : {}),
       updatedByActorType: input.actorType ?? "user",
       updatedByActorId: input.actorId,
@@ -369,11 +388,16 @@ export async function updateDocument(input: UpdateDocumentInput) {
 
   if (!note) return { ok: false, status: 404, error: "Note not found" } satisfies DocumentCommandResult<never>;
 
-  if (contentChanged) {
-    await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+  if (contentChanged || documentTypeChanged) {
+    if (note.documentType === "markdown") {
+      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
+    } else {
+      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: "" });
+      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: "" });
+    }
   }
-  if (contentChanged) await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
-  if (titleChanged) await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
+  if (titleChanged && note.documentType === "markdown") await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
 
   const contentHash = hashMarkdown(note.content);
   const actorType = input.actorType ?? "user";
@@ -390,6 +414,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
         contentChanged,
         folderChanged,
         isApiEditableChanged,
+        documentTypeChanged,
         isApiEditable: note.isApiEditable,
       }),
       beforeHash: currentHash,
@@ -403,6 +428,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
 export async function editDocument(input: Omit<UpdateDocumentInput, "title" | "markdown" | "folderId"> & { edits: DocumentEdit[] }) {
   const current = await readDocument({ documentId: input.documentId, userId: input.userId });
   if (!current.ok) return current;
+  if (current.value.note.documentType !== "markdown") return { ok: false, status: 400, error: "Patch edits are only supported for markdown notes" } satisfies DocumentCommandResult<never>;
 
   const result = applyDocumentEdits(current.value.note.content, input.edits);
   if (!result.ok) return { ok: false, status: 400, error: result.error } satisfies DocumentCommandResult<never>;

@@ -13,17 +13,18 @@ export type VersionActorType = "user" | "agent" | "system";
 const MAX_VERSIONS_PER_NOTE = 100;
 const USER_CHECKPOINT_INTERVAL_MS = 10 * 60 * 1000;
 
-function versionState(note: Pick<Note, "title" | "content" | "folderId" | "createdAt" | "isApiEditable">) {
+function versionState(note: Pick<Note, "title" | "content" | "documentType" | "folderId" | "createdAt" | "isApiEditable">) {
   return {
     title: note.title,
     content: note.content,
+    documentType: note.documentType,
     folderId: note.folderId,
     createdAt: note.createdAt.toISOString(),
     isApiEditable: note.isApiEditable,
   };
 }
 
-function hashState(note: Pick<Note, "title" | "content" | "folderId" | "createdAt" | "isApiEditable">) {
+function hashState(note: Pick<Note, "title" | "content" | "documentType" | "folderId" | "createdAt" | "isApiEditable">) {
   return createHash("sha256").update(JSON.stringify(versionState(note))).digest("hex");
 }
 
@@ -67,6 +68,7 @@ export async function createNoteVersion(input: {
     noteId: input.note.id,
     title: input.note.title,
     content: input.note.content,
+    documentType: input.note.documentType,
     folderId: input.note.folderId,
     createdAtValue: input.note.createdAt,
     isApiEditable: input.note.isApiEditable,
@@ -128,6 +130,7 @@ export async function restoreNoteVersion(input: { userId: string; noteId: string
   const [note] = await db.update(notes).set({
     title: version.title,
     content: version.content,
+    documentType: version.documentType,
     folderId: version.folderId,
     createdAt: version.createdAtValue,
     isApiEditable: version.isApiEditable,
@@ -138,11 +141,16 @@ export async function restoreNoteVersion(input: { userId: string; noteId: string
 
   if (!note) return { ok: false, status: 404, error: "Note not found" } as const;
 
-  if (current.content !== note.content) {
-    await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
-    await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
+  if (current.content !== note.content || current.documentType !== note.documentType) {
+    if (note.documentType === "markdown") {
+      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
+    } else {
+      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: "" });
+      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: "" });
+    }
   }
-  if (current.title !== note.title) await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
+  if (current.title !== note.title && note.documentType === "markdown") await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
 
   const beforeHash = hashMarkdown(current.content);
   const afterHash = hashMarkdown(note.content);
@@ -168,6 +176,7 @@ export function serializeVersion(version: NoteVersion) {
     noteId: version.noteId,
     title: version.title,
     content: version.content,
+    documentType: version.documentType,
     folderId: version.folderId,
     createdAtValue: version.createdAtValue,
     isApiEditable: version.isApiEditable,

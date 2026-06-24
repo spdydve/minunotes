@@ -35,7 +35,8 @@ export type OAuthAuthorization = { id: string; userId: string; clientId: string;
 export type OAuthAuthorizeRequest = { client_id: string; redirect_uri: string; response_type: string; code_challenge: string; code_challenge_method: string; state?: string; scope?: string }; 
 export type OAuthAuthorizePreview = { client: OAuthClient; request: { scope: string; state: string | null; redirectUri: string } };
 export type NoteType = "note" | "template";
-export type Note = { id: string; folderId: string; title: string; content: string; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; updatedByActorUid?: string | null; createdAt: string; updatedAt: string };
+export type DocumentType = "markdown" | "canvas.default" | "canvas.mindmap";
+export type Note = { id: string; folderId: string; title: string; content: string; documentType: DocumentType; type: NoteType; isApiEditable: boolean; updatedByActorType: "user" | "agent" | "system" | null; updatedByActorId: string | null; updatedByActorUid?: string | null; createdAt: string; updatedAt: string };
 export type NoteResponse = { note: Note; contentHash: string };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type NoteShareLink = { id: string; noteId: string; permission: "read"; createdAt: string; updatedAt: string; expiresAt: string | null; revokedAt: string | null; url: string | null };
@@ -50,7 +51,7 @@ export type Attachment = { id: string; userId: string; noteId: string; folderId:
 export type UploadImageResponse = { attachment: Attachment; markdownUrl: string; markdown: string };
 export type SignedImageUpload = UploadImageResponse & { signedUrl: string; method: "PUT"; headers: { "content-type": string } };
 export type NoteVersionSummary = { id: string; noteId: string; title: string; reason: "create" | "autosave_checkpoint" | "before_agent_edit" | "before_restore" | "manual"; actorType: "user" | "agent" | "system"; actorId: string | null; stateHash: string; createdAt: string };
-export type NoteVersion = NoteVersionSummary & { content: string; folderId: string; createdAtValue: string; isApiEditable: boolean };
+export type NoteVersion = NoteVersionSummary & { content: string; documentType: DocumentType; folderId: string; createdAtValue: string; isApiEditable: boolean };
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type NoteVersionsResponse = { noteId: string; versions: NoteVersionSummary[] };
 export type DocumentEdit =
@@ -96,7 +97,7 @@ export const api = {
   updateTemplateFolders: (templateId: string, folderIds: string[]) => request<{ ok: true }>(`/notes/templates/${templateId}/folders`, { method: "PUT", body: JSON.stringify({ folderIds }) }),
   notes: (folderId: string, type: NoteType = "note") => request<{ notes: Note[] }>(`/folders/${folderId}/notes?type=${type}`),
   recentNotes: (limit = 10) => request<{ notes: Note[] }>(`/notes/recent?limit=${limit}`),
-  createNote: (folderId: string, data?: { title?: string; content?: string; type?: NoteType }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
+  createNote: (folderId: string, data?: { title?: string; content?: string; type?: NoteType; documentType?: DocumentType }) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: "POST", body: JSON.stringify(data ?? {}) }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
   noteShareLink: (noteId: string) => request<{ shareLink: NoteShareLink | null }>(`/notes/${noteId}/share-link`),

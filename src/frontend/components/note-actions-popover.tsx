@@ -28,7 +28,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
 
 
   const duplicate = useMutation({
-    mutationFn: () => api.createNote(note.folderId, { title: `${note.title} copy`, content: note.content, type: note.type }),
+    mutationFn: () => api.createNote(note.folderId, { title: `${note.title} copy`, content: note.content, type: note.type, documentType: note.documentType }),
     onSuccess: ({ note: duplicateNote }) => {
       qc.invalidateQueries({ queryKey: [duplicateNote.type === "template" ? "templates" : "notes", duplicateNote.folderId] });
       if (duplicateNote.type === "template") qc.invalidateQueries({ queryKey: ["templates"] });
@@ -44,7 +44,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
       <PopoverContent align="end" className="w-44 p-1">
         <ActionMenuButton onClick={() => void copyNoteLink()}>{copiedLink ? "Copied link" : "Copy note link"}</ActionMenuButton>
         <ActionMenuButton onClick={() => { setDetailsOpen(true); setOpen(false); }}>Details</ActionMenuButton>
-        <ActionMenuButton onClick={() => { setShareOpen(true); setOpen(false); }}>Share</ActionMenuButton>
+        {note.documentType === "markdown" ? <ActionMenuButton onClick={() => { setShareOpen(true); setOpen(false); }}>Share</ActionMenuButton> : null}
         <MoveNoteDialog note={note} onOpenChange={setOpen} trigger={<ActionMenuItemLabel>Move note</ActionMenuItemLabel>} />
         <ActionMenuButton disabled={duplicate.isPending} onClick={() => { duplicate.mutate(); setOpen(false); }}>Duplicate</ActionMenuButton>
         <ActionMenuButton onClick={() => { setVersionsOpen(true); setOpen(false); }}>Version history</ActionMenuButton>
@@ -54,7 +54,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
       </PopoverContent>
     </Popover>
     <NoteDetailsDialog note={note} open={detailsOpen} onOpenChange={setDetailsOpen} onNoteUpdated={onNoteUpdated} />
-    <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} />
+    {note.documentType === "markdown" ? <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} /> : null}
     <NoteVersionsDialog note={note} open={versionsOpen} onOpenChange={setVersionsOpen} onNoteUpdated={onNoteUpdated} />
   </>;
 }
