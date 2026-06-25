@@ -257,6 +257,7 @@ function NoteView() {
       key={noteId}
       title={title}
       content={content}
+      documentType={data.note.documentType as "canvas.default" | "canvas.mindmap"}
       saveState={saveState}
       onTitleChange={setTitle}
       onContentChange={setContent}

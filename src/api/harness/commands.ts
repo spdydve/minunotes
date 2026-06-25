@@ -1,3 +1,4 @@
+import { createDefaultCanvasDocument, createDefaultMindMapDocument } from "@dpklabs/minucanvas";
 import { and, asc, desc, eq, gt, inArray, like, or, sql } from "drizzle-orm";
 import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
@@ -31,8 +32,8 @@ export function isCanvasDocumentType(documentType: string) {
   return documentType.startsWith("canvas.");
 }
 
-export function emptyCanvasDocument() {
-  return JSON.stringify({ nodes: [], edges: [] });
+export function emptyCanvasDocument(documentType: DocumentType = "canvas.default") {
+  return JSON.stringify(documentType === "canvas.mindmap" ? createDefaultMindMapDocument({ rootId: "Root" }) : createDefaultCanvasDocument());
 }
 
 export async function listDocuments(input: { userId: string; folderId?: string; type?: NoteType }) {
@@ -271,13 +272,13 @@ export async function createDocument(input: {
   if (!folder) return { ok: false, status: 404, error: "Folder not found" } satisfies DocumentCommandResult<never>;
 
   const documentType = input.documentType ?? "markdown";
-  const title = input.title?.trim() || (documentType.startsWith("canvas.") ? "Untitled canvas" : "Untitled note");
+  const title = input.title?.trim() || (documentType === "canvas.mindmap" ? "Untitled mind map" : documentType.startsWith("canvas.") ? "Untitled canvas" : "Untitled note");
   const note = {
     id: createId("note"),
     folderId: input.folderId,
     userId: input.userId,
     title,
-    content: input.markdown ?? (documentType.startsWith("canvas.") ? emptyCanvasDocument() : ""),
+    content: input.markdown ?? (documentType.startsWith("canvas.") ? emptyCanvasDocument(documentType) : ""),
     documentType,
     type: input.type ?? "note",
     updatedByActorType: input.actorType ?? "user",

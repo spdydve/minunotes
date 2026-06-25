@@ -75,6 +75,24 @@ describe("folder hierarchy", () => {
     expect(JSON.parse(note.content)).toEqual({ nodes: [], edges: [] });
   });
 
+  it("creates mind map notes with a root node", async () => {
+    const { app } = await setupFolderApp();
+    const folder = await createFolder(app, "Mind maps");
+
+    const response = await app.request(`/api/folders/${folder.id}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ documentType: "canvas.mindmap" }),
+    });
+    expect(response.status).toBe(201);
+    const { note } = await response.json() as { note: { title: string; documentType: string; content: string } };
+    expect(note.title).toBe("Untitled mind map");
+    expect(note.documentType).toBe("canvas.mindmap");
+    const canvas = JSON.parse(note.content) as { nodes: Array<{ id: string; text: string }>; edges: unknown[] };
+    expect(canvas.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ id: "Root", text: "Central topic", shape: "text" })]));
+    expect(canvas.edges).toEqual([]);
+  });
+
   it("rejects canvas templates", async () => {
     const { app } = await setupFolderApp();
     const folder = await createFolder(app, "Templates");

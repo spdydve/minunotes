@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, FileText, Folder as FolderIcon, Lock, Shapes } from "lucide-react";
+import { ChevronDown, FileText, Folder as FolderIcon, GitBranch, Lock, Shapes } from "lucide-react";
 import { ApiError, api, type Folder, type Note } from "../lib/api";
 import { FolderActionsPopover } from "../components/folder-actions-popover";
 import { NoteActionsPopover } from "../components/note-actions-popover";
@@ -101,7 +101,7 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
               <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
                 <span className="truncate">{item.note.title}</span>
               </span>
-              <span className="mt-1 block text-xs text-[var(--notes-muted)]">{item.note.documentType.startsWith("canvas.") ? "Canvas" : "Note"} · Updated {new Date(item.note.updatedAt).toLocaleString()}</span>
+              <span className="mt-1 block text-xs text-[var(--notes-muted)]">{item.note.documentType === "canvas.mindmap" ? "Mind map" : item.note.documentType.startsWith("canvas.") ? "Canvas" : "Note"} · Updated {new Date(item.note.updatedAt).toLocaleString()}</span>
             </span>
           </Link>
           <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />
@@ -132,7 +132,7 @@ function FolderContentsTable({ items, allFolders, onDeleteNote }: { items: Conte
                 <span className="truncate">{item.note.title}</span>
               </Link>}
             </td>
-            <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{item.kind === "folder" ? "Folder" : item.note.documentType.startsWith("canvas.") ? "Canvas" : "Note"}</td>
+            <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{item.kind === "folder" ? "Folder" : item.note.documentType === "canvas.mindmap" ? "Mind map" : item.note.documentType.startsWith("canvas.") ? "Canvas" : "Note"}</td>
             <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">{new Date(item.kind === "folder" ? item.folder.updatedAt : item.note.updatedAt).toLocaleString()}</td>
             <td className="border-b border-[var(--notes-table-row-border)] px-5 py-3 align-middle text-right">
               <div className="flex justify-end">{item.kind === "folder" ? <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} icon="settings" /> : <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />}</div>
@@ -156,7 +156,7 @@ function FolderView() {
   });
   const { data: foldersData } = useQuery({ queryKey: ["folders"], queryFn: api.folders });
   const create = useMutation({
-    mutationFn: (documentType: "markdown" | "canvas.default" = "markdown") => api.createNote(folderId, { documentType }),
+    mutationFn: (documentType: "markdown" | "canvas.default" | "canvas.mindmap" = "markdown") => api.createNote(folderId, { documentType }),
     onSuccess: ({ note }) => {
       void nav({ to: "/notes/$noteId", params: { noteId: note.id } });
       void qc.invalidateQueries({ queryKey: ["notes", folderId] });
@@ -184,6 +184,10 @@ function FolderView() {
     setNewMenuOpen(false);
     create.mutate("canvas.default");
   };
+  const createMindMapNote = () => {
+    setNewMenuOpen(false);
+    create.mutate("canvas.mindmap");
+  };
   const openTemplatePicker = () => {
     setNewMenuOpen(false);
     void nav({ to: "/folders/$folderId/new-from-template", params: { folderId } });
@@ -209,6 +213,10 @@ function FolderView() {
               <button type="button" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]" onClick={createCanvasNote}>
                 <Shapes className="h-4 w-4 text-[var(--notes-muted)]" />
                 <span>Canvas</span>
+              </button>
+              <button type="button" className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]" onClick={createMindMapNote}>
+                <GitBranch className="h-4 w-4 text-[var(--notes-muted)]" />
+                <span>Mind map</span>
               </button>
             </PopoverContent>
           </Popover>
