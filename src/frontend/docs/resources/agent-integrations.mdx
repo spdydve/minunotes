@@ -25,8 +25,13 @@ Private folders are never accessible to agents or integrations. Private status a
 GET /api/harness/folders
 POST /api/harness/notes
 POST /api/harness/notes/:noteId/edit
+POST /api/harness/canvases
+POST /api/harness/canvases/from-syntax
+PUT /api/harness/notes/:noteId/canvas/from-syntax
 GET /api/openapi.json
 POST /api/mcp
 ```
 
 Use `X-API-Key` on harness, OpenAPI-authenticated, and trusted/local hosted MCP requests. OAuth connected apps use `Authorization: Bearer mnoac_...` for hosted MCP and harness requests.
+
+For generated canvases and mind maps, prefer Minu diagram syntax through the canvas harness endpoints. Use raw JSON Canvas only when exact import/replacement is needed.

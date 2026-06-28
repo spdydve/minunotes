@@ -35,6 +35,36 @@ POST /api/harness/folders
 4. Send small edits with `baseHash`.
 5. Read back the note and report final markdown or a changed-section summary.
 
+## Canvas notes
+
+Canvas notes use `documentType: "canvas.default"` or `"canvas.mindmap"`. Their `content` is serialized JSON Canvas, not markdown. Markdown patch edits are rejected for canvas notes.
+
+Create from JSON Canvas:
+
+```bash
+curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
+  -X POST "$API/api/harness/canvases" \
+  -d '{"folderId":"folder_xxx","title":"Flow","canvas":{"nodes":[],"edges":[]}}'
+```
+
+Create from Minu diagram syntax:
+
+```bash
+curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
+  -X POST "$API/api/harness/canvases/from-syntax" \
+  -d '{"folderId":"folder_xxx","syntax":"diagram \"Product plan\" {\n  layout mindmap\n  Product\n  Product > Research\n}"}'
+```
+
+Replace an existing canvas:
+
+```bash
+curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
+  -X PUT "$API/api/harness/notes/note_xxx/canvas/from-syntax" \
+  -d '{"baseHash":"hash_from_read","syntax":"diagram \"Auth flow\" {\n  User > Login\n  Login > Dashboard\n}"}'
+```
+
+Use syntax for generated diagrams/mind maps. Use raw JSON Canvas for exact imports or deterministic replacements.
+
 ## Edit payloads
 
 ```ts

@@ -25,6 +25,8 @@ X-API-Key: <MINUNOTES_API_KEY>
 - Include `baseHash` when editing content to avoid overwriting concurrent changes.
 - Prefer small, targeted edits.
 - Preserve markdown structure, headings, links, wikilinks, and image URLs.
+- Check `documentType` before editing. Markdown patch edits only work for `markdown` notes.
+- For `canvas.default` and `canvas.mindmap`, use canvas JSON or Minu diagram syntax endpoints instead of markdown patch edits.
 - Use `[[Note Title]]` for note links when appropriate. Use `[[Note Title|label]]` when the visible label should differ.
 - Search/read before creating wikilinks to avoid duplicate-title ambiguity.
 - Tags are lightweight labels. Tag names normalize to lowercase words with optional dashes, for example `plan` or `release-notes`.
@@ -60,7 +62,7 @@ Filter search by tag:
 curl -s "${AUTH[@]}" "$API/api/harness/notes/search?q=project&tag=release-notes"
 ```
 
-Create/read/edit notes:
+Create/read/edit markdown notes:
 
 ```bash
 curl -s "${AUTH[@]}" \
@@ -72,6 +74,26 @@ curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx"
 curl -s "${AUTH[@]}" \
   -X POST "$API/api/harness/notes/note_xxx/edit" \
   -d '{"baseHash":"hash_from_read","edits":[{"type":"replace_text","oldText":"old","newText":"new"}]}'
+```
+
+Create canvases from JSON Canvas or Minu diagram syntax:
+
+```bash
+curl -s "${AUTH[@]}" \
+  -X POST "$API/api/harness/canvases" \
+  -d '{"folderId":"folder_xxx","title":"Flow","canvas":{"nodes":[],"edges":[]}}'
+
+curl -s "${AUTH[@]}" \
+  -X POST "$API/api/harness/canvases/from-syntax" \
+  -d '{"folderId":"folder_xxx","syntax":"diagram \"Product plan\" {\n  layout mindmap\n  Product\n  Product > Research\n  Product > Build\n}"}'
+```
+
+Replace an existing canvas:
+
+```bash
+curl -s "${AUTH[@]}" \
+  -X PUT "$API/api/harness/notes/note_xxx/canvas/from-syntax" \
+  -d '{"baseHash":"hash_from_read","syntax":"diagram \"Auth flow\" {\n  User > Login\n  Login > Dashboard\n}"}'
 ```
 
 Tags:
@@ -108,6 +130,8 @@ curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/lines?from=1&to=80"
 - `GET /api/harness/notes/search?q=...&tag=...`
 - `GET /api/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
 - `POST /api/harness/notes`
+- `POST /api/harness/canvases`
+- `POST /api/harness/canvases/from-syntax`
 - `GET /api/harness/notes/orphans`
 - `GET /api/harness/notes/:noteId`
 - `GET /api/harness/notes/:noteId/events?limit=25`
@@ -119,6 +143,8 @@ curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/lines?from=1&to=80"
 - `GET /api/harness/notes/:noteId/search-lines?q=...&context=2&limit=25&caseSensitive=false`
 - `GET /api/harness/notes/:noteId/outline`
 - `GET /api/harness/notes/:noteId/sections/:sectionId`
+- `PUT /api/harness/notes/:noteId/canvas`
+- `PUT /api/harness/notes/:noteId/canvas/from-syntax`
 - `POST /api/harness/notes/:noteId/edit`
 
 ## Edit payload types
@@ -130,7 +156,7 @@ type DocumentEdit =
   | { type: "replace_range"; from: number; to: number; text: string };
 ```
 
-Prefer `replace_text` when the target text is unique. Use `replace_range` only after reading lines/sections and when exact replacement is not practical.
+Prefer `replace_text` when the target text is unique. Use `replace_range` only after reading lines/sections and when exact replacement is not practical. For canvases, prefer Minu diagram syntax for generated diagrams/mind maps and JSON Canvas for exact imports/replacements.
 
 ## Error handling
 

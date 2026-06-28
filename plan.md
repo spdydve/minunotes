@@ -107,10 +107,10 @@ Goal: make canvases first-class for agents without turning them into a separate 
   - [x] Expose create canvas from raw JSON.
   - [x] Expose replace canvas JSON.
   - [x] Expose create/replace from Minu diagram syntax.
-- [ ] Phase 3: OpenAPI/tests/docs
+- [x] Phase 3: OpenAPI/tests/docs
   - [x] Add harness canvas tests.
   - [x] Update OpenAPI schemas/tests.
-  - [ ] Update harness resource docs and skill docs.
+  - [x] Update harness resource docs and skill docs.
 
 ## OAuth Integrations Plan
 
