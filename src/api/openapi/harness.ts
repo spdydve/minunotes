@@ -10,6 +10,7 @@ export const harnessOpenApiSpec = {
   tags: [
     { name: "Folders" },
     { name: "Notes" },
+    { name: "Canvases" },
     { name: "Tags" },
   ],
   paths: {
@@ -89,6 +90,24 @@ export const harnessOpenApiSpec = {
           "401": { $ref: "#/components/responses/Unauthorized" },
           "403": { $ref: "#/components/responses/Forbidden" },
         },
+      },
+    },
+    "/api/harness/canvases": {
+      post: {
+        tags: ["Canvases"],
+        operationId: "createCanvas",
+        summary: "Create a canvas note from JSON Canvas",
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateCanvasRequest" } } } },
+        responses: { "201": { description: "Created canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } },
+      },
+    },
+    "/api/harness/canvases/from-syntax": {
+      post: {
+        tags: ["Canvases"],
+        operationId: "createCanvasFromSyntax",
+        summary: "Create a canvas note from Minu diagram syntax",
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateCanvasFromSyntaxRequest" } } } },
+        responses: { "201": { description: "Created canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/CanvasSyntaxNoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } },
       },
     },
     "/api/harness/notes/{noteId}": {
@@ -182,6 +201,26 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note section", content: { "application/json": { schema: { $ref: "#/components/schemas/SectionResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
+    "/api/harness/notes/{noteId}/canvas": {
+      put: {
+        tags: ["Canvases"],
+        operationId: "replaceCanvas",
+        summary: "Replace a canvas note with JSON Canvas",
+        parameters: [{ $ref: "#/components/parameters/NoteId" }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/ReplaceCanvasRequest" } } } },
+        responses: { "200": { description: "Updated canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" }, "409": { $ref: "#/components/responses/Conflict" } },
+      },
+    },
+    "/api/harness/notes/{noteId}/canvas/from-syntax": {
+      put: {
+        tags: ["Canvases"],
+        operationId: "replaceCanvasFromSyntax",
+        summary: "Replace a canvas note with compiled Minu diagram syntax",
+        parameters: [{ $ref: "#/components/parameters/NoteId" }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/ReplaceCanvasFromSyntaxRequest" } } } },
+        responses: { "200": { description: "Updated canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/CanvasSyntaxNoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" }, "409": { $ref: "#/components/responses/Conflict" } },
+      },
+    },
     "/api/harness/notes/{noteId}/edit": {
       post: {
         tags: ["Notes"],
@@ -209,13 +248,21 @@ export const harnessOpenApiSpec = {
       FoldersResponse: { type: "object", required: ["folders"], properties: { folders: { type: "array", items: { $ref: "#/components/schemas/Folder" } } } },
       FolderResponse: { type: "object", required: ["folder"], properties: { folder: { $ref: "#/components/schemas/Folder" } } },
       CreateFolderRequest: { type: "object", required: ["title"], properties: { title: { type: "string" }, parentFolderId: { type: ["string", "null"], description: "Optional parent folder. Maximum depth is five folder levels." } } },
-      Note: { type: "object", required: ["id", "folderId", "title", "content", "type", "isApiEditable", "createdAt", "updatedAt"], properties: { id: { type: "string" }, folderId: { type: "string" }, title: { type: "string" }, content: { type: "string" }, type: { type: "string", enum: ["note", "template"] }, isApiEditable: { type: "boolean" }, updatedByActorType: { type: ["string", "null"] }, updatedByActorId: { type: ["string", "null"] }, createdAt: { type: "string" }, updatedAt: { type: "string" }, folderTitle: { type: "string" } } },
+      DocumentType: { type: "string", enum: ["markdown", "canvas.default", "canvas.mindmap"] },
+      CanvasDocument: { type: "object", required: ["nodes", "edges"], properties: { nodes: { type: "array", items: { type: "object", additionalProperties: true } }, edges: { type: "array", items: { type: "object", additionalProperties: true } } }, additionalProperties: true },
+      DiagramDiagnostic: { type: "object", properties: { severity: { type: "string", enum: ["warning", "error"] }, message: { type: "string" }, line: { type: "integer" } } },
+      Note: { type: "object", required: ["id", "folderId", "title", "content", "documentType", "type", "isApiEditable", "createdAt", "updatedAt"], properties: { id: { type: "string" }, folderId: { type: "string" }, title: { type: "string" }, content: { type: "string", description: "Markdown for markdown notes, serialized JSON Canvas for canvas notes." }, documentType: { $ref: "#/components/schemas/DocumentType" }, type: { type: "string", enum: ["note", "template"] }, isApiEditable: { type: "boolean" }, updatedByActorType: { type: ["string", "null"] }, updatedByActorId: { type: ["string", "null"] }, createdAt: { type: "string" }, updatedAt: { type: "string" }, folderTitle: { type: "string" } } },
       NoteResponse: { type: "object", required: ["note", "contentHash"], properties: { note: { $ref: "#/components/schemas/Note" }, contentHash: { type: "string" } } },
+      CanvasSyntaxNoteResponse: { type: "object", required: ["note", "contentHash", "diagnostics"], properties: { note: { $ref: "#/components/schemas/Note" }, contentHash: { type: "string" }, diagnostics: { type: "array", items: { $ref: "#/components/schemas/DiagramDiagnostic" } } } },
       SearchNotesResponse: { type: "object", required: ["notes"], properties: { notes: { type: "array", items: { $ref: "#/components/schemas/Note" } } } },
       Tag: { type: "object", required: ["id", "name", "normalizedName"], properties: { id: { type: "string" }, name: { type: "string" }, normalizedName: { type: "string" }, noteCount: { type: "integer" } } },
       TagsResponse: { type: "object", required: ["tags"], properties: { tags: { type: "array", items: { $ref: "#/components/schemas/Tag" } } } },
       UpdateTagsRequest: { type: "object", required: ["tags"], properties: { tags: { type: "array", items: { type: "string" } } } },
-      CreateNoteRequest: { type: "object", required: ["folderId"], properties: { folderId: { type: "string" }, title: { type: "string" }, content: { type: "string" } } },
+      CreateNoteRequest: { type: "object", required: ["folderId"], properties: { folderId: { type: "string" }, title: { type: "string" }, content: { type: "string" }, documentType: { $ref: "#/components/schemas/DocumentType" } } },
+      CreateCanvasRequest: { type: "object", required: ["folderId"], properties: { folderId: { type: "string" }, title: { type: "string" }, documentType: { type: "string", enum: ["canvas.default", "canvas.mindmap"] }, canvas: { $ref: "#/components/schemas/CanvasDocument" } } },
+      ReplaceCanvasRequest: { type: "object", required: ["canvas"], properties: { title: { type: "string" }, documentType: { type: "string", enum: ["canvas.default", "canvas.mindmap"] }, canvas: { $ref: "#/components/schemas/CanvasDocument" }, baseHash: { type: "string" } } },
+      CreateCanvasFromSyntaxRequest: { type: "object", required: ["folderId", "syntax"], properties: { folderId: { type: "string" }, title: { type: "string" }, documentType: { type: "string", enum: ["canvas.default", "canvas.mindmap"] }, syntax: { type: "string", description: "Minu diagram syntax. Use `layout mindmap` for mind maps." } } },
+      ReplaceCanvasFromSyntaxRequest: { type: "object", required: ["syntax"], properties: { title: { type: "string" }, documentType: { type: "string", enum: ["canvas.default", "canvas.mindmap"] }, syntax: { type: "string", description: "Minu diagram syntax. Use `layout mindmap` for mind maps." }, baseHash: { type: "string" } } },
       NumberedLine: { type: "object", required: ["line", "text"], properties: { line: { type: "integer" }, text: { type: "string" } } },
       LinesResponse: { type: "object", properties: { noteId: { type: "string" }, contentHash: { type: "string" }, from: { type: "integer" }, to: { type: "integer" }, lineCount: { type: "integer" }, lines: { type: "array", items: { $ref: "#/components/schemas/NumberedLine" } } } },
       LineSearchMatch: { type: "object", properties: { noteId: { type: "string" }, folderId: { type: "string" }, title: { type: "string" }, line: { type: "integer" }, column: { type: "integer" }, text: { type: "string" }, before: { type: "array", items: { $ref: "#/components/schemas/NumberedLine" } }, after: { type: "array", items: { $ref: "#/components/schemas/NumberedLine" } } } },

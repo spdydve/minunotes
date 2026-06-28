@@ -40,6 +40,78 @@ Goal: add MinuCanvas as a note-backed tool, not a separate product object. Canva
   - Canvas edits persist after reload.
   - Existing markdown notes still render/edit normally.
 
+## Canvas harness/API update plan
+
+Goal: make canvases first-class for agents without turning them into a separate product object. Canvas documents remain notes with `documentType`, while the harness/OpenAPI gains canvas-aware create/read/replace and syntax-based generation paths.
+
+### Decisions
+- Keep JSON Canvas as canonical persisted storage in `notes.content`.
+- Prefer Minu diagram syntax for agent-generated diagrams and mind maps.
+- Also support direct JSON Canvas manipulation for exact edits/import/export.
+- Do not allow markdown patch edits against canvas notes.
+- Keep canvas share links disabled for now unless explicitly revisited.
+- Use MinuCanvas helpers for defaults and syntax compilation:
+  - `createDefaultCanvasDocument()`
+  - `createDefaultMindMapDocument()`
+  - `compileMinuDiagramSyntax()`
+- Initial syntax operations should replace/create whole canvas content, not partial structural edits.
+
+### Proposed harness capabilities
+- Read note includes `documentType` and canvas JSON content for canvas notes.
+- Create document accepts:
+  - `documentType: "markdown" | "canvas.default" | "canvas.mindmap"`
+  - optional raw canvas JSON content for canvas documents.
+- Replace canvas JSON:
+  - validates JSON shape has `nodes` and `edges` arrays.
+  - records note version/history and note event.
+- Create canvas from Minu diagram syntax:
+  - compiles syntax server-side.
+  - stores compiled JSON Canvas.
+  - supports `layout mindmap` when MinuCanvas compiler/profile supports it.
+- Replace existing canvas from Minu diagram syntax:
+  - only for `canvas.*` notes.
+  - updates title optionally.
+- OpenAPI schemas expose document type and canvas/syntax endpoints clearly.
+
+### Files to modify/create
+- `src/api/harness/commands.ts` — add canvas validation, create/replace JSON helpers, syntax compile helpers, events/history integration.
+- `src/api/routes/harness.ts` — add harness routes/actions for canvas JSON and syntax operations.
+- `src/api/openapi/harness.ts` — document new canvas request/response schemas and endpoints.
+- `src/api/routes/folders.ts` — ensure raw canvas content creation validates JSON and defaults through MinuCanvas helpers.
+- `src/frontend/lib/api.ts` — update types only if frontend needs new fields/endpoints for testing.
+- `tests/harness-canvas.test.ts` — new coverage for create/read/replace JSON and syntax-generated canvases.
+- `tests/openapi.test.ts` — update expected OpenAPI output if schemas/routes are asserted.
+- `docs/skills/minunotes-harness/SKILL.md` — add agent guidance for canvas JSON and diagram syntax.
+- `/Users/davidkennedy/.pi/agent/skills/minunotes-harness/SKILL.md` — mirror harness skill update after repo docs are stable.
+- `src/frontend/docs/resources/harness-api.mdx` or `agent-integrations.mdx` — add brief canvas harness examples if resources expose harness docs.
+
+### Verification
+- `pnpm typecheck`
+- `pnpm test tests/harness-canvas.test.ts`
+- `pnpm test tests/openapi.test.ts`
+- `pnpm test`
+- `pnpm build`
+- Manual harness smoke:
+  - create `canvas.default` from JSON.
+  - create `canvas.mindmap` from syntax with a root node.
+  - replace a canvas note from syntax.
+  - confirm markdown notes still reject canvas-only operations.
+  - confirm canvas notes still reject markdown patch edits.
+
+### Implementation phases
+- [x] Phase 1: API command primitives
+  - [x] Add canvas JSON parser/validator.
+  - [x] Add default canvas/mindmap creation through MinuCanvas helpers.
+  - [x] Add replace-canvas-content command with version/event integration.
+- [x] Phase 2: Harness routes/actions
+  - [x] Expose create canvas from raw JSON.
+  - [x] Expose replace canvas JSON.
+  - [x] Expose create/replace from Minu diagram syntax.
+- [ ] Phase 3: OpenAPI/tests/docs
+  - [x] Add harness canvas tests.
+  - [x] Update OpenAPI schemas/tests.
+  - [ ] Update harness resource docs and skill docs.
+
 ## OAuth Integrations Plan
 
 ## Why we are doing this

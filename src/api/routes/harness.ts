@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { db } from "../db/client";
 import { apiKeyFolderPermissions, folders, notes, oauthAuthorizationFolderPermissions, type ApiKey, type OAuthAuthorization } from "../db/schema";
-import { createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, searchAllDocumentLines, searchDocumentLines, searchDocuments, type ActorType, type DocumentEdit } from "../harness/commands";
+import { canvasDocumentFromSyntax, createDocument, editDocument, listFolders, listNoteEvents, readDocument, readDocumentLines, replaceCanvasDocument, searchAllDocumentLines, searchDocumentLines, searchDocuments, serializeCanvasDocument, type ActorType, type DocumentEdit, type DocumentType } from "../harness/commands";
 import { findSection, parseSections } from "../harness/sections";
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from "../notes/links";
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from "../notes/tags";
@@ -154,7 +154,7 @@ harnessRoutes.post("/notes", async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: "Unauthorized" }, 401);
 
-  const body = await c.req.json().catch(() => null) as { folderId?: string; title?: string; content?: string } | null;
+  const body = await c.req.json().catch(() => null) as { folderId?: string; title?: string; content?: string; documentType?: DocumentType } | null;
   if (!body) return c.json({ error: "Invalid JSON" }, 400);
   if (!body.folderId) return c.json({ error: "Folder id is required" }, 400);
 
@@ -166,12 +166,68 @@ harnessRoutes.post("/notes", async (c) => {
     folderId: body.folderId,
     title: body.title,
     markdown: body.content,
+    documentType: body.documentType,
     actorType: actor.actorType,
     actorId: actor.actorId,
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value, 201);
+});
+
+harnessRoutes.post("/canvases", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { folderId?: string; title?: string; canvas?: unknown; documentType?: "canvas.default" | "canvas.mindmap" } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  if (!body.folderId) return c.json({ error: "Folder id is required" }, 400);
+  if (!(await hasFolderPermission(c, body.folderId, "create"))) return c.json({ error: "Forbidden" }, 403);
+
+  const content = body.canvas === undefined ? undefined : serializeCanvasDocument(body.canvas);
+  if (body.canvas !== undefined && !content) return c.json({ error: "Canvas content must include nodes and edges arrays" }, 400);
+
+  const actor = getActor(c);
+  const result = await createDocument({
+    userId: user.id,
+    folderId: body.folderId,
+    title: body.title,
+    markdown: content ?? undefined,
+    documentType: body.documentType ?? "canvas.default",
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value, 201);
+});
+
+harnessRoutes.post("/canvases/from-syntax", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { folderId?: string; title?: string; syntax?: string; documentType?: "canvas.default" | "canvas.mindmap" } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  if (!body.folderId) return c.json({ error: "Folder id is required" }, 400);
+  if (!body.syntax?.trim()) return c.json({ error: "Diagram syntax is required" }, 400);
+  if (!(await hasFolderPermission(c, body.folderId, "create"))) return c.json({ error: "Forbidden" }, 403);
+
+  const compiled = canvasDocumentFromSyntax({ syntax: body.syntax, documentType: body.documentType });
+  if (!compiled.ok) return c.json({ error: "Diagram syntax has errors", diagnostics: compiled.errors }, 400);
+
+  const actor = getActor(c);
+  const result = await createDocument({
+    userId: user.id,
+    folderId: body.folderId,
+    title: body.title ?? compiled.title,
+    markdown: JSON.stringify(compiled.canvas),
+    documentType: compiled.documentType as "canvas.default" | "canvas.mindmap",
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ ...result.value, diagnostics: compiled.diagnostics }, 201);
 });
 
 harnessRoutes.get("/notes/orphans", async (c) => {
@@ -342,6 +398,67 @@ harnessRoutes.get("/notes/:noteId/sections/:sectionId", async (c) => {
       content: result.value.note.content.slice(section.contentFrom, section.contentTo),
     },
   });
+});
+
+harnessRoutes.put("/notes/:noteId/canvas", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { canvas?: unknown; documentType?: "canvas.default" | "canvas.mindmap"; title?: string; baseHash?: string } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  if (body.canvas === undefined) return c.json({ error: "Canvas content is required" }, 400);
+  const canvas = serializeCanvasDocument(body.canvas);
+  if (!canvas) return c.json({ error: "Canvas content must include nodes and edges arrays" }, 400);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "edit"))) return c.json({ error: "Forbidden" }, 403);
+
+  const actor = getActor(c);
+  const result = await replaceCanvasDocument({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    title: body.title,
+    canvas: JSON.parse(canvas),
+    documentType: body.documentType,
+    baseHash: body.baseHash,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+
+  if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);
+  return c.json(result.value);
+});
+
+harnessRoutes.put("/notes/:noteId/canvas/from-syntax", async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json().catch(() => null) as { syntax?: string; documentType?: "canvas.default" | "canvas.mindmap"; title?: string; baseHash?: string } | null;
+  if (!body) return c.json({ error: "Invalid JSON" }, 400);
+  if (!body.syntax?.trim()) return c.json({ error: "Diagram syntax is required" }, 400);
+
+  const current = await readDocument({ documentId: c.req.param("noteId"), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, "edit"))) return c.json({ error: "Forbidden" }, 403);
+
+  const compiled = canvasDocumentFromSyntax({ syntax: body.syntax, documentType: body.documentType });
+  if (!compiled.ok) return c.json({ error: "Diagram syntax has errors", diagnostics: compiled.errors }, 400);
+
+  const actor = getActor(c);
+  const result = await replaceCanvasDocument({
+    documentId: c.req.param("noteId"),
+    userId: user.id,
+    title: body.title ?? compiled.title,
+    canvas: compiled.canvas,
+    documentType: compiled.documentType as "canvas.default" | "canvas.mindmap",
+    baseHash: body.baseHash,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+
+  if (!result.ok) return c.json({ error: result.error, ...("currentHash" in result ? { currentHash: result.currentHash } : {}) }, result.status);
+  return c.json({ ...result.value, diagnostics: compiled.diagnostics });
 });
 
 harnessRoutes.post("/notes/:noteId/edit", async (c) => {

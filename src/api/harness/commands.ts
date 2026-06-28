@@ -1,4 +1,4 @@
-import { createDefaultCanvasDocument, createDefaultMindMapDocument } from "@dpklabs/minucanvas";
+import { compileMinuDiagramSyntax, createDefaultCanvasDocument, createDefaultMindMapDocument, type JsonCanvasDocument } from "@dpklabs/minucanvas";
 import { and, asc, desc, eq, gt, inArray, like, or, sql } from "drizzle-orm";
 import { syncNoteAttachmentReferences } from "../attachments/references";
 import { db } from "../db/client";
@@ -32,8 +32,36 @@ export function isCanvasDocumentType(documentType: string) {
   return documentType.startsWith("canvas.");
 }
 
+export function normalizeCanvasDocument(value: unknown): JsonCanvasDocument | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<JsonCanvasDocument>;
+  if (!Array.isArray(candidate.nodes) || !Array.isArray(candidate.edges)) return null;
+  return { nodes: candidate.nodes, edges: candidate.edges } as JsonCanvasDocument;
+}
+
+export function parseCanvasDocumentJson(content: string): JsonCanvasDocument | null {
+  try {
+    return normalizeCanvasDocument(JSON.parse(content));
+  } catch {
+    return null;
+  }
+}
+
+export function serializeCanvasDocument(value: unknown): string | null {
+  const canvas = normalizeCanvasDocument(value);
+  return canvas ? JSON.stringify(canvas) : null;
+}
+
 export function emptyCanvasDocument(documentType: DocumentType = "canvas.default") {
   return JSON.stringify(documentType === "canvas.mindmap" ? createDefaultMindMapDocument({ rootId: "Root" }) : createDefaultCanvasDocument());
+}
+
+export function compileDiagramSyntax(input: { syntax: string; documentType?: DocumentType }) {
+  const result = compileMinuDiagramSyntax(input.syntax, input.documentType === "canvas.mindmap" ? { layout: "mindmap" } : undefined);
+  const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
+  if (errors.length > 0) return { ok: false as const, errors: result.diagnostics };
+  const documentType: DocumentType = input.documentType ?? (result.parsed.layout === "mindmap" ? "canvas.mindmap" : "canvas.default");
+  return { ok: true as const, document: result.document, documentType, diagnostics: result.diagnostics, title: result.parsed.title };
 }
 
 export async function listDocuments(input: { userId: string; folderId?: string; type?: NoteType }) {
@@ -272,13 +300,19 @@ export async function createDocument(input: {
   if (!folder) return { ok: false, status: 404, error: "Folder not found" } satisfies DocumentCommandResult<never>;
 
   const documentType = input.documentType ?? "markdown";
+  let content = input.markdown ?? (documentType.startsWith("canvas.") ? emptyCanvasDocument(documentType) : "");
+  if (documentType.startsWith("canvas.")) {
+    const canvas = parseCanvasDocumentJson(content);
+    if (!canvas) return { ok: false, status: 400, error: "Canvas content must be JSON with nodes and edges arrays" } satisfies DocumentCommandResult<never>;
+    content = JSON.stringify(canvas);
+  }
   const title = input.title?.trim() || (documentType === "canvas.mindmap" ? "Untitled mind map" : documentType.startsWith("canvas.") ? "Untitled canvas" : "Untitled note");
   const note = {
     id: createId("note"),
     folderId: input.folderId,
     userId: input.userId,
     title,
-    content: input.markdown ?? (documentType.startsWith("canvas.") ? emptyCanvasDocument(documentType) : ""),
+    content,
     documentType,
     type: input.type ?? "note",
     updatedByActorType: input.actorType ?? "user",
@@ -358,8 +392,16 @@ export async function updateDocument(input: UpdateDocumentInput) {
     if (!folder) return { ok: false, status: 404, error: "Destination folder not found" } satisfies DocumentCommandResult<never>;
   }
 
+  const nextDocumentType = input.documentType ?? current.value.note.documentType;
+  let nextContent = input.markdown;
+  if (nextContent !== undefined && nextDocumentType.startsWith("canvas.")) {
+    const canvas = parseCanvasDocumentJson(nextContent);
+    if (!canvas) return { ok: false, status: 400, error: "Canvas content must be JSON with nodes and edges arrays" } satisfies DocumentCommandResult<never>;
+    nextContent = JSON.stringify(canvas);
+  }
+
   const titleChanged = input.title !== undefined && input.title !== current.value.note.title;
-  const contentChanged = input.markdown !== undefined && input.markdown !== current.value.note.content;
+  const contentChanged = nextContent !== undefined && nextContent !== current.value.note.content;
   const folderChanged = input.folderId !== undefined && input.folderId !== current.value.note.folderId;
   const isApiEditableChanged = input.isApiEditable !== undefined && input.isApiEditable !== current.value.note.isApiEditable;
   const documentTypeChanged = input.documentType !== undefined && input.documentType !== current.value.note.documentType;
@@ -375,7 +417,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
   const [note] = await db.update(notes)
     .set({
       ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.markdown !== undefined ? { content: input.markdown } : {}),
+      ...(nextContent !== undefined ? { content: nextContent } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),
       ...(input.isApiEditable !== undefined ? { isApiEditable: input.isApiEditable } : {}),
       ...(input.documentType !== undefined ? { documentType: input.documentType } : {}),
@@ -424,6 +466,31 @@ export async function updateDocument(input: UpdateDocumentInput) {
   }
 
   return { ok: true, value: { note, contentHash } } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
+}
+
+export async function replaceCanvasDocument(input: Omit<UpdateDocumentInput, "markdown" | "documentType"> & { canvas: JsonCanvasDocument; documentType?: Extract<DocumentType, "canvas.default" | "canvas.mindmap"> }) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+  const documentType = input.documentType ?? (current.value.note.documentType.startsWith("canvas.") ? current.value.note.documentType as Extract<DocumentType, "canvas.default" | "canvas.mindmap"> : "canvas.default");
+  if (!current.value.note.documentType.startsWith("canvas.")) return { ok: false, status: 400, error: "Canvas operations are only supported for canvas notes" } satisfies DocumentCommandResult<never>;
+  const content = serializeCanvasDocument(input.canvas);
+  if (!content) return { ok: false, status: 400, error: "Canvas content must include nodes and edges arrays" } satisfies DocumentCommandResult<never>;
+  return updateDocument({
+    documentId: input.documentId,
+    userId: input.userId,
+    title: input.title,
+    markdown: content,
+    documentType,
+    baseHash: input.baseHash,
+    actorType: input.actorType,
+    actorId: input.actorId,
+  });
+}
+
+export function canvasDocumentFromSyntax(input: { syntax: string; documentType?: DocumentType }) {
+  const compiled = compileDiagramSyntax(input);
+  if (!compiled.ok) return compiled;
+  return { ok: true as const, canvas: compiled.document, documentType: compiled.documentType, diagnostics: compiled.diagnostics, title: compiled.title };
 }
 
 export async function editDocument(input: Omit<UpdateDocumentInput, "title" | "markdown" | "folderId"> & { edits: DocumentEdit[] }) {
