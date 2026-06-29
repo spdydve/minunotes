@@ -44,7 +44,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
       <PopoverContent align="end" className="w-44 p-1">
         <ActionMenuButton onClick={() => void copyNoteLink()}>{copiedLink ? "Copied link" : "Copy note link"}</ActionMenuButton>
         <ActionMenuButton onClick={() => { setDetailsOpen(true); setOpen(false); }}>Details</ActionMenuButton>
-        {note.documentType === "markdown" ? <ActionMenuButton onClick={() => { setShareOpen(true); setOpen(false); }}>Share</ActionMenuButton> : null}
+        <ActionMenuButton onClick={() => { setShareOpen(true); setOpen(false); }}>Share</ActionMenuButton>
         <MoveNoteDialog note={note} onOpenChange={setOpen} trigger={<ActionMenuItemLabel>Move note</ActionMenuItemLabel>} />
         <ActionMenuButton disabled={duplicate.isPending} onClick={() => { duplicate.mutate(); setOpen(false); }}>Duplicate</ActionMenuButton>
         <ActionMenuButton onClick={() => { setVersionsOpen(true); setOpen(false); }}>Version history</ActionMenuButton>
@@ -54,7 +54,7 @@ export function NoteActionsPopover({ note, onDelete, onToggleApiEditable, onNote
       </PopoverContent>
     </Popover>
     <NoteDetailsDialog note={note} open={detailsOpen} onOpenChange={setDetailsOpen} onNoteUpdated={onNoteUpdated} />
-    {note.documentType === "markdown" ? <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} /> : null}
+    <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} />
     <NoteVersionsDialog note={note} open={versionsOpen} onOpenChange={setVersionsOpen} onNoteUpdated={onNoteUpdated} />
   </>;
 }

@@ -1,12 +1,31 @@
 import { MarkdownEditor } from "@dpklabs/minueditor";
+import { MinuCanvas, centerViewportForDocument, mindMapCanvasProfile, standardCanvasProfile, type JsonCanvasDocument } from "@dpklabs/minucanvas";
 import type React from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ApiError, api } from "../lib/api";
+import { ApiError, api, type DocumentType } from "../lib/api";
 import { editorCodeHighlighter } from "../lib/code-highlighter";
 import { editorCodeLanguages } from "../lib/editor-languages";
 import { EmptyState } from "../components/ui/empty-state";
 import { rootRoute } from "./__root";
+
+const EMPTY_CANVAS: JsonCanvasDocument = { nodes: [], edges: [] };
+
+type CanvasViewport = { x: number; y: number; zoom: number };
+
+function parseCanvasDocument(content: string): JsonCanvasDocument {
+  if (!content.trim()) return EMPTY_CANVAS;
+  try {
+    const parsed = JSON.parse(content) as Partial<JsonCanvasDocument>;
+    return {
+      nodes: Array.isArray(parsed.nodes) ? parsed.nodes as JsonCanvasDocument["nodes"] : [],
+      edges: Array.isArray(parsed.edges) ? parsed.edges as JsonCanvasDocument["edges"] : [],
+    };
+  } catch {
+    return EMPTY_CANVAS;
+  }
+}
 
 function SharedNoteView() {
   const { token } = shareRoute.useParams();
@@ -20,16 +39,18 @@ function SharedNoteView() {
   if (error instanceof ApiError && error.status === 404) return <SharedShell><EmptyState title="Shared note unavailable"><p>This link was revoked, expired, or does not exist.</p></EmptyState></SharedShell>;
   if (!data?.note) return <SharedShell><EmptyState title="Unable to load note"><p>Try opening the link again.</p></EmptyState></SharedShell>;
 
-  return <SharedShell>
-    <article className="mx-auto w-full max-w-6xl">
-      <div className="border-b border-[var(--notes-border)] bg-[var(--notes-bg)] pb-4 md:sticky md:top-0 md:z-20 md:pt-2">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="notes-muted text-xs">Shared note · Read-only</p>
+  const isCanvas = data.note.documentType.startsWith("canvas.");
+
+  return <SharedShell full={isCanvas}>
+    <article className={isCanvas ? "flex h-screen w-full flex-col overflow-hidden" : "mx-auto w-full max-w-6xl"}>
+      <div className={`${isCanvas ? "shrink-0 px-4 py-3 sm:px-6" : "pb-4 md:sticky md:top-0 md:z-20 md:pt-2"} border-b border-[var(--notes-border)] bg-[var(--notes-bg)]`}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="notes-muted text-xs">Shared {isCanvas ? "canvas" : "note"} · Read-only</p>
         </div>
-        <h1 className="text-2xl font-semibold outline-none sm:text-3xl">{data.note.title}</h1>
+        <h1 className={isCanvas ? "text-xl font-semibold sm:text-2xl" : "text-2xl font-semibold outline-none sm:text-3xl"}>{data.note.title}</h1>
         <div className="notes-muted mt-2 text-xs">Updated {new Date(data.note.updatedAt).toLocaleString()}</div>
       </div>
-      <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
+      {isCanvas ? <SharedCanvas content={data.note.content} documentType={data.note.documentType} /> : <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
         <MarkdownEditor
           value={data.note.content}
           onChange={() => undefined}
@@ -39,13 +60,40 @@ function SharedNoteView() {
           codeHighlighter={editorCodeHighlighter}
           className="notes-minu-editor"
         />
-      </div>
+      </div>}
     </article>
   </SharedShell>;
 }
 
-function SharedShell({ children }: { children: React.ReactNode }) {
-  return <main className="min-h-screen bg-[var(--notes-bg)] px-4 py-4 text-[var(--notes-text)] sm:px-6 sm:py-6">
+function SharedCanvas({ content, documentType }: { content: string; documentType: DocumentType }) {
+  const value = parseCanvasDocument(content);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [initialViewport, setInitialViewport] = useState<CanvasViewport | null>(null);
+  const profile = documentType === "canvas.mindmap" ? mindMapCanvasProfile : standardCanvasProfile;
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || initialViewport) return;
+    setInitialViewport(centerViewportForDocument(value, { width: frame.clientWidth, height: frame.clientHeight }));
+  }, [initialViewport, value]);
+
+  return <div ref={frameRef} className="notes-minu-canvas h-[calc(100vh-6.25rem)] min-h-[480px] overflow-hidden bg-[var(--notes-panel)]">
+    {initialViewport ? <MinuCanvas
+      value={value}
+      onChange={() => undefined}
+      readOnly
+      canvasTheme="system"
+      shapeTheme="outline"
+      initialViewport={initialViewport}
+      documentProfile={profile}
+      grid
+      minHeight="100%"
+    /> : null}
+  </div>;
+}
+
+function SharedShell({ children, full = false }: { children: React.ReactNode; full?: boolean }) {
+  return <main className={`${full ? "min-h-screen" : "min-h-screen px-4 py-4 sm:px-6 sm:py-6"} bg-[var(--notes-bg)] text-[var(--notes-text)]`}>
     {children}
   </main>;
 }

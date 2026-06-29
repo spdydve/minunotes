@@ -106,7 +106,7 @@ export function NoteShareDialog({ note, open, onOpenChange }: { note: Note; open
         </section>
 
         <div className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-sm text-[var(--notes-muted)]">
-          Shared notes are public and read-only. Folder metadata, API settings, and edit controls are not exposed.
+          Shared notes and canvases are public and read-only. Folder metadata, API settings, and edit controls are not exposed.
         </div>
 
         {create.isError ? <p className="text-sm text-red-600">Unable to create share link.</p> : null}

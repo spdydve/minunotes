@@ -34,6 +34,7 @@ shareRoutes.get("/:token", async (c) => {
     note: {
       title: row.note.title,
       content: row.note.content,
+      documentType: row.note.documentType,
       updatedAt: row.note.updatedAt,
     },
     share: row.share,

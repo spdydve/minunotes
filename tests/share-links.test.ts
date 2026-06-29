@@ -72,10 +72,39 @@ describe("note share links", () => {
 
     const publicRead = await app.request(`/api/share/${tokenFromUrl(shareLink.url)}`);
     expect(publicRead.status).toBe(200);
-    const body = await publicRead.json() as { note: { title: string; content: string }; share: { id: string; permission: string } };
-    expect(body.note).toEqual({ title: "A Note", content: "# Shared\n\nHello", updatedAt: expect.any(String) });
+    const body = await publicRead.json() as { note: { title: string; content: string; documentType: string }; share: { id: string; permission: string } };
+    expect(body.note).toEqual({ title: "A Note", content: "# Shared\n\nHello", documentType: "markdown", updatedAt: expect.any(String) });
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe("read");
+  });
+
+  it("creates a share link for canvas notes", async () => {
+    const { app, db, schema } = await setupShareApp();
+    await db.insert(schema.notes).values({
+      id: "note_canvas",
+      folderId: "folder_a",
+      userId: "user_a",
+      title: "Shared Canvas",
+      content: JSON.stringify({ nodes: [], edges: [] }),
+      documentType: "canvas.default",
+      type: "note",
+      isApiEditable: true,
+      updatedByActorType: null,
+      updatedByActorId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const create = await app.request("/api/notes/note_canvas/share-link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
+    expect(create.status).toBe(201);
+    const { shareLink } = await create.json() as { shareLink: { url: string } };
+
+    const publicRead = await app.request(`/api/share/${tokenFromUrl(shareLink.url)}`);
+    expect(publicRead.status).toBe(200);
+    const body = await publicRead.json() as { note: { title: string; content: string; documentType: string } };
+    expect(body.note.title).toBe("Shared Canvas");
+    expect(body.note.documentType).toBe("canvas.default");
+    expect(JSON.parse(body.note.content)).toEqual({ nodes: [], edges: [] });
   });
 
   it("returns existing active share metadata on repeated create", async () => {
