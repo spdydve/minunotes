@@ -81,10 +81,5 @@
     "typescript": "latest",
     "vite": "latest",
     "vitest": "^4.1.7"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "@dpklabs/minucanvas@0.4.0": "patches/@dpklabs__minucanvas@0.4.0.patch"
-    }
   }
 }

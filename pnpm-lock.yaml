@@ -4,11 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@dpklabs/minucanvas@0.4.0':
-    hash: asmfgt2l2aw4gduhvg52o6eql4
-    path: patches/@dpklabs__minucanvas@0.4.0.patch
-
 importers:
 
   .:
@@ -54,7 +49,7 @@ importers:
         version: 6.5.3
       '@dpklabs/minucanvas':
         specifier: github:spdydve/minucanvas#v0.4.0
-        version: github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f(patch_hash=asmfgt2l2aw4gduhvg52o6eql4)(react-dom@19.2.6)(react@19.2.6)
+        version: github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
         specifier: github:spdydve/minueditor#v0.10.3
         version: github.com/spdydve/minueditor/9ba58c193cc2e3464de0706faf16bd4017d3180e(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
@@ -6351,7 +6346,7 @@ packages:
   /zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
-  github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f(patch_hash=asmfgt2l2aw4gduhvg52o6eql4)(react-dom@19.2.6)(react@19.2.6):
+  github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f(react-dom@19.2.6)(react@19.2.6):
     resolution: {tarball: https://codeload.github.com/spdydve/minucanvas/tar.gz/38284718c9d4cdcdfb2afbff17707df4315fd19f}
     id: github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f
     name: '@dpklabs/minucanvas'
@@ -6364,7 +6359,6 @@ packages:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
     dev: false
-    patched: true
 
   github.com/spdydve/minueditor/9ba58c193cc2e3464de0706faf16bd4017d3180e(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
     resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/9ba58c193cc2e3464de0706faf16bd4017d3180e}
