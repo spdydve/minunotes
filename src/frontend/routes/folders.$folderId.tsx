@@ -142,7 +142,7 @@ function FolderContentsTable({
                 <FolderActionsPopover
                   folder={item.folder}
                   depth={folderDepth(item.folder, allFolders)}
-                  icon="settings"
+                  icon="more"
                 />
               </div>
             </div>
@@ -275,7 +275,7 @@ function FolderContentsTable({
                       <FolderActionsPopover
                         folder={item.folder}
                         depth={folderDepth(item.folder, allFolders)}
-                        icon="settings"
+                        icon="more"
                       />
                     ) : (
                       <NoteActionsPopover
