@@ -2,6 +2,7 @@ import { MarkdownEditor } from "@dpklabs/minueditor";
 import { MinuCanvas, centerViewportForDocument, mindMapCanvasProfile, standardCanvasProfile, type JsonCanvasDocument } from "@dpklabs/minucanvas";
 import type React from "react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { Copy } from "lucide-react";
 import { createRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api, type DocumentType } from "../lib/api";
@@ -34,18 +35,38 @@ function SharedNoteView() {
     queryFn: () => api.sharedNote(token),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   if (isLoading) return <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">Loading shared note...</div>;
   if (error instanceof ApiError && error.status === 404) return <SharedShell><EmptyState title="Shared note unavailable"><p>This link was revoked, expired, or does not exist.</p></EmptyState></SharedShell>;
   if (!data?.note) return <SharedShell><EmptyState title="Unable to load note"><p>Try opening the link again.</p></EmptyState></SharedShell>;
 
   const isCanvas = data.note.documentType.startsWith("canvas.");
+  const copySharedContent = async () => {
+    const text = isCanvas ? JSON.stringify(parseCanvasDocument(data.note.content), null, 2) : data.note.content;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState("copied");
+      window.setTimeout(() => setCopyState("idle"), 1500);
+    } catch {
+      setCopyState("failed");
+      window.setTimeout(() => setCopyState("idle"), 1500);
+    }
+  };
 
   return <SharedShell full={isCanvas}>
     <article className={isCanvas ? "flex h-screen w-full flex-col overflow-hidden" : "mx-auto w-full max-w-6xl"}>
       <div className={`${isCanvas ? "shrink-0 px-4 py-3 sm:px-6" : "pb-4 md:sticky md:top-0 md:z-20 md:pt-2"} border-b border-[var(--notes-border)] bg-[var(--notes-bg)]`}>
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="notes-muted text-xs">Shared {isCanvas ? "canvas" : "note"} · Read-only</p>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel)] px-2.5 py-1.5 text-xs font-medium text-[var(--notes-text)] transition-colors hover:bg-[var(--notes-hover)]"
+            onClick={copySharedContent}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : `Copy ${isCanvas ? "JSON" : "markdown"}`}
+          </button>
         </div>
         <h1 className={isCanvas ? "text-xl font-semibold sm:text-2xl" : "text-2xl font-semibold outline-none sm:text-3xl"}>{data.note.title}</h1>
         <div className="notes-muted mt-2 text-xs">Updated {new Date(data.note.updatedAt).toLocaleString()}</div>

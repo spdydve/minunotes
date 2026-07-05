@@ -249,6 +249,13 @@ export function NoteEditor({
               view.contentDOM.removeEventListener("copy", handleTaskCopy, { capture: true });
               if (editorViewRef.current === view) editorViewRef.current = null;
             };
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() => {
+                if (editorViewRef.current !== view) return;
+                view.requestMeasure();
+                view.dispatch({ selection: view.state.selection, scrollIntoView: false });
+              });
+            });
             if (!initialEditing && view.hasFocus) view.contentDOM.blur();
           }}
           className="notes-minu-editor"
