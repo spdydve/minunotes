@@ -48,8 +48,8 @@ importers:
         specifier: ^6.5.3
         version: 6.5.3
       '@dpklabs/minucanvas':
-        specifier: github:spdydve/minucanvas#v0.4.0
-        version: github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f(react-dom@19.2.6)(react@19.2.6)
+        specifier: github:spdydve/minucanvas#v0.5.0
+        version: github.com/spdydve/minucanvas/7613a516fb1b40db1f7fbe14d1ae670d04a5aa70(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
         specifier: github:spdydve/minueditor#v0.10.3
         version: github.com/spdydve/minueditor/9ba58c193cc2e3464de0706faf16bd4017d3180e(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
@@ -162,7 +162,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.1.0)
+        version: 4.1.7(@types/node@25.9.1)(vite@8.1.3)
 
 packages:
 
@@ -3486,7 +3486,7 @@ packages:
       magic-string: 0.30.21
       vite: 8.0.14(@types/node@25.9.1)(tsx@4.22.3)
 
-  /@vitest/mocker@4.1.7(vite@8.1.0):
+  /@vitest/mocker@4.1.7(vite@8.1.3):
     resolution: {integrity: sha512-vY7nuamKgfvpA1Koa3oYIw/k7D6kZnpGyNMZW8loow2bsBYla1TFdqTaXncWdRn4pgwNs+90RhnXhJScDwQeJA==}
     peerDependencies:
       msw: ^2.4.9
@@ -3500,7 +3500,7 @@ packages:
       '@vitest/spy': 4.1.7
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 8.1.0(@types/node@25.9.1)(tsx@4.22.3)
+      vite: 8.1.3(@types/node@25.9.1)(tsx@4.22.3)
     dev: true
 
   /@vitest/pretty-format@4.1.7:
@@ -5281,6 +5281,15 @@ packages:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
+  /postcss@8.5.16:
+    resolution: {integrity: sha512-vuwillviilfKZsg0VGj5R/YwwcHx4SLsIOI/7K6mQkWx+l5cUHTjj5g0AasTBcyXsbfTgrwsUNmVUb5xVwyPwg==}
+    engines: {node: ^10 || ^12 || >=14}
+    dependencies:
+      nanoid: 3.3.12
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+    dev: true
+
   /promise-limit@2.7.0:
     resolution: {integrity: sha512-7nJ6v5lnJsXwGprnGXga4wx6d1POjvi5Qmf1ivTRxTjH4Z/9Czja/UCMLVmB9N93GeWOU93XaFaEt6jbuoagNw==}
     dev: false
@@ -6100,8 +6109,8 @@ packages:
     optionalDependencies:
       fsevents: 2.3.3
 
-  /vite@8.1.0(@types/node@25.9.1)(tsx@4.22.3):
-    resolution: {integrity: sha512-BuJcQK/56NQTWDGn4ABea3q4SSBdNPWwNZKTkkUpcMPnLoquSYH8llRtSUIgoL1KSCpHt5eghLShn50mH36y7Q==}
+  /vite@8.1.3(@types/node@25.9.1)(tsx@4.22.3):
+    resolution: {integrity: sha512-Ds+gBRbj0lwRO2Y5hwnUBdxSwlAve9LeRyU4sNnAr0ewW0gWF0n5bgXgUzbgZ49MV9BVUAQUFYVcDUcilUExMA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -6146,7 +6155,7 @@ packages:
       '@types/node': 25.9.1
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.15
+      postcss: 8.5.16
       rolldown: 1.1.3
       tinyglobby: 0.2.17
       tsx: 4.22.3
@@ -6219,7 +6228,7 @@ packages:
     transitivePeerDependencies:
       - msw
 
-  /vitest@4.1.7(@types/node@25.9.1)(vite@8.1.0):
+  /vitest@4.1.7(@types/node@25.9.1)(vite@8.1.3):
     resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
@@ -6262,7 +6271,7 @@ packages:
     dependencies:
       '@types/node': 25.9.1
       '@vitest/expect': 4.1.7
-      '@vitest/mocker': 4.1.7(vite@8.1.0)
+      '@vitest/mocker': 4.1.7(vite@8.1.3)
       '@vitest/pretty-format': 4.1.7
       '@vitest/runner': 4.1.7
       '@vitest/snapshot': 4.1.7
@@ -6279,7 +6288,7 @@ packages:
       tinyexec: 1.2.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.1.0(@types/node@25.9.1)(tsx@4.22.3)
+      vite: 8.1.3(@types/node@25.9.1)(tsx@4.22.3)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw
@@ -6346,11 +6355,12 @@ packages:
   /zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
-  github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minucanvas/tar.gz/38284718c9d4cdcdfb2afbff17707df4315fd19f}
-    id: github.com/spdydve/minucanvas/38284718c9d4cdcdfb2afbff17707df4315fd19f
+  github.com/spdydve/minucanvas/7613a516fb1b40db1f7fbe14d1ae670d04a5aa70(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minucanvas/tar.gz/7613a516fb1b40db1f7fbe14d1ae670d04a5aa70}
+    id: github.com/spdydve/minucanvas/7613a516fb1b40db1f7fbe14d1ae670d04a5aa70
     name: '@dpklabs/minucanvas'
-    version: 0.4.0
+    version: 0.5.0
+    prepare: true
     requiresBuild: true
     peerDependencies:
       react: '>=18.0.0'
