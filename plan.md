@@ -112,6 +112,57 @@ Goal: make canvases first-class for agents without turning them into a separate 
   - [x] Update OpenAPI schemas/tests.
   - [x] Update harness resource docs and skill docs.
 
+## OAuth Dynamic Client Registration Plan
+
+Goal: add Dynamic Client Registration (DCR) for hosted MCP/ChatGPT-style clients while preserving manual OAuth client registration. DCR should reduce setup friction by letting compliant clients register a public OAuth client automatically after discovering MinuNotes OAuth metadata.
+
+### Decisions
+- Keep existing manual OAuth Apps/Connected Apps support unchanged.
+- Add DCR as an additive public-client registration path.
+- DCR clients use the existing `oauth_clients` table.
+- DCR-created clients are public clients only; no client secret initially.
+- DCR does not require a logged-in MinuNotes user because it registers an application client, not a user authorization.
+- User authorization still happens during the existing consent flow.
+- Redirect URIs must be HTTPS, except localhost/127.0.0.1 for development.
+- Add conservative redirect host guardrails for hosted DCR clients, initially allowing known connector hosts such as `chatgpt.com` plus localhost for dev.
+- Advertise `registration_endpoint` in OAuth authorization server metadata.
+- Preserve current bearer token support for harness/MCP.
+
+### Files to modify/create
+- `src/api/db/schema.ts` — decide whether existing `oauth_clients.userId: null` is enough for DCR-created clients; add any metadata fields only if needed.
+- `src/api/routes/oauth.ts` — add `POST /api/oauth/register`, validation, client metadata response, and metadata advertisement.
+- `src/api/index.ts` — ensure root OAuth metadata also advertises DCR.
+- `src/api/lib/oauth.ts` — add shared redirect URI validation / DCR helpers if route code gets large.
+- `tests/oauth.test.ts` — add DCR registration tests and metadata tests.
+- `src/frontend/docs/resources/oauth-manual-testing.mdx` — document DCR and manual fallback.
+- Optional: `src/frontend/docs/resources/mcp.mdx` or agent integration docs — mention ChatGPT can auto-register if DCR is deployed.
+
+### Verification
+- `pnpm typecheck`
+- `pnpm test tests/oauth.test.ts tests/mcp-route.test.ts`
+- `pnpm test`
+- `pnpm build`
+- Manual smoke:
+  - Fetch `/.well-known/oauth-authorization-server` and confirm `registration_endpoint` is present.
+  - `POST /api/oauth/register` with ChatGPT callback URL returns a client ID.
+  - Use returned client ID in existing authorize/token flow.
+  - Existing manual OAuth client creation still works.
+  - MCP protected resource metadata still points to the authorization server.
+
+### Implementation phases
+- [x] Phase 1: DCR registration route and metadata
+  - [x] Add request/response validation.
+  - [x] Insert public OAuth client with `userId: null`.
+  - [x] Advertise `registration_endpoint` in `/api/oauth/.well-known/oauth-authorization-server` and root metadata.
+- [x] Phase 2: Tests
+  - [x] Test successful public-client DCR registration.
+  - [x] Test rejected insecure/unsupported redirect URIs.
+  - [x] Test metadata includes registration endpoint.
+  - [x] Test existing manual OAuth client route still works.
+- [x] Phase 3: Docs
+  - [x] Document ChatGPT/MCP DCR setup.
+  - [x] Document manual OAuth client fallback.
+
 ## OAuth Integrations Plan
 
 ## Why we are doing this

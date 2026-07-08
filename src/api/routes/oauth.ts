@@ -4,7 +4,7 @@ import { db } from "../db/client";
 import { oauthAuthorizationCodes, oauthAuthorizationFolderPermissions, oauthAuthorizations, oauthClients, oauthTokens, type ApiKey, type OAuthAuthorization } from "../db/schema";
 import { auth } from "../lib/auth";
 import { filterSelectablePermissionRows } from "../lib/folder-access";
-import { AUTHORIZATION_CODE_TTL_MS, ACCESS_TOKEN_TTL_MS, REFRESH_TOKEN_TTL_MS, findOAuthClient, generateOAuthToken, hashOAuthToken, isRedirectUriAllowed, oauthError, verifyPkce } from "../lib/oauth";
+import { AUTHORIZATION_CODE_TTL_MS, ACCESS_TOKEN_TTL_MS, REFRESH_TOKEN_TTL_MS, findOAuthClient, generateOAuthToken, hashOAuthToken, isRedirectUriAllowed, oauthError, validateDcrRedirectUri, validateOAuthRedirectUri, verifyPkce } from "../lib/oauth";
 import { createId } from "../lib/id";
 
 type Variables = {
@@ -22,6 +22,20 @@ function getOrigin(c: Context<{ Variables: Variables }>) {
 
 function textParam(value: FormDataEntryValue | string | undefined | null) {
   return typeof value === "string" ? value : undefined;
+}
+
+function authorizationServerMetadata(issuer: string) {
+  return {
+    issuer,
+    authorization_endpoint: `${issuer}/api/oauth/authorize`,
+    token_endpoint: `${issuer}/api/oauth/token`,
+    revocation_endpoint: `${issuer}/api/oauth/revoke`,
+    registration_endpoint: `${issuer}/api/oauth/register`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+  };
 }
 
 function appendErrorRedirect(redirectUri: string, error: string, state?: string | null) {
@@ -42,18 +56,49 @@ async function validateAuthorizeRequest(input: { clientId?: string; redirectUri?
   return { ok: true as const, client, redirectUri: input.redirectUri, clientId: input.clientId, codeChallenge: input.codeChallenge, codeChallengeMethod: input.codeChallengeMethod };
 }
 
-oauthRoutes.get("/.well-known/oauth-authorization-server", (c) => {
-  const issuer = getOrigin(c);
+oauthRoutes.get("/.well-known/oauth-authorization-server", (c) => c.json(authorizationServerMetadata(getOrigin(c))));
+
+oauthRoutes.post("/register", async (c) => {
+  const body = await c.req.json().catch(() => null) as { redirect_uris?: unknown; client_name?: unknown; token_endpoint_auth_method?: unknown; grant_types?: unknown; response_types?: unknown; scope?: unknown } | null;
+  if (!body) return c.json(oauthError("invalid_client_metadata", "Invalid JSON"), 400);
+
+  const redirectUris = Array.isArray(body.redirect_uris) ? [...new Set(body.redirect_uris.filter((uri): uri is string => typeof uri === "string").map((uri) => uri.trim()).filter(Boolean))] : [];
+  if (redirectUris.length === 0) return c.json(oauthError("invalid_redirect_uri", "redirect_uris is required"), 400);
+  for (const uri of redirectUris) {
+    const result = validateDcrRedirectUri(uri);
+    if (!result.ok) return c.json(oauthError("invalid_redirect_uri", result.error), 400);
+  }
+
+  const tokenEndpointAuthMethod = typeof body.token_endpoint_auth_method === "string" ? body.token_endpoint_auth_method : "none";
+  if (tokenEndpointAuthMethod !== "none") return c.json(oauthError("invalid_client_metadata", "Only token_endpoint_auth_method=none is supported"), 400);
+  const grantTypes = Array.isArray(body.grant_types) ? body.grant_types.filter((value): value is string => typeof value === "string") : ["authorization_code", "refresh_token"];
+  if (!grantTypes.includes("authorization_code")) return c.json(oauthError("invalid_client_metadata", "authorization_code grant is required"), 400);
+  const responseTypes = Array.isArray(body.response_types) ? body.response_types.filter((value): value is string => typeof value === "string") : ["code"];
+  if (!responseTypes.includes("code")) return c.json(oauthError("invalid_client_metadata", "code response type is required"), 400);
+
+  const now = new Date();
+  const clientName = typeof body.client_name === "string" && body.client_name.trim() ? body.client_name.trim() : "Dynamically registered MCP client";
+  const [client] = await db.insert(oauthClients).values({
+    id: createId("oauth_client"),
+    userId: null,
+    name: clientName,
+    description: "Dynamically registered OAuth client",
+    redirectUris: JSON.stringify(redirectUris),
+    clientType: "public",
+    createdAt: now,
+    updatedAt: now,
+  }).returning();
+
   return c.json({
-    issuer,
-    authorization_endpoint: `${issuer}/api/oauth/authorize`,
-    token_endpoint: `${issuer}/api/oauth/token`,
-    revocation_endpoint: `${issuer}/api/oauth/revoke`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
-  });
+    client_id: client.id,
+    client_id_issued_at: Math.floor(now.getTime() / 1000),
+    client_name: client.name,
+    redirect_uris: redirectUris,
+    token_endpoint_auth_method: "none",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    scope: typeof body.scope === "string" ? body.scope : "notes.read notes.create notes.edit",
+  }, 201);
 });
 
 oauthRoutes.get("/clients", async (c) => {
@@ -77,8 +122,8 @@ oauthRoutes.post("/clients", async (c) => {
   if (redirectUris.length === 0) return c.json({ error: "At least one redirect URI is required" }, 400);
   for (const uri of redirectUris) {
     try {
-      const parsed = new URL(uri);
-      if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") return c.json({ error: "Redirect URIs must use HTTPS unless they target localhost" }, 400);
+      const result = validateOAuthRedirectUri(uri);
+      if (!result.ok) return c.json({ error: result.error }, 400);
     } catch {
       return c.json({ error: "Redirect URIs must be valid URLs" }, 400);
     }

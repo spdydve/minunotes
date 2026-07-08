@@ -99,7 +99,39 @@ Hosted MCP also accepts OAuth bearer tokens:
 Authorization: Bearer mnoac_...
 ```
 
-This is the path for OAuth-capable hosted connectors. API keys remain the simpler path for local scripts, trusted private agents, and local MCP clients.
+OAuth-capable MCP clients should start with the MCP endpoint:
+
+```txt
+https://notes.dpklabs.com/api/mcp
+```
+
+The server advertises OAuth discovery metadata and Dynamic Client Registration (DCR):
+
+```txt
+GET /.well-known/oauth-authorization-server
+GET /api/mcp/.well-known/oauth-protected-resource
+POST /api/oauth/register
+```
+
+DCR lets clients such as ChatGPT register their callback URL and receive a public client ID automatically. Manual OAuth app creation still works as a fallback for custom/trusted apps.
+
+Example DCR smoke request:
+
+```sh
+curl -s "$MINUNOTES_BASE_URL/api/oauth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "ChatGPT Connector",
+    "redirect_uris": ["https://chatgpt.com/connector/oauth/example"],
+    "token_endpoint_auth_method": "none",
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"]
+  }'
+```
+
+Expected result: a JSON response with `client_id`, `redirect_uris`, `token_endpoint_auth_method: "none"`, and `response_types: ["code"]`.
+
+API keys remain the simpler path for local scripts, trusted private agents, and local MCP clients.
 
 ## What to verify
 
