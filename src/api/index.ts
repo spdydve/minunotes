@@ -47,6 +47,32 @@ app.use("*", cors({
   exposeHeaders: ["Mcp-Session-Id"],
   credentials: true,
 }));
+function oauthAuthorizationServerMetadata(origin: string) {
+  return {
+    issuer: origin,
+    authorization_endpoint: `${origin}/api/oauth/authorize`,
+    token_endpoint: `${origin}/api/oauth/token`,
+    revocation_endpoint: `${origin}/api/oauth/revoke`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+  };
+}
+
+function mcpProtectedResourceMetadata(origin: string) {
+  return {
+    resource: `${origin}/api/mcp`,
+    authorization_servers: [origin],
+    bearer_methods_supported: ["header"],
+    scopes_supported: ["notes.read", "notes.create", "notes.edit"],
+    resource_documentation: `${origin}/api/harness/openapi.json`,
+  };
+}
+
+app.get("/.well-known/oauth-authorization-server", (c) => c.json(oauthAuthorizationServerMetadata(new URL(c.req.url).origin)));
+app.get("/.well-known/oauth-protected-resource", (c) => c.json(mcpProtectedResourceMetadata(new URL(c.req.url).origin)));
+app.get("/api/mcp/.well-known/oauth-protected-resource", (c) => c.json(mcpProtectedResourceMetadata(new URL(c.req.url).origin)));
 app.get("/api/openapi.json", (c) => c.json(harnessOpenApiSpec));
 app.get("/api/harness/openapi.json", (c) => c.json(harnessOpenApiSpec));
 app.get("/health", async (c) => {

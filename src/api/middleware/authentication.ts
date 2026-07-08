@@ -15,6 +15,12 @@ export const authenticationMiddleware = createMiddleware(async (c, next) => {
   await next();
 });
 
+function mcpAuthChallenge(requestUrl: string) {
+  const url = new URL(requestUrl);
+  if (!url.pathname.startsWith("/api/mcp")) return undefined;
+  return `Bearer resource_metadata="${url.origin}/api/mcp/.well-known/oauth-protected-resource"`;
+}
+
 export const harnessAuthenticationMiddleware = createMiddleware(async (c, next) => {
   const headerApiKey = c.req.raw.headers.get("x-api-key")?.trim() ?? null;
   const apiKey = getApiKeyFromHeaders(c.req.raw.headers);
@@ -37,7 +43,8 @@ export const harnessAuthenticationMiddleware = createMiddleware(async (c, next) 
     }
   }
 
-  if (headerApiKey) return c.json({ error: "Invalid API key" }, 401);
+  const authChallenge = mcpAuthChallenge(c.req.url);
+  if (headerApiKey) return c.json({ error: "Invalid API key" }, 401, authChallenge ? { "WWW-Authenticate": authChallenge } : undefined);
 
   const authorization = c.req.raw.headers.get("authorization");
   const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -63,7 +70,7 @@ export const harnessAuthenticationMiddleware = createMiddleware(async (c, next) 
       return;
     }
 
-    return c.json({ error: "Invalid bearer token" }, 401);
+    return c.json({ error: "Invalid bearer token" }, 401, authChallenge ? { "WWW-Authenticate": authChallenge } : undefined);
   }
 
   await authenticationMiddleware(c, next);

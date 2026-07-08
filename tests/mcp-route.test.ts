@@ -8,7 +8,19 @@ describe("hosted MCP route", () => {
     const response = await app.request("/api/mcp", { method: "POST" });
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("/api/mcp/.well-known/oauth-protected-resource");
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("serves OAuth protected resource metadata for MCP", async () => {
+    const response = await app.request("/api/mcp/.well-known/oauth-protected-resource");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      resource: "http://localhost/api/mcp",
+      authorization_servers: ["http://localhost"],
+      bearer_methods_supported: ["header"],
+    });
   });
 
   it("serves MCP initialize over streamable HTTP with API key auth", async () => {
