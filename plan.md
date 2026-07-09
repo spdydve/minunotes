@@ -144,11 +144,7 @@ External/stable integration API:
 /health
 ```
 
-Legacy compatibility during migration:
-
-```txt
-/api/*
-```
+The legacy `/api/*` surface is removed; update clients to the canonical routes above.
 
 ### Auth model
 
@@ -163,7 +159,7 @@ Legacy compatibility during migration:
 ### Decisions
 
 - Make `/internal/*`, `/v1/harness/*`, `/mcp`, `/oauth/*`, and root `/.well-known/*` the preferred/canonical routes.
-- Keep `/api/*` as legacy aliases for now.
+- Remove `/api/*` legacy aliases.
 - Update frontend default API base from `/api` to `/internal`.
 - Update external docs/skills to prefer `/v1/harness` and `/mcp`.
 - Update OpenAPI paths to `/v1/harness/*` as canonical.
@@ -204,7 +200,7 @@ Legacy compatibility during migration:
   - `POST /mcp` works with API key or bearer.
   - `GET /mcp/.well-known/oauth-protected-resource` returns canonical resource `/mcp`.
   - `GET /.well-known/oauth-authorization-server` advertises root `/oauth/*` endpoints.
-  - Legacy `/api/harness`, `/api/mcp`, `/api/oauth`, and `/api/notes` still work during transition.
+  - Legacy `/api/*` routes return 404 after migration.
 
 ### Implementation phases
 
@@ -212,7 +208,7 @@ Legacy compatibility during migration:
   - [x] Add `/internal/*` aliases for frontend JSON routes.
   - [x] Add `/v1/harness/*` aliases and OpenAPI endpoints.
   - [x] Add canonical `/mcp` aliases and protected resource metadata.
-  - [x] Keep `/api/*` aliases intact.
+  - [x] Remove `/api/*` aliases.
 - [x] Phase 2: Update frontend and metadata
   - [x] Change frontend default API base to `/internal`.
   - [x] Update OAuth/MCP metadata to canonical routes.

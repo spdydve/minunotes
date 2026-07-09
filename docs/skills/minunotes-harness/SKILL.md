@@ -30,7 +30,7 @@ X-API-Key: <MINUNOTES_API_KEY>
 - Use `[[Note Title]]` for note links when appropriate. Use `[[Note Title|label]]` when the visible label should differ.
 - Search/read before creating wikilinks to avoid duplicate-title ambiguity.
 - Tags are lightweight labels. Tag names normalize to lowercase words with optional dashes, for example `plan` or `release-notes`.
-- For app-owned images, preserve URLs such as `/api/attachments/.../content`.
+- For app-owned images, preserve URLs such as `/internal/attachments/.../content`.
 - Report folder ID, note ID, and final changed markdown or section summary after edits.
 - If permission is denied, report the permission issue instead of retrying unrelated actions.
 

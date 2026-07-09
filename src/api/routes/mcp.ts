@@ -46,7 +46,7 @@ function toQueryString(input: Record<string, string | number | boolean | undefin
 
 function createHostedMcpClient(origin: string, authHeaders: Record<string, string>): NotesMcpClient {
   async function request(path: string, init: RequestInit = {}) {
-    const response = await fetch(`${origin}/api/harness${path}`, {
+    const response = await fetch(`${origin}/v1/harness${path}`, {
       ...init,
       headers: {
         "content-type": "application/json",

@@ -323,7 +323,7 @@ export async function createDocument(input: {
 
   await db.insert(notes).values(note);
   if (note.documentType === "markdown") {
-    if (note.content.includes("/api/attachments/")) {
+    if (note.content.includes("/internal/attachments/")) {
       await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
     }
     await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });

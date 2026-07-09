@@ -86,13 +86,13 @@ describe("attachment markdown URLs", () => {
     vi.stubEnv("ATTACHMENT_STORAGE_DRIVER", "filesystem");
     vi.stubEnv("ATTACHMENT_PUBLIC_BASE_URL", "");
 
-    expect(getAttachmentMarkdownUrl("att_123")).toBe("/api/attachments/att_123/content");
+    expect(getAttachmentMarkdownUrl("att_123")).toBe("/internal/attachments/att_123/content");
   });
 
   it("uses the configured public base URL", () => {
     vi.stubEnv("ATTACHMENT_STORAGE_DRIVER", "filesystem");
     vi.stubEnv("ATTACHMENT_PUBLIC_BASE_URL", "https://images.dpklabs.com/");
 
-    expect(getAttachmentMarkdownUrl("att_123")).toBe("https://images.dpklabs.com/api/attachments/att_123/content");
+    expect(getAttachmentMarkdownUrl("att_123")).toBe("https://images.dpklabs.com/internal/attachments/att_123/content");
   });
 });

@@ -17,7 +17,7 @@ export const authenticationMiddleware = createMiddleware(async (c, next) => {
 
 function mcpAuthChallenge(requestUrl: string) {
   const url = new URL(requestUrl);
-  if (!url.pathname.startsWith("/mcp") && !url.pathname.startsWith("/api/mcp")) return undefined;
+  if (!url.pathname.startsWith("/mcp")) return undefined;
   return `Bearer resource_metadata="${url.origin}/mcp/.well-known/oauth-protected-resource"`;
 }
 

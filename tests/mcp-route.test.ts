@@ -5,7 +5,7 @@ import { mcpRoutes } from "../src/api/routes/mcp";
 
 describe("hosted MCP route", () => {
   it("requires authentication", async () => {
-    const response = await app.request("/api/mcp", { method: "POST" });
+    const response = await app.request("/mcp", { method: "POST" });
 
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toContain("/mcp/.well-known/oauth-protected-resource");
@@ -13,7 +13,7 @@ describe("hosted MCP route", () => {
   });
 
   it("serves OAuth protected resource metadata for MCP", async () => {
-    const response = await app.request("/api/mcp/.well-known/oauth-protected-resource");
+    const response = await app.request("/mcp/.well-known/oauth-protected-resource");
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
@@ -31,9 +31,9 @@ describe("hosted MCP route", () => {
       c.set("apiKey", { id: "key_test" });
       await next();
     });
-    testApp.route("/api/mcp", mcpRoutes);
+    testApp.route("/mcp", mcpRoutes);
 
-    const response = await testApp.request("/api/mcp", {
+    const response = await testApp.request("/mcp", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "x-api-key": "ntak_test" },
       body: JSON.stringify({
