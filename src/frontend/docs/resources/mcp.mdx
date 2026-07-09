@@ -14,6 +14,8 @@ DELETE /api/mcp
 
 Hosted MCP accepts either `X-API-Key: ntak_...` or `Authorization: Bearer mnoac_...` for OAuth connected apps, and routes tool calls through `/api/harness/*`.
 
+OAuth-capable hosted clients can discover authorization metadata from the MCP endpoint. MinuNotes advertises protected-resource metadata and Dynamic Client Registration (DCR), so clients such as ChatGPT can register a public OAuth client automatically instead of requiring manual app setup.
+
 ## Local MCP
 
 Use local MCP for desktop clients that launch a process, such as local MCP-compatible tools.

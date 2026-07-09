@@ -91,6 +91,43 @@ describe("oauth foundations", () => {
     expect(revoke.status).toBe(200);
   });
 
+  it("dynamically registers public OAuth clients", async () => {
+    const { app } = await setupApp();
+
+    const response = await app.request("/api/oauth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_name: "ChatGPT Connector",
+        redirect_uris: ["https://chatgpt.com/connector/oauth/abc123"],
+        token_endpoint_auth_method: "none",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const body = await response.json() as { client_id: string; redirect_uris: string[]; token_endpoint_auth_method: string; grant_types: string[]; response_types: string[] };
+    expect(body.client_id).toMatch(/^oauth_client_/);
+    expect(body.redirect_uris).toEqual(["https://chatgpt.com/connector/oauth/abc123"]);
+    expect(body.token_endpoint_auth_method).toBe("none");
+    expect(body.grant_types).toContain("authorization_code");
+    expect(body.response_types).toContain("code");
+  });
+
+  it("rejects unsupported dynamic client redirect hosts", async () => {
+    const { app } = await setupApp();
+
+    const response = await app.request("/api/oauth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_name: "Unknown", redirect_uris: ["https://evil.example/callback"] }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "invalid_redirect_uri" });
+  });
+
   it("uses bearer tokens for harness access with API-key-style permissions", async () => {
     const { authApp, db, schema, user, hashOAuthToken } = await setupApp();
     const token = "mnoac_test_token";
@@ -171,6 +208,7 @@ describe("oauth foundations", () => {
     await expect(response.json()).resolves.toMatchObject({
       authorization_endpoint: "http://localhost/api/oauth/authorize",
       token_endpoint: "http://localhost/api/oauth/token",
+      registration_endpoint: "http://localhost/api/oauth/register",
       code_challenge_methods_supported: ["S256"],
     });
   });

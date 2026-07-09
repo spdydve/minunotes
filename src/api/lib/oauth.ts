@@ -28,6 +28,26 @@ export function isRedirectUriAllowed(client: Pick<OAuthClient, "redirectUris">, 
   return parseRedirectUris(client).includes(redirectUri);
 }
 
+export function validateOAuthRedirectUri(uri: string) {
+  try {
+    const parsed = new URL(uri);
+    if (parsed.protocol === "https:") return { ok: true as const, url: parsed };
+    if (parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")) return { ok: true as const, url: parsed };
+    return { ok: false as const, error: "Redirect URIs must use HTTPS unless they target localhost" };
+  } catch {
+    return { ok: false as const, error: "Redirect URIs must be valid URLs" };
+  }
+}
+
+export function validateDcrRedirectUri(uri: string) {
+  const result = validateOAuthRedirectUri(uri);
+  if (!result.ok) return result;
+  const hostname = result.url.hostname.toLowerCase();
+  const allowed = hostname === "chatgpt.com" || hostname.endsWith(".chatgpt.com") || hostname === "chat.openai.com" || hostname === "localhost" || hostname === "127.0.0.1";
+  if (!allowed) return { ok: false as const, error: "Dynamic client registration is limited to trusted connector redirect hosts" };
+  return result;
+}
+
 export function pkceChallenge(verifier: string) {
   return createHash("sha256").update(verifier).digest("base64url");
 }
