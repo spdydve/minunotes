@@ -217,7 +217,7 @@ export default $config({
         output: "dist",
       },
       environment: {
-        VITE_API_URL: isLocal ? "/api" : `${apiUrl}/api`,
+        VITE_API_URL: isLocal ? "/internal" : `${apiUrl}/internal`,
         VITE_API_PROXY_TARGET: apiGateway.url,
       },
     });

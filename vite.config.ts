@@ -40,9 +40,9 @@ export default defineConfig(async ({ mode }) => {
       ],
     },
     server: {
-      proxy: apiTarget && apiTarget !== "/api"
+      proxy: apiTarget && apiTarget !== "/internal"
         ? {
-            "/api": {
+            "/internal": {
               target: apiTarget.replace(/\/$/, ""),
               changeOrigin: true,
               secure: true,
