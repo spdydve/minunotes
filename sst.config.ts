@@ -86,7 +86,7 @@ export default $config({
         (stageDomains ? `https://${stageDomains.api}` : undefined),
       BETTER_AUTH_URL:
         env.BETTER_AUTH_URL ??
-        (stageDomains ? `https://${stageDomains.api}/api/auth` : undefined),
+        (stageDomains ? `https://${stageDomains.api}/internal/auth` : undefined),
     });
     const allowOrigins = parseAllowedOrigins(
       env.API_ALLOWED_ORIGINS,
