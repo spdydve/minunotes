@@ -17,7 +17,7 @@ export const mcpRoutes = new Hono<{ Variables: Variables }>();
 mcpRoutes.all("/", async (c) => {
   const user = c.get("user");
   const origin = new URL(c.req.url).origin;
-  const authChallenge = `Bearer resource_metadata="${origin}/api/mcp/.well-known/oauth-protected-resource"`;
+  const authChallenge = `Bearer resource_metadata="${origin}/mcp/.well-known/oauth-protected-resource"`;
   if (!user) return c.json({ error: "Unauthorized" }, 401, { "WWW-Authenticate": authChallenge });
 
   const apiKey = getApiKeyFromHeaders(c.req.raw.headers);

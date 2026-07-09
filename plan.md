@@ -112,6 +112,119 @@ Goal: make canvases first-class for agents without turning them into a separate 
   - [x] Update OpenAPI schemas/tests.
   - [x] Update harness resource docs and skill docs.
 
+## API surface redesign plan
+
+Goal: reshape MinuNotes API routing as if designed from scratch while preserving enough compatibility during the transition. Separate frontend/internal JSON routes from stable external integration routes.
+
+### Target route shape
+
+Internal web-app API, session/cookie based and not documented as stable public API:
+
+```txt
+/internal/auth/*
+/internal/folders/*
+/internal/notes/*
+/internal/attachments/*
+/internal/api-keys/*
+/internal/share/*
+/internal/oauth/clients/*
+/internal/oauth/authorizations/*
+```
+
+External/stable integration API:
+
+```txt
+/v1/harness/*
+/v1/openapi.json
+/openapi.json
+/mcp
+/mcp/.well-known/oauth-protected-resource
+/oauth/*
+/.well-known/*
+/health
+```
+
+Legacy compatibility during migration:
+
+```txt
+/api/*
+```
+
+### Auth model
+
+- `/internal/*`: browser session cookies, except public share JSON.
+- `/v1/harness/*`: API key or OAuth bearer.
+- `/mcp`: API key or OAuth bearer; OAuth discovery/challenge enabled.
+- `/oauth/register`: public DCR with redirect URI guardrails.
+- `/oauth/authorize`: browser session because user consent is required.
+- `/oauth/token` and `/oauth/revoke`: OAuth protocol requests.
+- `/openapi.json` and `/v1/openapi.json`: public read-only specs.
+
+### Decisions
+
+- Make `/internal/*`, `/v1/harness/*`, `/mcp`, `/oauth/*`, and root `/.well-known/*` the preferred/canonical routes.
+- Keep `/api/*` as legacy aliases for now.
+- Update frontend default API base from `/api` to `/internal`.
+- Update external docs/skills to prefer `/v1/harness` and `/mcp`.
+- Update OpenAPI paths to `/v1/harness/*` as canonical.
+- Keep OAuth unversioned because it is protocol-oriented.
+- Keep MCP unversioned because it is protocol-oriented.
+- Avoid exposing root `/notes` and `/folders`; those remain internal under `/internal`.
+
+### Files to modify/create
+
+- `src/api/index.ts` — add `/internal`, `/v1/harness`, `/mcp`, `/oauth`, `/openapi.json`, `/v1/openapi.json` canonical routes and middleware; keep `/api/*` aliases.
+- `src/frontend/lib/api.ts` — change default `API_URL` to `/internal` and ensure path construction still works.
+- `src/api/openapi/harness.ts` — update canonical paths from `/api/harness/*` to `/v1/harness/*`; include server URLs if helpful.
+- `src/api/routes/mcp.ts` — update protected-resource metadata/challenges to canonical `/mcp` and `/v1/harness/openapi.json`/`/openapi.json` docs.
+- `src/api/middleware/authentication.ts` — update MCP auth challenge detection for `/mcp` and legacy `/api/mcp`.
+- Tests:
+  - `tests/oauth.test.ts`
+  - `tests/mcp-route.test.ts`
+  - `tests/openapi.test.ts`
+  - any tests that call `/api/harness/*` and should check canonical `/v1/harness/*`.
+- Docs/resources:
+  - `src/frontend/docs/resources/harness-api.mdx`
+  - `src/frontend/docs/resources/agent-integrations.mdx`
+  - `src/frontend/docs/resources/mcp.mdx`
+  - `src/frontend/docs/resources/oauth-manual-testing.mdx`
+  - `docs/skills/minunotes-harness/SKILL.md`
+  - `/Users/davidkennedy/.pi/agent/skills/minunotes-harness/SKILL.md`
+
+### Verification
+
+- `pnpm typecheck`
+- `pnpm test tests/oauth.test.ts tests/mcp-route.test.ts tests/openapi.test.ts`
+- `pnpm test`
+- `pnpm build`
+- Manual smoke:
+  - Frontend can load with `/internal` API base.
+  - `GET /openapi.json` and `GET /v1/openapi.json` return canonical `/v1/harness` paths.
+  - `GET /v1/harness/folders` works with `X-API-Key` or bearer.
+  - `POST /mcp` works with API key or bearer.
+  - `GET /mcp/.well-known/oauth-protected-resource` returns canonical resource `/mcp`.
+  - `GET /.well-known/oauth-authorization-server` advertises root `/oauth/*` endpoints.
+  - Legacy `/api/harness`, `/api/mcp`, `/api/oauth`, and `/api/notes` still work during transition.
+
+### Implementation phases
+
+- [x] Phase 1: Add canonical route aliases and middleware
+  - [x] Add `/internal/*` aliases for frontend JSON routes.
+  - [x] Add `/v1/harness/*` aliases and OpenAPI endpoints.
+  - [x] Add canonical `/mcp` aliases and protected resource metadata.
+  - [x] Keep `/api/*` aliases intact.
+- [x] Phase 2: Update frontend and metadata
+  - [x] Change frontend default API base to `/internal`.
+  - [x] Update OAuth/MCP metadata to canonical routes.
+  - [x] Update OpenAPI canonical paths.
+- [x] Phase 3: Tests
+  - [x] Add canonical route tests.
+  - [x] Preserve legacy route tests where useful.
+  - [x] Verify OAuth DCR and MCP discovery with canonical routes.
+- [x] Phase 4: Docs and skills
+  - [x] Update resource docs.
+  - [x] Update harness skills and local Pi skill mirror.
+
 ## OAuth Dynamic Client Registration Plan
 
 Goal: add Dynamic Client Registration (DCR) for hosted MCP/ChatGPT-style clients while preserving manual OAuth client registration. DCR should reduce setup friction by letting compliant clients register a public OAuth client automatically after discovering MinuNotes OAuth metadata.

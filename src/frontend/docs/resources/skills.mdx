@@ -39,16 +39,16 @@ The API key should be scoped to only the folders the agent needs.
 ## Useful endpoints
 
 ```txt
-GET /api/harness/folders
-GET /api/harness/notes/search?q=...
-POST /api/harness/notes
-GET /api/harness/notes/:noteId
-POST /api/harness/notes/:noteId/edit
-GET /api/harness/tags
-PUT /api/harness/notes/:noteId/tags
-GET /api/harness/notes/:noteId/backlinks
-GET /api/harness/notes/:noteId/links
-GET /api/harness/notes/orphans
+GET /v1/harness/folders
+GET /v1/harness/notes/search?q=...
+POST /v1/harness/notes
+GET /v1/harness/notes/:noteId
+POST /v1/harness/notes/:noteId/edit
+GET /v1/harness/tags
+PUT /v1/harness/notes/:noteId/tags
+GET /v1/harness/notes/:noteId/backlinks
+GET /v1/harness/notes/:noteId/links
+GET /v1/harness/notes/orphans
 ```
 
 ## Portable skill file
@@ -65,8 +65,8 @@ Give that file to agents that support portable skills or system instructions.
 
 Agents can also use:
 
-- Hosted MCP at `/api/mcp`
-- OpenAPI documents at `/api/openapi.json` and `/api/harness/openapi.json`
-- Direct REST calls to `/api/harness/*`
+- Hosted MCP at `/mcp`
+- OpenAPI documents at `/openapi.json` and `/v1/harness/openapi.json`
+- Direct REST calls to `/v1/harness/*`
 
 All of these use the same scoped API-key permission model.

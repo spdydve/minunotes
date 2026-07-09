@@ -8,7 +8,7 @@ describe("hosted MCP route", () => {
     const response = await app.request("/api/mcp", { method: "POST" });
 
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain("/api/mcp/.well-known/oauth-protected-resource");
+    expect(response.headers.get("www-authenticate")).toContain("/mcp/.well-known/oauth-protected-resource");
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
   });
 
@@ -17,7 +17,7 @@ describe("hosted MCP route", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      resource: "http://localhost/api/mcp",
+      resource: "http://localhost/mcp",
       authorization_servers: ["http://localhost"],
       bearer_methods_supported: ["header"],
     });

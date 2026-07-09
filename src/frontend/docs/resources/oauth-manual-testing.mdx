@@ -7,7 +7,7 @@ Use these checks when validating API keys, hosted MCP, local MCP, and OAuth conn
 Create an API key in **Settings → API Access → API keys**. Then call the harness directly:
 
 ```sh
-curl "$MINUNOTES_BASE_URL/api/harness/folders" \
+curl "$MINUNOTES_BASE_URL/v1/harness/folders" \
   -H "X-API-Key: ntak_..."
 ```
 
@@ -18,7 +18,7 @@ Expected result: a JSON list of folders allowed by that key. Private folders sho
 Use hosted MCP for remote MCP-capable clients:
 
 ```txt
-https://notes.dpklabs.com/api/mcp
+https://notes.dpklabs.com/mcp
 ```
 
 Authenticate with:
@@ -30,7 +30,7 @@ X-API-Key: ntak_...
 A local curl check can confirm the endpoint is reachable:
 
 ```sh
-curl "$MINUNOTES_BASE_URL/api/mcp" \
+curl "$MINUNOTES_BASE_URL/mcp" \
   -H "X-API-Key: ntak_..."
 ```
 
@@ -88,7 +88,7 @@ The script prints an authorization URL. Open it while logged into MinuNotes, app
 Expected result:
 
 - token exchange succeeds
-- `/api/harness/folders` succeeds with `Authorization: Bearer mnoac_...`
+- `/v1/harness/folders` succeeds with `Authorization: Bearer mnoac_...`
 - visible folders match the consent scope
 
 ## Hosted MCP with OAuth
@@ -102,15 +102,15 @@ Authorization: Bearer mnoac_...
 OAuth-capable MCP clients should start with the MCP endpoint:
 
 ```txt
-https://notes.dpklabs.com/api/mcp
+https://notes.dpklabs.com/mcp
 ```
 
 The server advertises OAuth discovery metadata and Dynamic Client Registration (DCR):
 
 ```txt
 GET /.well-known/oauth-authorization-server
-GET /api/mcp/.well-known/oauth-protected-resource
-POST /api/oauth/register
+GET /mcp/.well-known/oauth-protected-resource
+POST /oauth/register
 ```
 
 DCR lets clients such as ChatGPT register their callback URL and receive a public client ID automatically. Manual OAuth app creation still works as a fallback for custom/trusted apps.
@@ -118,7 +118,7 @@ DCR lets clients such as ChatGPT register their callback URL and receive a publi
 Example DCR smoke request:
 
 ```sh
-curl -s "$MINUNOTES_BASE_URL/api/oauth/register" \
+curl -s "$MINUNOTES_BASE_URL/oauth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "client_name": "ChatGPT Connector",

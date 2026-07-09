@@ -7,12 +7,12 @@ MinuNotes supports both hosted MCP and local stdio MCP.
 Use hosted MCP for cloud agents, shared runtimes, and MCP-native integrations that can connect to a remote HTTP endpoint.
 
 ```txt
-POST /api/mcp
-GET /api/mcp
-DELETE /api/mcp
+POST /mcp
+GET /mcp
+DELETE /mcp
 ```
 
-Hosted MCP accepts either `X-API-Key: ntak_...` or `Authorization: Bearer mnoac_...` for OAuth connected apps, and routes tool calls through `/api/harness/*`.
+Hosted MCP accepts either `X-API-Key: ntak_...` or `Authorization: Bearer mnoac_...` for OAuth connected apps, and routes tool calls through `/v1/harness/*`.
 
 OAuth-capable hosted clients can discover authorization metadata from the MCP endpoint. MinuNotes advertises protected-resource metadata and Dynamic Client Registration (DCR), so clients such as ChatGPT can register a public OAuth client automatically instead of requiring manual app setup.
 

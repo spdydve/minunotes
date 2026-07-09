@@ -222,9 +222,9 @@ describe("oauth foundations", () => {
     const response = await app.request("/api/oauth/.well-known/oauth-authorization-server");
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      authorization_endpoint: "http://localhost/api/oauth/authorize",
-      token_endpoint: "http://localhost/api/oauth/token",
-      registration_endpoint: "http://localhost/api/oauth/register",
+      authorization_endpoint: "http://localhost/oauth/authorize",
+      token_endpoint: "http://localhost/oauth/token",
+      registration_endpoint: "http://localhost/oauth/register",
       code_challenge_methods_supported: ["S256"],
     });
   });
