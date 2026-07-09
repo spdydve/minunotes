@@ -31,7 +31,7 @@ export function getObjectStorage() {
 
 export function getAttachmentMarkdownUrl(attachmentId: string) {
   const { attachmentStorage } = getApiRuntimeConfig();
-  const path = `/api/attachments/${attachmentId}/content`;
+  const path = `/internal/attachments/${attachmentId}/content`;
   return attachmentStorage.publicBaseUrl ? `${attachmentStorage.publicBaseUrl}${path}` : path;
 }
 

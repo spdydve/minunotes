@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { attachments } from "../db/schema";
 
-const APP_ATTACHMENT_URL_PATTERN = /(?:!\[[^\]]*\]|\[[^\]]*\])\(\s*(?:https?:\/\/[^\s)]+)?\/api\/attachments\/(att_[a-zA-Z0-9_-]+)\/content(?:[?#][^\s)]*)?\s*(?:"[^"]*"|'[^']*')?\s*\)/g;
+const APP_ATTACHMENT_URL_PATTERN = /(?:!\[[^\]]*\]|\[[^\]]*\])\(\s*(?:https?:\/\/[^\s)]+)?\/internal\/attachments\/(att_[a-zA-Z0-9_-]+)\/content(?:[?#][^\s)]*)?\s*(?:"[^"]*"|'[^']*')?\s*\)/g;
 
 export function extractAppAttachmentIds(markdown: string) {
   const ids = new Set<string>();

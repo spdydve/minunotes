@@ -37,9 +37,9 @@ If a note has no backlinks, no backlinks button is shown.
 Agents can inspect note relationships through the harness API:
 
 ```txt
-GET /api/harness/notes/:noteId/backlinks
-GET /api/harness/notes/:noteId/links
-GET /api/harness/notes/orphans
+GET /v1/harness/notes/:noteId/backlinks
+GET /v1/harness/notes/:noteId/links
+GET /v1/harness/notes/orphans
 ```
 
 Outgoing links include unresolved wikilinks with `targetNoteId: null`.

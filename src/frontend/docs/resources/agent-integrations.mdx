@@ -22,14 +22,14 @@ Private folders are never accessible to agents or integrations. Private status a
 ## Core endpoints
 
 ```txt
-GET /api/harness/folders
-POST /api/harness/notes
-POST /api/harness/notes/:noteId/edit
-POST /api/harness/canvases
-POST /api/harness/canvases/from-syntax
-PUT /api/harness/notes/:noteId/canvas/from-syntax
-GET /api/openapi.json
-POST /api/mcp
+GET /v1/harness/folders
+POST /v1/harness/notes
+POST /v1/harness/notes/:noteId/edit
+POST /v1/harness/canvases
+POST /v1/harness/canvases/from-syntax
+PUT /v1/harness/notes/:noteId/canvas/from-syntax
+GET /openapi.json
+POST /mcp
 ```
 
 Use `X-API-Key` on harness, OpenAPI-authenticated, and trusted/local hosted MCP requests. OAuth connected apps use `Authorization: Bearer mnoac_...` for hosted MCP and harness requests.

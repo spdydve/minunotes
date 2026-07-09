@@ -17,7 +17,7 @@ export const mcpRoutes = new Hono<{ Variables: Variables }>();
 mcpRoutes.all("/", async (c) => {
   const user = c.get("user");
   const origin = new URL(c.req.url).origin;
-  const authChallenge = `Bearer resource_metadata="${origin}/api/mcp/.well-known/oauth-protected-resource"`;
+  const authChallenge = `Bearer resource_metadata="${origin}/mcp/.well-known/oauth-protected-resource"`;
   if (!user) return c.json({ error: "Unauthorized" }, 401, { "WWW-Authenticate": authChallenge });
 
   const apiKey = getApiKeyFromHeaders(c.req.raw.headers);
@@ -46,7 +46,7 @@ function toQueryString(input: Record<string, string | number | boolean | undefin
 
 function createHostedMcpClient(origin: string, authHeaders: Record<string, string>): NotesMcpClient {
   async function request(path: string, init: RequestInit = {}) {
-    const response = await fetch(`${origin}/api/harness${path}`, {
+    const response = await fetch(`${origin}/v1/harness${path}`, {
       ...init,
       headers: {
         "content-type": "application/json",

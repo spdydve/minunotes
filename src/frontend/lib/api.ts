@@ -1,4 +1,4 @@
-const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL ?? "/internal").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(

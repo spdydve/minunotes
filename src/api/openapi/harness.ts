@@ -14,7 +14,7 @@ export const harnessOpenApiSpec = {
     { name: "Tags" },
   ],
   paths: {
-    "/api/harness/tags": {
+    "/v1/harness/tags": {
       get: {
         tags: ["Tags"],
         operationId: "listTags",
@@ -22,7 +22,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Tags", content: { "application/json": { schema: { $ref: "#/components/schemas/TagsResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
       },
     },
-    "/api/harness/folders": {
+    "/v1/harness/folders": {
       get: {
         tags: ["Folders"],
         operationId: "listFolders",
@@ -46,7 +46,7 @@ export const harnessOpenApiSpec = {
         },
       },
     },
-    "/api/harness/notes/search": {
+    "/v1/harness/notes/search": {
       get: {
         tags: ["Notes"],
         operationId: "searchNotes",
@@ -55,7 +55,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Matching notes", content: { "application/json": { schema: { $ref: "#/components/schemas/SearchNotesResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
       },
     },
-    "/api/harness/notes/orphans": {
+    "/v1/harness/notes/orphans": {
       get: {
         tags: ["Notes"],
         operationId: "listOrphanNotes",
@@ -63,7 +63,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Orphan notes", content: { "application/json": { schema: { $ref: "#/components/schemas/SearchNotesResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
       },
     },
-    "/api/harness/notes/search-lines": {
+    "/v1/harness/notes/search-lines": {
       get: {
         tags: ["Notes"],
         operationId: "searchNoteLines",
@@ -78,7 +78,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Line matches", content: { "application/json": { schema: { $ref: "#/components/schemas/LineSearchResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" } },
       },
     },
-    "/api/harness/notes": {
+    "/v1/harness/notes": {
       post: {
         tags: ["Notes"],
         operationId: "createNote",
@@ -92,7 +92,7 @@ export const harnessOpenApiSpec = {
         },
       },
     },
-    "/api/harness/canvases": {
+    "/v1/harness/canvases": {
       post: {
         tags: ["Canvases"],
         operationId: "createCanvas",
@@ -101,7 +101,7 @@ export const harnessOpenApiSpec = {
         responses: { "201": { description: "Created canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } },
       },
     },
-    "/api/harness/canvases/from-syntax": {
+    "/v1/harness/canvases/from-syntax": {
       post: {
         tags: ["Canvases"],
         operationId: "createCanvasFromSyntax",
@@ -110,7 +110,7 @@ export const harnessOpenApiSpec = {
         responses: { "201": { description: "Created canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/CanvasSyntaxNoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" } },
       },
     },
-    "/api/harness/notes/{noteId}": {
+    "/v1/harness/notes/{noteId}": {
       get: {
         tags: ["Notes"],
         operationId: "getNote",
@@ -119,7 +119,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/tags": {
+    "/v1/harness/notes/{noteId}/tags": {
       get: {
         tags: ["Tags"],
         operationId: "listNoteTags",
@@ -136,7 +136,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Updated note tags", content: { "application/json": { schema: { $ref: "#/components/schemas/TagsResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/events": {
+    "/v1/harness/notes/{noteId}/events": {
       get: {
         tags: ["Notes"],
         operationId: "listNoteEvents",
@@ -145,7 +145,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note events", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteEventsResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/links": {
+    "/v1/harness/notes/{noteId}/links": {
       get: {
         tags: ["Notes"],
         operationId: "listNoteLinks",
@@ -155,7 +155,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Outgoing links", content: { "application/json": { schema: { $ref: "#/components/schemas/LinksResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/backlinks": {
+    "/v1/harness/notes/{noteId}/backlinks": {
       get: {
         tags: ["Notes"],
         operationId: "listNoteBacklinks",
@@ -165,7 +165,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note backlinks", content: { "application/json": { schema: { $ref: "#/components/schemas/BacklinksResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/lines": {
+    "/v1/harness/notes/{noteId}/lines": {
       get: {
         tags: ["Notes"],
         operationId: "readNoteLines",
@@ -174,7 +174,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Numbered lines", content: { "application/json": { schema: { $ref: "#/components/schemas/LinesResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/search-lines": {
+    "/v1/harness/notes/{noteId}/search-lines": {
       get: {
         tags: ["Notes"],
         operationId: "searchLinesInNote",
@@ -183,7 +183,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Line matches", content: { "application/json": { schema: { $ref: "#/components/schemas/LineSearchResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/outline": {
+    "/v1/harness/notes/{noteId}/outline": {
       get: {
         tags: ["Notes"],
         operationId: "getNoteOutline",
@@ -192,7 +192,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note outline", content: { "application/json": { schema: { $ref: "#/components/schemas/OutlineResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/sections/{sectionId}": {
+    "/v1/harness/notes/{noteId}/sections/{sectionId}": {
       get: {
         tags: ["Notes"],
         operationId: "readNoteSection",
@@ -201,7 +201,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Note section", content: { "application/json": { schema: { $ref: "#/components/schemas/SectionResponse" } } } }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } },
       },
     },
-    "/api/harness/notes/{noteId}/canvas": {
+    "/v1/harness/notes/{noteId}/canvas": {
       put: {
         tags: ["Canvases"],
         operationId: "replaceCanvas",
@@ -211,7 +211,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Updated canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/NoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" }, "409": { $ref: "#/components/responses/Conflict" } },
       },
     },
-    "/api/harness/notes/{noteId}/canvas/from-syntax": {
+    "/v1/harness/notes/{noteId}/canvas/from-syntax": {
       put: {
         tags: ["Canvases"],
         operationId: "replaceCanvasFromSyntax",
@@ -221,7 +221,7 @@ export const harnessOpenApiSpec = {
         responses: { "200": { description: "Updated canvas note", content: { "application/json": { schema: { $ref: "#/components/schemas/CanvasSyntaxNoteResponse" } } } }, "400": { $ref: "#/components/responses/BadRequest" }, "401": { $ref: "#/components/responses/Unauthorized" }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" }, "409": { $ref: "#/components/responses/Conflict" } },
       },
     },
-    "/api/harness/notes/{noteId}/edit": {
+    "/v1/harness/notes/{noteId}/edit": {
       post: {
         tags: ["Notes"],
         operationId: "editNote",

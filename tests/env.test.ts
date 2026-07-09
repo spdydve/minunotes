@@ -22,7 +22,7 @@ describe("parseAllowedOrigins", () => {
   it("normalizes origins by removing paths", () => {
     expect(
       parseAllowedOrigins(
-        "https://notes.example.com/api/auth",
+        "https://notes.example.com/internal/auth",
         "https://notes.example.com",
       ),
     ).toEqual(["https://notes.example.com", defaults.localFrontendUrl]);
@@ -36,12 +36,12 @@ describe("getStageUrls", () => {
         ...process.env,
         FRONTEND_URL: "https://notes.example.com",
         API_URL: "https://api.notes.example.com",
-        BETTER_AUTH_URL: "https://api.notes.example.com/api/auth",
+        BETTER_AUTH_URL: "https://api.notes.example.com/internal/auth",
       }),
     ).toEqual({
       frontendUrl: "https://notes.example.com",
       apiUrl: "https://api.notes.example.com",
-      betterAuthUrl: "https://api.notes.example.com/api/auth",
+      betterAuthUrl: "https://api.notes.example.com/internal/auth",
     });
   });
 
@@ -56,7 +56,7 @@ describe("getStageUrls", () => {
     ).toEqual({
       frontendUrl: "https://notes.example.com",
       apiUrl: "https://api.notes.example.com",
-      betterAuthUrl: "https://api.notes.example.com/api/auth",
+      betterAuthUrl: "https://api.notes.example.com/internal/auth",
     });
   });
 });
@@ -85,7 +85,7 @@ describe("getApiRuntimeConfig", () => {
     ).toEqual({
       frontendUrl: "https://notes.example.com",
       apiUrl: "https://api.notes.example.com",
-      betterAuthUrl: "https://api.notes.example.com/api/auth",
+      betterAuthUrl: "https://api.notes.example.com/internal/auth",
       allowedOrigins: [
         "https://notes.example.com",
         "https://admin.example.com",

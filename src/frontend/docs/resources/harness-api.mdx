@@ -24,7 +24,7 @@ Folder-level read-only blocks Create/Edit for All and Project-root scopes. Speci
 Folder creation is separate. Only keys with folder-creation permission can call:
 
 ```txt
-POST /api/harness/folders
+POST /v1/harness/folders
 ```
 
 ## Safe editing flow
@@ -43,7 +43,7 @@ Create from JSON Canvas:
 
 ```bash
 curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
-  -X POST "$API/api/harness/canvases" \
+  -X POST "$API/v1/harness/canvases" \
   -d '{"folderId":"folder_xxx","title":"Flow","canvas":{"nodes":[],"edges":[]}}'
 ```
 
@@ -51,7 +51,7 @@ Create from Minu diagram syntax:
 
 ```bash
 curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
-  -X POST "$API/api/harness/canvases/from-syntax" \
+  -X POST "$API/v1/harness/canvases/from-syntax" \
   -d '{"folderId":"folder_xxx","syntax":"diagram \"Product plan\" {\n  layout mindmap\n  Product\n  Product > Research\n}"}'
 ```
 
@@ -59,7 +59,7 @@ Replace an existing canvas:
 
 ```bash
 curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
-  -X PUT "$API/api/harness/notes/note_xxx/canvas/from-syntax" \
+  -X PUT "$API/v1/harness/notes/note_xxx/canvas/from-syntax" \
   -d '{"baseHash":"hash_from_read","syntax":"diagram \"Auth flow\" {\n  User > Login\n  Login > Dashboard\n}"}'
 ```
 

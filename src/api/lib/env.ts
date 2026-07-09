@@ -52,7 +52,7 @@ export function getStageUrls(stage: StageName, env = process.env): StageUrls {
     "API_URL",
   );
   const betterAuthUrl = ensureUrl(
-    env.BETTER_AUTH_URL ?? `${apiUrl}/api/auth`,
+    env.BETTER_AUTH_URL ?? `${apiUrl}/internal/auth`,
     "BETTER_AUTH_URL",
   );
 
@@ -90,7 +90,7 @@ export function getApiRuntimeConfig(env = process.env) {
   );
   const apiUrl = ensureUrl(env.API_URL ?? frontendUrl, "API_URL");
   const betterAuthUrl = ensureUrl(
-    env.BETTER_AUTH_URL ?? `${apiUrl}/api/auth`,
+    env.BETTER_AUTH_URL ?? `${apiUrl}/internal/auth`,
     "BETTER_AUTH_URL",
   );
   const allowedOrigins = parseAllowedOrigins(

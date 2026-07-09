@@ -9,7 +9,7 @@ Environment variables:
 - `MINUNOTES_API_URL` — API origin/base, for example `https://api-dev-notes.dpklabs.com`.
 - `MINUNOTES_API_KEY` — API key scoped to all non-private folders, selected project roots, or specific folders.
 
-Normalize the API URL by removing any trailing slash. Harness routes live under `/api/harness`.
+Normalize the API URL by removing any trailing slash. Harness routes live under `/v1/harness`.
 
 Send the API key on every request:
 
@@ -30,7 +30,7 @@ X-API-Key: <MINUNOTES_API_KEY>
 - Use `[[Note Title]]` for note links when appropriate. Use `[[Note Title|label]]` when the visible label should differ.
 - Search/read before creating wikilinks to avoid duplicate-title ambiguity.
 - Tags are lightweight labels. Tag names normalize to lowercase words with optional dashes, for example `plan` or `release-notes`.
-- For app-owned images, preserve URLs such as `/api/attachments/.../content`.
+- For app-owned images, preserve URLs such as `/internal/attachments/.../content`.
 - Report folder ID, note ID, and final changed markdown or section summary after edits.
 - If permission is denied, report the permission issue instead of retrying unrelated actions.
 
@@ -47,32 +47,32 @@ AUTH=(-H "X-API-Key: $KEY" -H "Content-Type: application/json")
 List accessible folders:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/folders"
+curl -s "${AUTH[@]}" "$API/v1/harness/folders"
 ```
 
 Search notes by title/content/folder/tag text:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/notes/search?q=project"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project"
 ```
 
 Filter search by tag:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/notes/search?q=project&tag=release-notes"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project&tag=release-notes"
 ```
 
 Create/read/edit markdown notes:
 
 ```bash
 curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/notes" \
+  -X POST "$API/v1/harness/notes" \
   -d '{"folderId":"folder_xxx","title":"Agent Harness Smoke Test","content":"# Agent Harness Smoke Test\n\n- [ ] Created by harness\n"}'
 
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx"
 
 curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/notes/note_xxx/edit" \
+  -X POST "$API/v1/harness/notes/note_xxx/edit" \
   -d '{"baseHash":"hash_from_read","edits":[{"type":"replace_text","oldText":"old","newText":"new"}]}'
 ```
 
@@ -80,11 +80,11 @@ Create canvases from JSON Canvas or Minu diagram syntax:
 
 ```bash
 curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/canvases" \
+  -X POST "$API/v1/harness/canvases" \
   -d '{"folderId":"folder_xxx","title":"Flow","canvas":{"nodes":[],"edges":[]}}'
 
 curl -s "${AUTH[@]}" \
-  -X POST "$API/api/harness/canvases/from-syntax" \
+  -X POST "$API/v1/harness/canvases/from-syntax" \
   -d '{"folderId":"folder_xxx","syntax":"diagram \"Product plan\" {\n  layout mindmap\n  Product\n  Product > Research\n  Product > Build\n}"}'
 ```
 
@@ -92,60 +92,60 @@ Replace an existing canvas:
 
 ```bash
 curl -s "${AUTH[@]}" \
-  -X PUT "$API/api/harness/notes/note_xxx/canvas/from-syntax" \
+  -X PUT "$API/v1/harness/notes/note_xxx/canvas/from-syntax" \
   -d '{"baseHash":"hash_from_read","syntax":"diagram \"Auth flow\" {\n  User > Login\n  Login > Dashboard\n}"}'
 ```
 
 Tags:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/tags"
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/tags"
+curl -s "${AUTH[@]}" "$API/v1/harness/tags"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/tags"
 curl -s "${AUTH[@]}" \
-  -X PUT "$API/api/harness/notes/note_xxx/tags" \
+  -X PUT "$API/v1/harness/notes/note_xxx/tags" \
   -d '{"tags":["project","release-notes"]}'
 ```
 
 Graph context:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/backlinks"
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/links"
-curl -s "${AUTH[@]}" "$API/api/harness/notes/orphans"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/backlinks"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/links"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 ```
 
 Read outline/section/lines:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/outline"
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/sections/section-id"
-curl -s "${AUTH[@]}" "$API/api/harness/notes/note_xxx/lines?from=1&to=80"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/outline"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/sections/section-id"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/lines?from=1&to=80"
 ```
 
 ## Endpoint reference
 
-- `GET /api/harness/folders`
-- `POST /api/harness/folders`
-- `GET /api/harness/tags`
-- `GET /api/harness/notes/search?q=...&tag=...`
-- `GET /api/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
-- `POST /api/harness/notes`
-- `POST /api/harness/canvases`
-- `POST /api/harness/canvases/from-syntax`
-- `GET /api/harness/notes/orphans`
-- `GET /api/harness/notes/:noteId`
-- `GET /api/harness/notes/:noteId/events?limit=25`
-- `GET /api/harness/notes/:noteId/tags`
-- `PUT /api/harness/notes/:noteId/tags`
-- `GET /api/harness/notes/:noteId/backlinks`
-- `GET /api/harness/notes/:noteId/links`
-- `GET /api/harness/notes/:noteId/lines?from=1&to=80`
-- `GET /api/harness/notes/:noteId/search-lines?q=...&context=2&limit=25&caseSensitive=false`
-- `GET /api/harness/notes/:noteId/outline`
-- `GET /api/harness/notes/:noteId/sections/:sectionId`
-- `PUT /api/harness/notes/:noteId/canvas`
-- `PUT /api/harness/notes/:noteId/canvas/from-syntax`
-- `POST /api/harness/notes/:noteId/edit`
+- `GET /v1/harness/folders`
+- `POST /v1/harness/folders`
+- `GET /v1/harness/tags`
+- `GET /v1/harness/notes/search?q=...&tag=...`
+- `GET /v1/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
+- `POST /v1/harness/notes`
+- `POST /v1/harness/canvases`
+- `POST /v1/harness/canvases/from-syntax`
+- `GET /v1/harness/notes/orphans`
+- `GET /v1/harness/notes/:noteId`
+- `GET /v1/harness/notes/:noteId/events?limit=25`
+- `GET /v1/harness/notes/:noteId/tags`
+- `PUT /v1/harness/notes/:noteId/tags`
+- `GET /v1/harness/notes/:noteId/backlinks`
+- `GET /v1/harness/notes/:noteId/links`
+- `GET /v1/harness/notes/:noteId/lines?from=1&to=80`
+- `GET /v1/harness/notes/:noteId/search-lines?q=...&context=2&limit=25&caseSensitive=false`
+- `GET /v1/harness/notes/:noteId/outline`
+- `GET /v1/harness/notes/:noteId/sections/:sectionId`
+- `PUT /v1/harness/notes/:noteId/canvas`
+- `PUT /v1/harness/notes/:noteId/canvas/from-syntax`
+- `POST /v1/harness/notes/:noteId/edit`
 
 ## Edit payload types
 
