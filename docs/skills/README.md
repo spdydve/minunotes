@@ -4,7 +4,8 @@ Portable agent skills for using MinuNotes from other projects or clean agent ses
 
 ## Available skills
 
-- [MinuNotes Harness Skill](./minunotes-harness/SKILL.md) — read, search, create, edit, tag, and inspect linked notes through the harness API.
+- [MinuNotes Harness Tool Skill](./minunotes-harness/SKILL.md) — lightweight, tool-first guidance for agents with registered `minunotes_*` tools.
+- [MinuNotes Harness API Skill](./minunotes-harness-api/SKILL.md) — curl/API-only guidance for agents without registered MinuNotes tools.
 
 ## Related
 
