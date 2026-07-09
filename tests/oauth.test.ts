@@ -56,6 +56,7 @@ async function setupApp() {
     await next();
   });
   app.route("/api/oauth", oauthRoutes);
+  app.route("/oauth", oauthRoutes);
 
   const authApp = new Hono();
   authApp.use("/api/harness/*", harnessAuthenticationMiddleware);
@@ -199,6 +200,21 @@ describe("oauth foundations", () => {
     const after = await app.request("/api/oauth/authorizations");
     const afterBody = await after.json() as { authorizations: Array<{ id: string; revokedAt: string | null }> };
     expect(afterBody.authorizations.find((authorization) => authorization.id === "oauth_auth_connected")?.revokedAt).toBeTruthy();
+  });
+
+  it("serves OAuth endpoints from root aliases for MCP clients", async () => {
+    const { app } = await setupApp();
+    const verifier = "b".repeat(64);
+    const authorize = await app.request(`/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent("https://client.example/callback")}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256`);
+    expect(authorize.status).toBe(302);
+    expect(new URL(authorize.headers.get("location")!).pathname).toBe("/oauth/authorize");
+
+    const token = await app.request("/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "authorization_code", client_id: "client_a", redirect_uri: "https://client.example/callback", code: "invalid", code_verifier: verifier }),
+    });
+    expect(token.status).toBe(400);
   });
 
   it("serves authorization server metadata", async () => {
