@@ -118,11 +118,13 @@ app.use("/internal/oauth/authorize/preview", async (c, next) => {
   await next();
 });
 app.use("/internal/oauth/authorize", authenticationMiddleware);
+app.use("/internal/oauth/authorize/*", authenticationMiddleware);
 app.use("/internal/oauth/clients", authenticationMiddleware);
 app.use("/internal/oauth/clients/*", authenticationMiddleware);
 app.use("/internal/oauth/authorizations", authenticationMiddleware);
 app.use("/internal/oauth/authorizations/*", authenticationMiddleware);
 app.use("/oauth/authorize", authenticationMiddleware);
+app.use("/oauth/authorize/*", authenticationMiddleware);
 app.use("/oauth/clients", authenticationMiddleware);
 app.use("/oauth/clients/*", authenticationMiddleware);
 app.use("/oauth/authorizations", authenticationMiddleware);
