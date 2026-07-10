@@ -6,8 +6,34 @@ import { getApiKeyFromHeaders, parseApiKey, verifyApiKey } from "../lib/api-keys
 import { hashOAuthToken } from "../lib/oauth";
 import { auth } from "../lib/auth";
 
+function cookieNames(headers: Headers) {
+  const cookie = headers.get("cookie") ?? "";
+  return cookie
+    .split(";")
+    .map((part) => part.trim().split("=")[0])
+    .filter(Boolean);
+}
+
+function logAuthDiagnostic(c: Parameters<Parameters<typeof createMiddleware>[0]>[0], session: Awaited<ReturnType<typeof auth.api.getSession>>) {
+  const url = new URL(c.req.url);
+  if (!url.pathname.includes("/oauth/authorize/preview")) return;
+
+  const names = cookieNames(c.req.raw.headers);
+  console.info("[AUTH DIAGNOSTIC]", {
+    path: url.pathname,
+    origin: c.req.raw.headers.get("origin"),
+    referer: c.req.raw.headers.get("referer"),
+    hasCookieHeader: names.length > 0,
+    cookieNames: names,
+    hasSession: Boolean(session?.session),
+    hasUser: Boolean(session?.user),
+    userId: session?.user?.id ?? null,
+  });
+}
+
 export const authenticationMiddleware = createMiddleware(async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  logAuthDiagnostic(c, session);
   c.set("user", session?.user ?? null);
   c.set("session", session?.session ?? null);
   c.set("apiKey", null);
