@@ -280,8 +280,6 @@ oauthRoutes.post("/authorize/approve", async (c) => {
 });
 
 oauthRoutes.get("/authorize", async (c) => {
-  const user = c.get("user");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
   const result = await validateAuthorizeRequest({
     clientId: c.req.query("client_id"),
     redirectUri: c.req.query("redirect_uri"),
