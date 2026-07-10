@@ -67,7 +67,7 @@ export default $config({
       production: {
         web: "notes.dpklabs.com",
         api: "api.notes.dpklabs.com",
-        cookieDomain: "notes.dpklabs.com",
+        cookieDomain: "dpklabs.com",
         cookiePrefix: "minunotes",
       },
     };
