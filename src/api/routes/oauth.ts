@@ -6,6 +6,7 @@ import { auth } from "../lib/auth";
 import { filterSelectablePermissionRows } from "../lib/folder-access";
 import { AUTHORIZATION_CODE_TTL_MS, ACCESS_TOKEN_TTL_MS, REFRESH_TOKEN_TTL_MS, findOAuthClient, generateOAuthToken, hashOAuthToken, isRedirectUriAllowed, oauthError, validateDcrRedirectUri, validateOAuthRedirectUri, verifyPkce } from "../lib/oauth";
 import { createId } from "../lib/id";
+import { getApiRuntimeConfig } from "../lib/env";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -15,6 +16,8 @@ type Variables = {
 };
 
 export const oauthRoutes = new Hono<{ Variables: Variables }>();
+
+const { frontendUrl } = getApiRuntimeConfig();
 
 function getOrigin(c: Context<{ Variables: Variables }>) {
   return new URL(c.req.url).origin;
@@ -287,7 +290,7 @@ oauthRoutes.get("/authorize", async (c) => {
     codeChallengeMethod: c.req.query("code_challenge_method"),
   });
   if (!result.ok) return c.json(result.error, result.status);
-  const url = new URL("/oauth/authorize", getOrigin(c));
+  const url = new URL("/oauth/authorize", frontendUrl);
   for (const [key, value] of new URL(c.req.url).searchParams.entries()) url.searchParams.set(key, value);
   return c.redirect(url.toString(), 302);
 });
