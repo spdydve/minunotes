@@ -2,7 +2,6 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { Hono } from "hono";
 import { createNotesMcpServer, type NotesMcpClient } from "../../../packages/mcp/src/server";
 import type { ApiKey, OAuthAuthorization } from "../db/schema";
-import { getApiKeyFromHeaders } from "../lib/api-keys";
 import { auth } from "../lib/auth";
 
 type Variables = {
@@ -20,11 +19,11 @@ mcpRoutes.all("/", async (c) => {
   const authChallenge = `Bearer resource_metadata="${origin}/mcp/.well-known/oauth-protected-resource"`;
   if (!user) return c.json({ error: "Unauthorized" }, 401, { "WWW-Authenticate": authChallenge });
 
-  const apiKey = getApiKeyFromHeaders(c.req.raw.headers);
+  const apiKey = c.req.raw.headers.get("x-api-key")?.trim() ?? null;
   const bearer = c.req.raw.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
   if ((!apiKey || !c.get("apiKey")) && (!bearer || !c.get("oauthAuthorization"))) return c.json({ error: "Hosted MCP requires X-API-Key or Bearer authentication" }, 401, { "WWW-Authenticate": authChallenge });
 
-  const client = createHostedMcpClient(origin, apiKey ? { "x-api-key": apiKey } : { authorization: `Bearer ${bearer}` });
+  const client = createHostedMcpClient(origin, apiKey && c.get("apiKey") ? { "x-api-key": apiKey } : { authorization: `Bearer ${bearer}` });
   const server = createNotesMcpServer(client);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
