@@ -30,7 +30,12 @@ const app = new Hono<{
 }>();
 
 const { allowedOrigins } = getApiRuntimeConfig();
-const authRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 60, keyPrefix: "auth" });
+const authRateLimit = createRateLimitMiddleware({
+  windowMs: 60_000,
+  max: 10,
+  keyPrefix: "auth",
+  skip: (path) => path === "/internal/auth/sign-out",
+});
 const apiKeyRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 30, keyPrefix: "api-keys" });
 const harnessRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 120, keyPrefix: "harness" });
 const writeBodyLimit = createRequestSizeLimitMiddleware({ maxBytes: 256 * 1024 });

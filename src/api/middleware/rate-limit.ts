@@ -4,6 +4,7 @@ export type RateLimitOptions = {
   windowMs: number;
   max: number;
   keyPrefix?: string;
+  skip?: (path: string) => boolean;
 };
 
 type Bucket = {
@@ -45,8 +46,13 @@ export function resetRateLimitStore() {
   buckets.clear();
 }
 
-export function createRateLimitMiddleware({ windowMs, max, keyPrefix = "global" }: RateLimitOptions) {
+export function createRateLimitMiddleware({ windowMs, max, keyPrefix = "global", skip }: RateLimitOptions) {
   return createMiddleware(async (c, next) => {
+    if (skip?.(c.req.path)) {
+      await next();
+      return;
+    }
+
     const client = getClientAddress(c.req.raw.headers);
     const key = `${keyPrefix}:${client}`;
     const result = consumeRateLimit(key, { windowMs, max });
