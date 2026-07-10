@@ -39,7 +39,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     "notes_list_folders",
     {
       title: "List folders",
-      description: "List folders available to the configured MinuNotes API key.",
+      description: "List folders available to the authorized MinuNotes connection.",
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -50,7 +50,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     "notes_create_folder",
     {
       title: "Create folder",
-      description: "Create a folder or subfolder if the configured API key has folder creation permission. The new folder is automatically scoped to this key.",
+      description: "Create a folder or subfolder if the authorized MinuNotes connection has folder creation permission. The new folder is automatically scoped to this connection.",
       inputSchema: { title: z.string(), parentFolderId: z.string().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -62,7 +62,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     "notes_search",
     {
       title: "Search notes",
-      description: "Search notes visible to the configured MinuNotes API key.",
+      description: "Search notes visible to the authorized MinuNotes connection.",
       inputSchema: { query: z.string() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -86,7 +86,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     "notes_create_note",
     {
       title: "Create note",
-      description: "Create a note in a folder. Permissions are enforced by the MinuNotes API key.",
+      description: "Create a note in a folder. Permissions are enforced by the authorized MinuNotes connection.",
       inputSchema: { folderId: z.string(), title: z.string().optional(), content: z.string().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -118,7 +118,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     "notes_search_lines",
     {
       title: "Search note lines",
-      description: "Search matching lines across notes visible to the configured MinuNotes API key.",
+      description: "Search matching lines across notes visible to the authorized MinuNotes connection.",
       inputSchema: { query: z.string(), folderId: z.string().optional(), context: z.number().optional(), limit: z.number().optional(), caseSensitive: z.boolean().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
