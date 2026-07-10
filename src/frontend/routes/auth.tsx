@@ -1,10 +1,18 @@
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { authClient } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
 import { rootRoute } from "./__root";
 
+function safeRedirect(value: unknown) {
+  if (typeof value !== "string") return "/";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
 function AuthView() {
+  const search = useSearch({ from: "/auth" }) as { redirect?: string };
+  const redirect = safeRedirect(search.redirect);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
@@ -55,7 +63,7 @@ function AuthView() {
     setLoading(true);
     try {
       await authClient.signIn.emailOtp({ email, otp });
-      window.location.href = "/";
+      window.location.href = redirect;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid code");
     } finally {
@@ -74,6 +82,7 @@ function AuthView() {
     <div className="w-full max-w-md rounded-lg border bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950">
       <h1 className="text-xl font-semibold">{step === "email" ? "Sign in" : "Check your email"}</h1>
       <p className="mt-2 text-sm text-slate-500">{step === "email" ? "Enter your email to receive a one-time code." : `Enter the code sent to ${email}.`}</p>
+      {redirect.startsWith("/oauth/authorize") ? <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Sign in to continue authorizing this connected app.</p> : null}
       {message && <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">{message}</p>}
       {error && <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">{error}</p>}
       {step === "email" ? <form className="mt-5 space-y-4" onSubmit={sendOtp}>

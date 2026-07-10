@@ -19,7 +19,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? await res.json() : null;
 
-  if (!res.ok) throw new ApiError(data?.error ?? "Request failed", res.status);
+  if (!res.ok) throw new ApiError(data?.error_description ?? data?.error ?? "Request failed", res.status);
   if (!data) throw new Error("API did not return JSON. Check VITE_API_URL.");
 
   return data as T;
@@ -67,7 +67,7 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const contentType = res.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? await res.json() : null;
 
-  if (!res.ok) throw new ApiError(data?.error ?? "Request failed", res.status);
+  if (!res.ok) throw new ApiError(data?.error_description ?? data?.error ?? "Request failed", res.status);
   if (!data) throw new Error("API did not return JSON. Check VITE_API_URL.");
 
   return data as T;

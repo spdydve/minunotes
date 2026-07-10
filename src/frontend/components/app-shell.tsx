@@ -6,7 +6,8 @@ import { authClient } from "../lib/auth-client";
 import { applyNoteTheme, getStoredTheme } from "../lib/themes";
 
 export function AppShell() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const location = useRouterState({ select: (state) => state.location });
+  const pathname = location.pathname;
   const session = authClient.useSession();
   const isAuthRoute = pathname === "/auth";
   const isPublicShareRoute = pathname.startsWith("/share/");
@@ -23,7 +24,10 @@ export function AppShell() {
 
   if (isAuthRoute || isPublicShareRoute) return <Outlet />;
   if (session.isPending) return <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">Loading...</div>;
-  if (!session.data?.user) return <Navigate to="/auth" />;
+  if (!session.data?.user) {
+    const redirect = `${location.pathname}${location.searchStr}`;
+    return <Navigate to="/auth" search={redirect === "/" ? undefined : { redirect }} />;
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--notes-bg)] text-[var(--notes-text)]">

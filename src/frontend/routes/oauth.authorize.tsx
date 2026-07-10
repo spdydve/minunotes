@@ -84,7 +84,7 @@ function OAuthAuthorizeView() {
 
   if (!request) return <section className="mx-auto max-w-xl rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-6"><h1 className="text-xl font-semibold">Invalid OAuth request</h1><p className="notes-muted mt-2 text-sm">The authorization request is missing required parameters.</p></section>;
   if (preview.isLoading || folders.isLoading) return <p className="notes-muted text-sm">Loading authorization request...</p>;
-  if (preview.error) return <section className="mx-auto max-w-xl rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-6"><h1 className="text-xl font-semibold">Unable to authorize app</h1><p className="notes-muted mt-2 text-sm">This OAuth request is invalid or the app is not registered.</p></section>;
+  if (preview.error) return <section className="mx-auto max-w-xl rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-6"><h1 className="text-xl font-semibold">Unable to authorize app</h1><p className="notes-muted mt-2 text-sm">This OAuth request is invalid, expired, or the app is not registered.</p><p className="mt-3 rounded-md border border-[var(--notes-border)] bg-[var(--notes-bg)] p-3 text-xs text-[var(--notes-muted)]">{preview.error instanceof Error ? preview.error.message : "Unknown authorization error"}</p></section>;
 
   const appName = preview.data?.client.name ?? "This app";
   const selectedCount = selectedFolderIds.size;
