@@ -50,9 +50,5 @@ export function verifyApiKey(key: string, hash: string, salt: string) {
 }
 
 export function getApiKeyFromHeaders(headers: Headers) {
-  const headerKey = headers.get("x-api-key")?.trim();
-  if (headerKey) return headerKey;
-
-  const authorization = headers.get("authorization");
-  return authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : null;
+  return headers.get("x-api-key")?.trim() || null;
 }

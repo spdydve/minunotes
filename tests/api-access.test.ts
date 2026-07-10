@@ -52,18 +52,18 @@ describe("API key hashing and verification", () => {
 });
 
 describe("API key header extraction", () => {
-  it("prefers x-api-key over authorization bearer", () => {
+  it("reads x-api-key", () => {
     const headers = new Headers({
       "x-api-key": "ntak_uid_secret",
-      authorization: "Bearer ntak_other_secret",
+      authorization: "Bearer oauth_token",
     });
 
     expect(getApiKeyFromHeaders(headers)).toBe("ntak_uid_secret");
   });
 
-  it("falls back to authorization bearer", () => {
+  it("does not treat authorization bearer as an API key", () => {
     const headers = new Headers({ authorization: "Bearer ntak_uid_secret" });
-    expect(getApiKeyFromHeaders(headers)).toBe("ntak_uid_secret");
+    expect(getApiKeyFromHeaders(headers)).toBeNull();
   });
 
   it("returns null when neither header is present", () => {

@@ -12,13 +12,19 @@ GET /mcp
 DELETE /mcp
 ```
 
-Hosted MCP accepts either `X-API-Key: ntak_...` or `Authorization: Bearer mnoac_...` for OAuth connected apps, and routes tool calls through `/v1/harness/*`.
+Hosted MCP uses OAuth bearer authentication:
+
+```http
+Authorization: Bearer mnoac_...
+```
+
+MinuNotes validates the OAuth token at `/mcp`, then routes tool calls through internal harness operations using the connected app's scoped permissions. Direct `/v1/harness/*` API access remains API-key based; hosted MCP is the OAuth surface.
 
 OAuth-capable hosted clients can discover authorization metadata from the MCP endpoint. MinuNotes advertises protected-resource metadata and Dynamic Client Registration (DCR), so clients such as ChatGPT can register a public OAuth client automatically instead of requiring manual app setup.
 
 ## Local MCP
 
-Use local MCP for desktop clients that launch a process, such as local MCP-compatible tools.
+Use local MCP for desktop clients that launch a process, such as local MCP-compatible tools. Local stdio MCP uses an owner-managed API key from the environment and calls the direct harness API.
 
 ```sh
 export NOTES_API_URL="https://your-minunotes-host"

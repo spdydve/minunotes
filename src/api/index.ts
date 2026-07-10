@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import { type ApiKey, type OAuthAuthorization } from "./db/schema";
 import { libsql } from "./db/client";
 import { auth } from "./lib/auth";
-import { authenticationMiddleware, harnessAuthenticationMiddleware } from "./middleware/authentication";
+import { authenticationMiddleware, harnessApiKeyAuthenticationMiddleware, mcpOAuthAuthenticationMiddleware, type AuthContext } from "./middleware/authentication";
 import { createRateLimitMiddleware } from "./middleware/rate-limit";
 import { createRequestSizeLimitMiddleware } from "./middleware/request-limits";
 import { securityHeadersMiddleware } from "./middleware/security-headers";
@@ -26,6 +26,7 @@ const app = new Hono<{
     session: typeof auth.$Infer.Session.session | null;
     apiKey: ApiKey | null;
     oauthAuthorization: OAuthAuthorization | null;
+    authContext: AuthContext;
   };
 }>();
 
@@ -136,9 +137,9 @@ app.use("/internal/attachments", authenticationMiddleware);
 app.use("/internal/attachments/*", authenticationMiddleware);
 app.use("/internal/api-keys", authenticationMiddleware);
 app.use("/internal/api-keys/*", authenticationMiddleware);
-app.use("/v1/harness/*", harnessAuthenticationMiddleware);
-app.use("/mcp", harnessAuthenticationMiddleware);
-app.use("/mcp/*", harnessAuthenticationMiddleware);
+app.use("/v1/harness/*", harnessApiKeyAuthenticationMiddleware);
+app.use("/mcp", mcpOAuthAuthenticationMiddleware);
+app.use("/mcp/*", mcpOAuthAuthenticationMiddleware);
 
 app.use("/internal/api-keys", apiKeyRateLimit);
 app.use("/internal/api-keys/*", apiKeyRateLimit);

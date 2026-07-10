@@ -56,11 +56,11 @@ If you cannot complete a step due to permissions or API errors, stop and report 
 The agent succeeds if it:
 
 - Uses `X-API-Key` authentication.
-- Lists folders through `/api/harness/folders`.
-- Creates a note through `/api/harness/notes`.
+- Lists folders through `/v1/harness/folders`.
+- Creates a note through `/v1/harness/notes`.
 - Reads the note after creation.
 - Uses `baseHash` on edit.
-- Makes one targeted edit through `/api/harness/notes/:noteId/edit`.
+- Makes one targeted edit through `/v1/harness/notes/:noteId/edit`.
 - Reads back the final note.
 - Reports IDs and final markdown.
 
@@ -83,8 +83,8 @@ Find the note titled "Agent Harness Smoke Test", read its outline, fetch its mai
 
 Expected endpoints:
 
-- `GET /api/harness/notes/search?q=Agent%20Harness%20Smoke%20Test`
-- `GET /api/harness/notes/:noteId/outline`
-- `GET /api/harness/notes/:noteId/sections/:sectionId`
-- `POST /api/harness/notes/:noteId/edit`
-- `GET /api/harness/notes/:noteId/events`
+- `GET /v1/harness/notes/search?q=Agent%20Harness%20Smoke%20Test`
+- `GET /v1/harness/notes/:noteId/outline`
+- `GET /v1/harness/notes/:noteId/sections/:sectionId`
+- `POST /v1/harness/notes/:noteId/edit`
+- `GET /v1/harness/notes/:noteId/events`

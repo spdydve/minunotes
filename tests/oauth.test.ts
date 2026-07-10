@@ -25,7 +25,7 @@ async function setupApp() {
   tempDirs.push(dir);
   vi.stubEnv("TURSO_DB_URL", `file:${path.join(dir, "test.db")}`);
 
-  const [{ db, libsql }, schema, { oauthRoutes }, { harnessRoutes }, { harnessAuthenticationMiddleware }, { hashOAuthToken }] = await Promise.all([
+  const [{ db, libsql }, schema, { oauthRoutes }, { harnessRoutes }, { harnessApiKeyAuthenticationMiddleware }, { hashOAuthToken }] = await Promise.all([
     import("../src/api/db/client"),
     import("../src/api/db/schema"),
     import("../src/api/routes/oauth"),
@@ -59,7 +59,7 @@ async function setupApp() {
   app.route("/oauth", oauthRoutes);
 
   const authApp = new Hono();
-  authApp.use("/api/harness/*", harnessAuthenticationMiddleware);
+  authApp.use("/api/harness/*", harnessApiKeyAuthenticationMiddleware);
   authApp.route("/api/harness", harnessRoutes);
 
   return { app, authApp, db, schema, user, hashOAuthToken };
@@ -129,7 +129,7 @@ describe("oauth foundations", () => {
     await expect(response.json()).resolves.toMatchObject({ error: "invalid_redirect_uri" });
   });
 
-  it("uses bearer tokens for harness access with API-key-style permissions", async () => {
+  it("rejects bearer tokens for direct harness access", async () => {
     const { authApp, db, schema, user, hashOAuthToken } = await setupApp();
     const token = "mnoac_test_token";
     const publicFolder = { id: "folder_public", userId: user.id, parentFolderId: null, title: "Public", isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
@@ -161,17 +161,8 @@ describe("oauth foundations", () => {
     });
 
     const folders = await authApp.request("/api/harness/folders", { headers: { authorization: `Bearer ${token}` } });
-    expect(folders.status).toBe(200);
-    const foldersBody = await folders.json() as { folders: Array<{ id: string }> };
-    expect(foldersBody.folders.map((folder) => folder.id)).toContain(publicFolder.id);
-    expect(foldersBody.folders.map((folder) => folder.id)).not.toContain(privateFolder.id);
-
-    const createNote = await authApp.request("/api/harness/notes", {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ folderId: publicFolder.id, title: "Blocked" }),
-    });
-    expect(createNote.status).toBe(403);
+    expect(folders.status).toBe(401);
+    await expect(folders.json()).resolves.toEqual({ error: "Unauthorized" });
   });
 
   it("lists and revokes connected apps", async () => {

@@ -3,12 +3,15 @@ import { Hono } from "hono";
 import { createNotesMcpServer, type NotesMcpClient } from "../../../packages/mcp/src/server";
 import type { ApiKey, OAuthAuthorization } from "../db/schema";
 import { auth } from "../lib/auth";
+import { harnessRoutes } from "./harness";
+import type { AuthContext } from "../middleware/authentication";
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
   apiKey: ApiKey | null;
   oauthAuthorization: OAuthAuthorization | null;
+  authContext: AuthContext;
 };
 
 export const mcpRoutes = new Hono<{ Variables: Variables }>();
@@ -19,11 +22,11 @@ mcpRoutes.all("/", async (c) => {
   const authChallenge = `Bearer resource_metadata="${origin}/mcp/.well-known/oauth-protected-resource"`;
   if (!user) return c.json({ error: "Unauthorized" }, 401, { "WWW-Authenticate": authChallenge });
 
-  const apiKey = c.req.raw.headers.get("x-api-key")?.trim() ?? null;
   const bearer = c.req.raw.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if ((!apiKey || !c.get("apiKey")) && (!bearer || !c.get("oauthAuthorization"))) return c.json({ error: "Hosted MCP requires X-API-Key or Bearer authentication" }, 401, { "WWW-Authenticate": authChallenge });
+  const oauthAuthorization = c.get("oauthAuthorization");
+  if (!bearer || !oauthAuthorization) return c.json({ error: "Hosted MCP requires OAuth bearer authentication" }, 401, { "WWW-Authenticate": authChallenge });
 
-  const client = createHostedMcpClient(origin, apiKey && c.get("apiKey") ? { "x-api-key": apiKey } : { authorization: `Bearer ${bearer}` });
+  const client = createHostedMcpClient({ user, oauthAuthorization });
   const server = createNotesMcpServer(client);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -43,13 +46,23 @@ function toQueryString(input: Record<string, string | number | boolean | undefin
   return query ? `?${query}` : "";
 }
 
-function createHostedMcpClient(origin: string, authHeaders: Record<string, string>): NotesMcpClient {
+function createHostedMcpClient(authState: { user: NonNullable<Variables["user"]>; oauthAuthorization: NonNullable<Variables["oauthAuthorization"]> }): NotesMcpClient {
+  const app = new Hono<{ Variables: Variables }>();
+  app.use("*", async (c, next) => {
+    c.set("user", authState.user);
+    c.set("session", null);
+    c.set("apiKey", null);
+    c.set("oauthAuthorization", authState.oauthAuthorization);
+    c.set("authContext", { type: "oauth", userId: authState.user.id, authorizationId: authState.oauthAuthorization.id });
+    await next();
+  });
+  app.route("/", harnessRoutes);
+
   async function request(path: string, init: RequestInit = {}) {
-    const response = await fetch(`${origin}/v1/harness${path}`, {
+    const response = await app.request(path, {
       ...init,
       headers: {
         "content-type": "application/json",
-        ...authHeaders,
         ...init.headers,
       },
     });

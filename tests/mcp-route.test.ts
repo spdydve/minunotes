@@ -12,6 +12,13 @@ describe("hosted MCP route", () => {
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
   });
 
+  it("rejects API-key auth on hosted MCP", async () => {
+    const response = await app.request("/mcp", { method: "POST", headers: { "x-api-key": "ntak_invalid" } });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
   it("serves OAuth protected resource metadata for MCP", async () => {
     const response = await app.request("/mcp/.well-known/oauth-protected-resource");
 
@@ -23,19 +30,20 @@ describe("hosted MCP route", () => {
     });
   });
 
-  it("serves MCP initialize over streamable HTTP with API key auth", async () => {
+  it("serves MCP initialize over streamable HTTP with OAuth bearer auth", async () => {
     const testApp = new Hono();
     testApp.use("*", async (c, next) => {
       c.set("user", { id: "user_test", name: "Test User", email: "test@example.com" });
       c.set("session", null);
-      c.set("apiKey", { id: "key_test" });
+      c.set("apiKey", null);
+      c.set("oauthAuthorization", { id: "oauth_auth_test" });
       await next();
     });
     testApp.route("/mcp", mcpRoutes);
 
     const response = await testApp.request("/mcp", {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "x-api-key": "ntak_test" },
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: "Bearer mnoac_test" },
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,

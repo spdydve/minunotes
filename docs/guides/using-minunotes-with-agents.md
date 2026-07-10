@@ -45,10 +45,10 @@ Then route note operations through helper functions that wrap the harness API.
 For MCP-capable hosted agents, use the hosted Streamable HTTP MCP endpoint instead:
 
 ```txt
-https://<your-minunotes-host>/api/mcp
+https://<your-minunotes-host>/mcp
 ```
 
-Hosted MCP accepts `X-API-Key` authentication for trusted/private clients and OAuth bearer tokens for connected apps. Both use the same scoped folder permissions as `/api/harness/*`. Local MCP clients can still run the `notes-mcp` stdio binary.
+Hosted MCP uses OAuth bearer authentication for connected apps. Direct harness API access uses API keys with `/v1/harness/*`. Local MCP clients can still run the `notes-mcp` stdio binary with an owner-managed API key in the local process environment.
 
 Recommended helper shape:
 
@@ -64,7 +64,7 @@ async function minunotesRequest<T>(
   init?: RequestInit,
 ): Promise<T> {
   const apiUrl = config.apiUrl.replace(/\/$/, "");
-  const res = await fetch(`${apiUrl}/api/harness${path}`, {
+  const res = await fetch(`${apiUrl}/v1/harness${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -139,7 +139,7 @@ For organization tasks, agents can also read/update note tags through the harnes
 
 ## MCP and OpenAPI options
 
-- Use **hosted MCP** (`/api/mcp`) for MCP-native hosted agents, cloud agents, Lambda/container agents, and team-managed runtimes.
+- Use **hosted MCP** (`/mcp`) for MCP-native hosted agents, cloud agents, ChatGPT-style OAuth connected apps, and team-managed runtimes.
 - Use **local stdio MCP** (`notes-mcp`) for desktop clients that spawn local MCP processes.
 - Use the **harness skill/API** for coding agents that can call HTTPS directly and do not need MCP transport.
 - Use **OpenAPI** for REST/OpenAPI-native platforms such as custom actions or tools importers.
@@ -147,21 +147,21 @@ For organization tasks, agents can also read/update note tags through the harnes
 OpenAPI documents are available at:
 
 ```txt
-GET /api/openapi.json
-GET /api/harness/openapi.json
+GET /openapi.json
+GET /v1/openapi.json
 ```
 
-All paths keep business logic and permissions centralized in `/api/harness/*`.
+Direct harness API paths live under `/v1/harness/*` and use `X-API-Key` authentication. Hosted MCP uses `/mcp` with OAuth bearer authentication while sharing the same underlying permission model.
 
 Useful graph and organization endpoints include:
 
-- `GET /api/harness/tags`
-- `GET /api/harness/notes/search?q=...&tag=...`
-- `GET /api/harness/notes/:noteId/tags`
-- `PUT /api/harness/notes/:noteId/tags`
-- `GET /api/harness/notes/:noteId/backlinks`
-- `GET /api/harness/notes/:noteId/links`
-- `GET /api/harness/notes/orphans`
+- `GET /v1/harness/tags`
+- `GET /v1/harness/notes/search?q=...&tag=...`
+- `GET /v1/harness/notes/:noteId/tags`
+- `PUT /v1/harness/notes/:noteId/tags`
+- `GET /v1/harness/notes/:noteId/backlinks`
+- `GET /v1/harness/notes/:noteId/links`
+- `GET /v1/harness/notes/orphans`
 
 ## Best practices
 
