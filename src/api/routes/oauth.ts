@@ -198,7 +198,15 @@ oauthRoutes.delete("/authorizations/:authorizationId", async (c) => {
 
 oauthRoutes.get("/authorize/preview", async (c) => {
   const user = c.get("user");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (!user) {
+    console.info("[OAUTH PREVIEW UNAUTHORIZED]", {
+      path: new URL(c.req.url).pathname,
+      origin: c.req.raw.headers.get("origin"),
+      referer: c.req.raw.headers.get("referer"),
+      hasCookieHeader: Boolean(c.req.raw.headers.get("cookie")),
+    });
+    return c.json({ error: "Unauthorized" }, 401);
+  }
 
   const result = await validateAuthorizeRequest({
     clientId: c.req.query("client_id"),

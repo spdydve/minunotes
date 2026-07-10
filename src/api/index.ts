@@ -108,6 +108,15 @@ app.use("/internal/oauth/revoke", authRateLimit);
 
 app.route("/internal/auth", authRoutes);
 
+app.use("/internal/oauth/authorize/preview", async (c, next) => {
+  console.info("[OAUTH PREVIEW REQUEST]", {
+    path: c.req.path,
+    origin: c.req.raw.headers.get("origin"),
+    referer: c.req.raw.headers.get("referer"),
+    hasCookieHeader: Boolean(c.req.raw.headers.get("cookie")),
+  });
+  await next();
+});
 app.use("/internal/oauth/authorize", authenticationMiddleware);
 app.use("/internal/oauth/clients", authenticationMiddleware);
 app.use("/internal/oauth/clients/*", authenticationMiddleware);
