@@ -97,8 +97,10 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
 }
 
 function normalizeApiBase(input: string) {
-  const normalized = input.replace(/\/$/, '');
-  return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+  const normalized = input.replace(/\/+$/, '');
+  if (normalized.endsWith('/v1')) return normalized;
+  if (normalized.endsWith('/api')) return `${normalized.slice(0, -4)}/v1`;
+  return `${normalized}/v1`;
 }
 
 function toQueryString(input: Record<string, string | number | boolean | undefined>) {
