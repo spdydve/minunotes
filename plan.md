@@ -530,3 +530,85 @@ New tables likely needed:
 ## Approval
 
 Planning only. Do not implement until this plan is approved and phase scope is selected.
+
+---
+
+# Auth Surface Cleanup Plan
+
+## Goal
+
+Make direct harness API access and hosted MCP access work cleanly side-by-side without auth-mode ambiguity, with API keys reserved for direct API automation and OAuth Bearer reserved for MCP/hosted connected apps.
+
+## Decisions to preserve
+
+- Direct `/v1/harness/*` API access uses API keys only.
+- Hosted integrations such as ChatGPT use OAuth Bearer tokens through `/mcp` only.
+- MCP uses OAuth Bearer as the primary hosted auth mode.
+- Optional/local MCP API-key support can remain if useful, but should be clearly separate from hosted OAuth.
+- `Authorization: Bearer` should mean OAuth only.
+- API keys should use `X-API-Key` for direct harness requests.
+
+## Files to modify/create
+
+- `src/api/middleware/authentication.ts`
+  - Introduce a first-class auth context variable, e.g. `authActor` or `authContext`.
+  - Capture `type: "apiKey" | "oauth" | "session" | "anonymous"` plus safe IDs.
+  - Add low-noise structured logs for MCP/harness auth mode without token values.
+- `src/api/lib/api-keys.ts`
+  - Stop treating `Authorization: Bearer` as an API key.
+  - Keep API-key parsing/verification focused on `X-API-Key`.
+  - If needed, add explicit legacy helper only for local compatibility and do not use it in hosted OAuth paths.
+- `src/api/routes/mcp.ts`
+  - Use the explicit auth context to decide whether to forward `X-API-Key` or `Authorization: Bearer`.
+  - Update any remaining wording/errors to say “authorized connection” unless the failure is specifically an API-key failure.
+- `src/api/routes/harness.ts`
+  - Ensure route-level 401s are generic unless authentication middleware identified a concrete invalid API key/bearer.
+- `packages/mcp/src/server.ts`
+  - Keep OAuth/API-key neutral tool descriptions.
+- Tests:
+  - `tests/mcp-route.test.ts`
+  - `tests/harness-folder-access.test.ts`
+  - `tests/auth-object-access.test.ts`
+  - Add/extend tests for header semantics and auth forwarding.
+
+## Proposed implementation phases
+
+- [x] Phase 1: Explicit auth context
+  - [x] Add `authContext` variable to Hono context.
+  - [x] Set `authContext.type = "apiKey"` only for valid `X-API-Key`.
+  - [x] Set `authContext.type = "oauth"` only for valid `Authorization: Bearer`.
+  - [x] Set session/anonymous context for internal/browser routes.
+
+- [x] Phase 2: Header semantics cleanup
+  - [x] Update API-key helpers to no longer parse bearer tokens as API keys.
+  - [x] Keep direct harness API usage documented as `X-API-Key` only.
+  - [x] Ensure invalid API-key messages only occur for actual `X-API-Key` attempts.
+
+- [x] Phase 3: MCP forwarding and diagnostics
+  - [x] Update MCP to route based on `authContext.type`/OAuth auth state.
+  - [x] Add structured logs: route, auth type, safe auth id, status, no secrets.
+  - [x] Verify ChatGPT OAuth goes through `oauth` mode at `/mcp`, not `apiKey` mode.
+
+- [x] Phase 4: Tests and docs
+  - [x] Add tests proving API key direct API access still works.
+  - [x] Add tests proving OAuth direct harness API access is rejected unless explicitly re-enabled.
+  - [x] Add tests proving hosted MCP uses OAuth bearer.
+  - [x] Remove hosted MCP API-key forwarding; local stdio MCP remains API-key based.
+  - [x] Update docs/resources if user-facing instructions changed.
+
+## Verification
+
+- `pnpm typecheck`
+- `pnpm test tests/mcp-route.test.ts tests/oauth.test.ts tests/harness-folder-access.test.ts tests/auth-object-access.test.ts`
+- `pnpm test`
+- `pnpm build`
+- Production smoke:
+  - `GET /v1/harness/folders` with `X-API-Key` succeeds.
+  - `GET /v1/harness/folders` with OAuth bearer is rejected.
+  - ChatGPT MCP can list/create folders and create notes through OAuth bearer.
+  - Invalid API key returns “Invalid API key”.
+  - Invalid OAuth bearer returns “Invalid bearer token”.
+
+## Approval
+
+Planning only. Do not implement until approved.

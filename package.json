@@ -21,6 +21,11 @@
     "email:test": "ENVIRONMENT=local tsx scripts/send-test-email.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
     "ci:local": "pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -47,7 +52,7 @@
     "@codemirror/language": "^6.12.3",
     "@codemirror/legacy-modes": "^6.5.3",
     "@dpklabs/minucanvas": "github:spdydve/minucanvas#v0.5.0",
-    "@dpklabs/minueditor": "github:spdydve/minueditor#v0.10.3",
+    "@dpklabs/minueditor": "github:spdydve/minueditor#v0.10.4",
     "@hono/node-server": "^2.0.3",
     "@libsql/client": "latest",
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -68,6 +73,7 @@
     "tailwind-merge": "latest"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
     "@mdx-js/rollup": "^3.1.1",
     "@tailwindcss/vite": "latest",
     "@types/aws-lambda": "8.10.161",

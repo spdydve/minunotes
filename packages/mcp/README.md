@@ -1,6 +1,6 @@
 # @minunotes/mcp
 
-MCP server for MinuNotes harness workflows. Uses the MinuNotes harness API and API key auth.
+MCP server for MinuNotes harness workflows. Local stdio MCP uses the MinuNotes harness API with API-key auth. Hosted MinuNotes MCP uses OAuth bearer auth at `/mcp`.
 
 ## Local stdio MCP
 
@@ -33,18 +33,20 @@ Example MCP client config:
 MinuNotes also exposes a hosted Streamable HTTP MCP endpoint at:
 
 ```txt
-POST /api/mcp
-GET /api/mcp
-DELETE /api/mcp
+POST /mcp
+GET /mcp
+DELETE /mcp
 ```
 
-Hosted MCP v1 requires `X-API-Key` authentication. Tool calls run through the same `/api/harness/*` permissions as the local MCP path.
+Hosted MCP uses OAuth bearer authentication. Tool calls run through the authorized connected app's scoped permissions.
 
 ```http
-X-API-Key: ntak_...
+Authorization: Bearer mnoac_...
 Accept: application/json, text/event-stream
 Content-Type: application/json
 ```
+
+Direct harness API access remains API-key based through `/v1/harness/*`. Local stdio MCP uses `NOTES_API_KEY` and calls the harness API from the local process.
 
 Use hosted MCP for cloud agents, ChatGPT-style integrations, Lambda/container agents, or team-managed agent runtimes. Use local stdio MCP when a desktop client expects to launch a local MCP process.
 
@@ -68,7 +70,7 @@ Implementation notes:
 - Uses the official `@modelcontextprotocol/sdk`.
 - Honors MinuNotes access modes: all non-private folders, selected project roots, or specific selected non-private folders. Private folders are not accessible to MCP.
 - Uses stdio transport for local process-spawned MCP clients.
-- Uses Streamable HTTP transport for hosted `/api/mcp` clients.
+- Uses Streamable HTTP transport for hosted `/mcp` clients.
 - Returns both `structuredContent` and text content.
 - Adds MCP tool annotations for read-only/destructive/idempotent hints.
 - Includes a starter `summarize_note` prompt.

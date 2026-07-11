@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createClient, NotesApiError } from "./config.js";
-import { createNotesMcpServer } from "./server.js";
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createClient, NotesApiError } from './config.js';
+import { createNotesMcpServer } from './server.js';
 
 export async function main() {
   const server = createNotesMcpServer(createClient());

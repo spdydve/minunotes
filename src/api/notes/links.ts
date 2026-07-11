@@ -1,13 +1,13 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
-import { db } from "../db/client";
-import { noteLinks, notes } from "../db/schema";
-import { createId } from "../lib/id";
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { db } from '../db/client';
+import { noteLinks, notes } from '../db/schema';
+import { createId } from '../lib/id';
 
 export type ParsedNoteLink = {
   targetTitle: string;
   targetNoteId: string | null;
   label: string | null;
-  linkType: "wikilink" | "internal-url" | "markdown-internal-url";
+  linkType: 'wikilink' | 'internal-url' | 'markdown-internal-url';
   raw: string;
   from: number;
   to: number;
@@ -19,7 +19,7 @@ const MARKDOWN_INTERNAL_URL_PATTERN = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+\/note
 const RAW_INTERNAL_URL_PATTERN = /(?<!\]\()https?:\/\/[^\s)]+\/notes\/(note_[a-zA-Z0-9]+)/g;
 
 export function normalizeNoteTitle(title: string) {
-  return title.trim().replace(/\s+/g, " ").toLowerCase();
+  return title.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 export function parseWikiLinks(markdown: string): ParsedNoteLink[] {
@@ -28,16 +28,16 @@ export function parseWikiLinks(markdown: string): ParsedNoteLink[] {
     const rawInner = match[1]?.trim();
     if (!rawInner) continue;
 
-    const [rawTitle, ...labelParts] = rawInner.split("|");
-    const targetTitle = rawTitle?.trim().replace(/\s+/g, " ") ?? "";
+    const [rawTitle, ...labelParts] = rawInner.split('|');
+    const targetTitle = rawTitle?.trim().replace(/\s+/g, ' ') ?? '';
     if (!targetTitle) continue;
 
-    const label = labelParts.length > 0 ? labelParts.join("|").trim() || null : null;
+    const label = labelParts.length > 0 ? labelParts.join('|').trim() || null : null;
     links.push({
       targetTitle,
       targetNoteId: NOTE_ID_PATTERN.test(targetTitle) ? targetTitle : null,
       label,
-      linkType: "wikilink",
+      linkType: 'wikilink',
       raw: match[0],
       from: match.index ?? 0,
       to: (match.index ?? 0) + match[0].length,
@@ -58,7 +58,7 @@ export function parseInternalNoteUrls(markdown: string): ParsedNoteLink[] {
       targetTitle: match[1]?.trim() || match[3],
       targetNoteId: match[3],
       label: match[1]?.trim() || null,
-      linkType: "markdown-internal-url",
+      linkType: 'markdown-internal-url',
       raw,
       from,
       to: from + raw.length,
@@ -74,7 +74,7 @@ export function parseInternalNoteUrls(markdown: string): ParsedNoteLink[] {
       targetTitle: match[1],
       targetNoteId: match[1],
       label: null,
-      linkType: "internal-url",
+      linkType: 'internal-url',
       raw,
       from,
       to,
@@ -90,7 +90,9 @@ export function parseNoteLinks(markdown: string): ParsedNoteLink[] {
 
 async function resolveUniqueTargetNote(input: { userId: string; sourceNoteId: string; targetTitle: string }) {
   const normalized = normalizeNoteTitle(input.targetTitle);
-  const rows = await db.select({ id: notes.id }).from(notes)
+  const rows = await db
+    .select({ id: notes.id })
+    .from(notes)
     .where(and(eq(notes.userId, input.userId), sql`lower(${notes.title}) = ${normalized}`))
     .limit(2);
   const candidates = rows.filter((row) => row.id !== input.sourceNoteId);
@@ -99,7 +101,9 @@ async function resolveUniqueTargetNote(input: { userId: string; sourceNoteId: st
 
 async function resolveTargetNoteById(input: { userId: string; sourceNoteId: string; targetNoteId: string }) {
   if (input.targetNoteId === input.sourceNoteId) return null;
-  const [target] = await db.select({ id: notes.id, title: notes.title }).from(notes)
+  const [target] = await db
+    .select({ id: notes.id, title: notes.title })
+    .from(notes)
     .where(and(eq(notes.id, input.targetNoteId), eq(notes.userId, input.userId)))
     .limit(1);
   return target ?? null;
@@ -114,11 +118,23 @@ export async function reindexNoteLinks(input: { userId: string; noteId: string; 
   const values = [];
   for (const link of parsed) {
     const target = link.targetNoteId
-      ? await resolveTargetNoteById({ userId: input.userId, sourceNoteId: input.noteId, targetNoteId: link.targetNoteId })
+      ? await resolveTargetNoteById({
+          userId: input.userId,
+          sourceNoteId: input.noteId,
+          targetNoteId: link.targetNoteId,
+        })
       : null;
-    const targetNoteId = target?.id ?? (link.linkType === "wikilink" ? await resolveUniqueTargetNote({ userId: input.userId, sourceNoteId: input.noteId, targetTitle: link.targetTitle }) : null);
+    const targetNoteId =
+      target?.id ??
+      (link.linkType === 'wikilink'
+        ? await resolveUniqueTargetNote({
+            userId: input.userId,
+            sourceNoteId: input.noteId,
+            targetTitle: link.targetTitle,
+          })
+        : null);
     values.push({
-      id: createId("note_link"),
+      id: createId('note_link'),
       userId: input.userId,
       sourceNoteId: input.noteId,
       targetNoteId,
@@ -135,66 +151,91 @@ export async function reindexNoteLinks(input: { userId: string; noteId: string; 
 
 export async function resolveUnresolvedNoteLinks(input: { userId: string; title: string; noteId: string }) {
   const normalized = normalizeNoteTitle(input.title);
-  const candidates = await db.select({ id: notes.id }).from(notes)
+  const candidates = await db
+    .select({ id: notes.id })
+    .from(notes)
     .where(and(eq(notes.userId, input.userId), sql`lower(${notes.title}) = ${normalized}`))
     .limit(2);
   if (candidates.length !== 1) return;
 
-  await db.update(noteLinks)
+  await db
+    .update(noteLinks)
     .set({ targetNoteId: input.noteId, updatedAt: new Date() })
-    .where(and(eq(noteLinks.userId, input.userId), isNull(noteLinks.targetNoteId), sql`lower(${noteLinks.targetTitle}) = ${normalized}`));
+    .where(
+      and(
+        eq(noteLinks.userId, input.userId),
+        isNull(noteLinks.targetNoteId),
+        sql`lower(${noteLinks.targetTitle}) = ${normalized}`
+      )
+    );
 }
 
 export async function listOutgoingLinks(input: { userId: string; noteId: string }) {
-  const source = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId))).limit(1);
+  const source = await db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId)))
+    .limit(1);
   if (source.length === 0) return null;
 
-  return db.select({
-    id: noteLinks.id,
-    sourceNoteId: noteLinks.sourceNoteId,
-    targetNoteId: noteLinks.targetNoteId,
-    targetTitle: noteLinks.targetTitle,
-    label: noteLinks.label,
-    linkType: noteLinks.linkType,
-    createdAt: noteLinks.createdAt,
-    updatedAt: noteLinks.updatedAt,
-  }).from(noteLinks)
+  return db
+    .select({
+      id: noteLinks.id,
+      sourceNoteId: noteLinks.sourceNoteId,
+      targetNoteId: noteLinks.targetNoteId,
+      targetTitle: noteLinks.targetTitle,
+      label: noteLinks.label,
+      linkType: noteLinks.linkType,
+      createdAt: noteLinks.createdAt,
+      updatedAt: noteLinks.updatedAt,
+    })
+    .from(noteLinks)
     .where(and(eq(noteLinks.userId, input.userId), eq(noteLinks.sourceNoteId, input.noteId)))
     .orderBy(noteLinks.targetTitle);
 }
 
 export async function listOrphanNotes(input: { userId: string }) {
-  return db.select({
-    id: notes.id,
-    folderId: notes.folderId,
-    title: notes.title,
-    type: notes.type,
-    createdAt: notes.createdAt,
-    updatedAt: notes.updatedAt,
-  }).from(notes)
-    .where(and(
-      eq(notes.userId, input.userId),
-      eq(notes.type, "note"),
-      sql`not exists (select 1 from ${noteLinks} where ${noteLinks.targetNoteId} = ${notes.id} and ${noteLinks.userId} = ${input.userId})`,
-    ))
+  return db
+    .select({
+      id: notes.id,
+      folderId: notes.folderId,
+      title: notes.title,
+      type: notes.type,
+      createdAt: notes.createdAt,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .where(
+      and(
+        eq(notes.userId, input.userId),
+        eq(notes.type, 'note'),
+        sql`not exists (select 1 from ${noteLinks} where ${noteLinks.targetNoteId} = ${notes.id} and ${noteLinks.userId} = ${input.userId})`
+      )
+    )
     .orderBy(notes.title);
 }
 
 export async function listBacklinks(input: { userId: string; noteId: string }) {
-  const target = await db.select({ id: notes.id }).from(notes).where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId))).limit(1);
+  const target = await db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId)))
+    .limit(1);
   if (target.length === 0) return null;
 
-  return db.select({
-    id: noteLinks.id,
-    sourceNoteId: noteLinks.sourceNoteId,
-    sourceTitle: notes.title,
-    sourceFolderId: notes.folderId,
-    targetTitle: noteLinks.targetTitle,
-    label: noteLinks.label,
-    linkType: noteLinks.linkType,
-    createdAt: noteLinks.createdAt,
-    updatedAt: noteLinks.updatedAt,
-  }).from(noteLinks)
+  return db
+    .select({
+      id: noteLinks.id,
+      sourceNoteId: noteLinks.sourceNoteId,
+      sourceTitle: notes.title,
+      sourceFolderId: notes.folderId,
+      targetTitle: noteLinks.targetTitle,
+      label: noteLinks.label,
+      linkType: noteLinks.linkType,
+      createdAt: noteLinks.createdAt,
+      updatedAt: noteLinks.updatedAt,
+    })
+    .from(noteLinks)
     .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
     .where(and(eq(noteLinks.userId, input.userId), eq(noteLinks.targetNoteId, input.noteId)))
     .orderBy(notes.title);

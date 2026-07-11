@@ -1,43 +1,49 @@
-import crypto from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { createClient } from "@libsql/client";
+import crypto from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { createClient } from '@libsql/client';
 
 type JournalEntry = { idx: number; version: string; when: number; tag: string; breakpoints: boolean };
 type JournalFile = { version: string; dialect: string; entries: JournalEntry[] };
 
-const MIGRATIONS_DIR = path.resolve("drizzle");
-const JOURNAL_PATH = path.join(MIGRATIONS_DIR, "meta/_journal.json");
-const DRIZZLE_TABLE = "__drizzle_migrations";
-const BREAKPOINT = "--> statement-breakpoint";
+const MIGRATIONS_DIR = path.resolve('drizzle');
+const JOURNAL_PATH = path.join(MIGRATIONS_DIR, 'meta/_journal.json');
+const DRIZZLE_TABLE = '__drizzle_migrations';
+const BREAKPOINT = '--> statement-breakpoint';
 
 function loadEnvFile(filePath: string) {
   if (!existsSync(filePath)) return;
-  for (const rawLine of readFileSync(filePath, "utf8").split(/\r?\n/)) {
+  for (const rawLine of readFileSync(filePath, 'utf8').split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line || line.startsWith("#") || !line.includes("=")) continue;
-    const index = line.indexOf("=");
+    if (!line || line.startsWith('#') || !line.includes('=')) continue;
+    const index = line.indexOf('=');
     const key = line.slice(0, index).trim();
-    const value = line.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+    const value = line
+      .slice(index + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
     process.env[key] ??= value;
   }
 }
 
 function hash(content: string) {
-  return crypto.createHash("sha256").update(content).digest("hex");
+  return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 function statements(sql: string) {
-  return sql.split(BREAKPOINT).map((statement) => statement.trim()).filter(Boolean);
+  return sql
+    .split(BREAKPOINT)
+    .map((statement) => statement.trim())
+    .filter(Boolean);
 }
 
 function loadMigrations() {
   if (!existsSync(JOURNAL_PATH)) throw new Error(`Migration journal not found: ${JOURNAL_PATH}`);
-  const journal = JSON.parse(readFileSync(JOURNAL_PATH, "utf8")) as JournalFile;
+  const journal = JSON.parse(readFileSync(JOURNAL_PATH, 'utf8')) as JournalFile;
   return journal.entries.map((entry) => {
     const sqlPath = path.join(MIGRATIONS_DIR, `${entry.tag}.sql`);
     if (!existsSync(sqlPath)) throw new Error(`Migration SQL file not found: ${sqlPath}`);
-    const sql = readFileSync(sqlPath, "utf8");
+    const sql = readFileSync(sqlPath, 'utf8');
     return { tag: entry.tag, when: entry.when, hash: hash(sql), statements: statements(sql) };
   });
 }
@@ -65,19 +71,19 @@ async function recordMigration(client: ReturnType<typeof createClient>, migratio
   });
 }
 
-const environment = process.env.ENVIRONMENT ?? "local";
-loadEnvFile(".env");
+const environment = process.env.ENVIRONMENT ?? 'local';
+loadEnvFile('.env');
 loadEnvFile(`.env.${environment}`);
-loadEnvFile(".env.local");
+loadEnvFile('.env.local');
 
-const url = process.env.TURSO_DB_URL ?? process.env.LIBSQL_URL ?? "file:local.db";
+const url = process.env.TURSO_DB_URL ?? process.env.LIBSQL_URL ?? 'file:local.db';
 const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.LIBSQL_AUTH_TOKEN;
-const dryRun = process.argv.includes("--dry-run");
+const dryRun = process.argv.includes('--dry-run');
 
-console.log("Drizzle migration runner");
+console.log('Drizzle migration runner');
 console.log(`Environment: ${environment}`);
 console.log(`Target: ${url}`);
-console.log(`Mode: ${dryRun ? "dry-run" : "apply"}`);
+console.log(`Mode: ${dryRun ? 'dry-run' : 'apply'}`);
 
 const client = createClient({ url, authToken });
 
@@ -91,7 +97,7 @@ try {
   console.log(`Pending migrations: ${pending.length}`);
 
   if (pending.length === 0) {
-    console.log("Nothing to migrate.");
+    console.log('Nothing to migrate.');
   } else if (dryRun) {
     for (const migration of pending) console.log(`- ${migration.tag} (${migration.statements.length} statements)`);
   } else {
@@ -103,12 +109,12 @@ try {
         await client.execute(statement);
       }
       await recordMigration(client, migration);
-      console.log("  ✓ recorded");
+      console.log('  ✓ recorded');
     }
-    console.log("Migrations applied successfully.");
+    console.log('Migrations applied successfully.');
   }
 } catch (error) {
-  console.error("Migration failed:");
+  console.error('Migration failed:');
   console.error(error);
   process.exitCode = 1;
 } finally {

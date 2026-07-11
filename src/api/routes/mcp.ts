@@ -1,29 +1,35 @@
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { Hono } from "hono";
-import { createNotesMcpServer, type NotesMcpClient } from "../../../packages/mcp/src/server";
-import type { ApiKey, OAuthAuthorization } from "../db/schema";
-import { auth } from "../lib/auth";
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { Hono } from 'hono';
+import { createNotesMcpServer, type NotesMcpClient } from '../../../packages/mcp/src/server';
+import type { ApiKey, OAuthAuthorization } from '../db/schema';
+import type { auth } from '../lib/auth';
+import type { AuthContext } from '../middleware/authentication';
+import { harnessRoutes } from './harness';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
   session: typeof auth.$Infer.Session.session | null;
   apiKey: ApiKey | null;
   oauthAuthorization: OAuthAuthorization | null;
+  authContext: AuthContext;
 };
 
 export const mcpRoutes = new Hono<{ Variables: Variables }>();
 
-mcpRoutes.all("/", async (c) => {
-  const user = c.get("user");
+mcpRoutes.all('/', async (c) => {
+  const user = c.get('user');
   const origin = new URL(c.req.url).origin;
   const authChallenge = `Bearer resource_metadata="${origin}/mcp/.well-known/oauth-protected-resource"`;
-  if (!user) return c.json({ error: "Unauthorized" }, 401, { "WWW-Authenticate": authChallenge });
+  if (!user) return c.json({ error: 'Unauthorized' }, 401, { 'WWW-Authenticate': authChallenge });
 
-  const apiKey = c.req.raw.headers.get("x-api-key")?.trim() ?? null;
-  const bearer = c.req.raw.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if ((!apiKey || !c.get("apiKey")) && (!bearer || !c.get("oauthAuthorization"))) return c.json({ error: "Hosted MCP requires X-API-Key or Bearer authentication" }, 401, { "WWW-Authenticate": authChallenge });
+  const bearer = c.req.raw.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const oauthAuthorization = c.get('oauthAuthorization');
+  if (!bearer || !oauthAuthorization)
+    return c.json({ error: 'Hosted MCP requires OAuth bearer authentication' }, 401, {
+      'WWW-Authenticate': authChallenge,
+    });
 
-  const client = createHostedMcpClient(origin, apiKey && c.get("apiKey") ? { "x-api-key": apiKey } : { authorization: `Bearer ${bearer}` });
+  const client = createHostedMcpClient({ user, oauthAuthorization });
   const server = createNotesMcpServer(client);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -40,23 +46,40 @@ function toQueryString(input: Record<string, string | number | boolean | undefin
     if (value !== undefined) params.set(key, String(value));
   }
   const query = params.toString();
-  return query ? `?${query}` : "";
+  return query ? `?${query}` : '';
 }
 
-function createHostedMcpClient(origin: string, authHeaders: Record<string, string>): NotesMcpClient {
+function createHostedMcpClient(authState: {
+  user: NonNullable<Variables['user']>;
+  oauthAuthorization: NonNullable<Variables['oauthAuthorization']>;
+}): NotesMcpClient {
+  const app = new Hono<{ Variables: Variables }>();
+  app.use('*', async (c, next) => {
+    c.set('user', authState.user);
+    c.set('session', null);
+    c.set('apiKey', null);
+    c.set('oauthAuthorization', authState.oauthAuthorization);
+    c.set('authContext', {
+      type: 'oauth',
+      userId: authState.user.id,
+      authorizationId: authState.oauthAuthorization.id,
+    });
+    await next();
+  });
+  app.route('/', harnessRoutes);
+
   async function request(path: string, init: RequestInit = {}) {
-    const response = await fetch(`${origin}/v1/harness${path}`, {
+    const response = await app.request(path, {
       ...init,
       headers: {
-        "content-type": "application/json",
-        ...authHeaders,
+        'content-type': 'application/json',
         ...init.headers,
       },
     });
 
     const body = await response.json().catch(() => null);
     if (!response.ok) {
-      const message = typeof body?.error === "string" ? body.error : "MinuNotes harness request failed";
+      const message = typeof body?.error === 'string' ? body.error : 'MinuNotes harness request failed';
       throw new Error(`${message} (${response.status})`);
     }
     return body;
@@ -64,18 +87,34 @@ function createHostedMcpClient(origin: string, authHeaders: Record<string, strin
 
   return {
     folders: {
-      list: () => request("/folders"),
-      create: ({ title, parentFolderId }) => request("/folders", { method: "POST", body: JSON.stringify({ title, parentFolderId }) }),
+      list: () => request('/folders'),
+      create: ({ title, parentFolderId }) =>
+        request('/folders', { method: 'POST', body: JSON.stringify({ title, parentFolderId }) }),
     },
     notes: {
       search: (query) => request(`/notes/search?q=${encodeURIComponent(query)}`),
       get: (noteId) => request(`/notes/${encodeURIComponent(noteId)}`),
-      create: (folderId, input) => request("/notes", { method: "POST", body: JSON.stringify({ folderId, title: input.title, content: input.content }) }),
-      edit: (noteId, edits, baseHash) => request(`/notes/${encodeURIComponent(noteId)}/edit`, { method: "POST", body: JSON.stringify({ edits, baseHash }) }),
-      searchLines: (input) => request(`/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`),
+      create: (folderId, input) =>
+        request('/notes', {
+          method: 'POST',
+          body: JSON.stringify({ folderId, title: input.title, content: input.content }),
+        }),
+      edit: (noteId, edits, baseHash) =>
+        request(`/notes/${encodeURIComponent(noteId)}/edit`, {
+          method: 'POST',
+          body: JSON.stringify({ edits, baseHash }),
+        }),
+      searchLines: (input) =>
+        request(
+          `/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`
+        ),
       lines: (noteId, input) => request(`/notes/${encodeURIComponent(noteId)}/lines${toQueryString(input)}`),
-      searchNoteLines: (noteId, input) => request(`/notes/${encodeURIComponent(noteId)}/search-lines${toQueryString({ q: input.query, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`),
-      section: (noteId, sectionId) => request(`/notes/${encodeURIComponent(noteId)}/sections/${encodeURIComponent(sectionId)}`),
+      searchNoteLines: (noteId, input) =>
+        request(
+          `/notes/${encodeURIComponent(noteId)}/search-lines${toQueryString({ q: input.query, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`
+        ),
+      section: (noteId, sectionId) =>
+        request(`/notes/${encodeURIComponent(noteId)}/sections/${encodeURIComponent(sectionId)}`),
     },
   };
 }

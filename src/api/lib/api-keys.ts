@@ -1,15 +1,15 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
-const API_KEY_PREFIX = "ntak";
+const API_KEY_PREFIX = 'ntak';
 const HASH_LENGTH = 64;
-const TOKEN_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const TOKEN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const API_KEY_UID_LENGTH = 8;
 const API_KEY_SECRET_LENGTH = 32;
 const TOKEN_PATTERN = /^[A-Za-z0-9]+$/;
 
 function randomToken(length: number) {
   const bytes = randomBytes(length);
-  let token = "";
+  let token = '';
   for (const byte of bytes) token += TOKEN_ALPHABET[byte % TOKEN_ALPHABET.length];
   return token;
 }
@@ -30,29 +30,26 @@ export function parseApiKey(key: string) {
 
   if (
     uid.length !== API_KEY_UID_LENGTH ||
-    separator !== "_" ||
+    separator !== '_' ||
     secret.length !== API_KEY_SECRET_LENGTH ||
     !TOKEN_PATTERN.test(uid) ||
     !TOKEN_PATTERN.test(secret)
-  ) return null;
+  )
+    return null;
   return { prefix: API_KEY_PREFIX, uid, secret };
 }
 
 export function hashApiKey(key: string, salt = randomToken(16)) {
-  const hash = scryptSync(key, salt, HASH_LENGTH).toString("hex");
+  const hash = scryptSync(key, salt, HASH_LENGTH).toString('hex');
   return { hash, salt };
 }
 
 export function verifyApiKey(key: string, hash: string, salt: string) {
   const candidate = scryptSync(key, salt, HASH_LENGTH);
-  const expected = Buffer.from(hash, "hex");
+  const expected = Buffer.from(hash, 'hex');
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
 }
 
 export function getApiKeyFromHeaders(headers: Headers) {
-  const headerKey = headers.get("x-api-key")?.trim();
-  if (headerKey) return headerKey;
-
-  const authorization = headers.get("authorization");
-  return authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : null;
+  return headers.get('x-api-key')?.trim() || null;
 }

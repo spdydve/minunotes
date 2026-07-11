@@ -20,7 +20,10 @@ export function getLineRange(markdown: string, from: number, to: number) {
   return { from: start, to: end, lineCount: lines.length, lines: lines.slice(start - 1, end) };
 }
 
-export function searchLines(markdown: string, input: { query: string; context?: number; limit?: number; caseSensitive?: boolean }) {
+export function searchLines(
+  markdown: string,
+  input: { query: string; context?: number; limit?: number; caseSensitive?: boolean }
+) {
   const query = input.query;
   if (!query) return { lineCount: splitNumberedLines(markdown).length, matches: [] as LineMatch[] };
 

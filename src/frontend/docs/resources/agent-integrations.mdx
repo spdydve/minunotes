@@ -32,6 +32,6 @@ GET /openapi.json
 POST /mcp
 ```
 
-Use `X-API-Key` on harness, OpenAPI-authenticated, and trusted/local hosted MCP requests. OAuth connected apps use `Authorization: Bearer mnoac_...` for hosted MCP and harness requests.
+Use `X-API-Key` for direct `/v1/harness/*` API and OpenAPI-authenticated requests. Hosted MCP uses OAuth bearer tokens at `/mcp` (`Authorization: Bearer mnoac_...`). Local stdio MCP uses an owner-managed API key in the local process environment and calls the harness API.
 
 For generated canvases and mind maps, prefer Minu diagram syntax through the canvas harness endpoints. Use raw JSON Canvas only when exact import/replacement is needed.

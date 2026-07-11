@@ -1,16 +1,16 @@
 import {
+  type CanvasSelection,
   CanvasStyleToolbar,
+  type CanvasTool,
   CanvasToolbar,
-  MinuCanvas,
   centerViewportForDocument,
+  type JsonCanvasDocument,
+  MinuCanvas,
   mindMapCanvasProfile,
   standardCanvasProfile,
   toolsForCanvasProfile,
-  type CanvasSelection,
-  type CanvasTool,
-  type JsonCanvasDocument,
-} from "@dpklabs/minucanvas";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+} from '@dpklabs/minucanvas';
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 
 const EMPTY_CANVAS: JsonCanvasDocument = { nodes: [], edges: [] };
 
@@ -21,12 +21,8 @@ function parseCanvasDocument(content: string): JsonCanvasDocument {
   try {
     const parsed = JSON.parse(content) as Partial<JsonCanvasDocument>;
     return {
-      nodes: Array.isArray(parsed.nodes)
-        ? (parsed.nodes as JsonCanvasDocument["nodes"])
-        : [],
-      edges: Array.isArray(parsed.edges)
-        ? (parsed.edges as JsonCanvasDocument["edges"])
-        : [],
+      nodes: Array.isArray(parsed.nodes) ? (parsed.nodes as JsonCanvasDocument['nodes']) : [],
+      edges: Array.isArray(parsed.edges) ? (parsed.edges as JsonCanvasDocument['edges']) : [],
     };
   } catch {
     return EMPTY_CANVAS;
@@ -47,8 +43,8 @@ export function NoteCanvasEditor({
 }: {
   title: string;
   content: string;
-  documentType?: "canvas.default" | "canvas.mindmap";
-  saveState?: "saved" | "saving" | "unsaved" | "error";
+  documentType?: 'canvas.default' | 'canvas.mindmap';
+  saveState?: 'saved' | 'saving' | 'unsaved' | 'error';
   onTitleChange: (value: string) => void;
   onContentChange: (value: string) => void;
   actions: ReactNode;
@@ -56,21 +52,22 @@ export function NoteCanvasEditor({
   staleNotice?: ReactNode;
   updatedMeta?: ReactNode;
 }) {
-  const titleValue = title === "Untitled canvas" || title === "Untitled Canvas" || title === "Untitled mind map" ? "" : title;
-  const isMindMap = documentType === "canvas.mindmap";
+  const titleValue =
+    title === 'Untitled canvas' || title === 'Untitled Canvas' || title === 'Untitled mind map' ? '' : title;
+  const isMindMap = documentType === 'canvas.mindmap';
   const canvasProfile = isMindMap ? mindMapCanvasProfile : standardCanvasProfile;
   const saveLabel =
-    saveState === "saving"
-      ? "Saving..."
-      : saveState === "unsaved"
-        ? "Unsaved changes"
-        : saveState === "error"
-          ? "Save failed"
-          : "Saved";
+    saveState === 'saving'
+      ? 'Saving...'
+      : saveState === 'unsaved'
+        ? 'Unsaved changes'
+        : saveState === 'error'
+          ? 'Save failed'
+          : 'Saved';
   const value = parseCanvasDocument(content);
   const canvasFrameRef = useRef<HTMLDivElement | null>(null);
   const [initialViewport, setInitialViewport] = useState<CanvasViewport | null>(null);
-  const [tool, setTool] = useState<CanvasTool>("select");
+  const [tool, setTool] = useState<CanvasTool>('select');
   const [selection, setSelection] = useState<CanvasSelection>({
     nodeIds: [],
     edgeIds: [],
@@ -79,7 +76,8 @@ export function NoteCanvasEditor({
   useLayoutEffect(() => {
     const frame = canvasFrameRef.current;
     if (!frame || initialViewport) return;
-    const setCentered = () => setInitialViewport(centerViewportForDocument(value, { width: frame.clientWidth, height: frame.clientHeight }));
+    const setCentered = () =>
+      setInitialViewport(centerViewportForDocument(value, { width: frame.clientWidth, height: frame.clientHeight }));
     setCentered();
   }, [initialViewport, value]);
 
@@ -94,7 +92,7 @@ export function NoteCanvasEditor({
                 className="w-full bg-transparent text-base font-semibold outline-none sm:text-lg"
                 value={titleValue}
                 onChange={(event) => onTitleChange(event.target.value)}
-                placeholder={isMindMap ? "Untitled mind map" : "Untitled canvas"}
+                placeholder={isMindMap ? 'Untitled mind map' : 'Untitled canvas'}
                 spellCheck={true}
               />
               <div className="notes-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
@@ -112,7 +110,10 @@ export function NoteCanvasEditor({
         </div>
         {staleNotice ? <div className="mt-2">{staleNotice}</div> : null}
       </div>
-      <div ref={canvasFrameRef} className="notes-minu-canvas relative min-h-0 flex-1 overflow-hidden bg-[var(--notes-panel)]">
+      <div
+        ref={canvasFrameRef}
+        className="notes-minu-canvas relative min-h-0 flex-1 overflow-hidden bg-[var(--notes-panel)]"
+      >
         <div className="absolute left-4 top-4 z-10">
           <CanvasToolbar
             tool={tool}
@@ -128,22 +129,24 @@ export function NoteCanvasEditor({
             onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
           />
         </div>
-        {initialViewport ? <MinuCanvas
-          value={value}
-          onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
-          canvasTheme="system"
-          shapeTheme="outline"
-          tool={tool}
-          onToolChange={setTool}
-          selectedNodeIds={selection.nodeIds}
-          selectedEdgeIds={selection.edgeIds}
-          onSelectionChange={setSelection}
-          initialViewport={initialViewport}
-          documentProfile={canvasProfile}
-          grid
-          snapToGrid
-          minHeight="100%"
-        /> : null}
+        {initialViewport ? (
+          <MinuCanvas
+            value={value}
+            onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
+            canvasTheme="system"
+            shapeTheme="outline"
+            tool={tool}
+            onToolChange={setTool}
+            selectedNodeIds={selection.nodeIds}
+            selectedEdgeIds={selection.edgeIds}
+            onSelectionChange={setSelection}
+            initialViewport={initialViewport}
+            documentProfile={canvasProfile}
+            grid
+            snapToGrid
+            minHeight="100%"
+          />
+        ) : null}
       </div>
     </section>
   );
