@@ -21,6 +21,11 @@
     "email:test": "ENVIRONMENT=local tsx scripts/send-test-email.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
     "ci:local": "pnpm typecheck && pnpm test && pnpm build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -68,6 +73,7 @@
     "tailwind-merge": "latest"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
     "@mdx-js/rollup": "^3.1.1",
     "@tailwindcss/vite": "latest",
     "@types/aws-lambda": "8.10.161",
