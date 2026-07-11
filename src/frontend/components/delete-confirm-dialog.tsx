@@ -1,23 +1,92 @@
-import { createPortal } from "react-dom";
-import { useState, type ReactNode } from "react";
-import { Button } from "./ui/button";
+import { type ReactNode, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Button } from './ui/button';
 
-export function DeleteConfirmDialog({ label, warning, onConfirm, trigger, onOpenChange }: { label: string; warning: string; onConfirm: () => void; trigger?: ReactNode; onOpenChange?: (open: boolean) => void }) {
+export function DeleteConfirmDialog({
+  label,
+  warning,
+  onConfirm,
+  trigger,
+  onOpenChange,
+}: {
+  label: string;
+  warning: string;
+  onConfirm: () => void;
+  trigger?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  return <>
-    {trigger ? <span role="button" tabIndex={0} onClick={() => { setOpen(true); onOpenChange?.(true); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen(true); onOpenChange?.(true); } }}>{trigger}</span> : <Button variant="destructive" onClick={() => { setOpen(true); onOpenChange?.(true); }}>Delete</Button>}
-    {open && createPortal(<div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
-      <div className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
-        <h2 className="text-lg font-semibold">Delete {label}</h2>
-        <p className="notes-muted mt-2 text-sm">{warning}</p>
-        <p className="mt-4 text-sm">Type <strong>delete</strong> to confirm.</p>
-        <input className="notes-input mt-2 w-full rounded-md px-3 py-2" value={value} onChange={(e) => setValue(e.target.value)} />
-        <div className="mt-4 flex justify-end gap-2">
-          <Button onClick={() => { setOpen(false); onOpenChange?.(false); }}>Cancel</Button>
-          <Button disabled={value !== "delete"} variant="destructive" onClick={() => { onConfirm(); setOpen(false); onOpenChange?.(false); }}>Delete</Button>
-        </div>
-      </div>
-    </div>, document.body)}
-  </>;
+  const [value, setValue] = useState('');
+  return (
+    <>
+      {trigger ? (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            setOpen(true);
+            onOpenChange?.(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setOpen(true);
+              onOpenChange?.(true);
+            }
+          }}
+        >
+          {trigger}
+        </span>
+      ) : (
+        <Button
+          variant="destructive"
+          onClick={() => {
+            setOpen(true);
+            onOpenChange?.(true);
+          }}
+        >
+          Delete
+        </Button>
+      )}
+      {open &&
+        createPortal(
+          <div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
+            <div className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
+              <h2 className="text-lg font-semibold">Delete {label}</h2>
+              <p className="notes-muted mt-2 text-sm">{warning}</p>
+              <p className="mt-4 text-sm">
+                Type <strong>delete</strong> to confirm.
+              </p>
+              <input
+                className="notes-input mt-2 w-full rounded-md px-3 py-2"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenChange?.(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={value !== 'delete'}
+                  variant="destructive"
+                  onClick={() => {
+                    onConfirm();
+                    setOpen(false);
+                    onOpenChange?.(false);
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
 }

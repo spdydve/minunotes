@@ -1,12 +1,27 @@
-import { MarkdownEditor, type MarkdownEditorHandle } from "@dpklabs/minueditor";
-import { Heading1, Heading2, Heading3, Image, List, ListChecks, ListOrdered, Plus, Quote, Redo2, Table2, Type, Undo2, X } from "lucide-react";
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { editorCodeHighlighter } from "../lib/code-highlighter";
-import { editorCodeLanguages } from "../lib/editor-languages";
+import { MarkdownEditor, type MarkdownEditorHandle } from '@dpklabs/minueditor';
+import {
+  Heading1,
+  Heading2,
+  Heading3,
+  Image,
+  List,
+  ListChecks,
+  ListOrdered,
+  Plus,
+  Quote,
+  Redo2,
+  Table2,
+  Type,
+  Undo2,
+  X,
+} from 'lucide-react';
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
+import { editorCodeHighlighter } from '../lib/code-highlighter';
+import { editorCodeLanguages } from '../lib/editor-languages';
 
-type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>["onViewReady"]>>[0];
+type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>['onViewReady']>>[0];
 
-type WikiLinksProp = ComponentProps<typeof MarkdownEditor>["wikiLinks"];
+type WikiLinksProp = ComponentProps<typeof MarkdownEditor>['wikiLinks'];
 
 export function NoteEditor({
   title,
@@ -24,7 +39,7 @@ export function NoteEditor({
 }: {
   title: string;
   content: string;
-  saveState?: "saved" | "saving" | "unsaved" | "error";
+  saveState?: 'saved' | 'saving' | 'unsaved' | 'error';
   onTitleChange: (value: string) => void;
   onContentChange: (value: string) => void;
   onImageUpload?: (file: File) => Promise<string> | string;
@@ -39,16 +54,16 @@ export function NoteEditor({
   const [editorReady, setEditorReady] = useState(false);
   const [blockMenuOpen, setBlockMenuOpen] = useState(false);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
-  const [imageTab, setImageTab] = useState<"upload" | "link">("upload");
-  const [imageUrl, setImageUrl] = useState("");
-  const [imageAlt, setImageAlt] = useState("");
+  const [imageTab, setImageTab] = useState<'upload' | 'link'>('upload');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
   const [imagePickerError, setImagePickerError] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const editorRef = useRef<MarkdownEditorHandle | null>(null);
   const editorViewRef = useRef<EditorViewLike | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorKeydownCleanupRef = useRef<(() => void) | null>(null);
-  const titleValue = title === "Untitled note" || title === "Untitled template" ? "" : title;
+  const titleValue = title === 'Untitled note' || title === 'Untitled template' ? '' : title;
 
   useEffect(() => () => editorKeydownCleanupRef.current?.(), []);
 
@@ -62,22 +77,22 @@ export function NoteEditor({
     };
 
     updateKeyboardOffset();
-    viewport.addEventListener("resize", updateKeyboardOffset);
-    viewport.addEventListener("scroll", updateKeyboardOffset);
+    viewport.addEventListener('resize', updateKeyboardOffset);
+    viewport.addEventListener('scroll', updateKeyboardOffset);
     return () => {
-      viewport.removeEventListener("resize", updateKeyboardOffset);
-      viewport.removeEventListener("scroll", updateKeyboardOffset);
+      viewport.removeEventListener('resize', updateKeyboardOffset);
+      viewport.removeEventListener('scroll', updateKeyboardOffset);
     };
   }, []);
 
   const saveLabel =
-    saveState === "saving"
-      ? "Saving..."
-      : saveState === "unsaved"
-        ? "Unsaved changes"
-        : saveState === "error"
-          ? "Save failed"
-          : "Saved";
+    saveState === 'saving'
+      ? 'Saving...'
+      : saveState === 'unsaved'
+        ? 'Unsaved changes'
+        : saveState === 'error'
+          ? 'Save failed'
+          : 'Saved';
 
   const insertMarkdown = (markdown: string) => {
     editorRef.current?.insertMarkdown(markdown);
@@ -85,15 +100,15 @@ export function NoteEditor({
   };
 
   const blockItems = [
-    { label: "Text", icon: Type, markdown: "" },
-    { label: "Heading 1", icon: Heading1, markdown: "# " },
-    { label: "Heading 2", icon: Heading2, markdown: "## " },
-    { label: "Heading 3", icon: Heading3, markdown: "### " },
-    { label: "Bulleted list", icon: List, markdown: "- " },
-    { label: "Numbered list", icon: ListOrdered, markdown: "1. " },
-    { label: "To-do list", icon: ListChecks, markdown: "- [ ] " },
-    { label: "Quote", icon: Quote, markdown: "> " },
-    { label: "Table", icon: Table2, markdown: "| Column 1 | Column 2 |\n| --- | --- |\n|  |  |" },
+    { label: 'Text', icon: Type, markdown: '' },
+    { label: 'Heading 1', icon: Heading1, markdown: '# ' },
+    { label: 'Heading 2', icon: Heading2, markdown: '## ' },
+    { label: 'Heading 3', icon: Heading3, markdown: '### ' },
+    { label: 'Bulleted list', icon: List, markdown: '- ' },
+    { label: 'Numbered list', icon: ListOrdered, markdown: '1. ' },
+    { label: 'To-do list', icon: ListChecks, markdown: '- [ ] ' },
+    { label: 'Quote', icon: Quote, markdown: '> ' },
+    { label: 'Table', icon: Table2, markdown: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |' },
   ];
 
   const openImagePicker = () => {
@@ -104,9 +119,9 @@ export function NoteEditor({
   const closeImagePicker = () => {
     setImagePickerOpen(false);
     setImagePickerError(null);
-    setImageUrl("");
-    setImageAlt("");
-    if (imageInputRef.current) imageInputRef.current.value = "";
+    setImageUrl('');
+    setImageAlt('');
+    if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   const uploadImageFile = async (file: File | undefined) => {
@@ -118,7 +133,7 @@ export function NoteEditor({
       editorRef.current?.insertImage({ src, alt: imageAlt.trim() || file.name });
       closeImagePicker();
     } catch (error) {
-      setImagePickerError(error instanceof Error ? error.message : "Image upload failed");
+      setImagePickerError(error instanceof Error ? error.message : 'Image upload failed');
     } finally {
       setUploadingImage(false);
     }
@@ -135,12 +150,8 @@ export function NoteEditor({
     <section className="mx-auto w-full max-w-6xl">
       <div className="border-b border-[var(--notes-border)] bg-[var(--notes-bg)] pb-4 md:sticky md:-top-6 md:z-20 md:-mt-6 md:pt-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="notes-muted min-w-0 text-xs">
-            {uploadingImage ? "Uploading image..." : saveLabel}
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            {actions}
-          </div>
+          <p className="notes-muted min-w-0 text-xs">{uploadingImage ? 'Uploading image...' : saveLabel}</p>
+          <div className="flex shrink-0 items-center gap-2">{actions}</div>
         </div>
         {staleNotice}
         <input
@@ -153,9 +164,7 @@ export function NoteEditor({
           autoComplete="on"
           autoCapitalize="sentences"
         />
-        {updatedMeta ? (
-          <div className="notes-muted mt-2 text-xs">{updatedMeta}</div>
-        ) : null}
+        {updatedMeta ? <div className="notes-muted mt-2 text-xs">{updatedMeta}</div> : null}
         {headerExtra}
       </div>
       <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
@@ -173,20 +182,24 @@ export function NoteEditor({
           autoCapitalize="sentences"
           onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
           wikiLinks={wikiLinks}
-          onImageUpload={onImageUpload ? async (file) => {
-            setUploadingImage(true);
-            try {
-              return await onImageUpload(file);
-            } finally {
-              setUploadingImage(false);
-            }
-          } : undefined}
+          onImageUpload={
+            onImageUpload
+              ? async (file) => {
+                  setUploadingImage(true);
+                  try {
+                    return await onImageUpload(file);
+                  } finally {
+                    setUploadingImage(false);
+                  }
+                }
+              : undefined
+          }
           onViewReady={(view) => {
             setEditorReady(true);
             editorViewRef.current = view;
             editorKeydownCleanupRef.current?.();
             const handlePartialTaskEnter = (event: KeyboardEvent) => {
-              if (event.key !== "Enter" || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+              if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 
               const selection = view.state.selection.main;
               if (!selection.empty) return;
@@ -200,10 +213,10 @@ export function NoteEditor({
               event.preventDefault();
               event.stopPropagation();
 
-              const text = taskMatch[3] ?? "";
+              const text = taskMatch[3] ?? '';
               if (text.length === 0) {
                 view.dispatch({
-                  changes: { from: line.from, to: line.to, insert: "" },
+                  changes: { from: line.from, to: line.to, insert: '' },
                   selection: { anchor: line.from },
                   scrollIntoView: true,
                 });
@@ -222,31 +235,33 @@ export function NoteEditor({
               if (ranges.length === 0) return;
 
               let expanded = false;
-              const text = ranges.map((range) => {
-                let from = range.from;
-                const to = range.to;
-                const fromLine = view.state.doc.lineAt(from);
-                const toLine = view.state.doc.lineAt(to);
-                const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
+              const text = ranges
+                .map((range) => {
+                  let from = range.from;
+                  const to = range.to;
+                  const fromLine = view.state.doc.lineAt(from);
+                  const toLine = view.state.doc.lineAt(to);
+                  const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
 
-                if (taskPrefix && fromLine.number !== toLine.number && from > fromLine.from && from <= fromLine.to) {
-                  from = fromLine.from;
-                  expanded = true;
-                }
+                  if (taskPrefix && fromLine.number !== toLine.number && from > fromLine.from && from <= fromLine.to) {
+                    from = fromLine.from;
+                    expanded = true;
+                  }
 
-                return view.state.doc.sliceString(from, to);
-              }).join("\n");
+                  return view.state.doc.sliceString(from, to);
+                })
+                .join('\n');
 
               if (!expanded) return;
               event.preventDefault();
               event.stopPropagation();
-              event.clipboardData?.setData("text/plain", text);
+              event.clipboardData?.setData('text/plain', text);
             };
-            view.contentDOM.addEventListener("keydown", handlePartialTaskEnter, { capture: true });
-            view.contentDOM.addEventListener("copy", handleTaskCopy, { capture: true });
+            view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
+            view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
             editorKeydownCleanupRef.current = () => {
-              view.contentDOM.removeEventListener("keydown", handlePartialTaskEnter, { capture: true });
-              view.contentDOM.removeEventListener("copy", handleTaskCopy, { capture: true });
+              view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
+              view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
               if (editorViewRef.current === view) editorViewRef.current = null;
             };
             window.requestAnimationFrame(() => {
@@ -266,46 +281,115 @@ export function NoteEditor({
           <div className="max-h-[min(82vh,42rem)] w-full max-w-lg overflow-hidden rounded-t-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-[var(--notes-border)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3">
               <h2 className="text-sm font-semibold">Add an image</h2>
-              <button type="button" className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]" onClick={closeImagePicker} aria-label="Close image picker">
+              <button
+                type="button"
+                className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                onClick={closeImagePicker}
+                aria-label="Close image picker"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="flex gap-1 border-b border-[var(--notes-border)] px-4">
-              <button type="button" className={`border-b-2 px-3 py-2 text-sm font-medium ${imageTab === "upload" ? "border-[var(--notes-blue)] text-[var(--notes-text)]" : "border-transparent text-[var(--notes-muted)] hover:text-[var(--notes-text)]"}`} onClick={() => setImageTab("upload")}>Upload</button>
-              <button type="button" className={`border-b-2 px-3 py-2 text-sm font-medium ${imageTab === "link" ? "border-[var(--notes-blue)] text-[var(--notes-text)]" : "border-transparent text-[var(--notes-muted)] hover:text-[var(--notes-text)]"}`} onClick={() => setImageTab("link")}>Link</button>
+              <button
+                type="button"
+                className={`border-b-2 px-3 py-2 text-sm font-medium ${imageTab === 'upload' ? 'border-[var(--notes-blue)] text-[var(--notes-text)]' : 'border-transparent text-[var(--notes-muted)] hover:text-[var(--notes-text)]'}`}
+                onClick={() => setImageTab('upload')}
+              >
+                Upload
+              </button>
+              <button
+                type="button"
+                className={`border-b-2 px-3 py-2 text-sm font-medium ${imageTab === 'link' ? 'border-[var(--notes-blue)] text-[var(--notes-text)]' : 'border-transparent text-[var(--notes-muted)] hover:text-[var(--notes-text)]'}`}
+                onClick={() => setImageTab('link')}
+              >
+                Link
+              </button>
             </div>
             <div className="max-h-[calc(min(82vh,42rem)-6rem)] space-y-3 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-              <input className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm" placeholder="Alt text optional" value={imageAlt} onChange={(event) => setImageAlt(event.target.value)} />
-              {imageTab === "upload" ? (
+              <input
+                className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm"
+                placeholder="Alt text optional"
+                value={imageAlt}
+                onChange={(event) => setImageAlt(event.target.value)}
+              />
+              {imageTab === 'upload' ? (
                 <div>
-                  <input ref={imageInputRef} className="hidden" type="file" accept="image/*" onChange={(event) => void uploadImageFile(event.target.files?.[0])} />
-                  <button type="button" className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-4 text-base font-semibold hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm" disabled={uploadingImage || !onImageUpload} onClick={() => imageInputRef.current?.click()}>
-                    {uploadingImage ? "Uploading..." : "Upload file"}
+                  <input
+                    ref={imageInputRef}
+                    className="hidden"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => void uploadImageFile(event.target.files?.[0])}
+                  />
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-4 text-base font-semibold hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm"
+                    disabled={uploadingImage || !onImageUpload}
+                    onClick={() => imageInputRef.current?.click()}
+                  >
+                    {uploadingImage ? 'Uploading...' : 'Upload file'}
                   </button>
                   <p className="mt-2 text-center text-xs text-[var(--notes-muted)]">Choose an image from your device</p>
                 </div>
               ) : (
-                <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); insertLinkedImage(); }}>
-                  <input className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm" type="url" inputMode="url" placeholder="Paste the image link…" value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} />
-                  <button type="submit" className="w-full rounded-lg border border-[var(--notes-blue)] bg-[var(--notes-blue)] px-3 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm" disabled={!imageUrl.trim()}>Embed image</button>
+                <form
+                  className="space-y-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    insertLinkedImage();
+                  }}
+                >
+                  <input
+                    className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm"
+                    type="url"
+                    inputMode="url"
+                    placeholder="Paste the image link…"
+                    value={imageUrl}
+                    onChange={(event) => setImageUrl(event.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="w-full rounded-lg border border-[var(--notes-blue)] bg-[var(--notes-blue)] px-3 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:py-3 sm:text-sm"
+                    disabled={!imageUrl.trim()}
+                  >
+                    Embed image
+                  </button>
                   <p className="text-center text-xs text-[var(--notes-muted)]">Works with any image from the web</p>
                 </form>
               )}
-              {imagePickerError ? <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">{imagePickerError}</p> : null}
+              {imagePickerError ? (
+                <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+                  {imagePickerError}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
       ) : null}
-      <div className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4 sm:px-6 md:left-72 md:right-0" style={keyboardOffset ? { bottom: keyboardOffset + 12 } : undefined}>
+      <div
+        className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4 sm:px-6 md:left-72 md:right-0"
+        style={keyboardOffset ? { bottom: keyboardOffset + 12 } : undefined}
+      >
         <div className="mx-auto flex max-w-3xl flex-col items-center">
           {blockMenuOpen ? (
             <div className="mb-3 rounded-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
-              <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">Basic blocks</p>
+              <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+                Basic blocks
+              </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {blockItems.map((item) => {
                   const Icon = item.icon;
                   return (
-                    <button key={item.label} type="button" className="flex items-center gap-3 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-left text-sm font-medium hover:bg-[var(--notes-hover)]" onPointerDown={(event) => { event.preventDefault(); insertMarkdown(item.markdown); }}>
+                    <button
+                      key={item.label}
+                      type="button"
+                      className="flex items-center gap-3 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-left text-sm font-medium hover:bg-[var(--notes-hover)]"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        insertMarkdown(item.markdown);
+                      }}
+                    >
                       <Icon className="h-5 w-5 text-[var(--notes-muted)]" />
                       <span>{item.label}</span>
                     </button>
@@ -315,17 +399,47 @@ export function NoteEditor({
             </div>
           ) : null}
           <div className="inline-flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 px-2 py-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
-            <button type="button" className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]" aria-label={blockMenuOpen ? "Close block menu" : "Open block menu"} onClick={() => setBlockMenuOpen((open) => !open)}>
+            <button
+              type="button"
+              className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+              aria-label={blockMenuOpen ? 'Close block menu' : 'Open block menu'}
+              onClick={() => setBlockMenuOpen((open) => !open)}
+            >
               {blockMenuOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
             </button>
-            <button type="button" className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]" aria-label="Undo" onPointerDown={(event) => { event.preventDefault(); editorRef.current?.undo(); }}>
+            <button
+              type="button"
+              className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+              aria-label="Undo"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                editorRef.current?.undo();
+              }}
+            >
               <Undo2 className="h-5 w-5" />
             </button>
-            <button type="button" className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]" aria-label="Redo" onPointerDown={(event) => { event.preventDefault(); editorRef.current?.redo(); }}>
+            <button
+              type="button"
+              className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+              aria-label="Redo"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                editorRef.current?.redo();
+              }}
+            >
               <Redo2 className="h-5 w-5" />
             </button>
             {onImageUpload ? (
-              <button type="button" className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] disabled:opacity-50" aria-label="Insert image" disabled={uploadingImage || !editorReady} onPointerDown={(event) => { event.preventDefault(); openImagePicker(); }}>
+              <button
+                type="button"
+                className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] disabled:opacity-50"
+                aria-label="Insert image"
+                disabled={uploadingImage || !editorReady}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  openImagePicker();
+                }}
+              >
                 <Image className="h-5 w-5" />
               </button>
             ) : null}

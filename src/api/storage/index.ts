@@ -1,7 +1,7 @@
-import { getApiRuntimeConfig } from "../lib/env";
-import { FilesystemObjectStorage } from "./filesystem-storage";
-import type { ObjectStorage } from "./object-storage";
-import { S3ObjectStorage } from "./s3-storage";
+import { getApiRuntimeConfig } from '../lib/env';
+import { FilesystemObjectStorage } from './filesystem-storage';
+import type { ObjectStorage } from './object-storage';
+import { S3ObjectStorage } from './s3-storage';
 
 let storage: ObjectStorage | null = null;
 
@@ -9,13 +9,13 @@ export function getObjectStorage() {
   if (storage) return storage;
 
   const { attachmentStorage } = getApiRuntimeConfig();
-  if (attachmentStorage.driver === "filesystem") {
+  if (attachmentStorage.driver === 'filesystem') {
     storage = new FilesystemObjectStorage(attachmentStorage.filesystemPath);
     return storage;
   }
 
-  if (attachmentStorage.driver === "s3" || attachmentStorage.driver === "s3-compatible") {
-    if (!attachmentStorage.bucket) throw new Error("ATTACHMENT_BUCKET is required for S3 attachment storage");
+  if (attachmentStorage.driver === 's3' || attachmentStorage.driver === 's3-compatible') {
+    if (!attachmentStorage.bucket) throw new Error('ATTACHMENT_BUCKET is required for S3 attachment storage');
     storage = new S3ObjectStorage({
       bucket: attachmentStorage.bucket,
       region: attachmentStorage.region,

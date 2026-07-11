@@ -1,24 +1,24 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { FolderPlus } from "lucide-react";
-import type { Folder } from "../lib/api";
-import { api } from "../lib/api";
-import { CreateFolderDialog } from "./create-folder-dialog";
-import { DeleteConfirmDialog } from "./delete-confirm-dialog";
-import { MoveFolderDialog } from "./move-folder-dialog";
-import { RenameFolderDialog } from "./rename-folder-dialog";
-import { ActionMenuButton, ActionMenuIconButton } from "./ui/action-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
+import { FolderPlus } from 'lucide-react';
+import { useState } from 'react';
+import type { Folder } from '../lib/api';
+import { api } from '../lib/api';
+import { CreateFolderDialog } from './create-folder-dialog';
+import { DeleteConfirmDialog } from './delete-confirm-dialog';
+import { MoveFolderDialog } from './move-folder-dialog';
+import { RenameFolderDialog } from './rename-folder-dialog';
+import { ActionMenuButton, ActionMenuIconButton } from './ui/action-menu';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 export function FolderActionsPopover({
   folder,
   depth = 0,
-  icon = "more",
+  icon = 'more',
 }: {
   folder: Folder;
   depth?: number;
-  icon?: "more" | "settings";
+  icon?: 'more' | 'settings';
 }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -29,8 +29,8 @@ export function FolderActionsPopover({
   const remove = useMutation({
     mutationFn: () => api.deleteFolder(folder.id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["folders"] });
-      nav({ to: "/" });
+      qc.invalidateQueries({ queryKey: ['folders'] });
+      nav({ to: '/' });
     },
   });
 
@@ -38,10 +38,7 @@ export function FolderActionsPopover({
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <ActionMenuIconButton
-            icon={icon}
-            aria-label={`Actions for ${folder.title}`}
-          />
+          <ActionMenuIconButton icon={icon} aria-label={`Actions for ${folder.title}`} />
         </PopoverTrigger>
         <PopoverContent align="end" className="w-48 p-1">
           {depth < 4 && !folder.isPrivate ? (
@@ -61,7 +58,7 @@ export function FolderActionsPopover({
             onClick={() => {
               setOpen(false);
               nav({
-                to: "/folders/$folderId/settings",
+                to: '/folders/$folderId/settings',
                 params: { folderId: folder.id },
               });
             }}
@@ -88,7 +85,7 @@ export function FolderActionsPopover({
             onClick={() => {
               setOpen(false);
               nav({
-                to: "/folders/$folderId/settings",
+                to: '/folders/$folderId/settings',
                 params: { folderId: folder.id },
               });
             }}
@@ -107,21 +104,9 @@ export function FolderActionsPopover({
           />
         </PopoverContent>
       </Popover>
-      <CreateFolderDialog
-        parentFolder={folder}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-      />
-      <MoveFolderDialog
-        folder={folder}
-        open={moveOpen}
-        onOpenChange={setMoveOpen}
-      />
-      <RenameFolderDialog
-        folder={folder}
-        open={renameOpen}
-        onOpenChange={setRenameOpen}
-      />
+      <CreateFolderDialog parentFolder={folder} open={createOpen} onOpenChange={setCreateOpen} />
+      <MoveFolderDialog folder={folder} open={moveOpen} onOpenChange={setMoveOpen} />
+      <RenameFolderDialog folder={folder} open={renameOpen} onOpenChange={setRenameOpen} />
     </>
   );
 }

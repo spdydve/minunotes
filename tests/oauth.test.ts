@@ -1,66 +1,83 @@
-import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { Hono } from "hono";
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Hono } from 'hono';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
   for (let index = 0; index <= 22; index += 1) {
-    const [file] = await Array.fromAsync((await import("node:fs/promises")).glob(`drizzle/${String(index).padStart(4, "0")}_*.sql`));
+    const [file] = await Array.fromAsync(
+      (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
+    );
     if (!file) throw new Error(`Missing migration ${index}`);
-    await libsql.executeMultiple(await readFile(file, "utf8"));
+    await libsql.executeMultiple(await readFile(file, 'utf8'));
   }
 }
 
 function pkceChallenge(verifier: string) {
-  return createHash("sha256").update(verifier).digest("base64url");
+  return createHash('sha256').update(verifier).digest('base64url');
 }
 
 async function setupApp() {
   vi.resetModules();
-  const dir = await mkdtemp(path.join(tmpdir(), "notes-oauth-"));
+  const dir = await mkdtemp(path.join(tmpdir(), 'notes-oauth-'));
   tempDirs.push(dir);
-  vi.stubEnv("TURSO_DB_URL", `file:${path.join(dir, "test.db")}`);
+  vi.stubEnv('TURSO_DB_URL', `file:${path.join(dir, 'test.db')}`);
 
-  const [{ db, libsql }, schema, { oauthRoutes }, { harnessRoutes }, { harnessApiKeyAuthenticationMiddleware }, { hashOAuthToken }] = await Promise.all([
-    import("../src/api/db/client"),
-    import("../src/api/db/schema"),
-    import("../src/api/routes/oauth"),
-    import("../src/api/routes/harness"),
-    import("../src/api/middleware/authentication"),
-    import("../src/api/lib/oauth"),
+  const [
+    { db, libsql },
+    schema,
+    { oauthRoutes },
+    { harnessRoutes },
+    { harnessApiKeyAuthenticationMiddleware },
+    { hashOAuthToken },
+  ] = await Promise.all([
+    import('../src/api/db/client'),
+    import('../src/api/db/schema'),
+    import('../src/api/routes/oauth'),
+    import('../src/api/routes/harness'),
+    import('../src/api/middleware/authentication'),
+    import('../src/api/lib/oauth'),
   ]);
 
   await runMigrations(libsql);
 
-  const user = { id: "user_a", name: "User A", email: "a@example.com", emailVerified: true, image: null, createdAt: new Date(), updatedAt: new Date() };
+  const user = {
+    id: 'user_a',
+    name: 'User A',
+    email: 'a@example.com',
+    emailVerified: true,
+    image: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   await db.insert(schema.user).values(user);
   await db.insert(schema.oauthClients).values({
-    id: "client_a",
-    name: "Client A",
-    description: "Test client",
-    redirectUris: JSON.stringify(["https://client.example/callback"]),
-    clientType: "public",
+    id: 'client_a',
+    name: 'Client A',
+    description: 'Test client',
+    redirectUris: JSON.stringify(['https://client.example/callback']),
+    clientType: 'public',
     createdAt: new Date(),
     updatedAt: new Date(),
   });
 
   const app = new Hono();
-  app.use("*", async (c, next) => {
-    c.set("user", user);
-    c.set("session", { id: "session_user_a", userId: user.id });
-    c.set("apiKey", null);
+  app.use('*', async (c, next) => {
+    c.set('user', user);
+    c.set('session', { id: 'session_user_a', userId: user.id });
+    c.set('apiKey', null);
     await next();
   });
-  app.route("/api/oauth", oauthRoutes);
-  app.route("/oauth", oauthRoutes);
+  app.route('/api/oauth', oauthRoutes);
+  app.route('/oauth', oauthRoutes);
 
   const authApp = new Hono();
-  authApp.use("/api/harness/*", harnessApiKeyAuthenticationMiddleware);
-  authApp.route("/api/harness", harnessRoutes);
+  authApp.use('/api/harness/*', harnessApiKeyAuthenticationMiddleware);
+  authApp.route('/api/harness', harnessRoutes);
 
   return { app, authApp, db, schema, user, hashOAuthToken };
 }
@@ -70,109 +87,144 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe("oauth foundations", () => {
-  it("creates and revokes user-owned OAuth apps", async () => {
+describe('oauth foundations', () => {
+  it('creates and revokes user-owned OAuth apps', async () => {
     const { app } = await setupApp();
 
-    const create = await app.request("/api/oauth/clients", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Test OAuth App", description: "Created in test", redirectUris: ["https://client.example/callback"] }),
+    const create = await app.request('/api/oauth/clients', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Test OAuth App',
+        description: 'Created in test',
+        redirectUris: ['https://client.example/callback'],
+      }),
     });
     expect(create.status).toBe(201);
-    const createBody = await create.json() as { client: { id: string; name: string; userId: string; redirectUris: string } };
-    expect(createBody.client.name).toBe("Test OAuth App");
-    expect(JSON.parse(createBody.client.redirectUris)).toEqual(["https://client.example/callback"]);
+    const createBody = (await create.json()) as {
+      client: { id: string; name: string; userId: string; redirectUris: string };
+    };
+    expect(createBody.client.name).toBe('Test OAuth App');
+    expect(JSON.parse(createBody.client.redirectUris)).toEqual(['https://client.example/callback']);
 
-    const list = await app.request("/api/oauth/clients");
+    const list = await app.request('/api/oauth/clients');
     expect(list.status).toBe(200);
-    await expect(list.json()).resolves.toMatchObject({ clients: [{ id: createBody.client.id, name: "Test OAuth App" }] });
+    await expect(list.json()).resolves.toMatchObject({
+      clients: [{ id: createBody.client.id, name: 'Test OAuth App' }],
+    });
 
-    const revoke = await app.request(`/api/oauth/clients/${createBody.client.id}`, { method: "DELETE" });
+    const revoke = await app.request(`/api/oauth/clients/${createBody.client.id}`, { method: 'DELETE' });
     expect(revoke.status).toBe(200);
   });
 
-  it("dynamically registers public OAuth clients", async () => {
+  it('dynamically registers public OAuth clients', async () => {
     const { app } = await setupApp();
 
-    const response = await app.request("/api/oauth/register", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+    const response = await app.request('/api/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        client_name: "ChatGPT Connector",
-        redirect_uris: ["https://chatgpt.com/connector/oauth/abc123"],
-        token_endpoint_auth_method: "none",
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
+        client_name: 'ChatGPT Connector',
+        redirect_uris: ['https://chatgpt.com/connector/oauth/abc123'],
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
       }),
     });
 
     expect(response.status).toBe(201);
-    const body = await response.json() as { client_id: string; redirect_uris: string[]; token_endpoint_auth_method: string; grant_types: string[]; response_types: string[] };
+    const body = (await response.json()) as {
+      client_id: string;
+      redirect_uris: string[];
+      token_endpoint_auth_method: string;
+      grant_types: string[];
+      response_types: string[];
+    };
     expect(body.client_id).toMatch(/^oauth_client_/);
-    expect(body.redirect_uris).toEqual(["https://chatgpt.com/connector/oauth/abc123"]);
-    expect(body.token_endpoint_auth_method).toBe("none");
-    expect(body.grant_types).toContain("authorization_code");
-    expect(body.response_types).toContain("code");
+    expect(body.redirect_uris).toEqual(['https://chatgpt.com/connector/oauth/abc123']);
+    expect(body.token_endpoint_auth_method).toBe('none');
+    expect(body.grant_types).toContain('authorization_code');
+    expect(body.response_types).toContain('code');
   });
 
-  it("rejects unsupported dynamic client redirect hosts", async () => {
+  it('rejects unsupported dynamic client redirect hosts', async () => {
     const { app } = await setupApp();
 
-    const response = await app.request("/api/oauth/register", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ client_name: "Unknown", redirect_uris: ["https://evil.example/callback"] }),
+    const response = await app.request('/api/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ client_name: 'Unknown', redirect_uris: ['https://evil.example/callback'] }),
     });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: "invalid_redirect_uri" });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_redirect_uri' });
   });
 
-  it("rejects bearer tokens for direct harness access", async () => {
+  it('rejects bearer tokens for direct harness access', async () => {
     const { authApp, db, schema, user, hashOAuthToken } = await setupApp();
-    const token = "mnoac_test_token";
-    const publicFolder = { id: "folder_public", userId: user.id, parentFolderId: null, title: "Public", isPrivate: false, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
-    const privateFolder = { id: "folder_private", userId: user.id, parentFolderId: null, title: "Private", isPrivate: true, isAgentReadOnly: false, createdAt: new Date(), updatedAt: new Date() };
-    await db.insert(schema.folders).values([publicFolder, privateFolder]);
-    const [authorization] = await db.insert(schema.oauthAuthorizations).values({
-      id: "oauth_auth_all",
+    const token = 'mnoac_test_token';
+    const publicFolder = {
+      id: 'folder_public',
       userId: user.id,
-      clientId: "client_a",
-      scope: "notes",
-      accessMode: "all",
-      canRead: true,
-      canCreate: false,
-      canEdit: false,
-      canCreateFolders: false,
+      parentFolderId: null,
+      title: 'Public',
+      isPrivate: false,
+      isAgentReadOnly: false,
       createdAt: new Date(),
       updatedAt: new Date(),
-    }).returning();
+    };
+    const privateFolder = {
+      id: 'folder_private',
+      userId: user.id,
+      parentFolderId: null,
+      title: 'Private',
+      isPrivate: true,
+      isAgentReadOnly: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.folders).values([publicFolder, privateFolder]);
+    const [authorization] = await db
+      .insert(schema.oauthAuthorizations)
+      .values({
+        id: 'oauth_auth_all',
+        userId: user.id,
+        clientId: 'client_a',
+        scope: 'notes',
+        accessMode: 'all',
+        canRead: true,
+        canCreate: false,
+        canEdit: false,
+        canCreateFolders: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
     await db.insert(schema.oauthTokens).values({
-      id: "oauth_token_all",
+      id: 'oauth_token_all',
       authorizationId: authorization.id,
       accessTokenHash: hashOAuthToken(token),
-      refreshTokenHash: hashOAuthToken("refresh"),
-      scope: "notes",
+      refreshTokenHash: hashOAuthToken('refresh'),
+      scope: 'notes',
       accessTokenExpiresAt: new Date(Date.now() + 60_000),
       refreshTokenExpiresAt: new Date(Date.now() + 60_000),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
-    const folders = await authApp.request("/api/harness/folders", { headers: { authorization: `Bearer ${token}` } });
+    const folders = await authApp.request('/api/harness/folders', { headers: { authorization: `Bearer ${token}` } });
     expect(folders.status).toBe(401);
-    await expect(folders.json()).resolves.toEqual({ error: "Unauthorized" });
+    await expect(folders.json()).resolves.toEqual({ error: 'Unauthorized' });
   });
 
-  it("lists and revokes connected apps", async () => {
+  it('lists and revokes connected apps', async () => {
     const { app, db, schema, user } = await setupApp();
     await db.insert(schema.oauthAuthorizations).values({
-      id: "oauth_auth_connected",
+      id: 'oauth_auth_connected',
       userId: user.id,
-      clientId: "client_a",
-      scope: "notes",
-      accessMode: "specific",
+      clientId: 'client_a',
+      scope: 'notes',
+      accessMode: 'specific',
       canRead: true,
       canCreate: false,
       canEdit: false,
@@ -181,92 +233,129 @@ describe("oauth foundations", () => {
       updatedAt: new Date(),
     });
 
-    const list = await app.request("/api/oauth/authorizations");
+    const list = await app.request('/api/oauth/authorizations');
     expect(list.status).toBe(200);
-    await expect(list.json()).resolves.toMatchObject({ authorizations: [{ id: "oauth_auth_connected", client: { name: "Client A" } }] });
+    await expect(list.json()).resolves.toMatchObject({
+      authorizations: [{ id: 'oauth_auth_connected', client: { name: 'Client A' } }],
+    });
 
-    const revoke = await app.request("/api/oauth/authorizations/oauth_auth_connected", { method: "DELETE" });
+    const revoke = await app.request('/api/oauth/authorizations/oauth_auth_connected', { method: 'DELETE' });
     expect(revoke.status).toBe(200);
 
-    const after = await app.request("/api/oauth/authorizations");
-    const afterBody = await after.json() as { authorizations: Array<{ id: string; revokedAt: string | null }> };
-    expect(afterBody.authorizations.find((authorization) => authorization.id === "oauth_auth_connected")?.revokedAt).toBeTruthy();
+    const after = await app.request('/api/oauth/authorizations');
+    const afterBody = (await after.json()) as { authorizations: Array<{ id: string; revokedAt: string | null }> };
+    expect(
+      afterBody.authorizations.find((authorization) => authorization.id === 'oauth_auth_connected')?.revokedAt
+    ).toBeTruthy();
   });
 
-  it("serves OAuth endpoints from root aliases for MCP clients", async () => {
+  it('serves OAuth endpoints from root aliases for MCP clients', async () => {
     const { app } = await setupApp();
-    const verifier = "b".repeat(64);
-    const authorize = await app.request(`/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent("https://client.example/callback")}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256`);
+    const verifier = 'b'.repeat(64);
+    const authorize = await app.request(
+      `/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent('https://client.example/callback')}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256`
+    );
     expect(authorize.status).toBe(302);
-    expect(new URL(authorize.headers.get("location")!).pathname).toBe("/oauth/authorize");
+    expect(new URL(authorize.headers.get('location')!).pathname).toBe('/oauth/authorize');
 
-    const token = await app.request("/oauth/token", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "authorization_code", client_id: "client_a", redirect_uri: "https://client.example/callback", code: "invalid", code_verifier: verifier }),
+    const token = await app.request('/oauth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: 'client_a',
+        redirect_uri: 'https://client.example/callback',
+        code: 'invalid',
+        code_verifier: verifier,
+      }),
     });
     expect(token.status).toBe(400);
   });
 
-  it("serves authorization server metadata", async () => {
+  it('serves authorization server metadata', async () => {
     const { app } = await setupApp();
-    const response = await app.request("/api/oauth/.well-known/oauth-authorization-server");
+    const response = await app.request('/api/oauth/.well-known/oauth-authorization-server');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      authorization_endpoint: "http://localhost/oauth/authorize",
-      token_endpoint: "http://localhost/oauth/token",
-      registration_endpoint: "http://localhost/oauth/register",
-      code_challenge_methods_supported: ["S256"],
+      authorization_endpoint: 'http://localhost/oauth/authorize',
+      token_endpoint: 'http://localhost/oauth/token',
+      registration_endpoint: 'http://localhost/oauth/register',
+      code_challenge_methods_supported: ['S256'],
     });
   });
 
-  it("exchanges an authorization code with PKCE and revokes a token", async () => {
+  it('exchanges an authorization code with PKCE and revokes a token', async () => {
     const { app } = await setupApp();
-    const verifier = "a".repeat(64);
-    const authorizePath = `/api/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent("https://client.example/callback")}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256&state=abc`;
+    const verifier = 'a'.repeat(64);
+    const authorizePath = `/api/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent('https://client.example/callback')}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256&state=abc`;
     const authorize = await app.request(authorizePath);
     expect(authorize.status).toBe(302);
-    const location = authorize.headers.get("location");
+    const location = authorize.headers.get('location');
     expect(location).toBeTruthy();
-    expect(new URL(location!).pathname).toBe("/oauth/authorize");
+    expect(new URL(location!).pathname).toBe('/oauth/authorize');
 
-    const preview = await app.request(authorizePath.replace("/authorize?", "/authorize/preview?"));
+    const preview = await app.request(authorizePath.replace('/authorize?', '/authorize/preview?'));
     expect(preview.status).toBe(200);
-    await expect(preview.json()).resolves.toMatchObject({ client: { name: "Client A" }, request: { state: "abc" } });
+    await expect(preview.json()).resolves.toMatchObject({ client: { name: 'Client A' }, request: { state: 'abc' } });
 
-    const approve = await app.request("/api/oauth/authorize/approve", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ responseType: "code", clientId: "client_a", redirectUri: "https://client.example/callback", codeChallenge: pkceChallenge(verifier), codeChallengeMethod: "S256", state: "abc", accessMode: "all", canRead: true, canCreate: false, canEdit: false, canCreateFolders: false, folderIds: [] }),
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        state: 'abc',
+        accessMode: 'all',
+        canRead: true,
+        canCreate: false,
+        canEdit: false,
+        canCreateFolders: false,
+        folderIds: [],
+      }),
     });
     expect(approve.status).toBe(200);
-    const { redirectUrl } = await approve.json() as { redirectUrl: string };
+    const { redirectUrl } = (await approve.json()) as { redirectUrl: string };
     const redirected = new URL(redirectUrl);
-    expect(redirected.searchParams.get("state")).toBe("abc");
-    const code = redirected.searchParams.get("code");
+    expect(redirected.searchParams.get('state')).toBe('abc');
+    const code = redirected.searchParams.get('code');
     expect(code).toBeTruthy();
 
-    const token = await app.request("/api/oauth/token", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "authorization_code", client_id: "client_a", redirect_uri: "https://client.example/callback", code: code!, code_verifier: verifier }),
+    const token = await app.request('/api/oauth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: 'client_a',
+        redirect_uri: 'https://client.example/callback',
+        code: code!,
+        code_verifier: verifier,
+      }),
     });
     expect(token.status).toBe(200);
-    const tokenBody = await token.json() as { access_token: string; refresh_token: string; token_type: string };
-    expect(tokenBody.token_type).toBe("Bearer");
+    const tokenBody = (await token.json()) as { access_token: string; refresh_token: string; token_type: string };
+    expect(tokenBody.token_type).toBe('Bearer');
     expect(tokenBody.access_token).toMatch(/^mnoac_/);
     expect(tokenBody.refresh_token).toMatch(/^mnort_/);
 
-    const reuse = await app.request("/api/oauth/token", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "authorization_code", client_id: "client_a", redirect_uri: "https://client.example/callback", code: code!, code_verifier: verifier }),
+    const reuse = await app.request('/api/oauth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: 'client_a',
+        redirect_uri: 'https://client.example/callback',
+        code: code!,
+        code_verifier: verifier,
+      }),
     });
     expect(reuse.status).toBe(400);
 
-    const revoke = await app.request("/api/oauth/revoke", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+    const revoke = await app.request('/api/oauth/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ token: tokenBody.access_token }),
     });
     expect(revoke.status).toBe(200);

@@ -4,26 +4,27 @@
 /* deno-fmt-ignore-file */
 /* biome-ignore-all lint: auto-generated */
 
-declare module "sst" {
+declare module 'sst' {
   export interface Resource {
-    "Api": {
-      "name": string
-      "type": "sst.aws.Function"
-    }
-    "ApiGateway": {
-      "type": "sst.aws.ApiGatewayV2"
-      "url": string
-    }
-    "Attachments": {
-      "name": string
-      "type": "sst.aws.Bucket"
-    }
-    "Web": {
-      "type": "sst.aws.StaticSite"
-      "url": string
-    }
+    Api: {
+      name: string;
+      type: 'sst.aws.Function';
+    };
+    ApiGateway: {
+      type: 'sst.aws.ApiGatewayV2';
+      url: string;
+    };
+    Attachments: {
+      name: string;
+      type: 'sst.aws.Bucket';
+    };
+    Web: {
+      type: 'sst.aws.StaticSite';
+      url: string;
+    };
   }
 }
 
-import "sst"
-export {}
+import 'sst';
+
+export {};

@@ -1,4 +1,4 @@
-import { createMiddleware } from "hono/factory";
+import { createMiddleware } from 'hono/factory';
 
 export type RateLimitOptions = {
   windowMs: number;
@@ -15,15 +15,15 @@ type Bucket = {
 const buckets = new Map<string, Bucket>();
 
 export function getClientAddress(headers: Headers) {
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const realIp = headers.get("x-real-ip")?.trim();
-  return forwarded || realIp || "anonymous";
+  const forwarded = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const realIp = headers.get('x-real-ip')?.trim();
+  return forwarded || realIp || 'anonymous';
 }
 
 export function consumeRateLimit(
   key: string,
-  { windowMs, max }: Pick<RateLimitOptions, "windowMs" | "max">,
-  now = Date.now(),
+  { windowMs, max }: Pick<RateLimitOptions, 'windowMs' | 'max'>,
+  now = Date.now()
 ) {
   const current = buckets.get(key);
   if (!current || current.resetAt <= now) {
@@ -46,7 +46,7 @@ export function resetRateLimitStore() {
   buckets.clear();
 }
 
-export function createRateLimitMiddleware({ windowMs, max, keyPrefix = "global", skip }: RateLimitOptions) {
+export function createRateLimitMiddleware({ windowMs, max, keyPrefix = 'global', skip }: RateLimitOptions) {
   return createMiddleware(async (c, next) => {
     if (skip?.(c.req.path)) {
       await next();
@@ -58,13 +58,13 @@ export function createRateLimitMiddleware({ windowMs, max, keyPrefix = "global",
     const result = consumeRateLimit(key, { windowMs, max });
     const resetInSeconds = Math.max(0, Math.ceil((result.resetAt - Date.now()) / 1000));
 
-    c.header("X-RateLimit-Limit", String(result.limit));
-    c.header("X-RateLimit-Remaining", String(result.remaining));
-    c.header("X-RateLimit-Reset", String(result.resetAt));
+    c.header('X-RateLimit-Limit', String(result.limit));
+    c.header('X-RateLimit-Remaining', String(result.remaining));
+    c.header('X-RateLimit-Reset', String(result.resetAt));
 
     if (!result.allowed) {
-      c.header("Retry-After", String(resetInSeconds));
-      return c.json({ error: "Rate limit exceeded" }, 429);
+      c.header('Retry-After', String(resetInSeconds));
+      return c.json({ error: 'Rate limit exceeded' }, 429);
     }
 
     await next();

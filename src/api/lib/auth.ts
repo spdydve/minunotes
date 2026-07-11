@@ -1,20 +1,12 @@
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { emailOTP } from "better-auth/plugins";
-import { db } from "../db/client";
-import { sendEmail } from "./email";
-import { getApiRuntimeConfig } from "./env";
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { emailOTP } from 'better-auth/plugins';
+import { db } from '../db/client';
+import { sendEmail } from './email';
+import { getApiRuntimeConfig } from './env';
 
-const {
-  frontendUrl,
-  apiUrl,
-  betterAuthUrl,
-  allowedOrigins,
-  cookieDomain,
-  cookiePrefix,
-  allowedLoginEmails,
-  ses,
-} = getApiRuntimeConfig();
+const { frontendUrl, apiUrl, betterAuthUrl, allowedOrigins, cookieDomain, cookiePrefix, allowedLoginEmails, ses } =
+  getApiRuntimeConfig();
 
 function isAllowedLoginEmail(email: string) {
   if (allowedLoginEmails.length === 0) return true;
@@ -22,14 +14,12 @@ function isAllowedLoginEmail(email: string) {
 }
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: "sqlite" }),
+  database: drizzleAdapter(db, { provider: 'sqlite' }),
   plugins: [
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
         if (!isAllowedLoginEmail(email)) {
-          console.warn(
-            `[AUTH OTP] blocked ${type} OTP for unauthorized email: ${email}`,
-          );
+          console.warn(`[AUTH OTP] blocked ${type} OTP for unauthorized email: ${email}`);
           return;
         }
 
@@ -41,7 +31,7 @@ export const auth = betterAuth({
         await sendEmail({
           to: email,
           from: ses.fromEmail,
-          subject: "Your MinuNotes login code",
+          subject: 'Your MinuNotes login code',
           html: `<p>Your MinuNotes verification code is: <strong>${otp}</strong></p><p>This code will expire soon.</p>`,
           text: `Your MinuNotes verification code is: ${otp}\n\nThis code will expire soon.`,
         });
@@ -56,7 +46,7 @@ export const auth = betterAuth({
     cookieCache: {
       enabled: true,
       maxAge: 5 * 60,
-      strategy: "compact",
+      strategy: 'compact',
     },
   },
   baseURL: betterAuthUrl,
@@ -67,15 +57,11 @@ export const auth = betterAuth({
       domain: cookieDomain,
     },
     defaultCookieAttributes: {
-      sameSite: cookieDomain ? "none" : "lax",
-      secure: Boolean(cookieDomain) || process.env.NODE_ENV === "production",
+      sameSite: cookieDomain ? 'none' : 'lax',
+      secure: Boolean(cookieDomain) || process.env.NODE_ENV === 'production',
       domain: cookieDomain,
-      path: "/",
+      path: '/',
     },
   },
-  trustedOrigins: Array.from(
-    new Set(
-      [...allowedOrigins, frontendUrl, apiUrl, betterAuthUrl].filter(Boolean),
-    ),
-  ),
+  trustedOrigins: Array.from(new Set([...allowedOrigins, frontendUrl, apiUrl, betterAuthUrl].filter(Boolean))),
 });

@@ -9,13 +9,15 @@ export interface DocumentSection {
 }
 
 function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "section";
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'section'
+  );
 }
 
 function uniqueId(base: string, counts: Map<string, number>) {
@@ -42,7 +44,7 @@ export function parseSections(markdown: string): DocumentSection[] {
   return headings.map((heading, index) => {
     const nextSameOrHigher = headings.slice(index + 1).find((candidate) => candidate.level <= heading.level);
     const to = nextSameOrHigher?.from ?? markdown.length;
-    const contentFrom = markdown[heading.lineEnd] === "\n" ? heading.lineEnd + 1 : heading.lineEnd;
+    const contentFrom = markdown[heading.lineEnd] === '\n' ? heading.lineEnd + 1 : heading.lineEnd;
 
     return {
       id: uniqueId(slugify(heading.heading), counts),

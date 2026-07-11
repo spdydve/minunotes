@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
-import { db } from "../db/client";
-import { attachments } from "../db/schema";
+import { and, eq } from 'drizzle-orm';
+import { db } from '../db/client';
+import { attachments } from '../db/schema';
 
-const APP_ATTACHMENT_URL_PATTERN = /(?:!\[[^\]]*\]|\[[^\]]*\])\(\s*(?:https?:\/\/[^\s)]+)?\/internal\/attachments\/(att_[a-zA-Z0-9_-]+)\/content(?:[?#][^\s)]*)?\s*(?:"[^"]*"|'[^']*')?\s*\)/g;
+const APP_ATTACHMENT_URL_PATTERN =
+  /(?:!\[[^\]]*\]|\[[^\]]*\])\(\s*(?:https?:\/\/[^\s)]+)?\/internal\/attachments\/(att_[a-zA-Z0-9_-]+)\/content(?:[?#][^\s)]*)?\s*(?:"[^"]*"|'[^']*')?\s*\)/g;
 
 export function extractAppAttachmentIds(markdown: string) {
   const ids = new Set<string>();
@@ -15,17 +16,22 @@ export function extractAppAttachmentIds(markdown: string) {
 export async function syncNoteAttachmentReferences(input: { noteId: string; userId: string; markdown: string }) {
   const referencedIds = new Set(extractAppAttachmentIds(input.markdown));
   const now = new Date();
-  const rows = await db.select().from(attachments).where(and(eq(attachments.noteId, input.noteId), eq(attachments.userId, input.userId)));
+  const rows = await db
+    .select()
+    .from(attachments)
+    .where(and(eq(attachments.noteId, input.noteId), eq(attachments.userId, input.userId)));
 
   for (const attachment of rows) {
     const isReferenced = referencedIds.has(attachment.id);
     const wasUnreferenced = Boolean(attachment.unreferencedAt);
     if (isReferenced) {
-      await db.update(attachments)
+      await db
+        .update(attachments)
         .set({ referencedAt: now, unreferencedAt: null, updatedAt: now })
         .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, input.userId)));
     } else if (!wasUnreferenced && attachment.referencedAt && !attachment.deletedAt) {
-      await db.update(attachments)
+      await db
+        .update(attachments)
         .set({ unreferencedAt: now, updatedAt: now })
         .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, input.userId)));
     }
