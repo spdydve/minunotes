@@ -127,6 +127,15 @@ describe('note link parser', () => {
       { targetNoteId: 'note_abc123', label: null, linkType: 'internal-url' },
     ]);
   });
+
+  it('parses scheme-less and root-relative internal note URLs', () => {
+    const raw = 'notes.dpklabs.com/notes/note_abc123';
+    const markdown = '[Note B](/notes/note_def456)';
+    expect(parseInternalNoteUrls(`${raw}\n${markdown}`)).toMatchObject([
+      { targetNoteId: 'note_def456', label: 'Note B', linkType: 'markdown-internal-url' },
+      { targetNoteId: 'note_abc123', label: null, linkType: 'internal-url' },
+    ]);
+  });
 });
 
 describe('note link indexing', () => {
@@ -255,7 +264,7 @@ describe('note link indexing', () => {
       app,
       folderA.id,
       'Source Note',
-      `See http://localhost:5173/notes/${target.id}\n\n[Target](/notes/${target.id})`
+      `See notes.dpklabs.com/notes/${target.id}\n\n[Target](/notes/${target.id})`
     );
 
     const response = await app.request(`/api/notes/${target.id}/backlinks`);
@@ -263,8 +272,15 @@ describe('note link indexing', () => {
     const body = (await response.json()) as {
       backlinks: Array<{ sourceNoteId: string; sourceTitle: string; linkType: string }>;
     };
-    expect(body.backlinks).toContainEqual(
-      expect.objectContaining({ sourceNoteId: source.id, sourceTitle: 'Source Note', linkType: 'internal-url' })
+    expect(body.backlinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceNoteId: source.id, sourceTitle: 'Source Note', linkType: 'internal-url' }),
+        expect.objectContaining({
+          sourceNoteId: source.id,
+          sourceTitle: 'Source Note',
+          linkType: 'markdown-internal-url',
+        }),
+      ])
     );
   });
 

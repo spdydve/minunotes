@@ -15,8 +15,9 @@ export type ParsedNoteLink = {
 
 const WIKILINK_PATTERN = /\[\[([^\]\n]+)\]\]/g;
 const NOTE_ID_PATTERN = /^note_[a-zA-Z0-9]+$/;
-const MARKDOWN_INTERNAL_URL_PATTERN = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+\/notes\/(note_[a-zA-Z0-9]+))\)/g;
-const RAW_INTERNAL_URL_PATTERN = /(?<!\]\()https?:\/\/[^\s)]+\/notes\/(note_[a-zA-Z0-9]+)/g;
+const NOTE_URL_PATTERN = String.raw`(?:https?:\/\/)?[^\s)]+\/notes\/(note_[a-zA-Z0-9]+)|\/notes\/(note_[a-zA-Z0-9]+)`;
+const MARKDOWN_INTERNAL_URL_PATTERN = new RegExp(String.raw`\[([^\]\n]+)\]\((${NOTE_URL_PATTERN})\)`, 'g');
+const RAW_INTERNAL_URL_PATTERN = new RegExp(String.raw`(?<!\]\()(?:${NOTE_URL_PATTERN})`, 'g');
 
 export function normalizeNoteTitle(title: string) {
   return title.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -53,10 +54,11 @@ export function parseInternalNoteUrls(markdown: string): ParsedNoteLink[] {
   for (const match of markdown.matchAll(MARKDOWN_INTERNAL_URL_PATTERN)) {
     const from = match.index ?? 0;
     const raw = match[0];
+    const targetNoteId = match[3] ?? match[4];
     markdownRanges.push({ from, to: from + raw.length });
     links.push({
-      targetTitle: match[1]?.trim() || match[3],
-      targetNoteId: match[3],
+      targetTitle: match[1]?.trim() || targetNoteId,
+      targetNoteId,
       label: match[1]?.trim() || null,
       linkType: 'markdown-internal-url',
       raw,
@@ -69,10 +71,11 @@ export function parseInternalNoteUrls(markdown: string): ParsedNoteLink[] {
     const from = match.index ?? 0;
     const raw = match[0];
     const to = from + raw.length;
+    const targetNoteId = match[1] ?? match[2];
     if (markdownRanges.some((range) => from >= range.from && to <= range.to)) continue;
     links.push({
-      targetTitle: match[1],
-      targetNoteId: match[1],
+      targetTitle: targetNoteId,
+      targetNoteId,
       label: null,
       linkType: 'internal-url',
       raw,
