@@ -30,8 +30,9 @@ MinuNotes should provide note-specific behavior through callbacks.
 
 ### MinuNotes owns
 - Note search suggestions.
-- Resolving target titles to note IDs.
-- Duplicate-title behavior.
+- Resolving targets to note IDs.
+- Inserting stable ID-backed targets for note suggestions.
+- Duplicate-title and legacy title-only link behavior.
 - Creating unresolved notes.
 - Navigation to notes.
 - Backend link indexing.
@@ -179,7 +180,7 @@ MinuNotes usage should look like:
 
       return result.notes.map((note) => ({
         id: note.id,
-        target: note.title,
+        target: `${note.id}|${note.title}`,
         label: note.title,
         detail: "Note",
       }));
@@ -244,9 +245,20 @@ Rules:
 
 ### Phase 4 — Polish
 - Hover cards or previews.
-- Ambiguous duplicate-title handling UI.
 - Better mobile suggestion placement.
 - Optional alias support.
+
+## Stable targets and legacy repair
+
+MinuNotes inserts all selected note suggestions as ID-backed wikilinks:
+
+```txt
+[[note_abc123|Project Plan]]
+```
+
+This keeps new links correct through target renames and duplicate-title collisions while the editor renders the human-readable alias. Existing title-only links remain supported. When a legacy title-only link matches multiple notes, it stays unresolved; MinuNotes must not choose a target or rewrite note content automatically.
+
+Repair is explicit: a user edits the ambiguous target and selects the intended suggestion. The editor replaces that exact wikilink with the selected ID-backed target. A future dedicated repair UI may make this easier, but it must retain this explicit-selection rule.
 
 ## Verification
 - Typing `[[` opens suggestions.

@@ -179,6 +179,41 @@ describe('note link indexing', () => {
     );
   });
 
+  it('keeps an ID-backed wikilink resolved through target renames and duplicate titles', async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, 'Project Plan');
+    await createNote(app, folderA.id, 'Project Plan');
+    const source = await createNote(app, folderA.id, 'Source Note', `See [[${target.id}|Project Plan]].`);
+
+    const targetResponse = await app.request(`/api/notes/${target.id}`);
+    const targetBody = (await targetResponse.json()) as { contentHash: string };
+    const renameResponse = await app.request(`/api/notes/${target.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Renamed Project Plan', baseHash: targetBody.contentHash }),
+    });
+    expect(renameResponse.status).toBe(200);
+
+    const linksResponse = await app.request(`/api/notes/${source.id}/links`);
+    expect(linksResponse.status).toBe(200);
+    await expect(linksResponse.json()).resolves.toMatchObject({
+      links: [expect.objectContaining({ targetNoteId: target.id, label: 'Project Plan', linkType: 'wikilink' })],
+    });
+  });
+
+  it('leaves ambiguous legacy title-only wikilinks unresolved', async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    await createNote(app, folderA.id, 'Project Plan');
+    await createNote(app, folderA.id, 'Project Plan');
+    const source = await createNote(app, folderA.id, 'Source Note', 'See [[Project Plan]].');
+
+    const linksResponse = await app.request(`/api/notes/${source.id}/links`);
+    expect(linksResponse.status).toBe(200);
+    await expect(linksResponse.json()).resolves.toMatchObject({
+      links: [expect.objectContaining({ targetNoteId: null, targetTitle: 'Project Plan', linkType: 'wikilink' })],
+    });
+  });
+
   it('returns backlinks through the harness API', async () => {
     const { app, folderA } = await setupNoteLinksApp();
     const target = await createNote(app, folderA.id, 'Target Note');
