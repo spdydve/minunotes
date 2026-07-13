@@ -16,7 +16,11 @@ export function FolderShareDialog({
   const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    error: loadError,
+    isLoading,
+  } = useQuery({
     queryKey: ['folder-share-link', folder.id],
     queryFn: () => api.folderShareLink(folder.id),
     enabled: open && !folder.isPrivate,
@@ -72,7 +76,7 @@ export function FolderShareDialog({
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--notes-border)] px-3 py-2 text-sm font-medium hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={sharingDisabled || isLoading || create.isPending}
+              disabled={sharingDisabled || create.isPending}
               onClick={() => void copy()}
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -135,6 +139,7 @@ export function FolderShareDialog({
             templates, folder settings, API settings, and edit controls are not exposed.
           </div>
 
+          {loadError ? <p className="text-sm text-red-600">Unable to load current share settings.</p> : null}
           {create.isError ? <p className="text-sm text-red-600">Unable to create share link.</p> : null}
           {revoke.isError ? <p className="text-sm text-red-600">Unable to turn off link access.</p> : null}
         </div>
