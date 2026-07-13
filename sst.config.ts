@@ -142,7 +142,7 @@ export default $config({
         SES_REGION: env.SES_REGION ?? env.AWS_REGION ?? 'us-east-1',
         ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
         ATTACHMENT_STORAGE_PATH: env.ATTACHMENT_STORAGE_PATH ?? '.notes-attachments',
-        ATTACHMENT_PUBLIC_BASE_URL: env.ATTACHMENT_PUBLIC_BASE_URL ?? '',
+        ATTACHMENT_PUBLIC_BASE_URL: env.ATTACHMENT_PUBLIC_BASE_URL || (isLocal ? '' : apiUrl),
         ATTACHMENT_BUCKET: env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
         ATTACHMENT_REGION: env.ATTACHMENT_REGION ?? env.AWS_REGION ?? '',
         ATTACHMENT_ENDPOINT: env.ATTACHMENT_ENDPOINT ?? '',
@@ -198,6 +198,7 @@ export default $config({
       environment: {
         VITE_API_URL: isLocal ? '/internal' : `${apiUrl}/internal`,
         VITE_API_PROXY_TARGET: apiGateway.url,
+        VITE_IMAGE_UPLOAD_DEBUG: isDev ? 'true' : 'false',
       },
     });
 
