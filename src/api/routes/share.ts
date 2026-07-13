@@ -1,10 +1,64 @@
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { noteShareLinks, notes } from '../db/schema';
+import { folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
+import { isFolderEffectivelyPrivate, loadFolderAccessTree } from '../lib/folder-access';
 import { hashShareToken } from '../lib/share-tokens';
 
 export const shareRoutes = new Hono();
+
+shareRoutes.get('/folders/:token', async (c) => {
+  const token = c.req.param('token').trim();
+  if (!token) return c.json({ error: 'Shared folder not found' }, 404);
+
+  const tokenHash = hashShareToken(token);
+  const now = new Date();
+  const [row] = await db
+    .select({
+      folder: folders,
+      share: {
+        id: folderShareLinks.id,
+        permission: folderShareLinks.permission,
+        createdAt: folderShareLinks.createdAt,
+      },
+    })
+    .from(folderShareLinks)
+    .innerJoin(folders, eq(folderShareLinks.folderId, folders.id))
+    .where(
+      and(
+        eq(folderShareLinks.tokenHash, tokenHash),
+        isNull(folderShareLinks.revokedAt),
+        or(isNull(folderShareLinks.expiresAt), gt(folderShareLinks.expiresAt, now))
+      )
+    )
+    .limit(1);
+
+  if (!row) return c.json({ error: 'Shared folder not found' }, 404);
+
+  const tree = await loadFolderAccessTree(row.folder.userId);
+  if (isFolderEffectivelyPrivate(row.folder.id, tree.byId)) return c.json({ error: 'Shared folder not found' }, 404);
+
+  const sharedNotes = await db
+    .select({
+      id: notes.id,
+      title: notes.title,
+      content: notes.content,
+      documentType: notes.documentType,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .where(and(eq(notes.userId, row.folder.userId), eq(notes.folderId, row.folder.id), eq(notes.type, 'note')))
+    .orderBy(asc(notes.title));
+
+  return c.json({
+    folder: {
+      title: row.folder.title,
+      updatedAt: row.folder.updatedAt,
+    },
+    notes: sharedNotes,
+    share: row.share,
+  });
+});
 
 shareRoutes.get('/:token', async (c) => {
   const token = c.req.param('token').trim();

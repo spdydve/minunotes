@@ -75,6 +75,7 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
   ]);
   const saveRequests: Array<{ noteId: string; body: Record<string, unknown> }> = [];
   let hashVersion = 1;
+  let folderShareLink: { id: string; folderId: string; permission: 'read'; url: string; createdAt: string; updatedAt: string } | null = null;
 
   await page.route('**/internal/**', async (route) => {
     const request = route.request();
@@ -100,6 +101,44 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
     }
 
     if (path === '/folders' && method === 'GET') return json({ folders: [browserFixture.folder] });
+
+    if (path === `/folders/${browserFixture.folder.id}/notes` && method === 'GET')
+      return json({ notes: [...notes.values()].filter((note) => note.folderId === browserFixture.folder.id) });
+
+    if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'GET')
+      return json({ shareLink: folderShareLink });
+
+    if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'POST') {
+      folderShareLink = {
+        id: 'folder_share_browser',
+        folderId: browserFixture.folder.id,
+        permission: 'read',
+        url: 'http://localhost:5173/share/folders/folder_share_token',
+        createdAt: now,
+        updatedAt: now,
+      };
+      return json({ shareLink: folderShareLink }, 201);
+    }
+
+    if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'DELETE') {
+      folderShareLink = null;
+      return json({ ok: true });
+    }
+
+    if (path === `/share/folders/folder_share_token` && method === 'GET')
+      return json({
+        folder: { title: browserFixture.folder.title, updatedAt: browserFixture.folder.updatedAt },
+        notes: [...notes.values()]
+          .filter((note) => note.folderId === browserFixture.folder.id && note.type === 'note')
+          .map((note) => ({
+            id: note.id,
+            title: note.title,
+            content: note.content,
+            documentType: note.documentType,
+            updatedAt: note.updatedAt,
+          })),
+        share: { id: 'folder_share_browser', permission: 'read', createdAt: now },
+      });
     if (path === '/notes/recent' && method === 'GET')
       return json({
         notes: [...notes.values()].map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),

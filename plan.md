@@ -1,3 +1,80 @@
+# Read-only Folder Sharing Plan
+
+Goal: add public, read-only folder share links that expose a folder landing page and the notes/canvases directly inside that folder, without enabling edits, API-key access, private folder leakage, or broad workspace sharing.
+
+## Decisions
+- Share links are token-based and read-only, modeled after existing note share links.
+- Folder sharing initially includes notes directly in the shared folder only. Subfolders are out of scope for phase 1 unless explicitly enabled later.
+- Shared folder views expose only safe public data: folder title, note titles, note content/document type, and updated timestamps.
+- Shared folder links do not expose folder settings, API access settings, owner metadata, tags, backlinks, activity, versions, or edit controls.
+- Private folders cannot be shared. If a shared folder is later made private, public access should stop.
+- Deleting/revoking the link disables access. Regenerating produces a new token and revokes the old active token.
+- Existing single-note share links remain unchanged.
+
+## Files to modify/create
+- `drizzle/0023_folder_share_links.sql` — add `folder_share_links` table.
+- `drizzle/meta/_journal.json` and generated migration metadata — register the new migration.
+- `src/api/db/schema.ts` — add `folderShareLinks` table, relations, and exported type.
+- `src/api/lib/share-tokens.ts` — add folder share URL builder, likely `/share/folders/:token`.
+- `src/api/routes/folders.ts` — add owner endpoints:
+  - `GET /internal/folders/:folderId/share-link`
+  - `POST /internal/folders/:folderId/share-link`
+  - `DELETE /internal/folders/:folderId/share-link`
+- `src/api/routes/share.ts` — add public read-only folder endpoint, e.g. `GET /internal/share/folders/:token`.
+- `src/frontend/lib/api.ts` — add folder share link types and client methods.
+- `src/frontend/components/folder-share-dialog.tsx` — new read-only folder share dialog, mirroring `NoteShareDialog`.
+- `src/frontend/components/folder-actions-popover.tsx` — add “Share” action for non-private folders.
+- `src/frontend/routes/share.folder.$token.tsx` or equivalent route file — new public shared folder route.
+- `src/frontend/router.tsx` — register the shared folder route.
+- `tests/folder-share-links.test.ts` — backend coverage for lifecycle, private-folder guardrails, revoke/regenerate, and public access.
+- `tests/browser/fixtures.ts` and `tests/browser/note-editor.spec.ts` or new browser spec — mocked browser coverage for folder share dialog and shared folder read-only view.
+- Optional docs: `docs/guides/organizing-notes.md` or sharing docs if a user-facing note is needed.
+
+## Implementation phases
+- [x] Phase 1: Data model and owner API
+  - [x] Add `folder_share_links` migration and schema relations.
+  - [x] Implement active-share lookup helpers similar to note share links.
+  - [x] Add create/read/revoke folder share endpoints.
+  - [x] Enforce: folder exists, owner matches, folder is not private/effectively private.
+  - [x] Tests: create existing link, regenerate, revoke, private folder rejection.
+
+- [x] Phase 2: Public shared folder API
+  - [x] Add public token lookup in `shareRoutes`.
+  - [x] Return folder metadata and direct child notes only.
+  - [x] Exclude templates unless explicitly desired.
+  - [x] Enforce revoked/expired/private-folder checks at read time.
+  - [x] Tests: valid public read, revoked 404, private-after-share 404, no subfolder leakage.
+
+- [x] Phase 3: Frontend owner UX
+  - [x] Add API types/methods in `src/frontend/lib/api.ts`.
+  - [x] Build `FolderShareDialog` with copy link, enable read-only link, revoke link, regenerate link.
+  - [x] Add Share action to `FolderActionsPopover`.
+  - [x] Ensure private folders either hide Share or explain why sharing is unavailable.
+  - [x] Browser test: enabling/copying folder link uses the expected mocked endpoint.
+
+- [x] Phase 4: Public shared folder view
+  - [x] Add `/share/folders/$token` route.
+  - [x] Render folder title and note list.
+  - [x] Selecting a note shows read-only MarkdownEditor or read-only MinuCanvas.
+  - [x] No editing, note actions, folder actions, backlinks, tags, API settings, versions, or activity.
+  - [x] Browser test: shared folder route loads notes and blocks edit controls.
+
+- [ ] Phase 5: Verification and docs
+  - [x] Run Biome on changed files.
+  - [x] Run `pnpm typecheck`.
+  - [x] Run targeted backend/browser tests.
+  - [x] Run full `pnpm test` and `pnpm test:browser`.
+  - [x] Run `pnpm build`.
+  - [ ] Manual dev check: create link, open incognito, revoke, verify 404.
+
+## Open questions for approval
+- Should a shared folder include only direct notes, or direct notes plus subfolders recursively? Recommendation: direct notes only for phase 1.
+- Should templates be visible if stored in a shared folder? Recommendation: no.
+- Should folder share links have optional expiration now? Recommendation: keep schema-compatible with note links but no UI expiration in phase 1.
+- Should note-level share links inside a shared folder reuse `/share/:token` links? Recommendation: no; render notes inside the folder share experience.
+
+---
+
 # MinuNotes Implementation Plan
 
 ## Canvas note type plan

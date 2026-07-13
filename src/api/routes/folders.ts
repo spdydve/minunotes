@@ -1,11 +1,17 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
-import { folders, notes, templateFolderAssignments } from '../db/schema';
+import { folderShareLinks, folders, notes, templateFolderAssignments } from '../db/schema';
 import { createDocument, listDocuments, listFolders } from '../harness/commands';
 import type { auth } from '../lib/auth';
-import { validateFolderMove, validateFolderParent } from '../lib/folder-access';
+import {
+  isFolderEffectivelyPrivate,
+  loadFolderAccessTree,
+  validateFolderMove,
+  validateFolderParent,
+} from '../lib/folder-access';
 import { createId } from '../lib/id';
+import { buildFolderShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -18,6 +24,38 @@ function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get('user');
   if (!user) return null;
   return user;
+}
+
+function activeFolderShareWhere(folderId: string, userId: string) {
+  const now = new Date();
+  return and(
+    eq(folderShareLinks.folderId, folderId),
+    eq(folderShareLinks.userId, userId),
+    isNull(folderShareLinks.revokedAt),
+    or(isNull(folderShareLinks.expiresAt), gt(folderShareLinks.expiresAt, now))
+  );
+}
+
+function serializeFolderShareLink(shareLink: typeof folderShareLinks.$inferSelect, url?: string | null) {
+  return {
+    id: shareLink.id,
+    folderId: shareLink.folderId,
+    permission: shareLink.permission,
+    createdAt: shareLink.createdAt,
+    updatedAt: shareLink.updatedAt,
+    expiresAt: shareLink.expiresAt,
+    revokedAt: shareLink.revokedAt,
+    url: url ?? (shareLink.token ? buildFolderShareUrl(shareLink.token) : null),
+  };
+}
+
+async function getShareableFolder(userId: string, folderId: string) {
+  const tree = await loadFolderAccessTree(userId);
+  const folder = tree.byId.get(folderId);
+  if (!folder) return { ok: false as const, status: 404 as const, error: 'Folder not found' };
+  if (isFolderEffectivelyPrivate(folder.id, tree.byId))
+    return { ok: false as const, status: 403 as const, error: 'Private folders cannot be shared' };
+  return { ok: true as const, folder };
 }
 
 folderRoutes.get('/', async (c) => {
@@ -97,6 +135,88 @@ folderRoutes.patch('/:folderId', async (c) => {
 
   if (!folder) return c.json({ error: 'Folder not found' }, 404);
   return c.json({ folder });
+});
+
+folderRoutes.get('/:folderId/share-link', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const result = await getShareableFolder(user.id, c.req.param('folderId'));
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  const [shareLink] = await db
+    .select()
+    .from(folderShareLinks)
+    .where(activeFolderShareWhere(result.folder.id, user.id))
+    .limit(1);
+  return c.json({ shareLink: shareLink ? serializeFolderShareLink(shareLink) : null });
+});
+
+folderRoutes.post('/:folderId/share-link', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const result = await getShareableFolder(user.id, c.req.param('folderId'));
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  const body = (await c.req.json().catch(() => null)) as { regenerate?: boolean } | null;
+  const [existing] = await db
+    .select()
+    .from(folderShareLinks)
+    .where(activeFolderShareWhere(result.folder.id, user.id))
+    .limit(1);
+  if (existing && !body?.regenerate && existing.token) return c.json({ shareLink: serializeFolderShareLink(existing) });
+
+  const token = generateShareToken();
+  const now = new Date();
+  if (existing && !body?.regenerate) {
+    const [shareLink] = await db
+      .update(folderShareLinks)
+      .set({ token, tokenHash: hashShareToken(token), updatedAt: now })
+      .where(eq(folderShareLinks.id, existing.id))
+      .returning();
+    return c.json({ shareLink: serializeFolderShareLink(shareLink) });
+  }
+
+  if (existing)
+    await db
+      .update(folderShareLinks)
+      .set({ revokedAt: now, updatedAt: now })
+      .where(eq(folderShareLinks.id, existing.id));
+  const [shareLink] = await db
+    .insert(folderShareLinks)
+    .values({
+      id: createId('folder_share'),
+      userId: user.id,
+      folderId: result.folder.id,
+      tokenHash: hashShareToken(token),
+      token,
+      permission: 'read',
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  return c.json({ shareLink: serializeFolderShareLink(shareLink) }, 201);
+});
+
+folderRoutes.delete('/:folderId/share-link', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const [folder] = await db
+    .select({ id: folders.id })
+    .from(folders)
+    .where(and(eq(folders.id, c.req.param('folderId')), eq(folders.userId, user.id)))
+    .limit(1);
+  if (!folder) return c.json({ error: 'Folder not found' }, 404);
+
+  const now = new Date();
+  await db
+    .update(folderShareLinks)
+    .set({ revokedAt: now, updatedAt: now })
+    .where(activeFolderShareWhere(folder.id, user.id));
+  return c.json({ ok: true });
 });
 
 folderRoutes.get('/:folderId/notes', async (c) => {

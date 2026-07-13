@@ -15,3 +15,8 @@ export function buildShareUrl(token: string) {
   const { frontendUrl } = getApiRuntimeConfig();
   return `${frontendUrl}/share/${encodeURIComponent(token)}`;
 }
+
+export function buildFolderShareUrl(token: string) {
+  const { frontendUrl } = getApiRuntimeConfig();
+  return `${frontendUrl}/share/folders/${encodeURIComponent(token)}`;
+}

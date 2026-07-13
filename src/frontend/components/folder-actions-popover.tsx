@@ -6,6 +6,7 @@ import type { Folder } from '../lib/api';
 import { api } from '../lib/api';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { DeleteConfirmDialog } from './delete-confirm-dialog';
+import { FolderShareDialog } from './folder-share-dialog';
 import { MoveFolderDialog } from './move-folder-dialog';
 import { RenameFolderDialog } from './rename-folder-dialog';
 import { ActionMenuButton, ActionMenuIconButton } from './ui/action-menu';
@@ -24,6 +25,7 @@ export function FolderActionsPopover({
   const [renameOpen, setRenameOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const nav = useNavigate();
   const qc = useQueryClient();
   const remove = useMutation({
@@ -68,6 +70,14 @@ export function FolderActionsPopover({
           <ActionMenuButton
             onClick={() => {
               setOpen(false);
+              setShareOpen(true);
+            }}
+          >
+            Share
+          </ActionMenuButton>
+          <ActionMenuButton
+            onClick={() => {
+              setOpen(false);
               setRenameOpen(true);
             }}
           >
@@ -106,6 +116,7 @@ export function FolderActionsPopover({
       </Popover>
       <CreateFolderDialog parentFolder={folder} open={createOpen} onOpenChange={setCreateOpen} />
       <MoveFolderDialog folder={folder} open={moveOpen} onOpenChange={setMoveOpen} />
+      <FolderShareDialog folder={folder} open={shareOpen} onOpenChange={setShareOpen} />
       <RenameFolderDialog folder={folder} open={renameOpen} onOpenChange={setRenameOpen} />
     </>
   );

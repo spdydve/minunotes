@@ -13,6 +13,7 @@ import { resourcesRoute } from './routes/resources';
 import { resourceDocRoute } from './routes/resources.$slug';
 import { apiAccessSettingsRoute } from './routes/settings.api-access';
 import { shareRoute } from './routes/share.$token';
+import { folderShareRoute } from './routes/share.folders.$token';
 import { templatesRoute } from './routes/templates';
 
 const routeTree = rootRoute.addChildren([
@@ -29,6 +30,7 @@ const routeTree = rootRoute.addChildren([
   apiAccessSettingsRoute,
   resourcesRoute,
   resourceDocRoute,
+  folderShareRoute,
   shareRoute,
 ]);
 
