@@ -227,7 +227,7 @@ function NoteView() {
           .slice(0, 50)
           .map((note) => ({
             id: note.id,
-            target: note.title.includes('|') ? `${note.id}|${note.title}` : note.title,
+            target: `${note.id}|${note.title}`,
             label: note.title,
             detail: 'folderTitle' in note && typeof note.folderTitle === 'string' ? note.folderTitle : 'Note',
           }));

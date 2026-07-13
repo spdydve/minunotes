@@ -612,3 +612,83 @@ Make direct harness API access and hosted MCP access work cleanly side-by-side w
 ## Approval
 
 Planning only. Do not implement until approved.
+
+---
+
+# Stable Wikilinks and Browser Integration Tests Plan
+
+## Scope and decisions
+
+Deliver the two agreed immediate priorities before shared-workspace editing:
+
+1. New wikilinks inserted from MinuNotes suggestions use stable note-ID targets with a human-readable alias: `[[note_id|Note Title]]`.
+2. Existing title-only links remain valid and are never rewritten automatically. Ambiguous legacy links must be surfaced for an explicit user repair choice; the implementation must not guess a target.
+3. Establish browser-level integration coverage in MinuNotes for the app wiring around the editor and canvas. Package-level MinuEditor/MinuCanvas tests remain their responsibility.
+
+**Decision proposed for approval:** use ID-backed targets for **all app-inserted wikilink suggestions**, not only duplicate-title cases. This makes future renames and later title collisions safe by default while keeping Markdown readable through aliases.
+
+## Phase 1 — Stable wikilink insertion and legacy safety
+
+- [x] Update the `wikiLinks.suggest` integration in `src/frontend/routes/notes.$noteId.tsx` so every note suggestion inserts `note.id|note.title` as its target, while retaining the current title and folder as suggestion display metadata.
+- [x] Confirm `findNote`, `resolve`, and `onOpen` continue to resolve ID-backed targets and navigate correctly after target-note rename/move.
+- [x] Extend `tests/note-links.test.ts` to cover ID-backed links with aliases, renamed targets, duplicate titles, and the invariant that ambiguous title-only links remain unresolved.
+- [x] Add a safe legacy-link repair design: detect ambiguous title-only links without mutation and offer only explicit conversion to a user-selected ID-backed target. Do not add an automatic database/content migration.
+- [x] Update `docs/guides/markdown-editor.md` and `docs/implementation/minueditor-wikilinks.md` to explain stable targets, aliases, duplicate-title behavior, and the legacy-link repair rule.
+
+### Files expected to change
+
+- `src/frontend/routes/notes.$noteId.tsx`
+- `tests/note-links.test.ts`
+- `docs/guides/markdown-editor.md`
+- `docs/implementation/minueditor-wikilinks.md`
+- Possibly `src/api/notes/links.ts` and `src/api/routes/notes.ts` only if legacy-link ambiguity detection needs a dedicated shared API; no schema migration is expected.
+
+### Verification
+
+- Existing unique and ID-backed wikilinks open the correct note.
+- New app-selected wikilinks remain valid when the target is renamed.
+- New app-selected wikilinks resolve correctly when another note has the same title.
+- Legacy title-only duplicates are unresolved rather than silently linked to an arbitrary note.
+- `pnpm exec biome check --write <changed-files>`
+- `pnpm typecheck`
+- `pnpm test tests/note-links.test.ts`
+- `pnpm test`
+- `pnpm build`
+
+## Phase 2 — Browser integration-test baseline
+
+- [x] Choose and configure a real-browser runner compatible with the Vite app (Playwright is the default recommendation); add an isolated browser fixture with mocked authenticated API responses.
+- [x] Add reusable browser helpers for deterministic note/folder fixtures and autosave assertions without arbitrary sleeps.
+- [ ] Add initial app-level editor cases:
+  - [x] edit title/content and verify autosave survives reload;
+  - [x] insert/select an ID-backed wikilink and verify navigation;
+  - [x] use a slash command and verify Markdown persistence;
+  - [x] insert an external image through the app image picker;
+  - [x] cover the app-owned attachment upload path, including an upload failure state;
+  - [ ] verify the stale-state UI after an out-of-band API edit (defer until stale polling is testable without timer manipulation, or is replaced with push-based freshness).
+- [x] Add an initial canvas case: edit a canvas note, reload, and verify persisted content.
+- [x] Add CI-friendly scripts separating fast API/unit tests from browser integration tests; browser tests are not folded into the current unit-test command.
+
+### Files expected to change/create
+
+- `package.json`
+- `pnpm-lock.yaml`
+- Browser-runner configuration (for example `playwright.config.ts`)
+- Test setup/fixture helpers under a new `tests/browser/` directory
+- Browser specs under `tests/browser/`
+- Possibly `vite.config.ts` or a dedicated test server script to run the frontend against the local API
+
+### Verification
+
+- The browser suite runs from a clean local database with no production credentials.
+- Each initial scenario passes independently and in the full suite.
+- Existing API/unit test behavior remains unchanged.
+- `pnpm exec biome check --write <changed-files>`
+- `pnpm typecheck`
+- `pnpm test`
+- Browser test command
+- `pnpm build`
+
+## Approval
+
+Planning only. Do not implement until approved.

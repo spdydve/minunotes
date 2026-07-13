@@ -246,6 +246,22 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   return data as T;
 }
 
+function logImageUpload(
+  event: string,
+  input: { noteId: string; file: File; phase: string; status?: number; message?: string }
+) {
+  if (!import.meta.env.DEV && import.meta.env.VITE_IMAGE_UPLOAD_DEBUG !== 'true') return;
+  console.info(`[MinuNotes image upload] ${event}`, {
+    noteId: input.noteId,
+    filename: input.file.name,
+    mimeType: input.file.type,
+    size: input.file.size,
+    phase: input.phase,
+    status: input.status,
+    message: input.message,
+  });
+}
+
 export const api = {
   apiKeys: () => request<{ keys: ApiKey[] }>('/api-keys'),
   oauthClients: () => request<{ clients: OAuthClient[] }>('/oauth/clients'),
@@ -384,6 +400,8 @@ export const api = {
       `/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
     ),
   uploadNoteImage: async (noteId: string, file: File) => {
+    let phase = 'requesting signed upload URL';
+    logImageUpload('starting', { noteId, file, phase });
     try {
       const { uploads } = await request<{ uploads: SignedImageUpload[] }>(
         `/attachments/notes/${noteId}/image-uploads`,
@@ -395,6 +413,8 @@ export const api = {
       const upload = uploads[0];
       if (!upload) throw new Error('API did not return an upload URL');
 
+      phase = 'uploading to object storage';
+      logImageUpload('signed upload started', { noteId, file, phase });
       const uploadResponse = await fetch(upload.signedUrl, {
         method: upload.method,
         headers: upload.headers,
@@ -402,15 +422,44 @@ export const api = {
       });
       if (!uploadResponse.ok) throw new ApiError('Image upload failed', uploadResponse.status);
 
-      return request<UploadImageResponse>(`/attachments/${upload.attachment.id}/complete`, {
+      phase = 'finalizing attachment';
+      logImageUpload('attachment completion started', { noteId, file, phase });
+      const completed = await request<UploadImageResponse>(`/attachments/${upload.attachment.id}/complete`, {
         method: 'POST',
         body: JSON.stringify({}),
       });
+      logImageUpload('completed', { noteId, file, phase });
+      return completed;
     } catch (error) {
-      if (!(error instanceof ApiError) || error.status !== 400) throw error;
-      const formData = new FormData();
-      formData.set('image', file);
-      return uploadRequest<UploadImageResponse>(`/attachments/notes/${noteId}/images`, formData);
+      if (!(error instanceof ApiError) || error.status !== 400) {
+        logImageUpload('failed', {
+          noteId,
+          file,
+          phase,
+          status: error instanceof ApiError ? error.status : undefined,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+        throw error;
+      }
+
+      phase = 'uploading through the API fallback';
+      logImageUpload('signed upload unavailable; using fallback', { noteId, file, phase, status: error.status });
+      try {
+        const formData = new FormData();
+        formData.set('image', file);
+        const completed = await uploadRequest<UploadImageResponse>(`/attachments/notes/${noteId}/images`, formData);
+        logImageUpload('fallback completed', { noteId, file, phase });
+        return completed;
+      } catch (fallbackError) {
+        logImageUpload('fallback failed', {
+          noteId,
+          file,
+          phase,
+          status: fallbackError instanceof ApiError ? fallbackError.status : undefined,
+          message: fallbackError instanceof Error ? fallbackError.message : 'Unknown error',
+        });
+        throw fallbackError;
+      }
     }
   },
   deleteNote: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}`, { method: 'DELETE' }),

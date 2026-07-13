@@ -97,13 +97,21 @@ Use a label when you want different visible text:
 [[Note Title|visible label]]
 ```
 
-Typing `[[` opens note suggestions. Selecting a suggestion inserts the link.
+Typing `[[` opens note suggestions. Selecting a suggestion inserts an ID-backed link while showing the note title:
+
+```md
+[[note_abc123|Note Title]]
+```
+
+The ID keeps a link stable when the target is renamed or when multiple notes have the same title. The editor displays `Note Title`, not the ID, when the link is inactive.
 
 Clicking a wikilink opens the target note when MinuNotes can resolve it.
 
-## Duplicate note titles
+## Duplicate note titles and older links
 
-Wikilinks resolve by note title when there is exactly one matching note. If multiple notes have the same title, the link may stay unresolved. Use clear note names when possible.
+Older title-only wikilinks resolve by title when there is exactly one matching note. If multiple notes have the same title, they stay unresolved rather than opening an arbitrary note.
+
+To repair an older ambiguous link, edit its target and select the intended note from the suggestions. MinuNotes replaces it with an ID-backed link. It never rewrites existing links automatically.
 
 ## Backlinks
 
