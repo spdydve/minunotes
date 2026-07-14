@@ -4,12 +4,7 @@ import { db } from '../db/client';
 import { folderShareLinks, folders, notes, templateFolderAssignments } from '../db/schema';
 import { createDocument, listDocuments, listFolders } from '../harness/commands';
 import type { auth } from '../lib/auth';
-import {
-  isFolderEffectivelyPrivate,
-  loadFolderAccessTree,
-  validateFolderMove,
-  validateFolderParent,
-} from '../lib/folder-access';
+import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { buildFolderShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
 
@@ -53,8 +48,6 @@ async function getShareableFolder(userId: string, folderId: string) {
   const tree = await loadFolderAccessTree(userId);
   const folder = tree.byId.get(folderId);
   if (!folder) return { ok: false as const, status: 404 as const, error: 'Folder not found' };
-  if (isFolderEffectivelyPrivate(folder.id, tree.byId))
-    return { ok: false as const, status: 403 as const, error: 'Private folders cannot be shared' };
   return { ok: true as const, folder };
 }
 

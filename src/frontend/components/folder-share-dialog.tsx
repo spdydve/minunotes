@@ -23,7 +23,7 @@ export function FolderShareDialog({
   } = useQuery({
     queryKey: ['folder-share-link', folder.id],
     queryFn: () => api.folderShareLink(folder.id),
-    enabled: open && !folder.isPrivate,
+    enabled: open,
   });
 
   const create = useMutation<{ shareLink: FolderShareLink }, Error, boolean>({
@@ -52,10 +52,7 @@ export function FolderShareDialog({
   const shareLink = data?.shareLink ?? null;
   const url = createdUrl ?? shareLink?.url ?? null;
   const linkSharingOn = Boolean(shareLink);
-  const sharingDisabled = folder.isPrivate;
-
   const copy = async () => {
-    if (sharingDisabled) return;
     let nextUrl = url;
     if (!nextUrl) {
       const result = await create.mutateAsync(false);
@@ -76,7 +73,7 @@ export function FolderShareDialog({
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--notes-border)] px-3 py-2 text-sm font-medium hover:bg-[var(--notes-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={sharingDisabled || create.isPending}
+              disabled={create.isPending}
               onClick={() => void copy()}
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -102,7 +99,7 @@ export function FolderShareDialog({
                 <select
                   className="bg-transparent outline-none"
                   value={linkSharingOn ? 'read' : 'none'}
-                  disabled={sharingDisabled || isLoading || create.isPending || revoke.isPending}
+                  disabled={isLoading || create.isPending || revoke.isPending}
                   onChange={(event) => {
                     if (event.target.value === 'read') create.mutate(false);
                     else revoke.mutate();
@@ -113,11 +110,9 @@ export function FolderShareDialog({
                 </select>
               </label>
               <p className="notes-muted text-sm">
-                {sharingDisabled
-                  ? 'Private folders cannot be shared. Turn off private access before enabling a public link.'
-                  : linkSharingOn
-                    ? 'This folder is publicly viewable by anyone with the link. Editing is disabled.'
-                    : 'Only you can access this folder unless link sharing is enabled.'}
+                {linkSharingOn
+                  ? 'This folder is publicly viewable by anyone with the link. Editing is disabled.'
+                  : 'Only you can access this folder unless link sharing is enabled.'}
               </p>
             </div>
           </section>

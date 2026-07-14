@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -228,26 +227,22 @@ describe('folder share links', () => {
     expect((await app.request(`/api/share/folders/${tokenFromUrl(secondShare.url)}`)).status).toBe(404);
   });
 
-  it('rejects private folders and hides folders made private after sharing', async () => {
-    const { app, db, schema } = await setupFolderShareApp();
+  it('allows owners to explicitly share private folders', async () => {
+    const { app } = await setupFolderShareApp();
 
-    const privateCreate = await app.request('/api/folders/folder_private/share-link', {
+    const create = await app.request('/api/folders/folder_private/share-link', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
-    expect(privateCreate.status).toBe(403);
-
-    const create = await app.request('/api/folders/folder_a/share-link', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    });
+    expect(create.status).toBe(201);
     const { shareLink } = (await create.json()) as { shareLink: { url: string } };
-    await db.update(schema.folders).set({ isPrivate: true }).where(eq(schema.folders.id, 'folder_a'));
 
     const publicRead = await app.request(`/api/share/folders/${tokenFromUrl(shareLink.url)}`);
-    expect(publicRead.status).toBe(404);
+    expect(publicRead.status).toBe(200);
+    const body = (await publicRead.json()) as { folder: { title: string }; notes: unknown[] };
+    expect(body.folder.title).toBe('Private Folder');
+    expect(body.notes).toEqual([]);
   });
 
   it('does not allow another user to manage a folder share link', async () => {

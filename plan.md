@@ -7,7 +7,7 @@ Goal: add public, read-only folder share links that expose a folder landing page
 - Folder sharing initially includes notes directly in the shared folder only. Subfolders are out of scope for phase 1 unless explicitly enabled later.
 - Shared folder views expose only safe public data: folder title, note titles, note content/document type, and updated timestamps.
 - Shared folder links do not expose folder settings, API access settings, owner metadata, tags, backlinks, activity, versions, or edit controls.
-- Private folders cannot be shared. If a shared folder is later made private, public access should stop.
+- Folder privacy remains an AI/API access boundary. Owners can explicitly create public read-only share links for folders they own, including private folders.
 - Deleting/revoking the link disables access. Regenerating produces a new token and revokes the old active token.
 - Existing single-note share links remain unchanged.
 
@@ -35,21 +35,21 @@ Goal: add public, read-only folder share links that expose a folder landing page
   - [x] Add `folder_share_links` migration and schema relations.
   - [x] Implement active-share lookup helpers similar to note share links.
   - [x] Add create/read/revoke folder share endpoints.
-  - [x] Enforce: folder exists, owner matches, folder is not private/effectively private.
-  - [x] Tests: create existing link, regenerate, revoke, private folder rejection.
+  - [x] Enforce: folder exists and owner matches.
+  - [x] Tests: create existing link, regenerate, revoke, private folder explicit sharing.
 
 - [x] Phase 2: Public shared folder API
   - [x] Add public token lookup in `shareRoutes`.
   - [x] Return folder metadata and direct child notes only.
   - [x] Exclude templates unless explicitly desired.
-  - [x] Enforce revoked/expired/private-folder checks at read time.
-  - [x] Tests: valid public read, revoked 404, private-after-share 404, no subfolder leakage.
+  - [x] Enforce revoked/expired share-link checks at read time.
+  - [x] Tests: valid public read, revoked 404, explicit private folder sharing, no subfolder leakage.
 
 - [x] Phase 3: Frontend owner UX
   - [x] Add API types/methods in `src/frontend/lib/api.ts`.
   - [x] Build `FolderShareDialog` with copy link, enable read-only link, revoke link, regenerate link.
   - [x] Add Share action to `FolderActionsPopover`.
-  - [x] Ensure private folders either hide Share or explain why sharing is unavailable.
+  - [x] Allow explicit owner sharing for private folders because privacy is scoped to AI/API access.
   - [x] Browser test: enabling/copying folder link uses the expected mocked endpoint.
 
 - [x] Phase 4: Public shared folder view

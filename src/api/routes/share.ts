@@ -2,7 +2,6 @@ import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
-import { isFolderEffectivelyPrivate, loadFolderAccessTree } from '../lib/folder-access';
 import { hashShareToken } from '../lib/share-tokens';
 
 export const shareRoutes = new Hono();
@@ -34,9 +33,6 @@ shareRoutes.get('/folders/:token', async (c) => {
     .limit(1);
 
   if (!row) return c.json({ error: 'Shared folder not found' }, 404);
-
-  const tree = await loadFolderAccessTree(row.folder.userId);
-  if (isFolderEffectivelyPrivate(row.folder.id, tree.byId)) return c.json({ error: 'Shared folder not found' }, 404);
 
   const sharedNotes = await db
     .select({
