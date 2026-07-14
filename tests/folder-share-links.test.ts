@@ -153,7 +153,7 @@ afterEach(async () => {
 });
 
 describe('folder share links', () => {
-  it('creates a share link and resolves direct notes publicly', async () => {
+  it('creates a share link and resolves descendant notes publicly', async () => {
     const { app } = await setupFolderShareApp();
 
     const create = await app.request('/api/folders/folder_a/share-link', {
@@ -169,13 +169,19 @@ describe('folder share links', () => {
     expect(publicRead.status).toBe(200);
     const body = (await publicRead.json()) as {
       folder: { title: string };
+      folders: Array<{ title: string; parentFolderId: string | null }>;
       notes: Array<{ title: string; content: string }>;
       share: { id: string; permission: string };
     };
     expect(body.folder.title).toBe('A Folder');
-    expect(body.notes).toEqual([expect.objectContaining({ title: 'A Note', content: '# Shared\n\nHello' })]);
+    expect(body.folders).toEqual([expect.objectContaining({ title: 'Child Folder', parentFolderId: 'folder_a' })]);
+    expect(body.notes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: 'A Note', content: '# Shared\n\nHello' }),
+        expect.objectContaining({ title: 'Child Note', content: 'hidden child' }),
+      ])
+    );
     expect(body.notes.map((note) => note.title)).not.toContain('Template');
-    expect(body.notes.map((note) => note.title)).not.toContain('Child Note');
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe('read');
   });

@@ -1,11 +1,11 @@
 # Read-only Folder Sharing Plan
 
-Goal: add public, read-only folder share links that expose a folder landing page and the notes/canvases directly inside that folder, without enabling edits, API-key access, private folder leakage, or broad workspace sharing.
+Goal: add public, read-only folder share links that expose a Drive-like folder landing page with nested subfolders and notes/canvases under the shared folder, without enabling edits, API-key access, or workspace-wide sharing.
 
 ## Decisions
 - Share links are token-based and read-only, modeled after existing note share links.
-- Folder sharing initially includes notes directly in the shared folder only. Subfolders are out of scope for phase 1 unless explicitly enabled later.
-- Shared folder views expose only safe public data: folder title, note titles, note content/document type, and updated timestamps.
+- Folder sharing is recursive by default, similar to Google Drive: subfolders and notes added under the shared folder are visible through the share link.
+- Shared folder views expose only safe public data: folder titles, note titles, note content/document type, and updated timestamps.
 - Shared folder links do not expose folder settings, API access settings, owner metadata, tags, backlinks, activity, versions, or edit controls.
 - Folder privacy remains an AI/API access boundary. Owners can explicitly create public read-only share links for folders they own, including private folders.
 - Deleting/revoking the link disables access. Regenerating produces a new token and revokes the old active token.
@@ -40,10 +40,10 @@ Goal: add public, read-only folder share links that expose a folder landing page
 
 - [x] Phase 2: Public shared folder API
   - [x] Add public token lookup in `shareRoutes`.
-  - [x] Return folder metadata and direct child notes only.
+  - [x] Return folder metadata, descendant folders, and descendant notes.
   - [x] Exclude templates unless explicitly desired.
   - [x] Enforce revoked/expired share-link checks at read time.
-  - [x] Tests: valid public read, revoked 404, explicit private folder sharing, no subfolder leakage.
+  - [x] Tests: valid recursive public read, revoked 404, explicit private folder sharing, templates hidden.
 
 - [x] Phase 3: Frontend owner UX
   - [x] Add API types/methods in `src/frontend/lib/api.ts`.
@@ -54,7 +54,7 @@ Goal: add public, read-only folder share links that expose a folder landing page
 
 - [x] Phase 4: Public shared folder view
   - [x] Add `/share/folders/$token` route.
-  - [x] Render folder title and note list.
+  - [x] Render folder title and nested note/subfolder tree.
   - [x] Selecting a note shows read-only MarkdownEditor or read-only MinuCanvas.
   - [x] No editing, note actions, folder actions, backlinks, tags, API settings, versions, or activity.
   - [x] Browser test: shared folder route loads notes and blocks edit controls.
@@ -68,10 +68,10 @@ Goal: add public, read-only folder share links that expose a folder landing page
   - [ ] Manual dev check: create link, open incognito, revoke, verify 404.
 
 ## Open questions for approval
-- Should a shared folder include only direct notes, or direct notes plus subfolders recursively? Recommendation: direct notes only for phase 1.
+- Should a shared folder include only direct notes, or direct notes plus subfolders recursively? Decision: recursive, Drive-like folder sharing.
 - Should templates be visible if stored in a shared folder? Recommendation: no.
 - Should folder share links have optional expiration now? Recommendation: keep schema-compatible with note links but no UI expiration in phase 1.
-- Should note-level share links inside a shared folder reuse `/share/:token` links? Recommendation: no; render notes inside the folder share experience.
+- Should note-level share links inside a shared folder reuse `/share/:token` links? Decision: no; render notes inside the folder share experience.
 
 ---
 

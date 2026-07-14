@@ -130,8 +130,8 @@ export function FolderShareDialog({
           </section>
 
           <div className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-sm text-[var(--notes-muted)]">
-            Shared folders are public and read-only. Only notes directly in this folder are exposed; subfolders,
-            templates, folder settings, API settings, and edit controls are not exposed.
+            Shared folders are public and read-only. Notes in this folder and its subfolders are exposed; templates,
+            folder settings, API settings, and edit controls are not exposed.
           </div>
 
           {loadError ? <p className="text-sm text-red-600">Unable to load current share settings.</p> : null}

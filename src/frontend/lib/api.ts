@@ -149,8 +149,9 @@ export type FolderShareLink = {
   url: string | null;
 };
 export type SharedNote = { title: string; content: string; documentType: DocumentType; updatedAt: string };
-export type SharedFolderNote = SharedNote & { id: string };
-export type SharedFolder = { title: string; updatedAt: string };
+export type SharedFolderNote = SharedNote & { id: string; folderId: string };
+export type SharedFolder = { id: string; title: string; updatedAt: string };
+export type SharedFolderChild = { id: string; parentFolderId: string | null; title: string; updatedAt: string };
 export type NoteEvent = {
   id: string;
   noteId: string;
@@ -387,6 +388,7 @@ export const api = {
   sharedFolder: (token: string) =>
     request<{
       folder: SharedFolder;
+      folders: SharedFolderChild[];
       notes: SharedFolderNote[];
       share: { id: string; permission: 'read'; createdAt: string };
     }>(`/share/folders/${encodeURIComponent(token)}`),
