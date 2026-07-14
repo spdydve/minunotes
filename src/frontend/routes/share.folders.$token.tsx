@@ -79,6 +79,15 @@ function buildSharedFolderTree(input: {
   return root;
 }
 
+function findFolderNode(node: SharedFolderTreeNode, folderId: string): SharedFolderTreeNode | null {
+  if (node.id === folderId) return node;
+  for (const child of node.children) {
+    const found = findFolderNode(child, folderId);
+    if (found) return found;
+  }
+  return null;
+}
+
 function SharedFolderView() {
   const { token } = folderShareRoute.useParams();
   const { data, error, isLoading } = useQuery({
@@ -86,16 +95,21 @@ function SharedFolderView() {
     queryFn: () => api.sharedFolder(token),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const selectedNote = useMemo(() => {
-    if (!data?.notes.length) return null;
-    return data.notes.find((note) => note.id === selectedNoteId) ?? data.notes[0];
-  }, [data?.notes, selectedNoteId]);
+  const selectedNote = useMemo(
+    () => data?.notes.find((note) => note.id === selectedNoteId) ?? null,
+    [data?.notes, selectedNoteId]
+  );
   const folderTree = useMemo(
     () =>
       data?.folder ? buildSharedFolderTree({ root: data.folder, folders: data.folders, notes: data.notes }) : null,
     [data?.folder, data?.folders, data?.notes]
   );
+  const selectedFolder = useMemo(() => {
+    if (!folderTree) return null;
+    return findFolderNode(folderTree, selectedFolderId ?? folderTree.id) ?? folderTree;
+  }, [folderTree, selectedFolderId]);
 
   if (isLoading)
     return (
@@ -128,21 +142,28 @@ function SharedFolderView() {
           <h1 className="mt-1 text-xl font-semibold">{data.folder.title}</h1>
           <p className="notes-muted mt-1 text-xs">Updated {new Date(data.folder.updatedAt).toLocaleString()}</p>
           <nav className="mt-5 space-y-1">
-            {data.notes.length === 0 ? <p className="notes-muted text-sm">No shared notes in this folder.</p> : null}
             {folderTree ? (
               <SharedFolderTree
                 node={folderTree}
                 depth={0}
-                selectedNoteId={selectedNote?.id ?? null}
-                onSelectNote={setSelectedNoteId}
-                showFolderTitle={false}
+                selectedFolderId={selectedFolder?.id ?? null}
+                onSelectFolder={(folderId) => {
+                  setSelectedFolderId(folderId);
+                  setSelectedNoteId(null);
+                }}
               />
             ) : null}
           </nav>
         </aside>
         <main className="min-w-0">
           {selectedNote ? (
-            <SharedFolderNoteView note={selectedNote} />
+            <SharedFolderNoteView note={selectedNote} onBack={() => setSelectedNoteId(null)} />
+          ) : selectedFolder ? (
+            <SharedFolderContents
+              folder={selectedFolder}
+              onSelectFolder={setSelectedFolderId}
+              onSelectNote={setSelectedNoteId}
+            />
           ) : (
             <div className="grid min-h-[60vh] place-items-center p-6">
               <EmptyState title="No notes shared">
@@ -159,66 +180,144 @@ function SharedFolderView() {
 function SharedFolderTree({
   node,
   depth,
-  selectedNoteId,
-  onSelectNote,
-  showFolderTitle,
+  selectedFolderId,
+  onSelectFolder,
 }: {
   node: SharedFolderTreeNode;
   depth: number;
-  selectedNoteId: string | null;
-  onSelectNote: (noteId: string) => void;
-  showFolderTitle: boolean;
+  selectedFolderId: string | null;
+  onSelectFolder: (folderId: string) => void;
 }) {
   return (
     <div className="space-y-1">
-      {showFolderTitle ? (
-        <div
-          className="notes-muted px-3 pt-3 pb-1 font-medium text-[11px] uppercase tracking-wide"
-          style={{ paddingLeft: `${0.75 + depth * 0.75}rem` }}
-        >
-          {node.title}
-        </div>
-      ) : null}
-      {node.notes.map((note) => (
-        <button
-          key={note.id}
-          type="button"
-          className={`block w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
-            selectedNoteId === note.id
-              ? 'bg-[var(--notes-hover)] text-[var(--notes-text)]'
-              : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'
-          }`}
-          style={{ paddingLeft: `${0.75 + depth * 0.75}rem` }}
-          onClick={() => onSelectNote(note.id)}
-        >
-          <span className="block truncate">{note.title}</span>
-          <span className="notes-muted block text-[11px]">
-            {note.documentType.startsWith('canvas.') ? 'Canvas' : 'Note'}
-          </span>
-        </button>
-      ))}
+      <button
+        type="button"
+        className={`block w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
+          selectedFolderId === node.id
+            ? 'bg-[var(--notes-hover)] text-[var(--notes-text)]'
+            : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'
+        }`}
+        style={{ paddingLeft: `${0.75 + depth * 0.75}rem` }}
+        onClick={() => onSelectFolder(node.id)}
+      >
+        <span className="block truncate">{node.title}</span>
+        <span className="notes-muted block text-[11px]">Folder</span>
+      </button>
       {node.children.map((child) => (
         <SharedFolderTree
           key={child.id}
           node={child}
           depth={depth + 1}
-          selectedNoteId={selectedNoteId}
-          onSelectNote={onSelectNote}
-          showFolderTitle
+          selectedFolderId={selectedFolderId}
+          onSelectFolder={onSelectFolder}
         />
       ))}
     </div>
   );
 }
 
-function SharedFolderNoteView({ note }: { note: SharedFolderNote }) {
+function SharedFolderContents({
+  folder,
+  onSelectFolder,
+  onSelectNote,
+}: {
+  folder: SharedFolderTreeNode;
+  onSelectFolder: (folderId: string) => void;
+  onSelectNote: (noteId: string) => void;
+}) {
+  const hasContents = folder.children.length > 0 || folder.notes.length > 0;
+  return (
+    <section className="mx-auto w-full max-w-5xl p-4 sm:p-6">
+      <div className="mb-6">
+        <p className="notes-muted text-xs">Shared folder · Read-only</p>
+        <h2 className="mt-1 text-2xl font-semibold">{folder.title}</h2>
+        <p className="notes-muted mt-1 text-xs">Updated {new Date(folder.updatedAt).toLocaleString()}</p>
+      </div>
+
+      {!hasContents ? (
+        <div className="grid min-h-[40vh] place-items-center rounded-lg border border-dashed border-[var(--notes-border)] p-6">
+          <EmptyState title="No notes shared">
+            <p>This folder has no notes or subfolders to display.</p>
+          </EmptyState>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-[var(--notes-border)] text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+              <tr>
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell">Type</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {folder.children.map((child) => (
+                <tr
+                  key={child.id}
+                  className="border-b border-[var(--notes-border)] last:border-0 hover:bg-[var(--notes-hover)]"
+                >
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      className="font-medium text-left hover:underline"
+                      onClick={() => onSelectFolder(child.id)}
+                    >
+                      {child.title}
+                    </button>
+                  </td>
+                  <td className="hidden px-4 py-3 text-[var(--notes-muted)] sm:table-cell">Folder</td>
+                  <td className="hidden px-4 py-3 text-[var(--notes-muted)] md:table-cell">
+                    {new Date(child.updatedAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+              {folder.notes.map((note) => (
+                <tr
+                  key={note.id}
+                  className="border-b border-[var(--notes-border)] last:border-0 hover:bg-[var(--notes-hover)]"
+                >
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      className="font-medium text-left hover:underline"
+                      onClick={() => onSelectNote(note.id)}
+                    >
+                      {note.title}
+                    </button>
+                  </td>
+                  <td className="hidden px-4 py-3 text-[var(--notes-muted)] sm:table-cell">
+                    {note.documentType.startsWith('canvas.') ? 'Canvas' : 'Note'}
+                  </td>
+                  <td className="hidden px-4 py-3 text-[var(--notes-muted)] md:table-cell">
+                    {new Date(note.updatedAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SharedFolderNoteView({ note, onBack }: { note: SharedFolderNote; onBack: () => void }) {
   const isCanvas = note.documentType.startsWith('canvas.');
   return (
     <article className={isCanvas ? 'flex h-screen w-full flex-col overflow-hidden' : 'mx-auto w-full max-w-6xl p-4'}>
       <div
         className={`${isCanvas ? 'shrink-0 px-4 py-3 sm:px-6' : 'pb-4'} border-b border-[var(--notes-border)] bg-[var(--notes-bg)]`}
       >
-        <p className="notes-muted text-xs">Shared {isCanvas ? 'canvas' : 'note'} · Read-only</p>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="notes-muted text-xs">Shared {isCanvas ? 'canvas' : 'note'} · Read-only</p>
+          <button
+            type="button"
+            className="rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel)] px-2.5 py-1.5 text-xs font-medium hover:bg-[var(--notes-hover)]"
+            onClick={onBack}
+          >
+            Back to folder
+          </button>
+        </div>
         <h2 className={isCanvas ? 'mt-1 text-xl font-semibold sm:text-2xl' : 'mt-1 text-2xl font-semibold sm:text-3xl'}>
           {note.title}
         </h2>
