@@ -26,6 +26,15 @@ export const browserFixture = {
     createdAt: now,
     updatedAt: now,
   },
+  childFolder: {
+    id: 'folder_child_browser',
+    parentFolderId: 'folder_browser',
+    title: 'Child folder',
+    isPrivate: false,
+    isAgentReadOnly: false,
+    createdAt: now,
+    updatedAt: now,
+  },
   source: {
     id: 'note_source',
     folderId: 'folder_browser',
@@ -45,6 +54,19 @@ export const browserFixture = {
     title: 'Canvas Note',
     content: '{"nodes":[],"edges":[]}',
     documentType: 'canvas.default',
+    type: 'note',
+    isApiEditable: true,
+    updatedByActorType: 'user',
+    updatedByActorId: 'user_browser',
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Note,
+  child: {
+    id: 'note_child',
+    folderId: 'folder_child_browser',
+    title: 'Child Note',
+    content: 'Child content.',
+    documentType: 'markdown',
     type: 'note',
     isApiEditable: true,
     updatedByActorType: 'user',
@@ -72,9 +94,18 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
     [browserFixture.source.id, { ...browserFixture.source }],
     [browserFixture.canvas.id, { ...browserFixture.canvas }],
     [browserFixture.target.id, { ...browserFixture.target }],
+    [browserFixture.child.id, { ...browserFixture.child }],
   ]);
   const saveRequests: Array<{ noteId: string; body: Record<string, unknown> }> = [];
   let hashVersion = 1;
+  let folderShareLink: {
+    id: string;
+    folderId: string;
+    permission: 'read';
+    url: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null = null;
 
   await page.route('**/internal/**', async (route) => {
     const request = route.request();
@@ -99,7 +130,59 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
       });
     }
 
-    if (path === '/folders' && method === 'GET') return json({ folders: [browserFixture.folder] });
+    if (path === '/folders' && method === 'GET')
+      return json({ folders: [browserFixture.folder, browserFixture.childFolder] });
+
+    if (path === `/folders/${browserFixture.folder.id}/notes` && method === 'GET')
+      return json({ notes: [...notes.values()].filter((note) => note.folderId === browserFixture.folder.id) });
+
+    if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'GET')
+      return json({ shareLink: folderShareLink });
+
+    if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'POST') {
+      folderShareLink = {
+        id: 'folder_share_browser',
+        folderId: browserFixture.folder.id,
+        permission: 'read',
+        url: 'http://localhost:5173/share/folders/folder_share_token',
+        createdAt: now,
+        updatedAt: now,
+      };
+      return json({ shareLink: folderShareLink }, 201);
+    }
+
+    if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'DELETE') {
+      folderShareLink = null;
+      return json({ ok: true });
+    }
+
+    if (path === `/share/folders/folder_share_token` && method === 'GET')
+      return json({
+        folder: {
+          id: browserFixture.folder.id,
+          title: browserFixture.folder.title,
+          updatedAt: browserFixture.folder.updatedAt,
+        },
+        folders: [
+          {
+            id: browserFixture.childFolder.id,
+            parentFolderId: browserFixture.childFolder.parentFolderId,
+            title: browserFixture.childFolder.title,
+            updatedAt: browserFixture.childFolder.updatedAt,
+          },
+        ],
+        notes: [...notes.values()]
+          .filter((note) => note.type === 'note')
+          .map((note) => ({
+            id: note.id,
+            folderId: note.folderId,
+            title: note.title,
+            content: note.content,
+            documentType: note.documentType,
+            updatedAt: note.updatedAt,
+          })),
+        share: { id: 'folder_share_browser', permission: 'read', createdAt: now },
+      });
     if (path === '/notes/recent' && method === 'GET')
       return json({
         notes: [...notes.values()].map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),

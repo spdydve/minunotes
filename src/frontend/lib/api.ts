@@ -138,7 +138,20 @@ export type NoteShareLink = {
   revokedAt: string | null;
   url: string | null;
 };
+export type FolderShareLink = {
+  id: string;
+  folderId: string;
+  permission: 'read';
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  url: string | null;
+};
 export type SharedNote = { title: string; content: string; documentType: DocumentType; updatedAt: string };
+export type SharedFolderNote = SharedNote & { id: string; folderId: string };
+export type SharedFolder = { id: string; title: string; updatedAt: string };
+export type SharedFolderChild = { id: string; parentFolderId: string | null; title: string; updatedAt: string };
 export type NoteEvent = {
   id: string;
   noteId: string;
@@ -324,6 +337,15 @@ export const api = {
   ) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: 'DELETE' }),
   folders: () => request<{ folders: Folder[] }>('/folders'),
+  folderShareLink: (folderId: string) =>
+    request<{ shareLink: FolderShareLink | null }>(`/folders/${folderId}/share-link`),
+  createFolderShareLink: (folderId: string, regenerate = false) =>
+    request<{ shareLink: FolderShareLink }>(`/folders/${folderId}/share-link`, {
+      method: 'POST',
+      body: JSON.stringify({ regenerate }),
+    }),
+  revokeFolderShareLink: (folderId: string) =>
+    request<{ ok: true }>(`/folders/${folderId}/share-link`, { method: 'DELETE' }),
   createFolder: (title: string, parentFolderId?: string | null) =>
     request<{ folder: Folder }>('/folders', { method: 'POST', body: JSON.stringify({ title, parentFolderId }) }),
   renameFolder: (folderId: string, title: string) =>
@@ -363,6 +385,13 @@ export const api = {
     request<{ note: SharedNote; share: { id: string; permission: 'read'; createdAt: string } }>(
       `/share/${encodeURIComponent(token)}`
     ),
+  sharedFolder: (token: string) =>
+    request<{
+      folder: SharedFolder;
+      folders: SharedFolderChild[];
+      notes: SharedFolderNote[];
+      share: { id: string; permission: 'read'; createdAt: string };
+    }>(`/share/folders/${encodeURIComponent(token)}`),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
   noteVersions: (noteId: string, limit = 100) =>
     request<NoteVersionsResponse>(`/notes/${noteId}/versions?limit=${limit}`),

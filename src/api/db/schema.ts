@@ -405,6 +405,33 @@ export const noteShareLinks = sqliteTable(
   ]
 );
 
+export const folderShareLinks = sqliteTable(
+  'folder_share_links',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    folderId: text('folder_id')
+      .notNull()
+      .references(() => folders.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    token: text('token'),
+    permission: text('permission', { enum: ['read'] })
+      .notNull()
+      .default('read'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }),
+    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
+  },
+  (table) => [
+    uniqueIndex('folder_share_links_token_hash_idx').on(table.tokenHash),
+    index('folder_share_links_folder_id_idx').on(table.folderId),
+    index('folder_share_links_user_id_idx').on(table.userId),
+  ]
+);
+
 export const tags = sqliteTable(
   'tags',
   {
@@ -514,6 +541,7 @@ export const userRelations = relations(user, ({ many }) => ({
   noteEvents: many(noteEvents),
   noteVersions: many(noteVersions),
   noteShareLinks: many(noteShareLinks),
+  folderShareLinks: many(folderShareLinks),
   noteLinks: many(noteLinks),
   tags: many(tags),
   noteTags: many(noteTags),
@@ -536,6 +564,7 @@ export const folderRelations = relations(folders, ({ many, one }) => ({
   notes: many(notes),
   attachments: many(attachments),
   templateAssignments: many(templateFolderAssignments),
+  shareLinks: many(folderShareLinks),
 }));
 
 export const apiKeyRelations = relations(apiKeys, ({ many, one }) => ({
@@ -624,6 +653,11 @@ export const noteShareLinkRelations = relations(noteShareLinks, ({ one }) => ({
   user: one(user, { fields: [noteShareLinks.userId], references: [user.id] }),
 }));
 
+export const folderShareLinkRelations = relations(folderShareLinks, ({ one }) => ({
+  folder: one(folders, { fields: [folderShareLinks.folderId], references: [folders.id] }),
+  user: one(user, { fields: [folderShareLinks.userId], references: [user.id] }),
+}));
+
 export const tagRelations = relations(tags, ({ many, one }) => ({
   user: one(user, { fields: [tags.userId], references: [user.id] }),
   notes: many(noteTags),
@@ -653,6 +687,7 @@ export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSe
 export type NoteEvent = typeof noteEvents.$inferSelect;
 export type NoteVersion = typeof noteVersions.$inferSelect;
 export type NoteShareLink = typeof noteShareLinks.$inferSelect;
+export type FolderShareLink = typeof folderShareLinks.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type NoteTag = typeof noteTags.$inferSelect;
 export type NoteLink = typeof noteLinks.$inferSelect;
