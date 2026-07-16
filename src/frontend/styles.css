@@ -33,6 +33,12 @@
   --notes-table-header-bg: var(--notes-panel-muted);
   --notes-table-row-hover: var(--notes-hover);
   --notes-table-row-border: color-mix(in srgb, var(--notes-border) 65%, transparent);
+  --me-link-popover-bg: var(--notes-panel);
+  --me-link-popover-text: var(--notes-text);
+  --me-link-popover-muted: var(--notes-muted);
+  --me-link-popover-border: var(--notes-border);
+  --me-link-popover-input-bg: var(--notes-bg);
+  --me-link-popover-focus: var(--notes-blue);
 }
 
 .theme-catppuccin-latte {
