@@ -51,8 +51,8 @@ importers:
         specifier: github:spdydve/minucanvas#v0.5.0
         version: github.com/spdydve/minucanvas/7613a516fb1b40db1f7fbe14d1ae670d04a5aa70(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
-        specifier: github:spdydve/minueditor#v0.10.5
-        version: github.com/spdydve/minueditor/dd591d087aed268ce9c287f35a49c0ae949d3a99(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
+        specifier: github:spdydve/minueditor#v0.10.6
+        version: github.com/spdydve/minueditor/d2eb9f997999662343e160380f0b36a7ab274f57(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
       '@hono/node-server':
         specifier: ^2.0.3
         version: 2.0.3(hono@4.12.21)
@@ -168,7 +168,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.1.4)
+        version: 4.1.7(@types/node@25.9.1)(vite@8.1.5)
 
 packages:
 
@@ -3587,7 +3587,7 @@ packages:
       magic-string: 0.30.21
       vite: 8.0.14(@types/node@25.9.1)(tsx@4.22.3)
 
-  /@vitest/mocker@4.1.7(vite@8.1.4):
+  /@vitest/mocker@4.1.7(vite@8.1.5):
     resolution: {integrity: sha512-vY7nuamKgfvpA1Koa3oYIw/k7D6kZnpGyNMZW8loow2bsBYla1TFdqTaXncWdRn4pgwNs+90RhnXhJScDwQeJA==}
     peerDependencies:
       msw: ^2.4.9
@@ -3601,7 +3601,7 @@ packages:
       '@vitest/spy': 4.1.7
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 8.1.4(@types/node@25.9.1)(tsx@4.22.3)
+      vite: 8.1.5(@types/node@25.9.1)(tsx@4.22.3)
     dev: true
 
   /@vitest/pretty-format@4.1.7:
@@ -5423,8 +5423,8 @@ packages:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  /postcss@8.5.16:
-    resolution: {integrity: sha512-vuwillviilfKZsg0VGj5R/YwwcHx4SLsIOI/7K6mQkWx+l5cUHTjj5g0AasTBcyXsbfTgrwsUNmVUb5xVwyPwg==}
+  /postcss@8.5.19:
+    resolution: {integrity: sha512-Mz8SaolMd8nB+G13WkORcxQKHZ/NE4xXevtkJHVuG+guo9/wYKlIMTKAqGdEmYOXR2ijPjTYNHssizdaVSUNdQ==}
     engines: {node: ^10 || ^12 || >=14}
     dependencies:
       nanoid: 3.3.12
@@ -6251,8 +6251,8 @@ packages:
     optionalDependencies:
       fsevents: 2.3.3
 
-  /vite@8.1.4(@types/node@25.9.1)(tsx@4.22.3):
-    resolution: {integrity: sha512-bTT9PsdWO+MQMNG9ZXIP/qM9wGh37DFxTV/sPq9cFpHr3w4jkgef032PkAL9jAqhk3Nz8NQw3O8n6/xFkqO4QQ==}
+  /vite@8.1.5(@types/node@25.9.1)(tsx@4.22.3):
+    resolution: {integrity: sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -6297,7 +6297,7 @@ packages:
       '@types/node': 25.9.1
       lightningcss: 1.32.0
       picomatch: 4.0.5
-      postcss: 8.5.16
+      postcss: 8.5.19
       rolldown: 1.1.5
       tinyglobby: 0.2.17
       tsx: 4.22.3
@@ -6370,7 +6370,7 @@ packages:
     transitivePeerDependencies:
       - msw
 
-  /vitest@4.1.7(@types/node@25.9.1)(vite@8.1.4):
+  /vitest@4.1.7(@types/node@25.9.1)(vite@8.1.5):
     resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
@@ -6413,7 +6413,7 @@ packages:
     dependencies:
       '@types/node': 25.9.1
       '@vitest/expect': 4.1.7
-      '@vitest/mocker': 4.1.7(vite@8.1.4)
+      '@vitest/mocker': 4.1.7(vite@8.1.5)
       '@vitest/pretty-format': 4.1.7
       '@vitest/runner': 4.1.7
       '@vitest/snapshot': 4.1.7
@@ -6430,7 +6430,7 @@ packages:
       tinyexec: 1.2.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.1.4(@types/node@25.9.1)(tsx@4.22.3)
+      vite: 8.1.5(@types/node@25.9.1)(tsx@4.22.3)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw
@@ -6511,11 +6511,12 @@ packages:
       react-dom: 19.2.6(react@19.2.6)
     dev: false
 
-  github.com/spdydve/minueditor/dd591d087aed268ce9c287f35a49c0ae949d3a99(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/dd591d087aed268ce9c287f35a49c0ae949d3a99}
-    id: github.com/spdydve/minueditor/dd591d087aed268ce9c287f35a49c0ae949d3a99
+  github.com/spdydve/minueditor/d2eb9f997999662343e160380f0b36a7ab274f57(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/d2eb9f997999662343e160380f0b36a7ab274f57}
+    id: github.com/spdydve/minueditor/d2eb9f997999662343e160380f0b36a7ab274f57
     name: '@dpklabs/minueditor'
-    version: 0.10.5
+    version: 0.10.6
+    prepare: true
     requiresBuild: true
     peerDependencies:
       '@codemirror/autocomplete': ^6.20.0
