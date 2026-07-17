@@ -48,8 +48,8 @@ importers:
         specifier: ^6.5.3
         version: 6.5.3
       '@dpklabs/minucanvas':
-        specifier: github:spdydve/minucanvas#v0.5.1
-        version: github.com/spdydve/minucanvas/2a270044d030ee5689eb0c90fb76e23c0e43ac42(react-dom@19.2.6)(react@19.2.6)
+        specifier: github:spdydve/minucanvas#v0.5.2
+        version: github.com/spdydve/minucanvas/183c4db57a88914813b7ebd430ae5a0eee26263f(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
         specifier: github:spdydve/minueditor#v0.10.7
         version: github.com/spdydve/minueditor/873fc7bdba3519527ba23f3be093249f505bfcd5(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
@@ -6508,11 +6508,11 @@ packages:
   /zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
-  github.com/spdydve/minucanvas/2a270044d030ee5689eb0c90fb76e23c0e43ac42(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minucanvas/tar.gz/2a270044d030ee5689eb0c90fb76e23c0e43ac42}
-    id: github.com/spdydve/minucanvas/2a270044d030ee5689eb0c90fb76e23c0e43ac42
+  github.com/spdydve/minucanvas/183c4db57a88914813b7ebd430ae5a0eee26263f(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minucanvas/tar.gz/183c4db57a88914813b7ebd430ae5a0eee26263f}
+    id: github.com/spdydve/minucanvas/183c4db57a88914813b7ebd430ae5a0eee26263f
     name: '@dpklabs/minucanvas'
-    version: 0.5.1
+    version: 0.5.2
     prepare: true
     requiresBuild: true
     peerDependencies:
