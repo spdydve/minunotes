@@ -51,8 +51,8 @@ importers:
         specifier: github:spdydve/minucanvas#v0.5.0
         version: github.com/spdydve/minucanvas/7613a516fb1b40db1f7fbe14d1ae670d04a5aa70(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
-        specifier: github:spdydve/minueditor#v0.10.6
-        version: github.com/spdydve/minueditor/d2eb9f997999662343e160380f0b36a7ab274f57(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
+        specifier: github:spdydve/minueditor#v0.10.7
+        version: github.com/spdydve/minueditor/873fc7bdba3519527ba23f3be093249f505bfcd5(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
       '@hono/node-server':
         specifier: ^2.0.3
         version: 2.0.3(hono@4.12.21)
@@ -6511,11 +6511,11 @@ packages:
       react-dom: 19.2.6(react@19.2.6)
     dev: false
 
-  github.com/spdydve/minueditor/d2eb9f997999662343e160380f0b36a7ab274f57(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/d2eb9f997999662343e160380f0b36a7ab274f57}
-    id: github.com/spdydve/minueditor/d2eb9f997999662343e160380f0b36a7ab274f57
+  github.com/spdydve/minueditor/873fc7bdba3519527ba23f3be093249f505bfcd5(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/873fc7bdba3519527ba23f3be093249f505bfcd5}
+    id: github.com/spdydve/minueditor/873fc7bdba3519527ba23f3be093249f505bfcd5
     name: '@dpklabs/minueditor'
-    version: 0.10.6
+    version: 0.10.7
     prepare: true
     requiresBuild: true
     peerDependencies:

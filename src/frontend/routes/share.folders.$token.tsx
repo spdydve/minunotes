@@ -5,7 +5,7 @@ import {
   mindMapCanvasProfile,
   standardCanvasProfile,
 } from '@dpklabs/minucanvas';
-import { MarkdownEditor } from '@dpklabs/minueditor';
+import { MarkdownRenderer } from '@dpklabs/minueditor';
 import { useQuery } from '@tanstack/react-query';
 import { createRoute } from '@tanstack/react-router';
 import type React from 'react';
@@ -13,7 +13,6 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/ui/empty-state';
 import { ApiError, api, type DocumentType, type SharedFolderChild, type SharedFolderNote } from '../lib/api';
 import { editorCodeHighlighter } from '../lib/code-highlighter';
-import { editorCodeLanguages } from '../lib/editor-languages';
 import { rootRoute } from './__root';
 
 const EMPTY_CANVAS: JsonCanvasDocument = { nodes: [], edges: [] };
@@ -327,14 +326,10 @@ function SharedFolderNoteView({ note, onBack }: { note: SharedFolderNote; onBack
         <SharedFolderCanvas content={note.content} documentType={note.documentType} />
       ) : (
         <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-          <MarkdownEditor
+          <MarkdownRenderer
             value={note.content}
-            onChange={() => undefined}
-            readOnly
-            minHeight={520}
-            codeLanguages={editorCodeLanguages}
             codeHighlighter={editorCodeHighlighter}
-            className="notes-minu-editor"
+            className="notes-minu-renderer"
           />
         </div>
       )}

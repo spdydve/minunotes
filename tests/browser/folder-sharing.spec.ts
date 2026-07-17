@@ -30,13 +30,13 @@ test('renders a public shared folder read-only view', async ({ page }) => {
 
   await page.getByRole('button', { name: browserFixture.source.title }).click();
   await expect(page.getByRole('heading', { name: browserFixture.source.title })).toBeVisible();
-  await expect(page.locator('.cm-content')).toContainText(browserFixture.source.content);
+  await expect(page.locator('.notes-minu-renderer')).toContainText(browserFixture.source.content);
 
   await page.getByRole('button', { name: 'Back to folder' }).click();
   await page.getByRole('button', { name: browserFixture.childFolder.title }).first().click();
   await expect(page.getByRole('heading', { name: browserFixture.childFolder.title })).toBeVisible();
   await page.getByRole('button', { name: browserFixture.child.title }).click();
   await expect(page.getByRole('heading', { name: browserFixture.child.title })).toBeVisible();
-  await expect(page.locator('.cm-content')).toContainText(browserFixture.child.content);
+  await expect(page.locator('.notes-minu-renderer')).toContainText(browserFixture.child.content);
   await expect(page.getByLabel(`Actions for ${browserFixture.folder.title}`)).toHaveCount(0);
 });
