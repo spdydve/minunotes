@@ -219,15 +219,17 @@ function NoteView() {
     return {
       enabled: true,
       openOnClick: true,
-      suggest: async (query: string) => {
+      labelBehavior: 'title' as const,
+      suggest: async (query: string, context?: { link?: { target: string; label?: string } }) => {
         const trimmed = query.trim();
-        const result = trimmed ? await api.searchNotes(trimmed, 'note', 50) : await api.recentNotes(20);
+        const searchTerm = noteIdPattern.test(trimmed) && context?.link?.label ? context.link.label.trim() : trimmed;
+        const result = searchTerm ? await api.searchNotes(searchTerm, 'note', 50) : await api.recentNotes(20);
         return result.notes
           .filter((note) => note.id !== noteId && note.type === 'note')
           .slice(0, 50)
           .map((note) => ({
             id: note.id,
-            target: `${note.id}|${note.title}`,
+            target: note.id,
             label: note.title,
             detail: 'folderTitle' in note && typeof note.folderTitle === 'string' ? note.folderTitle : 'Note',
           }));

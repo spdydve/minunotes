@@ -104,7 +104,30 @@ test('inserts an ID-backed wikilink selected from note suggestions', async ({ pa
   await page.getByText(browserFixture.target.title, { exact: true }).click();
   await api.expectSavedContent(`[[${browserFixture.target.id}|${browserFixture.target.title}]]`);
 
-  await page.getByPlaceholder('Untitled note').click();
-  await page.getByText(browserFixture.target.title, { exact: true }).click();
+  await page
+    .getByText(`[[${browserFixture.target.id}|${browserFixture.target.title}]]`, { exact: true })
+    .click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
   await expect(page).toHaveURL(new RegExp(`/notes/${browserFixture.target.id}$`));
+});
+
+test('refreshes wikilink suggestions while typing an open wikilink query', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const editor = page.locator('.cm-content');
+  await expect(editor).toBeVisible();
+  await editor.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.type('[[');
+
+  api.notes.set('note_fresh_target', {
+    ...browserFixture.target,
+    id: 'note_fresh_target',
+    title: 'Fresh Target',
+    content: 'Fresh target content.',
+  });
+
+  await page.keyboard.type('Fresh');
+  await page.getByText('Fresh Target', { exact: true }).click();
+  await api.expectSavedContent('[[note_fresh_target|Fresh Target]]');
 });
