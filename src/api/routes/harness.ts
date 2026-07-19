@@ -5,6 +5,7 @@ import {
   type ApiKey,
   apiKeyFolderPermissions,
   folders,
+  type Note,
   notes,
   type OAuthAuthorization,
   oauthAuthorizationFolderPermissions,
@@ -60,6 +61,29 @@ function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType;
     : oauthAuthorization
       ? { actorType: 'agent', actorId: oauthAuthorization.id }
       : { actorType: 'user' };
+}
+
+type HarnessNoteSummary = Pick<Note, 'id' | 'folderId' | 'title' | 'documentType' | 'type' | 'createdAt' | 'updatedAt'>;
+
+type SummarizableNote = HarnessNoteSummary & { content?: string; userId?: string };
+
+function summarizeHarnessNote(note: SummarizableNote): HarnessNoteSummary {
+  return {
+    id: note.id,
+    folderId: note.folderId,
+    title: note.title,
+    documentType: note.documentType,
+    type: note.type,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+  };
+}
+
+function summarizeHarnessDocumentResult<T extends { note: SummarizableNote; contentHash: string }>(result: T) {
+  return {
+    ...result,
+    note: summarizeHarnessNote(result.note),
+  };
 }
 
 async function hasFolderPermission(
@@ -240,7 +264,7 @@ harnessRoutes.post('/notes', async (c) => {
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json(result.value, 201);
+  return c.json(summarizeHarnessDocumentResult(result.value), 201);
 });
 
 harnessRoutes.post('/canvases', async (c) => {
@@ -273,7 +297,7 @@ harnessRoutes.post('/canvases', async (c) => {
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json(result.value, 201);
+  return c.json(summarizeHarnessDocumentResult(result.value), 201);
 });
 
 harnessRoutes.post('/canvases/from-syntax', async (c) => {
@@ -306,7 +330,7 @@ harnessRoutes.post('/canvases/from-syntax', async (c) => {
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json({ ...result.value, diagnostics: compiled.diagnostics }, 201);
+  return c.json({ ...summarizeHarnessDocumentResult(result.value), diagnostics: compiled.diagnostics }, 201);
 });
 
 harnessRoutes.get('/notes/orphans', async (c) => {
@@ -544,7 +568,7 @@ harnessRoutes.put('/notes/:noteId/canvas', async (c) => {
       { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
       result.status
     );
-  return c.json(result.value);
+  return c.json(summarizeHarnessDocumentResult(result.value));
 });
 
 harnessRoutes.put('/notes/:noteId/canvas/from-syntax', async (c) => {
@@ -584,7 +608,7 @@ harnessRoutes.put('/notes/:noteId/canvas/from-syntax', async (c) => {
       { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
       result.status
     );
-  return c.json({ ...result.value, diagnostics: compiled.diagnostics });
+  return c.json({ ...summarizeHarnessDocumentResult(result.value), diagnostics: compiled.diagnostics });
 });
 
 harnessRoutes.post('/notes/:noteId/edit', async (c) => {
@@ -615,5 +639,5 @@ harnessRoutes.post('/notes/:noteId/edit', async (c) => {
       { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
       result.status
     );
-  return c.json(result.value);
+  return c.json(summarizeHarnessDocumentResult(result.value));
 });

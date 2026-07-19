@@ -100,10 +100,17 @@ describe('harness canvas operations', () => {
     });
 
     expect(response.status).toBe(201);
-    const { note } = (await response.json()) as { note: { title: string; documentType: string; content: string } };
+    const { note } = (await response.json()) as {
+      note: { id: string; title: string; documentType: string; content?: string };
+    };
     expect(note.title).toBe('Raw canvas');
     expect(note.documentType).toBe('canvas.default');
-    expect(JSON.parse(note.content)).toEqual(canvas);
+    expect(note.content).toBeUndefined();
+
+    const read = await app.request(`/api/harness/notes/${note.id}`);
+    expect(read.status).toBe(200);
+    const { note: fullNote } = (await read.json()) as { note: { content: string } };
+    expect(JSON.parse(fullNote.content)).toEqual(canvas);
   });
 
   it('creates a mind map note from diagram syntax', async () => {
@@ -120,13 +127,18 @@ describe('harness canvas operations', () => {
 
     expect(response.status).toBe(201);
     const { note, diagnostics } = (await response.json()) as {
-      note: { title: string; documentType: string; content: string };
+      note: { id: string; title: string; documentType: string; content?: string };
       diagnostics: unknown[];
     };
     expect(note.title).toBe('Product plan');
     expect(note.documentType).toBe('canvas.mindmap');
+    expect(note.content).toBeUndefined();
     expect(diagnostics).toEqual([]);
-    const canvas = JSON.parse(note.content) as {
+
+    const read = await app.request(`/api/harness/notes/${note.id}`);
+    expect(read.status).toBe(200);
+    const { note: fullNote } = (await read.json()) as { note: { content: string } };
+    const canvas = JSON.parse(fullNote.content) as {
       nodes: Array<{ id: string; text?: string }>;
       edges: Array<{ fromNode: string; toNode: string }>;
     };
@@ -152,10 +164,15 @@ describe('harness canvas operations', () => {
       body: JSON.stringify({ syntax: `diagram "Auth flow" {\n  User > Login\n  Login > Dashboard\n}` }),
     });
     expect(replace.status).toBe(200);
-    const replaced = (await replace.json()) as { note: { title: string; documentType: string; content: string } };
+    const replaced = (await replace.json()) as { note: { title: string; documentType: string; content?: string } };
     expect(replaced.note.title).toBe('Auth flow');
     expect(replaced.note.documentType).toBe('canvas.default');
-    expect(JSON.parse(replaced.note.content).nodes.map((node: { id: string }) => node.id)).toEqual(
+    expect(replaced.note.content).toBeUndefined();
+
+    const read = await app.request(`/api/harness/notes/${created.note.id}`);
+    expect(read.status).toBe(200);
+    const { note: fullNote } = (await read.json()) as { note: { content: string } };
+    expect(JSON.parse(fullNote.content).nodes.map((node: { id: string }) => node.id)).toEqual(
       expect.arrayContaining(['User', 'Login', 'Dashboard'])
     );
 

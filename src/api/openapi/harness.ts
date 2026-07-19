@@ -121,8 +121,8 @@ export const harnessOpenApiSpec = {
         },
         responses: {
           '201': {
-            description: 'Created note',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteResponse' } } },
+            description: 'Created note summary',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteMutationResponse' } } },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
@@ -141,8 +141,8 @@ export const harnessOpenApiSpec = {
         },
         responses: {
           '201': {
-            description: 'Created canvas note',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteResponse' } } },
+            description: 'Created canvas note summary',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteMutationResponse' } } },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
@@ -161,8 +161,10 @@ export const harnessOpenApiSpec = {
         },
         responses: {
           '201': {
-            description: 'Created canvas note',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/CanvasSyntaxNoteResponse' } } },
+            description: 'Created canvas note summary',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CanvasSyntaxNoteMutationResponse' } },
+            },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
@@ -374,8 +376,8 @@ export const harnessOpenApiSpec = {
         },
         responses: {
           '200': {
-            description: 'Updated canvas note',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteResponse' } } },
+            description: 'Updated canvas note summary',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteMutationResponse' } } },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
@@ -397,8 +399,10 @@ export const harnessOpenApiSpec = {
         },
         responses: {
           '200': {
-            description: 'Updated canvas note',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/CanvasSyntaxNoteResponse' } } },
+            description: 'Updated canvas note summary',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/CanvasSyntaxNoteMutationResponse' } },
+            },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
@@ -420,8 +424,8 @@ export const harnessOpenApiSpec = {
         },
         responses: {
           '200': {
-            description: 'Updated note',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteResponse' } } },
+            description: 'Updated note summary',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteMutationResponse' } } },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
@@ -548,16 +552,46 @@ export const harnessOpenApiSpec = {
           folderTitle: { type: 'string' },
         },
       },
+      CompactNote: {
+        type: 'object',
+        required: ['id', 'folderId', 'title', 'documentType', 'type', 'createdAt', 'updatedAt'],
+        properties: {
+          id: { type: 'string' },
+          folderId: { type: 'string' },
+          title: { type: 'string' },
+          documentType: { $ref: '#/components/schemas/DocumentType' },
+          type: { type: 'string', enum: ['note', 'template'] },
+          createdAt: { type: 'string' },
+          updatedAt: { type: 'string' },
+        },
+      },
       NoteResponse: {
         type: 'object',
         required: ['note', 'contentHash'],
         properties: { note: { $ref: '#/components/schemas/Note' }, contentHash: { type: 'string' } },
+      },
+      NoteMutationResponse: {
+        type: 'object',
+        required: ['note', 'contentHash'],
+        description: 'Compact create/update response. Use the read-note endpoint to retrieve full content.',
+        properties: { note: { $ref: '#/components/schemas/CompactNote' }, contentHash: { type: 'string' } },
       },
       CanvasSyntaxNoteResponse: {
         type: 'object',
         required: ['note', 'contentHash', 'diagnostics'],
         properties: {
           note: { $ref: '#/components/schemas/Note' },
+          contentHash: { type: 'string' },
+          diagnostics: { type: 'array', items: { $ref: '#/components/schemas/DiagramDiagnostic' } },
+        },
+      },
+      CanvasSyntaxNoteMutationResponse: {
+        type: 'object',
+        required: ['note', 'contentHash', 'diagnostics'],
+        description:
+          'Compact create/update response with diagram diagnostics. Use the read-note endpoint to retrieve full content.',
+        properties: {
+          note: { $ref: '#/components/schemas/CompactNote' },
           contentHash: { type: 'string' },
           diagnostics: { type: 'array', items: { $ref: '#/components/schemas/DiagramDiagnostic' } },
         },

@@ -35,6 +35,8 @@ POST /v1/harness/folders
 4. Send small edits with `baseHash`.
 5. Read back the note and report final markdown or a changed-section summary.
 
+Create and update responses return compact note metadata plus `contentHash`; they do not include full note `content`. Use the read-note endpoint when content is needed.
+
 ## Canvas notes
 
 Canvas notes use `documentType: "canvas.default"` or `"canvas.mindmap"`. Their `content` is serialized JSON Canvas, not markdown. Markdown patch edits are rejected for canvas notes.

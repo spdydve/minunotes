@@ -85,6 +85,8 @@ curl -s "${AUTH[@]}" \
   -d '{"folderId":"folder_xxx","title":"Agent Harness Smoke Test","content":"# Agent Harness Smoke Test\n\n- [ ] Created by harness\n"}'
 ```
 
+Create/update responses return compact note metadata plus `contentHash`, not full note content. Read the note explicitly when content is needed.
+
 Read a note:
 
 ```bash
