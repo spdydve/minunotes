@@ -4,8 +4,6 @@ import path from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-type TestContext = Awaited<ReturnType<typeof setupHarnessApp>>;
-
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
@@ -123,8 +121,11 @@ describe('agent-created folder access', () => {
     });
 
     expect(createNoteResponse.status).toBe(201);
-    const { note } = (await createNoteResponse.json()) as { note: { folderId: string; title: string } };
+    const { note } = (await createNoteResponse.json()) as {
+      note: { folderId: string; title: string; content?: string };
+    };
     expect(note).toEqual(expect.objectContaining({ folderId: folder.id, title: 'Agent note' }));
+    expect(note.content).toBeUndefined();
   });
 
   it('allows all-access keys to read non-private folders but excludes private folders', async () => {
