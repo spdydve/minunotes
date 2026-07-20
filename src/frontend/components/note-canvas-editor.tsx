@@ -122,13 +122,12 @@ export function NoteCanvasEditor({
             tools={toolsForCanvasProfile(canvasProfile)}
           />
         </div>
-        <div className="absolute bottom-4 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2 overflow-x-auto">
-          <CanvasStyleToolbar
-            value={value}
-            selection={selection}
-            onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
-          />
-        </div>
+        <CanvasStyleToolbar
+          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
+          value={value}
+          selection={selection}
+          onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
+        />
         {initialViewport ? (
           <MinuCanvas
             value={value}
