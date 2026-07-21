@@ -4,7 +4,9 @@ MinuNotes is designed around a few lightweight organization tools rather than a 
 
 ## Folders
 
-Use folders for broad areas of work, projects, or access boundaries. Folder permissions also control what API keys and agents can read or edit.
+Use folders for broad areas of work, projects, or access boundaries. Folder permissions also control what API keys and agents can read, edit, create, or organize.
+
+Agents with an appropriately scoped API key can move notes into subfolders they can create in. A project-root scoped key keeps agent organization work inside that project; broader keys can move notes across granted roots.
 
 ## Wikilinks and backlinks
 

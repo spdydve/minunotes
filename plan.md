@@ -1,3 +1,104 @@
+# Agent and Bulk Note Move Plan
+
+Goal: let agents and users move one or many notes into a target folder so agent-created notes can be organized inside the existing folder permission model.
+
+## Current baseline
+- Internal UI already has single-note move support through `PATCH /internal/notes/:noteId` with `folderId` and `MoveNoteDialog`.
+- Harness permissions already support folder-scoped read/create/edit checks through `canIntegrationAccessFolder`.
+- Harness does not currently expose a dedicated note move endpoint.
+- UI does not currently expose multi-note/bulk move from folder lists.
+
+## Decisions
+- Implement a first-class batch move command and route; single-note move is just a one-item batch.
+- Keep permissions capability-based, not root-hardcoded:
+  - source folder requires `edit` permission.
+  - target folder requires `create` permission.
+  - private/read-only constraints continue to come from existing folder-access helpers.
+  - cross-root moves are allowed only when the actor has permission for both source and target through existing grants.
+- Use all-or-nothing behavior for batch moves.
+- Limit batch size, initially 100 note IDs.
+- Move only regular notes/templates that the caller is permitted to move according to route context:
+  - harness should reject templates via existing agent-edit rules unless explicitly extended later.
+  - internal UI may move notes the signed-in user owns.
+- Keep mutation responses compact for harness: no `content` in moved notes.
+- Record move activity/events and pre-agent version checkpoints through existing `updateDocument` behavior.
+
+## Files to modify/create
+
+### API and harness
+- `src/api/harness/commands.ts`
+  - Add `moveDocuments` / `moveNotes` command using existing `updateDocument` or a transactional batch wrapper.
+  - Reuse `updateDocument` move event behavior where possible.
+  - Add batch size validation and all-or-nothing preflight.
+- `src/api/routes/harness.ts`
+  - Add `POST /v1/harness/notes/move` body `{ noteIds: string[], targetFolderId: string }`.
+  - Check target `create` permission.
+  - Check each source note `edit` permission before moving.
+  - Return `{ notes: CompactNote[], targetFolderId }`.
+- `src/api/routes/notes.ts`
+  - Optional: add internal bulk route `POST /internal/notes/move` for UI reuse, or keep UI batch using repeated single-note PATCH only if simpler.
+  - Prefer an internal bulk route for all-or-nothing UI behavior.
+- `src/api/openapi/harness.ts`
+  - Add request/response schemas and path docs for batch move.
+
+### Frontend UI
+- `src/frontend/lib/api.ts`
+  - Add `moveNotes(noteIds, targetFolderId)` client method and response types.
+- `src/frontend/components/move-note-dialog.tsx`
+  - Reuse or generalize for multiple notes if practical.
+- `src/frontend/components/move-notes-dialog.tsx` or generalized dialog
+  - New bulk move dialog using existing `FolderDestinationPicker`.
+- `src/frontend/components/notes-table.tsx`
+  - Add multi-select rows and a bulk action bar with “Move”.
+  - Invalidate source and target folder note queries after move.
+- `src/frontend/routes/folders.$folderId.tsx`
+  - Wire selected notes and bulk move dialog into folder note list.
+
+### Docs and skills
+- `docs/skills/minunotes-harness-api/SKILL.md`
+  - Add `moveNotes`/batch move usage and permission notes.
+- `/Users/davidkennedy/.pi/agent/skills/minunotes-harness/SKILL.md`
+  - Mirror tool guidance if local skill docs should match deployed harness tools.
+- `src/frontend/docs/resources/harness-api.mdx`
+  - Add batch move endpoint example.
+- Optional: `docs/guides/organizing-notes.md`
+  - Add a short note that agents can organize notes by moving them within granted folder access.
+
+### Tests
+- `tests/harness-folder-access.test.ts`
+  - Add harness move tests:
+    - moves one note when source edit + target create are allowed.
+    - moves multiple notes all-or-nothing.
+    - blocks inaccessible source folder.
+    - blocks inaccessible target folder.
+    - permits cross-root when both roots are granted.
+    - blocks write into agent-read-only folder for all/top-level grants.
+    - preserves compact response with no content.
+- New or existing internal route tests for `POST /internal/notes/move` if added.
+- Browser tests, likely `tests/browser/note-editor.spec.ts` or a new folder-list spec:
+  - mocked bulk select + move flow.
+
+## Verification
+- `pnpm exec biome check --write <changed files>`
+- `pnpm typecheck`
+- Targeted tests:
+  - `pnpm test tests/harness-folder-access.test.ts`
+  - internal move route tests if added
+  - relevant browser spec
+- Full suite:
+  - `pnpm test`
+  - `pnpm test:browser`
+  - `pnpm build`
+
+## Status
+- [x] Approved for implementation.
+- [x] API/harness batch move route and command implemented.
+- [x] Internal bulk move route and UI bulk move flow implemented.
+- [x] OpenAPI, docs, skills, unit tests, and browser tests updated.
+- [x] Biome, typecheck, unit tests, browser tests, and build passed.
+
+---
+
 # Read-only Folder Sharing Plan
 
 Goal: add public, read-only folder share links that expose a Drive-like folder landing page with nested subfolders and notes/canvases under the shared folder, without enabling edits, API-key access, or workspace-wide sharing.

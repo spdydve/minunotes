@@ -38,6 +38,7 @@ Use JSON for request/response bodies.
 - For `canvas.default` and `canvas.mindmap`, use canvas JSON or Minu diagram syntax endpoints instead of markdown patch edits.
 - For app-owned images, preserve normal URL markdown such as `/internal/attachments/.../content`.
 - Report the folder ID, note ID, and final changed markdown or section summary after edits.
+- Use note moves to organize agent-created notes only within folders the API key can edit/create in.
 - If an API key lacks permission, report the permission issue instead of retrying unrelated actions.
 
 ## Common commands
@@ -86,6 +87,16 @@ curl -s "${AUTH[@]}" \
 ```
 
 Create/update responses return compact note metadata plus `contentHash`, not full note content. Read the note explicitly when content is needed.
+
+Move notes to another accessible folder:
+
+```bash
+curl -s "${AUTH[@]}" \
+  -X POST "$API/v1/harness/notes/move" \
+  -d '{"noteIds":["note_xxx","note_yyy"],"targetFolderId":"folder_xxx"}'
+```
+
+Moving requires edit access to every source note folder and create access to the target folder. The response is compact and does not include note content.
 
 Read a note:
 
@@ -187,6 +198,7 @@ curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 - `GET /v1/harness/notes/search?q=...&tag=...`
 - `GET /v1/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
 - `POST /v1/harness/notes`
+- `POST /v1/harness/notes/move`
 - `POST /v1/harness/canvases`
 - `POST /v1/harness/canvases/from-syntax`
 - `GET /v1/harness/notes/orphans`

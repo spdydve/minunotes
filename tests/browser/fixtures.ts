@@ -188,6 +188,17 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
         notes: [...notes.values()].map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
       });
 
+    if (path === '/notes/move' && method === 'POST') {
+      const body = request.postDataJSON() as { noteIds?: string[]; targetFolderId?: string };
+      const moved = (body.noteIds ?? []).map((noteId) => {
+        const note = notes.get(noteId);
+        if (!note) return null;
+        Object.assign(note, { folderId: body.targetFolderId ?? note.folderId, updatedAt: now });
+        return { note, contentHash: `hash_${++hashVersion}` };
+      });
+      return json({ notes: moved.filter(Boolean) });
+    }
+
     if (path === '/notes/search' && method === 'GET') {
       const query = url.searchParams.get('q')?.toLowerCase() ?? '';
       return json({

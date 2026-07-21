@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -76,6 +77,50 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
+
+function folderRow(id: string, title: string, parentFolderId: string | null = null, extras = {}) {
+  return {
+    id,
+    userId: 'user_test',
+    parentFolderId,
+    title,
+    isPrivate: false,
+    isAgentReadOnly: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...extras,
+  };
+}
+
+function noteRow(id: string, folderId: string, title: string, extras = {}) {
+  return {
+    id,
+    userId: 'user_test',
+    folderId,
+    title,
+    content: `${title} content`,
+    documentType: 'markdown' as const,
+    type: 'note' as const,
+    isApiEditable: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...extras,
+  };
+}
+
+function permissionRow(apiKeyId: string, folderId: string, extras = {}) {
+  return {
+    id: `agent_perm_${folderId}`,
+    apiKeyId,
+    folderId,
+    canRead: true,
+    canCreate: true,
+    canEdit: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...extras,
+  };
+}
 
 describe('agent-created folder access', () => {
   it('rejects API keys without folder creation permission', async () => {
@@ -340,5 +385,142 @@ describe('agent-created folder access', () => {
     const explicitChildResponse = await app.request('/api/harness/folders');
     const explicitChildBody = (await explicitChildResponse.json()) as { folders: Array<{ id: string }> };
     expect(explicitChildBody.folders.map((folder) => folder.id)).toContain(child.id);
+  });
+
+  it('moves multiple notes with compact responses when source edit and target create are allowed', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'specific' });
+    await db
+      .insert(schema.folders)
+      .values([folderRow('folder_source', 'Source'), folderRow('folder_target', 'Target')]);
+    await db
+      .insert(schema.apiKeyFolderPermissions)
+      .values([permissionRow(apiKey.id, 'folder_source'), permissionRow(apiKey.id, 'folder_target')]);
+    await db
+      .insert(schema.notes)
+      .values([noteRow('note_one', 'folder_source', 'One'), noteRow('note_two', 'folder_source', 'Two')]);
+
+    const response = await app.request('/api/harness/notes/move', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: ['note_one', 'note_two'], targetFolderId: 'folder_target' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      targetFolderId: string;
+      notes: Array<{ id: string; folderId: string; content?: string }>;
+    };
+    expect(body.targetFolderId).toBe('folder_target');
+    expect(body.notes).toEqual([
+      expect.objectContaining({ id: 'note_one', folderId: 'folder_target' }),
+      expect.objectContaining({ id: 'note_two', folderId: 'folder_target' }),
+    ]);
+    expect(body.notes.some((note) => note.content !== undefined)).toBe(false);
+
+    const rows = await db.select({ id: schema.notes.id, folderId: schema.notes.folderId }).from(schema.notes);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: 'note_one', folderId: 'folder_target' },
+        { id: 'note_two', folderId: 'folder_target' },
+      ])
+    );
+    const events = await db.select().from(schema.noteEvents);
+    expect(events.filter((event) => event.eventType === 'move')).toHaveLength(2);
+  });
+
+  it('does not move any notes when one source note is outside the editable scope', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'specific' });
+    await db
+      .insert(schema.folders)
+      .values([
+        folderRow('folder_allowed', 'Allowed'),
+        folderRow('folder_blocked', 'Blocked'),
+        folderRow('folder_target', 'Target'),
+      ]);
+    await db
+      .insert(schema.apiKeyFolderPermissions)
+      .values([permissionRow(apiKey.id, 'folder_allowed'), permissionRow(apiKey.id, 'folder_target')]);
+    await db
+      .insert(schema.notes)
+      .values([
+        noteRow('note_allowed', 'folder_allowed', 'Allowed'),
+        noteRow('note_blocked', 'folder_blocked', 'Blocked'),
+      ]);
+
+    const response = await app.request('/api/harness/notes/move', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: ['note_allowed', 'note_blocked'], targetFolderId: 'folder_target' }),
+    });
+
+    expect(response.status).toBe(403);
+    const [allowed] = await db
+      .select({ folderId: schema.notes.folderId })
+      .from(schema.notes)
+      .where(eq(schema.notes.id, 'note_allowed'));
+    expect(allowed.folderId).toBe('folder_allowed');
+  });
+
+  it('blocks moving notes into inaccessible target folders', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'specific' });
+    await db
+      .insert(schema.folders)
+      .values([folderRow('folder_source', 'Source'), folderRow('folder_target', 'Target')]);
+    await db.insert(schema.apiKeyFolderPermissions).values(permissionRow(apiKey.id, 'folder_source'));
+    await db.insert(schema.notes).values(noteRow('note_one', 'folder_source', 'One'));
+
+    const response = await app.request('/api/harness/notes/move', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: ['note_one'], targetFolderId: 'folder_target' }),
+    });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('allows cross-root moves when both roots are granted', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'top_level' });
+    await db
+      .insert(schema.folders)
+      .values([
+        folderRow('folder_root_a', 'Root A'),
+        folderRow('folder_root_b', 'Root B'),
+        folderRow('folder_child_a', 'Child A', 'folder_root_a'),
+        folderRow('folder_child_b', 'Child B', 'folder_root_b'),
+      ]);
+    await db
+      .insert(schema.apiKeyFolderPermissions)
+      .values([permissionRow(apiKey.id, 'folder_root_a'), permissionRow(apiKey.id, 'folder_root_b')]);
+    await db.insert(schema.notes).values(noteRow('note_cross_root', 'folder_child_a', 'Cross root'));
+
+    const response = await app.request('/api/harness/notes/move', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: ['note_cross_root'], targetFolderId: 'folder_child_b' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      notes: [expect.objectContaining({ id: 'note_cross_root', folderId: 'folder_child_b' })],
+    });
+  });
+
+  it('blocks moving notes into agent read-only targets for all-access keys', async () => {
+    const { app, db, schema } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'all' });
+    await db
+      .insert(schema.folders)
+      .values([
+        folderRow('folder_source', 'Source'),
+        folderRow('folder_readonly', 'Read only', null, { isAgentReadOnly: true }),
+      ]);
+    await db.insert(schema.notes).values(noteRow('note_one', 'folder_source', 'One'));
+
+    const response = await app.request('/api/harness/notes/move', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: ['note_one'], targetFolderId: 'folder_readonly' }),
+    });
+
+    expect(response.status).toBe(403);
   });
 });

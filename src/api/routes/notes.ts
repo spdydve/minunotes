@@ -6,6 +6,7 @@ import {
   type DocumentEdit,
   editDocument,
   listNoteEvents,
+  moveDocuments,
   readDocument,
   searchDocuments,
   updateDocument,
@@ -417,6 +418,32 @@ noteRoutes.get('/:noteId/sections/:sectionId', async (c) => {
       markdown: result.value.note.content.slice(section.from, section.to),
       content: result.value.note.content.slice(section.contentFrom, section.contentTo),
     },
+  });
+});
+
+noteRoutes.post('/move', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { noteIds?: string[]; targetFolderId?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (!Array.isArray(body.noteIds)) return c.json({ error: 'Note ids array is required' }, 400);
+  if (!body.noteIds.every((noteId) => typeof noteId === 'string'))
+    return c.json({ error: 'Note ids must be strings' }, 400);
+  if (!body.targetFolderId) return c.json({ error: 'Target folder id is required' }, 400);
+
+  const result = await moveDocuments({
+    documentIds: body.noteIds,
+    targetFolderId: body.targetFolderId,
+    userId: user.id,
+    actorType: 'user',
+  });
+
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({
+    notes: await Promise.all(
+      result.value.notes.map(async (item) => ({ ...item, note: await withPublicActorUid(item.note) }))
+    ),
   });
 });
 

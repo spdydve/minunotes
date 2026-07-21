@@ -27,6 +27,16 @@ Folder creation is separate. Only keys with folder-creation permission can call:
 POST /v1/harness/folders
 ```
 
+Agents can move notes when the key can edit every source folder and create in the target folder. Cross-root moves work only when both sides are inside the key's granted scope.
+
+```bash
+curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
+  -X POST "$API/v1/harness/notes/move" \
+  -d '{"noteIds":["note_xxx","note_yyy"],"targetFolderId":"folder_xxx"}'
+```
+
+Move responses return compact note metadata and no content.
+
 ## Safe editing flow
 
 1. Search or list folders.

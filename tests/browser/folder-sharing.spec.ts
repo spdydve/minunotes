@@ -19,6 +19,26 @@ test('enables and copies a read-only folder share link', async ({ context, page 
   await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
 });
 
+test('moves selected notes from a folder list', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto(`/folders/${browserFixture.folder.id}`);
+
+  const table = page.locator('table');
+  await table.getByLabel(`Select ${browserFixture.source.title}`).check();
+  await table.getByLabel(`Select ${browserFixture.target.title}`).check();
+  await expect(page.getByText('2 notes selected')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Move' }).click();
+  const dialog = page.getByRole('heading', { name: 'Move 2 notes' }).locator('..');
+  await expect(page.getByRole('heading', { name: 'Move 2 notes' })).toBeVisible();
+  await dialog.getByRole('button', { name: browserFixture.childFolder.title, exact: true }).click();
+  await dialog.getByRole('button', { name: 'Move here' }).click();
+
+  await expect(page.getByText('2 notes selected')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: browserFixture.source.title })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: browserFixture.target.title })).toHaveCount(0);
+});
+
 test('renders a public shared folder read-only view', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/share/folders/folder_share_token');

@@ -130,6 +130,29 @@ export const harnessOpenApiSpec = {
         },
       },
     },
+    '/v1/harness/notes/move': {
+      post: {
+        tags: ['Notes'],
+        operationId: 'moveNotes',
+        summary: 'Move notes to a folder',
+        description:
+          'Moves one or more notes to a target folder. Requires edit access to every source folder and create access to the target folder. The response is compact and does not include note content.',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/MoveNotesRequest' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Moved note summaries',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/MoveNotesResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
     '/v1/harness/canvases': {
       post: {
         tags: ['Canvases'],
@@ -576,6 +599,15 @@ export const harnessOpenApiSpec = {
         description: 'Compact create/update response. Use the read-note endpoint to retrieve full content.',
         properties: { note: { $ref: '#/components/schemas/CompactNote' }, contentHash: { type: 'string' } },
       },
+      MoveNotesResponse: {
+        type: 'object',
+        required: ['targetFolderId', 'notes'],
+        description: 'Compact batch move response. Use the read-note endpoint to retrieve full content.',
+        properties: {
+          targetFolderId: { type: 'string' },
+          notes: { type: 'array', items: { $ref: '#/components/schemas/CompactNote' } },
+        },
+      },
       CanvasSyntaxNoteResponse: {
         type: 'object',
         required: ['note', 'contentHash', 'diagnostics'],
@@ -629,6 +661,14 @@ export const harnessOpenApiSpec = {
           title: { type: 'string' },
           content: { type: 'string' },
           documentType: { $ref: '#/components/schemas/DocumentType' },
+        },
+      },
+      MoveNotesRequest: {
+        type: 'object',
+        required: ['noteIds', 'targetFolderId'],
+        properties: {
+          noteIds: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'string' } },
+          targetFolderId: { type: 'string' },
         },
       },
       CreateCanvasRequest: {

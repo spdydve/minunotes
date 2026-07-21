@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   compileMinuDiagramSyntax,
   createDefaultCanvasDocument,
@@ -7,7 +8,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, like, or, sql } from 'drizzle-orm';
 import { syncNoteAttachmentReferences } from '../attachments/references';
 import { db } from '../db/client';
-import { folders, type Note, noteEvents, notes, noteTags, tags } from '../db/schema';
+import { folders, type Note, noteEvents, notes, noteTags, noteVersions, tags } from '../db/schema';
 import { createId } from '../lib/id';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from '../notes/links';
 import { createNoteVersion, maybeCreateUserCheckpoint } from '../notes/versions';
@@ -503,6 +504,216 @@ export async function readDocument(input: { documentId: string; userId: string }
     ok: true,
     value: { note, contentHash: hashMarkdown(note.content) },
   } satisfies DocumentCommandResult<{ note: typeof note; contentHash: string }>;
+}
+
+export const MAX_MOVE_DOCUMENTS = 100;
+const MAX_VERSIONS_PER_NOTE = 100;
+const USER_CHECKPOINT_INTERVAL_MS = 10 * 60 * 1000;
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+class MoveDocumentsTransactionError extends Error {
+  constructor(
+    readonly status: 400 | 403 | 404,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+function hashVersionState(
+  note: Pick<Note, 'title' | 'content' | 'documentType' | 'folderId' | 'createdAt' | 'isApiEditable'>
+) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        title: note.title,
+        content: note.content,
+        documentType: note.documentType,
+        folderId: note.folderId,
+        createdAt: note.createdAt.toISOString(),
+        isApiEditable: note.isApiEditable,
+      })
+    )
+    .digest('hex');
+}
+
+async function createMoveVersion(
+  tx: DbTransaction,
+  input: {
+    note: Note;
+    reason: 'autosave_checkpoint' | 'before_agent_edit';
+    actorType: 'user' | 'agent';
+    actorId?: string;
+  }
+) {
+  const stateHash = hashVersionState(input.note);
+  const [latest] = await tx
+    .select()
+    .from(noteVersions)
+    .where(and(eq(noteVersions.userId, input.note.userId), eq(noteVersions.noteId, input.note.id)))
+    .orderBy(desc(noteVersions.createdAt))
+    .limit(1);
+  if (latest?.stateHash === stateHash) return;
+
+  await tx.insert(noteVersions).values({
+    id: createId('note_version'),
+    userId: input.note.userId,
+    noteId: input.note.id,
+    title: input.note.title,
+    content: input.note.content,
+    documentType: input.note.documentType,
+    folderId: input.note.folderId,
+    createdAtValue: input.note.createdAt,
+    isApiEditable: input.note.isApiEditable,
+    stateHash,
+    reason: input.reason,
+    actorType: input.actorType,
+    actorId: input.actorId ?? null,
+    createdAt: new Date(),
+  });
+
+  const excess = await tx
+    .select({ id: noteVersions.id })
+    .from(noteVersions)
+    .where(and(eq(noteVersions.userId, input.note.userId), eq(noteVersions.noteId, input.note.id)))
+    .orderBy(desc(noteVersions.createdAt))
+    .limit(10_000)
+    .offset(MAX_VERSIONS_PER_NOTE);
+  if (excess.length > 0)
+    await tx.delete(noteVersions).where(
+      inArray(
+        noteVersions.id,
+        excess.map((row) => row.id)
+      )
+    );
+}
+
+async function maybeCreateMoveUserCheckpoint(tx: DbTransaction, input: { note: Note; actorId?: string }) {
+  const [latest] = await tx
+    .select()
+    .from(noteVersions)
+    .where(and(eq(noteVersions.userId, input.note.userId), eq(noteVersions.noteId, input.note.id)))
+    .orderBy(desc(noteVersions.createdAt))
+    .limit(1);
+  if (latest && Date.now() - latest.createdAt.getTime() < USER_CHECKPOINT_INTERVAL_MS) return;
+  await createMoveVersion(tx, {
+    note: input.note,
+    reason: 'autosave_checkpoint',
+    actorType: 'user',
+    actorId: input.actorId,
+  });
+}
+
+export async function moveDocuments(input: {
+  documentIds: string[];
+  targetFolderId: string;
+  userId: string;
+  actorType?: ActorType;
+  actorId?: string;
+}) {
+  const documentIds = [...new Set(input.documentIds.map((id) => id.trim()).filter(Boolean))];
+  if (documentIds.length === 0)
+    return { ok: false, status: 400, error: 'At least one note id is required' } satisfies DocumentCommandResult<never>;
+  if (documentIds.length > MAX_MOVE_DOCUMENTS)
+    return {
+      ok: false,
+      status: 400,
+      error: `Cannot move more than ${MAX_MOVE_DOCUMENTS} notes at once`,
+    } satisfies DocumentCommandResult<never>;
+
+  const [targetFolder] = await db
+    .select({ id: folders.id })
+    .from(folders)
+    .where(and(eq(folders.id, input.targetFolderId), eq(folders.userId, input.userId)))
+    .limit(1);
+  if (!targetFolder)
+    return { ok: false, status: 404, error: 'Destination folder not found' } satisfies DocumentCommandResult<never>;
+
+  const currentNotes = await db
+    .select()
+    .from(notes)
+    .where(and(eq(notes.userId, input.userId), inArray(notes.id, documentIds)));
+  if (currentNotes.length !== documentIds.length)
+    return { ok: false, status: 404, error: 'One or more notes were not found' } satisfies DocumentCommandResult<never>;
+
+  if (input.actorType === 'agent') {
+    if (currentNotes.some((note) => note.type === 'template'))
+      return {
+        ok: false,
+        status: 403,
+        error: 'Templates cannot be moved through the API',
+      } satisfies DocumentCommandResult<never>;
+    if (currentNotes.some((note) => !note.isApiEditable))
+      return {
+        ok: false,
+        status: 403,
+        error: 'One or more notes are not editable through the API',
+      } satisfies DocumentCommandResult<never>;
+  }
+
+  const noteById = new Map(currentNotes.map((note) => [note.id, note]));
+  const orderedNotes = documentIds
+    .map((documentId) => noteById.get(documentId))
+    .filter((note): note is Note => Boolean(note));
+
+  try {
+    const moved = await db.transaction(async (tx) => {
+      const results = [] as Array<{ note: Note; contentHash: string }>;
+      for (const currentNote of orderedNotes) {
+        const folderChanged = currentNote.folderId !== input.targetFolderId;
+        const actorType = input.actorType ?? 'user';
+        const beforeHash = hashMarkdown(currentNote.content);
+        if (folderChanged && input.actorType === 'agent') {
+          await createMoveVersion(tx, {
+            note: currentNote,
+            reason: 'before_agent_edit',
+            actorType: 'agent',
+            actorId: input.actorId,
+          });
+        } else if (folderChanged && actorType === 'user') {
+          await maybeCreateMoveUserCheckpoint(tx, { note: currentNote, actorId: input.actorId });
+        }
+
+        const [note] = await tx
+          .update(notes)
+          .set({
+            folderId: input.targetFolderId,
+            updatedByActorType: actorType,
+            updatedByActorId: input.actorId,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(notes.id, currentNote.id), eq(notes.userId, input.userId)))
+          .returning();
+        if (!note) throw new MoveDocumentsTransactionError(404, 'Note not found');
+
+        const contentHash = hashMarkdown(note.content);
+        if (folderChanged) {
+          await tx.insert(noteEvents).values({
+            id: createId('note_event'),
+            noteId: note.id,
+            userId: note.userId,
+            actorType,
+            actorId: input.actorId,
+            eventType: 'move',
+            summary: 'Moved note to another folder',
+            beforeHash,
+            afterHash: contentHash,
+            createdAt: new Date(),
+          });
+        }
+        results.push({ note, contentHash });
+      }
+      return results;
+    });
+
+    return { ok: true, value: { notes: moved } } satisfies DocumentCommandResult<{
+      notes: Array<{ note: Note; contentHash: string }>;
+    }>;
+  } catch (error) {
+    if (error instanceof MoveDocumentsTransactionError)
+      return { ok: false, status: error.status, error: error.message } satisfies DocumentCommandResult<never>;
+    throw error;
+  }
 }
 
 export interface UpdateDocumentInput {

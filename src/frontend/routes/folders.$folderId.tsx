@@ -3,6 +3,7 @@ import { createRoute, Link, useNavigate } from '@tanstack/react-router';
 import { ChevronDown, FileText, Folder as FolderIcon, GitBranch, Lock, Shapes } from 'lucide-react';
 import { useState } from 'react';
 import { FolderActionsPopover } from '../components/folder-actions-popover';
+import { MoveNotesDialog } from '../components/move-notes-dialog';
 import { NoteActionsPopover } from '../components/note-actions-popover';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
@@ -84,8 +85,50 @@ function FolderContentsTable({
   allFolders: Folder[];
   onDeleteNote: (note: Note) => void;
 }) {
+  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
+  const visibleNotes = items.flatMap((item) => (item.kind === 'note' ? [item.note] : []));
+  const selectedNotes = visibleNotes.filter((note) => selectedNoteIds.has(note.id));
+  const allVisibleNotesSelected = visibleNotes.length > 0 && visibleNotes.every((note) => selectedNoteIds.has(note.id));
+  const someVisibleNotesSelected = visibleNotes.some((note) => selectedNoteIds.has(note.id));
+
+  const toggleNote = (noteId: string, checked: boolean) => {
+    setSelectedNoteIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(noteId);
+      else next.delete(noteId);
+      return next;
+    });
+  };
+
+  const toggleAllVisibleNotes = (checked: boolean) => {
+    setSelectedNoteIds((current) => {
+      const next = new Set(current);
+      for (const note of visibleNotes) {
+        if (checked) next.add(note.id);
+        else next.delete(note.id);
+      }
+      return next;
+    });
+  };
+
+  const bulkActions =
+    selectedNotes.length > 0 ? (
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] px-3 py-2 text-sm">
+        <span className="text-[var(--notes-muted)]">
+          {selectedNotes.length} {selectedNotes.length === 1 ? 'note' : 'notes'} selected
+        </span>
+        <div className="flex items-center gap-2">
+          <Button type="button" onClick={() => setSelectedNoteIds(new Set())}>
+            Clear
+          </Button>
+          <MoveNotesDialog notes={selectedNotes} onMoved={() => setSelectedNoteIds(new Set())} />
+        </div>
+      </div>
+    ) : null;
+
   return (
     <>
+      {bulkActions}
       <div className="space-y-2 md:hidden">
         {items.map((item) =>
           item.kind === 'folder' ? (
@@ -110,12 +153,12 @@ function FolderContentsTable({
                       ) : null}
                       {!isEffectivelyPrivate(item.folder, allFolders) &&
                       isEffectivelyAgentReadOnly(item.folder, allFolders) ? (
-                        <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-600">
+                        <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] text-amber-600 uppercase tracking-wide">
                           RO
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-1 block text-xs text-[var(--notes-muted)]">
+                    <span className="mt-1 block text-[var(--notes-muted)] text-xs">
                       Folder · Updated {new Date(item.folder.updatedAt).toLocaleString()}
                     </span>
                   </span>
@@ -129,32 +172,41 @@ function FolderContentsTable({
               className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] p-4"
             >
               <div className="flex items-start justify-between gap-3">
-                <Link
-                  to="/notes/$noteId"
-                  params={{ noteId: item.note.id }}
-                  className="flex min-w-0 flex-1 items-start gap-3"
-                >
-                  <span className="rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)]">
-                    {item.note.documentType.startsWith('canvas.') ? (
-                      <Shapes className="h-4 w-4" />
-                    ) : (
-                      <FileText className="h-4 w-4" />
-                    )}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
-                      <span className="truncate">{item.note.title}</span>
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-3"
+                    aria-label={`Select ${item.note.title}`}
+                    checked={selectedNoteIds.has(item.note.id)}
+                    onChange={(event) => toggleNote(item.note.id, event.currentTarget.checked)}
+                  />
+                  <Link
+                    to="/notes/$noteId"
+                    params={{ noteId: item.note.id }}
+                    className="flex min-w-0 flex-1 items-start gap-3"
+                  >
+                    <span className="rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)]">
+                      {item.note.documentType.startsWith('canvas.') ? (
+                        <Shapes className="h-4 w-4" />
+                      ) : (
+                        <FileText className="h-4 w-4" />
+                      )}
                     </span>
-                    <span className="mt-1 block text-xs text-[var(--notes-muted)]">
-                      {item.note.documentType === 'canvas.mindmap'
-                        ? 'Mind map'
-                        : item.note.documentType.startsWith('canvas.')
-                          ? 'Canvas'
-                          : 'Note'}{' '}
-                      · Updated {new Date(item.note.updatedAt).toLocaleString()}
+                    <span className="min-w-0">
+                      <span className="flex min-w-0 items-center gap-2 font-medium hover:text-[var(--notes-blue)]">
+                        <span className="truncate">{item.note.title}</span>
+                      </span>
+                      <span className="mt-1 block text-[var(--notes-muted)] text-xs">
+                        {item.note.documentType === 'canvas.mindmap'
+                          ? 'Mind map'
+                          : item.note.documentType.startsWith('canvas.')
+                            ? 'Canvas'
+                            : 'Note'}{' '}
+                        · Updated {new Date(item.note.updatedAt).toLocaleString()}
+                      </span>
                     </span>
-                  </span>
-                </Link>
+                  </Link>
+                </div>
                 <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />
               </div>
             </div>
@@ -166,16 +218,27 @@ function FolderContentsTable({
         <table className="w-full border-collapse text-sm">
           <thead className="bg-[var(--notes-table-header-bg)]">
             <tr>
-              <th className="border-b border-[var(--notes-border)] px-5 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+              <th className="border-[var(--notes-border)] border-b px-5 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                <input
+                  type="checkbox"
+                  aria-label="Select all notes"
+                  checked={allVisibleNotesSelected}
+                  ref={(input) => {
+                    if (input) input.indeterminate = someVisibleNotesSelected && !allVisibleNotesSelected;
+                  }}
+                  onChange={(event) => toggleAllVisibleNotes(event.currentTarget.checked)}
+                />
+              </th>
+              <th className="border-[var(--notes-border)] border-b px-5 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
                 Name
               </th>
-              <th className="border-b border-[var(--notes-border)] px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+              <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
                 Type
               </th>
-              <th className="border-b border-[var(--notes-border)] px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+              <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
                 Updated
               </th>
-              <th className="border-b border-[var(--notes-border)] px-5 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+              <th className="border-[var(--notes-border)] border-b px-5 py-2.5 text-right font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
                 Actions
               </th>
             </tr>
@@ -186,7 +249,17 @@ function FolderContentsTable({
                 key={item.kind === 'folder' ? `folder-${item.folder.id}` : `note-${item.note.id}`}
                 className="transition-colors hover:bg-[var(--notes-table-row-hover)]"
               >
-                <td className="border-b border-[var(--notes-table-row-border)] px-5 py-3 align-middle">
+                <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 align-middle">
+                  {item.kind === 'note' ? (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${item.note.title}`}
+                      checked={selectedNoteIds.has(item.note.id)}
+                      onChange={(event) => toggleNote(item.note.id, event.currentTarget.checked)}
+                    />
+                  ) : null}
+                </td>
+                <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 align-middle">
                   {item.kind === 'folder' ? (
                     <Link
                       to="/folders/$folderId"
@@ -200,7 +273,7 @@ function FolderContentsTable({
                       ) : null}
                       {!isEffectivelyPrivate(item.folder, allFolders) &&
                       isEffectivelyAgentReadOnly(item.folder, allFolders) ? (
-                        <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] uppercase tracking-wide text-amber-600">
+                        <span className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] text-amber-600 uppercase tracking-wide">
                           RO
                         </span>
                       ) : null}
@@ -220,7 +293,7 @@ function FolderContentsTable({
                     </Link>
                   )}
                 </td>
-                <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">
+                <td className="border-[var(--notes-table-row-border)] border-b px-4 py-3 align-middle text-[var(--notes-muted)] text-xs">
                   {item.kind === 'folder'
                     ? 'Folder'
                     : item.note.documentType === 'canvas.mindmap'
@@ -229,10 +302,10 @@ function FolderContentsTable({
                         ? 'Canvas'
                         : 'Note'}
                 </td>
-                <td className="border-b border-[var(--notes-table-row-border)] px-4 py-3 align-middle text-xs text-[var(--notes-muted)]">
+                <td className="border-[var(--notes-table-row-border)] border-b px-4 py-3 align-middle text-[var(--notes-muted)] text-xs">
                   {new Date(item.kind === 'folder' ? item.folder.updatedAt : item.note.updatedAt).toLocaleString()}
                 </td>
-                <td className="border-b border-[var(--notes-table-row-border)] px-5 py-3 align-middle text-right">
+                <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 text-right align-middle">
                   <div className="flex justify-end">
                     {item.kind === 'folder' ? (
                       <FolderActionsPopover
@@ -329,12 +402,12 @@ function FolderView() {
   return (
     <section className="mx-auto w-full max-w-5xl">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-semibold">{folder?.title ?? 'Folder notes'}</h2>
+        <h2 className="font-semibold text-xl">{folder?.title ?? 'Folder notes'}</h2>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <div className="inline-flex overflow-hidden rounded-md border border-[var(--notes-button-secondary-border)]">
             <button
               type="button"
-              className="border-r border-[var(--notes-button-secondary-border)] bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-sm text-[var(--notes-button-secondary-text)] transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="border-[var(--notes-button-secondary-border)] border-r bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               disabled={create.isPending}
               onClick={createMarkdownNote}
             >
@@ -344,7 +417,7 @@ function FolderView() {
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center bg-[var(--notes-button-secondary-bg)] px-2 text-sm text-[var(--notes-button-secondary-text)] transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center bg-[var(--notes-button-secondary-bg)] px-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={create.isPending}
                   aria-label="Open new options"
                 >

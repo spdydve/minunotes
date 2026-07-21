@@ -127,6 +127,7 @@ export type Note = {
   updatedAt: string;
 };
 export type NoteResponse = { note: Note; contentHash: string };
+export type MoveNotesResponse = { notes: NoteResponse[] };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type NoteShareLink = {
   id: string;
@@ -424,6 +425,11 @@ export const api = {
   ) => request<NoteResponse>(`/notes/${noteId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   moveNote: (noteId: string, folderId: string) =>
     request<NoteResponse>(`/notes/${noteId}`, { method: 'PATCH', body: JSON.stringify({ folderId }) }),
+  moveNotes: (noteIds: string[], targetFolderId: string) =>
+    request<MoveNotesResponse>('/notes/move', {
+      method: 'POST',
+      body: JSON.stringify({ noteIds, targetFolderId }),
+    }),
   searchNotes: (q: string, type: NoteType = 'note', limit?: number, tag?: string) =>
     request<{ notes: SearchNote[] }>(
       `/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`

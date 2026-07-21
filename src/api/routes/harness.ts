@@ -19,6 +19,7 @@ import {
   editDocument,
   listFolders,
   listNoteEvents,
+  moveDocuments,
   readDocument,
   readDocumentLines,
   replaceCanvasDocument,
@@ -340,6 +341,42 @@ harnessRoutes.get('/notes/orphans', async (c) => {
   const rows = await listOrphanNotes({ userId: user.id });
   const readableFolderIds = await getReadableFolderIds(c);
   return c.json({ notes: readableFolderIds ? rows.filter((note) => readableFolderIds.has(note.folderId)) : rows });
+});
+
+harnessRoutes.post('/notes/move', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { noteIds?: string[]; targetFolderId?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (!Array.isArray(body.noteIds)) return c.json({ error: 'Note ids array is required' }, 400);
+  if (!body.noteIds.every((noteId) => typeof noteId === 'string'))
+    return c.json({ error: 'Note ids must be strings' }, 400);
+  if (!body.targetFolderId) return c.json({ error: 'Target folder id is required' }, 400);
+  if (!(await hasFolderPermission(c, body.targetFolderId, 'create'))) return c.json({ error: 'Forbidden' }, 403);
+
+  const documentIds = [...new Set(body.noteIds.map((id) => id.trim()).filter(Boolean))];
+  for (const noteId of documentIds) {
+    const current = await readDocument({ documentId: noteId, userId: user.id });
+    if (!current.ok) return c.json({ error: current.error }, current.status);
+    if (!(await hasFolderPermission(c, current.value.note.folderId, 'edit')))
+      return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  const actor = getActor(c);
+  const result = await moveDocuments({
+    documentIds,
+    targetFolderId: body.targetFolderId,
+    userId: user.id,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+
+  return c.json({
+    targetFolderId: body.targetFolderId,
+    notes: result.value.notes.map((item) => summarizeHarnessNote(item.note)),
+  });
 });
 
 harnessRoutes.get('/notes/:noteId/tags', async (c) => {
