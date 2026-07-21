@@ -60,6 +60,7 @@ Tools include:
 - `notes_get_note`
 - `notes_create_note`
 - `notes_edit_note`
+- `notes_move_notes` (all-or-nothing, up to 100 notes)
 - `notes_search_lines`
 - `notes_read_lines`
 - `notes_search_note_lines`
@@ -69,6 +70,7 @@ Implementation notes:
 
 - Uses the official `@modelcontextprotocol/sdk`.
 - Honors MinuNotes access modes: all non-private folders, selected project roots, or specific selected non-private folders. Private folders are not accessible to MCP.
+- Move operations require edit access to every source folder and create access to the target folder.
 - Uses stdio transport for local process-spawned MCP clients.
 - Uses Streamable HTTP transport for hosted `/mcp` clients.
 - Returns both `structuredContent` and text content.

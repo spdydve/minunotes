@@ -30,6 +30,32 @@ describe('hosted MCP route', () => {
     });
   });
 
+  it('lists the move tool over streamable HTTP with OAuth bearer auth', async () => {
+    const testApp = new Hono();
+    testApp.use('*', async (c, next) => {
+      c.set('user', { id: 'user_test', name: 'Test User', email: 'test@example.com' });
+      c.set('session', null);
+      c.set('apiKey', null);
+      c.set('oauthAuthorization', { id: 'oauth_auth_test' });
+      await next();
+    });
+    testApp.route('/mcp', mcpRoutes);
+
+    const response = await testApp.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: 'Bearer mnoac_test',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.result.tools.map((tool: { name: string }) => tool.name)).toContain('notes_move_notes');
+  });
+
   it('serves MCP initialize over streamable HTTP with OAuth bearer auth', async () => {
     const testApp = new Hono();
     testApp.use('*', async (c, next) => {

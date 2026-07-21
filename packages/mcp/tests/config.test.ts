@@ -36,4 +36,27 @@ describe('config', () => {
       expect.objectContaining({ headers: expect.objectContaining({ 'x-api-key': 'key' }) })
     );
   });
+
+  it('moves notes through the v1 harness endpoint', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ targetFolderId: 'folder-2', notes: [] }), {
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createClient({ NOTES_API_URL: 'https://example.com', NOTES_API_KEY: 'key' }).notes.move({
+      noteIds: ['note-1'],
+      targetFolderId: 'folder-2',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.com/v1/harness/notes/move',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ noteIds: ['note-1'], targetFolderId: 'folder-2' }),
+      })
+    );
+  });
 });

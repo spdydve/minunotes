@@ -25,6 +25,7 @@ export type NotesMcpClient = {
     get: (noteId: string) => Promise<unknown>;
     create: (folderId: string, input: { title?: string; content?: string }) => Promise<unknown>;
     edit: (noteId: string, edits: DocumentEdit[], baseHash?: string) => Promise<unknown>;
+    move: (input: { noteIds: string[]; targetFolderId: string }) => Promise<unknown>;
     searchLines: (input: {
       query: string;
       folderId?: string;
@@ -126,6 +127,19 @@ export function createNotesMcpServer(client: NotesMcpClient) {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     async ({ noteId, edits, baseHash }) => toolResult(await client.notes.edit(noteId, edits, baseHash))
+  );
+
+  server.registerTool(
+    'notes_move_notes',
+    {
+      title: 'Move notes',
+      description:
+        'Move one or more notes to a target folder. Requires edit access to every source folder and create access to the target folder. The move is all-or-nothing and limited to 100 notes.',
+      inputSchema: { noteIds: z.array(z.string()).min(1).max(100), targetFolderId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteIds, targetFolderId }) => toolResult(await client.notes.move({ noteIds, targetFolderId }))
   );
 
   server.registerTool(

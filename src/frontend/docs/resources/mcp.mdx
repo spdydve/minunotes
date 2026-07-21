@@ -48,9 +48,12 @@ npm pack --dry-run
 - `notes_get_note`
 - `notes_create_note`
 - `notes_edit_note`
+- `notes_move_notes`
 - `notes_search_lines`
 - `notes_read_lines`
 - `notes_search_note_lines`
 - `notes_read_section`
 
 Tool discovery is handled by the MCP protocol. Clients call `tools/list`; MinuNotes registers tool names, descriptions, schemas, annotations, and handlers.
+
+Move operations are all-or-nothing, capped at 100 notes, and require edit access to every source folder plus create access to the target folder.

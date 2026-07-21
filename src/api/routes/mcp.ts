@@ -104,6 +104,11 @@ function createHostedMcpClient(authState: {
           method: 'POST',
           body: JSON.stringify({ edits, baseHash }),
         }),
+      move: (input) =>
+        request('/notes/move', {
+          method: 'POST',
+          body: JSON.stringify({ noteIds: input.noteIds, targetFolderId: input.targetFolderId }),
+        }),
       searchLines: (input) =>
         request(
           `/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`

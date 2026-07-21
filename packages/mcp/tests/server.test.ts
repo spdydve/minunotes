@@ -12,6 +12,7 @@ function mockClient() {
       get: vi.fn(async () => ({ note: { id: 'note-1', title: 'Note', content: 'Body' }, contentHash: 'hash' })),
       create: vi.fn(async () => ({ note: { id: 'note-2' }, contentHash: 'hash' })),
       edit: vi.fn(async () => ({ note: { id: 'note-1' }, contentHash: 'next' })),
+      move: vi.fn(async () => ({ targetFolderId: 'folder-2', notes: [{ id: 'note-1' }] })),
       searchLines: vi.fn(async () => ({ query: 'todo', matches: [] })),
       lines: vi.fn(async () => ({ noteId: 'note-1', lines: [] })),
       searchNoteLines: vi.fn(async () => ({ query: 'todo', matches: [] })),
@@ -38,6 +39,7 @@ describe('createNotesMcpServer', () => {
       'notes_get_note',
       'notes_create_note',
       'notes_edit_note',
+      'notes_move_notes',
       'notes_search_lines',
       'notes_read_lines',
       'notes_search_note_lines',
@@ -46,6 +48,7 @@ describe('createNotesMcpServer', () => {
     expect(registered.notes_list_folders.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(registered.notes_create_folder.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(registered.notes_edit_note.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(registered.notes_move_notes.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
   });
 
   it('calls harness client methods and returns structured content', async () => {
@@ -81,6 +84,18 @@ describe('createNotesMcpServer', () => {
     } as never);
 
     expect(client.notes.edit).toHaveBeenCalledWith('note-1', [{ type: 'append', text: 'hello' }], 'hash');
+  });
+
+  it('moves notes', async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_move_notes.handler({
+      noteIds: ['note-1', 'note-2'],
+      targetFolderId: 'folder-2',
+    } as never);
+
+    expect(client.notes.move).toHaveBeenCalledWith({ noteIds: ['note-1', 'note-2'], targetFolderId: 'folder-2' });
   });
 
   it('searches lines across notes', async () => {
