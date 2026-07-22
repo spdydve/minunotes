@@ -16,6 +16,30 @@ test('autosaves editor content and preserves it after reload', async ({ page }) 
   await expect(page.locator('.cm-content')).toContainText('Start here. Updated.');
 });
 
+test('switches between live and source editing and autosaves raw markdown changes', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  const markdown = '![Browser image](https://example.com/source-mode.png)';
+  api.notes.set(browserFixture.source.id, { ...browserFixture.source, content: markdown });
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  await expect(page.locator('.me-image-wrapper')).toBeVisible();
+  await page.getByLabel('Open note actions').click();
+  await page.getByRole('button', { name: 'Source mode', exact: true }).click();
+
+  const editor = page.locator('.cm-content');
+  await expect(page.locator('.me-image-wrapper')).toHaveCount(0);
+  await expect(editor).toContainText(markdown);
+
+  await editor.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('\n\nEdited in source.');
+  await api.expectSavedContent(`${markdown}\n\nEdited in source.`);
+
+  await page.getByLabel('Open note actions').click();
+  await page.getByRole('button', { name: 'Live mode', exact: true }).click();
+  await expect(page.locator('.me-image-wrapper')).toBeVisible();
+});
+
 test('inserts a heading through the slash-command menu', async ({ page }) => {
   const api = await mockBrowserApi(page);
   await page.goto(`/notes/${browserFixture.source.id}`);

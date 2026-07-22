@@ -15,12 +15,16 @@ export function NoteActionsPopover({
   onDelete,
   onToggleApiEditable,
   onNoteUpdated,
+  editorMode,
+  onEditorModeChange,
   icon = 'more',
 }: {
   note: Note;
   onDelete: () => void;
   onToggleApiEditable?: () => void;
   onNoteUpdated?: (response: { note: Note; contentHash: string }) => void;
+  editorMode?: 'live' | 'source';
+  onEditorModeChange?: (mode: 'live' | 'source') => void;
   icon?: 'more' | 'settings';
 }) {
   const [open, setOpen] = useState(false);
@@ -81,6 +85,16 @@ export function NoteActionsPopover({
           >
             Share
           </ActionMenuButton>
+          {editorMode && onEditorModeChange ? (
+            <ActionMenuButton
+              onClick={() => {
+                onEditorModeChange(editorMode === 'live' ? 'source' : 'live');
+                setOpen(false);
+              }}
+            >
+              {editorMode === 'live' ? 'Source mode' : 'Live mode'}
+            </ActionMenuButton>
+          ) : null}
           <MoveNoteDialog
             note={note}
             onOpenChange={setOpen}

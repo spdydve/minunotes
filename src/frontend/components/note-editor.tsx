@@ -31,6 +31,7 @@ export function NoteEditor({
   onContentChange,
   onImageUpload,
   initialEditing = false,
+  editorMode = 'live',
   actions,
   staleNotice,
   updatedMeta,
@@ -44,6 +45,7 @@ export function NoteEditor({
   onContentChange: (value: string) => void;
   onImageUpload?: (file: File) => Promise<string> | string;
   initialEditing?: boolean;
+  editorMode?: 'live' | 'source';
   actions: ReactNode;
   staleNotice?: ReactNode;
   updatedMeta?: ReactNode;
@@ -172,6 +174,7 @@ export function NoteEditor({
           ref={editorRef}
           value={content}
           onChange={onContentChange}
+          mode={editorMode}
           placeholder="Start typing..."
           minHeight={520}
           codeLanguages={editorCodeLanguages}

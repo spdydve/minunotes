@@ -27,6 +27,7 @@ function NoteView() {
   });
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [editorMode, setEditorMode] = useState<'live' | 'source'>('live');
   const [saveError, setSaveError] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
@@ -49,6 +50,7 @@ function NoteView() {
     hydratedNoteId.current = noteId;
     setTitle(data.note.title);
     setContent(data.note.content);
+    setEditorMode('live');
     lastSaved.current = { title: data.note.title, content: data.note.content };
     lastKnownHash.current = data.contentHash;
     setSaveError(false);
@@ -309,6 +311,8 @@ function NoteView() {
       onDelete={() => remove.mutate()}
       onToggleApiEditable={() => toggleApiEditable.mutate()}
       onNoteUpdated={applyDetailsUpdate}
+      editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}
+      onEditorModeChange={data.note.documentType === 'markdown' ? setEditorMode : undefined}
     />
   );
 
@@ -348,6 +352,7 @@ function NoteView() {
       onTitleChange={setTitle}
       onContentChange={setContent}
       initialEditing={!data.note.content.trim()}
+      editorMode={editorMode}
       updatedMeta={updatedMeta}
       headerExtra={<BacklinksPanel backlinks={backlinksData?.backlinks} isLoading={backlinksLoading} />}
       staleNotice={staleNotice}
