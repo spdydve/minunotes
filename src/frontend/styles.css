@@ -492,8 +492,10 @@ select {
   font-weight: 600;
 }
 .notes-minu-renderer table {
-  display: block;
-  overflow-x: auto;
+  display: table;
+  width: max-content;
+  min-width: 0;
+  max-width: none;
   white-space: nowrap;
 }
 .notes-minu-editor .me-table-scroller {

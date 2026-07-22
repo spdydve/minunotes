@@ -39,6 +39,24 @@ test('moves selected notes from a folder list', async ({ page }) => {
   await expect(page.getByRole('link', { name: browserFixture.target.title })).toHaveCount(0);
 });
 
+test('keeps rendered table backgrounds constrained to the table width', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  api.notes.set(browserFixture.source.id, {
+    ...browserFixture.source,
+    content: '| name | id |\n| --- | --- |\n| Venue | 123 |',
+  });
+  await page.goto('/share/folders/folder_share_token');
+  await page.getByRole('button', { name: browserFixture.source.title }).click();
+
+  const scroller = page.locator('.notes-minu-renderer .me-renderer-table-scroller');
+  const table = scroller.locator('table');
+  await expect(table).toBeVisible();
+
+  const [scrollerBox, tableBox] = await Promise.all([scroller.boundingBox(), table.boundingBox()]);
+  if (!scrollerBox || !tableBox) throw new Error('Expected rendered table bounds');
+  expect(tableBox.width).toBeLessThan(scrollerBox.width);
+});
+
 test('renders a public shared folder read-only view', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/share/folders/folder_share_token');
