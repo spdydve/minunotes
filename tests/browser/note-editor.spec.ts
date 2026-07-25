@@ -115,6 +115,83 @@ test('persists a canvas edit through reload', async ({ page }) => {
   await expect(page.locator('[data-minucanvas-node-id]')).toHaveCount(1);
 });
 
+test('links, opens, and unlinks a canvas node while preserving its external URL', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  api.notes.set(browserFixture.canvas.id, {
+    ...browserFixture.canvas,
+    content: JSON.stringify({
+      nodes: [
+        {
+          id: 'node_link',
+          type: 'text',
+          text: 'Canvas topic',
+          x: 0,
+          y: 0,
+          width: 180,
+          height: 80,
+          url: 'https://example.com/reference',
+        },
+      ],
+      edges: [],
+    }),
+  });
+  await page.goto(`/notes/${browserFixture.canvas.id}`);
+
+  const node = () => page.locator('[data-minucanvas-node-id="node_link"]');
+  await expect(node()).toBeVisible();
+  await node().click({ button: 'right' });
+  await page.getByRole('button', { name: 'Link to note…', exact: true }).click();
+  await expect(page.getByLabel('Close note link dialog')).toBeVisible();
+  await expect(page.getByPlaceholder('Search notes...')).toHaveValue('');
+  await page.getByLabel('Close note link dialog').click();
+  await expect(page.getByRole('dialog', { name: 'Link node to note' })).toHaveCount(0);
+
+  await node().click({ button: 'right' });
+  await page.getByRole('button', { name: 'Link to note…', exact: true }).click();
+  await expect(page.getByPlaceholder('Search notes...')).toHaveValue('');
+  await page.getByPlaceholder('Search notes...').fill('Target');
+  await page.getByRole('button', { name: /Target Note/ }).click();
+
+  await expect
+    .poll(() => {
+      const content = api.notes.get(browserFixture.canvas.id)?.content;
+      if (!content) return null;
+      return JSON.parse(content).nodes[0]?.minunotes?.link?.id;
+    })
+    .toBe(browserFixture.target.id);
+
+  await node().click({ button: 'right' });
+  await expect(page.getByRole('button', { name: 'Edit link…', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove note link', exact: true }).click();
+
+  await expect
+    .poll(() => {
+      const content = api.notes.get(browserFixture.canvas.id)?.content;
+      if (!content) return null;
+      const linkedNode = JSON.parse(content).nodes[0];
+      return { internalLink: linkedNode?.minunotes?.link ?? null, url: linkedNode?.url };
+    })
+    .toEqual({ internalLink: null, url: 'https://example.com/reference' });
+
+  await node().click({ button: 'right' });
+  await page.getByRole('button', { name: 'Link to note…', exact: true }).click();
+  await page.getByPlaceholder('Search notes...').fill('Target');
+  await page.getByRole('button', { name: /Target Note/ }).click();
+  await expect
+    .poll(() => {
+      const content = api.notes.get(browserFixture.canvas.id)?.content;
+      if (!content) return null;
+      return JSON.parse(content).nodes[0]?.minunotes?.link?.id;
+    })
+    .toBe(browserFixture.target.id);
+
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByLabel('Open linked note: Canvas topic').click();
+  const targetPage = await popupPromise;
+  await expect(targetPage).toHaveURL(new RegExp(`/notes/${browserFixture.target.id}$`));
+  await targetPage.close();
+});
+
 test('inserts an ID-backed wikilink selected from note suggestions', async ({ page }) => {
   const api = await mockBrowserApi(page);
   await page.goto(`/notes/${browserFixture.source.id}`);

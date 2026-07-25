@@ -165,6 +165,7 @@ export type NoteEvent = {
   afterHash: string | null;
   createdAt: string;
 };
+export type NoteLinkType = 'wikilink' | 'internal-url' | 'markdown-internal-url' | 'canvas-note';
 export type Backlink = {
   id: string;
   sourceNoteId: string;
@@ -172,7 +173,7 @@ export type Backlink = {
   sourceFolderId: string;
   targetTitle: string;
   label: string | null;
-  linkType: 'wikilink' | 'internal-url' | 'markdown-internal-url';
+  linkType: NoteLinkType;
   createdAt: string;
   updatedAt: string;
 };
@@ -182,7 +183,7 @@ export type NoteLink = {
   targetNoteId: string | null;
   targetTitle: string;
   label: string | null;
-  linkType: 'wikilink' | 'internal-url' | 'markdown-internal-url';
+  linkType: NoteLinkType;
   createdAt: string;
   updatedAt: string;
 };

@@ -486,7 +486,7 @@ export const noteLinks = sqliteTable(
     targetNoteId: text('target_note_id').references(() => notes.id, { onDelete: 'set null' }),
     targetTitle: text('target_title').notNull(),
     label: text('label'),
-    linkType: text('link_type', { enum: ['wikilink', 'internal-url', 'markdown-internal-url'] })
+    linkType: text('link_type', { enum: ['wikilink', 'internal-url', 'markdown-internal-url', 'canvas-note'] })
       .notNull()
       .default('wikilink'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),

@@ -1,3 +1,126 @@
+# Canvas Note Links Plan
+
+Goal: let canvas and mind-map nodes link to internal MinuNotes notes while preserving MinuCanvas external URL behavior and indexing internal links into backlinks and the note graph.
+
+## Decisions
+
+- Keep generic external links in the JSON Canvas `node.url` field and retain MinuCanvas v0.7's built-in external-link behavior.
+- Store internal links in host-owned node metadata:
+  - `node.minunotes.link.type = 'note'`
+  - `node.minunotes.link.id = 'note_…'`
+- Allow a node to contain both `url` and `minunotes.link`; internal link/unlink operations must preserve external URLs and unrelated host metadata.
+- Type canvas documents as `JsonCanvasDocument<MinuNotesNodeExtra>` so MinuCanvas preserves host metadata.
+- Use the MinuCanvas v0.7 imperative `CanvasHandle.updateNode()` API for UI link/unlink changes.
+- Use `renderNodeAdornment` for an internal-note badge and `getNodeContextActions` for link, open, change, and unlink actions.
+- Open internal links in a new browser tab using the current MinuNotes route; do not persist deployment-specific internal URLs.
+- Index valid internal canvas note links in the existing `note_links` table with `linkType = 'canvas-note'`.
+- Keep whole-canvas replacement as the canonical persistence operation; add focused harness link/unlink helpers for agents.
+- Harness link creation requires edit access to the source canvas and read access to the target note. Linking must not disclose inaccessible note titles.
+- Reimplement against current `main` and MinuCanvas v0.7 rather than merging the obsolete `canvas-note-links` commit.
+
+## Files to modify/create
+
+### Frontend canvas integration
+
+- `src/frontend/components/note-canvas-editor.tsx`
+  - Add typed MinuNotes node metadata.
+  - Hold a typed `CanvasHandle` ref and use `updateNode()` for link/unlink changes.
+  - Add internal-note adornment and context actions without changing `node.url` behavior.
+  - Add a note picker using the existing internal note search API.
+  - Navigate linked notes through TanStack Router.
+- `src/frontend/lib/api.ts`
+  - Add `canvas-note` to link response types and only add picker/client types if current search types are insufficient.
+- `src/frontend/routes/notes.$noteId.tsx`
+  - Pass the current note ID to the canvas editor so self-links are excluded from the picker.
+
+### Link indexing and persistence
+
+- `src/shared/canvas-links.ts`
+  - Define the shared internal-link metadata types and strict runtime reader.
+- `src/api/notes/links.ts`
+  - Parse `nodes[].minunotes.link` from valid canvas JSON.
+  - Reindex markdown or canvas links according to document type.
+  - Resolve canvas targets by stable note ID while ignoring malformed/self links.
+- `src/api/db/schema.ts`
+  - Add `canvas-note` to the typed `note_links.link_type` enum; no SQL migration is expected because the SQLite column stores text without a database enum constraint.
+- `src/api/harness/commands.ts`
+  - Reindex canvas links on create, replace, update, and document-type changes.
+  - Add focused canvas-node link/unlink commands that preserve all unrelated node fields and metadata.
+- `src/api/notes/versions.ts`
+  - Reindex restored canvas content rather than clearing its links.
+
+### Harness and public contract
+
+- `src/api/routes/harness.ts`
+  - Add link/unlink routes under the current harness prefix.
+  - Enforce source edit access, target read access, canvas-only operation, API-editable rules, and optimistic `baseHash` behavior.
+- `src/api/openapi/harness.ts`
+  - Document link/unlink operations, request schemas, and the `canvas-note` link type.
+- `docs/skills/minunotes-harness/SKILL.md`
+  - Document canvas-node link metadata and API operations.
+- `docs/skills/minunotes-harness-api/SKILL.md`
+  - Keep API-only agent guidance aligned with the OpenAPI contract.
+- `src/frontend/docs/resources/harness-api.mdx`
+  - Add examples for linking and unlinking nodes.
+- `src/frontend/docs/resources/wikilinks-backlinks.mdx`
+  - Explain that internal canvas links contribute to backlinks and graph results.
+
+### Tests
+
+- `tests/note-links.test.ts`
+  - Parse valid metadata and reject malformed links.
+  - Index canvas links and expose backlinks/outgoing links.
+  - Preserve markdown-link behavior.
+  - Reindex after canvas replacement and version restoration.
+- `tests/harness-canvas.test.ts`
+  - Link, change, and unlink a node.
+  - Preserve external `url` and unrelated metadata.
+  - Reject missing nodes, missing targets, non-canvas documents, stale hashes, and inaccessible targets.
+  - Verify compact harness mutation responses.
+- `tests/openapi.test.ts`
+  - Verify the new paths and `canvas-note` schema value.
+- Relevant browser spec under `tests/browser/`
+  - Select a canvas node, link it through search, open it through internal navigation, unlink it, and confirm external URL controls remain available.
+
+## Implementation phases
+
+- [x] Phase 1: Shared metadata and indexing
+  - [x] Add typed internal-link metadata and parser.
+  - [x] Extend link types and all canvas reindex call sites.
+  - [x] Cover parsing, backlinks, replacement, and restoration.
+- [x] Phase 2: MinuCanvas v0.7 UI integration
+  - [x] Wire typed `CanvasHandle` and `updateNode()`.
+  - [x] Add picker, adornment, internal navigation, and context actions.
+  - [x] Preserve built-in external links independently from internal note metadata.
+- [x] Phase 3: Harness operations and access boundaries
+  - [x] Add commands and routes with source/target permission checks.
+  - [x] Update OpenAPI and compact response handling.
+  - [x] Add permission, hash, preservation, and failure-path tests.
+- [x] Phase 4: Documentation and browser coverage
+  - [x] Update both harness skills and frontend resources.
+  - [x] Add focused browser coverage for link, unlink, internal navigation, and external URL preservation.
+- [ ] Phase 5: Verification
+  - [x] Run `pnpm exec biome check --write <changed-files>`.
+  - [x] Run `pnpm typecheck`.
+  - [x] Run targeted note-link, harness-canvas, OpenAPI, and browser tests.
+  - [x] Run `pnpm test` and the relevant browser suite.
+  - [x] Run `pnpm build`.
+  - [x] Verify internal and external links coexist on one node through the end-to-end browser flow.
+  - [ ] Optional human smoke check in local development.
+
+## Status
+
+- [x] Scope and data model approved.
+- [x] MinuCanvas v0.7 host-extension and imperative APIs reviewed.
+- [x] Phase 1 implemented and verified with Biome, typecheck, and targeted note-link tests.
+- [x] Phase 2 implemented and verified with Biome and typecheck; targeted indexing tests remain green.
+- [x] Phase 3 implemented and verified with Biome, typecheck, and targeted canvas/link/OpenAPI/access tests.
+- [x] Phase 4 implemented and verified with Biome, typecheck, and the complete note-editor browser spec.
+- [x] Full automated verification passed: 156 unit/integration tests, 14 browser tests, typecheck, and production build.
+- [ ] Optional human smoke check remains before merge.
+
+---
+
 # Agent and Bulk Note Move Plan
 
 Goal: let agents and users move one or many notes into a target folder so agent-created notes can be organized inside the existing folder permission model.

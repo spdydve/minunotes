@@ -172,6 +172,19 @@ curl -s "${AUTH[@]}" \
   -d '{"baseHash":"hash_from_read","syntax":"diagram \"Auth flow\" {\n  User > Login\n  Login > Dashboard\n}"}'
 ```
 
+Link or unlink one canvas node without replacing the full canvas:
+
+```bash
+curl -s "${AUTH[@]}" \
+  -X POST "$API/v1/harness/notes/note_canvas/canvas/nodes/node_a/link-note" \
+  -d '{"targetNoteId":"note_target","baseHash":"hash_from_read"}'
+
+curl -s "${AUTH[@]}" \
+  -X DELETE "$API/v1/harness/notes/note_canvas/canvas/nodes/node_a/link?baseHash=hash_from_read"
+```
+
+Internal links are stored as `node.minunotes.link = { "type": "note", "id": "note_…" }`. External links remain in `node.url`; link and unlink operations preserve external URLs and unrelated node metadata. Linking requires edit access to the canvas and read access to the target note.
+
 Tags:
 
 ```bash
@@ -213,6 +226,8 @@ curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 - `GET /v1/harness/notes/:noteId/outline`
 - `GET /v1/harness/notes/:noteId/sections/:sectionId`
 - `PUT /v1/harness/notes/:noteId/canvas`
+- `POST /v1/harness/notes/:noteId/canvas/nodes/:nodeId/link-note`
+- `DELETE /v1/harness/notes/:noteId/canvas/nodes/:nodeId/link?baseHash=...`
 - `PUT /v1/harness/notes/:noteId/canvas/from-syntax`
 - `POST /v1/harness/notes/:noteId/edit`
 

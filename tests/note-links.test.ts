@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseInternalNoteUrls, parseWikiLinks } from '../src/api/notes/links';
+import { parseCanvasNoteLinks, parseInternalNoteUrls, parseWikiLinks } from '../src/api/notes/links';
 
 const tempDirs: string[] = [];
 
@@ -100,6 +100,17 @@ async function createNote(app: Hono, folderId: string, title: string, content = 
   return note;
 }
 
+async function createCanvas(app: Hono, folderId: string, title: string, content: string) {
+  const response = await app.request(`/api/folders/${folderId}/notes`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, content, documentType: 'canvas.default' }),
+  });
+  expect(response.status).toBe(201);
+  const { note } = (await response.json()) as { note: { id: string; title: string; content: string } };
+  return note;
+}
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -136,6 +147,37 @@ describe('note link parser', () => {
       { targetNoteId: 'note_abc123', label: null, linkType: 'internal-url' },
     ]);
   });
+
+  it('parses internal canvas note metadata without treating external URLs as note links', () => {
+    const content = JSON.stringify({
+      nodes: [
+        {
+          id: 'linked',
+          type: 'text',
+          text: 'Target note',
+          url: 'https://example.com/reference',
+          minunotes: { link: { type: 'note', id: 'note_abc123' } },
+        },
+        { id: 'external', type: 'link', url: 'https://example.com' },
+        { id: 'invalid-id', type: 'text', minunotes: { link: { type: 'note', id: 'invalid' } } },
+        { id: 'invalid-type', type: 'text', minunotes: { link: { type: 'folder', id: 'note_def456' } } },
+      ],
+      edges: [],
+    });
+
+    expect(parseCanvasNoteLinks(content)).toEqual([
+      {
+        targetTitle: 'note_abc123',
+        targetNoteId: 'note_abc123',
+        label: 'Target note',
+        linkType: 'canvas-note',
+        raw: 'note_abc123',
+        from: 0,
+        to: 0,
+      },
+    ]);
+    expect(parseCanvasNoteLinks('{invalid')).toEqual([]);
+  });
 });
 
 describe('note link indexing', () => {
@@ -162,6 +204,75 @@ describe('note link indexing', () => {
         updatedAt: expect.any(String),
       },
     ]);
+  });
+
+  it('indexes, replaces, and restores canvas note links', async () => {
+    const { app, folderA } = await setupNoteLinksApp();
+    const target = await createNote(app, folderA.id, 'Canvas Target');
+    const linkedContent = JSON.stringify({
+      nodes: [
+        {
+          id: 'node_a',
+          type: 'text',
+          text: 'Target label',
+          x: 0,
+          y: 0,
+          width: 160,
+          height: 80,
+          url: 'https://example.com/source',
+          minunotes: { link: { type: 'note', id: target.id } },
+        },
+      ],
+      edges: [],
+    });
+    const source = await createCanvas(app, folderA.id, 'Canvas Source', linkedContent);
+
+    const backlinks = await app.request(`/api/notes/${target.id}/backlinks`);
+    expect(backlinks.status).toBe(200);
+    await expect(backlinks.json()).resolves.toMatchObject({
+      backlinks: [
+        expect.objectContaining({
+          sourceNoteId: source.id,
+          sourceTitle: 'Canvas Source',
+          targetTitle: 'Canvas Target',
+          label: 'Target label',
+          linkType: 'canvas-note',
+        }),
+      ],
+    });
+
+    const outgoing = await app.request(`/api/notes/${source.id}/links`);
+    expect(outgoing.status).toBe(200);
+    await expect(outgoing.json()).resolves.toMatchObject({
+      links: [expect.objectContaining({ targetNoteId: target.id, linkType: 'canvas-note' })],
+    });
+
+    const current = await app.request(`/api/notes/${source.id}`);
+    const currentBody = (await current.json()) as { contentHash: string };
+    const replace = await app.request(`/api/notes/${source.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: JSON.stringify({ nodes: [], edges: [] }), baseHash: currentBody.contentHash }),
+    });
+    expect(replace.status).toBe(200);
+
+    const afterReplace = await app.request(`/api/notes/${target.id}/backlinks`);
+    await expect(afterReplace.json()).resolves.toMatchObject({ backlinks: [] });
+
+    const versions = await app.request(`/api/notes/${source.id}/versions`);
+    const versionsBody = (await versions.json()) as { versions: Array<{ id: string; reason: string }> };
+    const createdVersion = versionsBody.versions.find((version) => version.reason === 'create');
+    expect(createdVersion).toBeTruthy();
+
+    const restore = await app.request(`/api/notes/${source.id}/versions/${createdVersion?.id}/restore`, {
+      method: 'POST',
+    });
+    expect(restore.status).toBe(200);
+
+    const afterRestore = await app.request(`/api/notes/${target.id}/backlinks`);
+    await expect(afterRestore.json()).resolves.toMatchObject({
+      backlinks: [expect.objectContaining({ sourceNoteId: source.id, linkType: 'canvas-note' })],
+    });
   });
 
   it('indexes note-id wikilinks with labels that contain pipes', async () => {

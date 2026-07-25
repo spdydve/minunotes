@@ -9,7 +9,10 @@ describe('harness OpenAPI spec', () => {
     const spec = (await response.json()) as {
       openapi: string;
       paths: Record<string, unknown>;
-      components: { securitySchemes: Record<string, unknown> };
+      components: {
+        securitySchemes: Record<string, unknown>;
+        schemas: Record<string, { properties?: Record<string, { enum?: string[] }> }>;
+      };
     };
 
     expect(spec.openapi).toBe('3.1.0');
@@ -25,6 +28,10 @@ describe('harness OpenAPI spec', () => {
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/backlinks');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/tags');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/sections/{sectionId}');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link-note');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link');
+    expect(spec.components.schemas.NoteLink?.properties?.linkType?.enum).toContain('canvas-note');
+    expect(spec.components.schemas.Backlink?.properties?.linkType?.enum).toContain('canvas-note');
   });
 
   it('also serves the spec under the harness namespace', async () => {

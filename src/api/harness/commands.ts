@@ -6,6 +6,7 @@ import {
   type JsonCanvasDocument,
 } from '@dpklabs/minucanvas';
 import { and, asc, desc, eq, gt, inArray, like, or, sql } from 'drizzle-orm';
+import type { MinuNotesNodeExtra, MinuNotesNodeMetadata } from '../../shared/canvas-links';
 import { syncNoteAttachmentReferences } from '../attachments/references';
 import { db } from '../db/client';
 import { folders, type Note, noteEvents, notes, noteTags, noteVersions, tags } from '../db/schema';
@@ -461,11 +462,16 @@ export async function createDocument(input: {
   };
 
   await db.insert(notes).values(note);
+  if (note.documentType === 'markdown' && note.content.includes('/internal/attachments/')) {
+    await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
+  }
+  await reindexNoteLinks({
+    noteId: note.id,
+    userId: note.userId,
+    markdown: note.content,
+    documentType: note.documentType,
+  });
   if (note.documentType === 'markdown') {
-    if (note.content.includes('/internal/attachments/')) {
-      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
-    }
-    await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
     await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
   }
 
@@ -833,13 +839,17 @@ export async function updateDocument(input: UpdateDocumentInput) {
   if (!note) return { ok: false, status: 404, error: 'Note not found' } satisfies DocumentCommandResult<never>;
 
   if (contentChanged || documentTypeChanged) {
-    if (note.documentType === 'markdown') {
-      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
-      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
-    } else {
-      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: '' });
-      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: '' });
-    }
+    await syncNoteAttachmentReferences({
+      noteId: note.id,
+      userId: note.userId,
+      markdown: note.documentType === 'markdown' ? note.content : '',
+    });
+    await reindexNoteLinks({
+      noteId: note.id,
+      userId: note.userId,
+      markdown: note.content,
+      documentType: note.documentType,
+    });
   }
   if (titleChanged && note.documentType === 'markdown')
     await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
@@ -871,6 +881,118 @@ export async function updateDocument(input: UpdateDocumentInput) {
     note: typeof note;
     contentHash: string;
   }>;
+}
+
+export async function linkCanvasNodeToNote(
+  input: Omit<UpdateDocumentInput, 'markdown' | 'documentType'> & { nodeId: string; targetNoteId: string }
+) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+  if (!current.value.note.documentType.startsWith('canvas.'))
+    return {
+      ok: false,
+      status: 400,
+      error: 'Canvas operations are only supported for canvas notes',
+    } satisfies DocumentCommandResult<never>;
+  if (input.targetNoteId === input.documentId)
+    return {
+      ok: false,
+      status: 400,
+      error: 'A canvas cannot link to itself',
+    } satisfies DocumentCommandResult<never>;
+
+  const [target] = await db
+    .select({ id: notes.id, title: notes.title })
+    .from(notes)
+    .where(and(eq(notes.id, input.targetNoteId), eq(notes.userId, input.userId), eq(notes.type, 'note')))
+    .limit(1);
+  if (!target) return { ok: false, status: 404, error: 'Target note not found' } satisfies DocumentCommandResult<never>;
+
+  const canvas = parseCanvasDocumentJson(current.value.note.content) as JsonCanvasDocument<MinuNotesNodeExtra> | null;
+  if (!canvas)
+    return {
+      ok: false,
+      status: 400,
+      error: 'Canvas content must include nodes and edges arrays',
+    } satisfies DocumentCommandResult<never>;
+
+  let found = false;
+  const nextCanvas: JsonCanvasDocument<MinuNotesNodeExtra> = {
+    ...canvas,
+    nodes: canvas.nodes.map((node) => {
+      if (node.id !== input.nodeId) return node;
+      found = true;
+      const currentMetadata =
+        node.minunotes && typeof node.minunotes === 'object' ? node.minunotes : ({} satisfies MinuNotesNodeMetadata);
+      return {
+        ...node,
+        text: node.text?.trim() ? node.text : target.title,
+        minunotes: {
+          ...currentMetadata,
+          link: { type: 'note', id: target.id },
+        },
+      };
+    }),
+  };
+  if (!found) return { ok: false, status: 404, error: 'Canvas node not found' } satisfies DocumentCommandResult<never>;
+
+  return replaceCanvasDocument({
+    documentId: input.documentId,
+    userId: input.userId,
+    title: input.title,
+    canvas: nextCanvas,
+    baseHash: input.baseHash,
+    actorType: input.actorType,
+    actorId: input.actorId,
+  });
+}
+
+export async function unlinkCanvasNode(
+  input: Omit<UpdateDocumentInput, 'markdown' | 'documentType'> & { nodeId: string }
+) {
+  const current = await readDocument({ documentId: input.documentId, userId: input.userId });
+  if (!current.ok) return current;
+  if (!current.value.note.documentType.startsWith('canvas.'))
+    return {
+      ok: false,
+      status: 400,
+      error: 'Canvas operations are only supported for canvas notes',
+    } satisfies DocumentCommandResult<never>;
+
+  const canvas = parseCanvasDocumentJson(current.value.note.content) as JsonCanvasDocument<MinuNotesNodeExtra> | null;
+  if (!canvas)
+    return {
+      ok: false,
+      status: 400,
+      error: 'Canvas content must include nodes and edges arrays',
+    } satisfies DocumentCommandResult<never>;
+
+  let found = false;
+  const nextCanvas: JsonCanvasDocument<MinuNotesNodeExtra> = {
+    ...canvas,
+    nodes: canvas.nodes.map((node) => {
+      if (node.id !== input.nodeId) return node;
+      found = true;
+      if (!node.minunotes || typeof node.minunotes !== 'object' || !node.minunotes.link) return node;
+      const nextMetadata = { ...node.minunotes };
+      delete nextMetadata.link;
+      const nextNode = { ...node };
+      if (Object.keys(nextMetadata).length > 0) nextNode.minunotes = nextMetadata;
+      else delete nextNode.minunotes;
+      return nextNode;
+    }),
+  };
+  if (!found) return { ok: false, status: 404, error: 'Canvas node not found' } satisfies DocumentCommandResult<never>;
+
+  return replaceCanvasDocument({
+    documentId: input.documentId,
+    userId: input.userId,
+    title: input.title,
+    canvas: nextCanvas,
+    baseHash: input.baseHash,
+    actorType: input.actorType,
+    actorId: input.actorId,
+  });
 }
 
 export async function replaceCanvasDocument(

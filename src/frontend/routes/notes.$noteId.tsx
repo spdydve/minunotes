@@ -320,6 +320,7 @@ function NoteView() {
     return (
       <NoteCanvasEditor
         key={noteId}
+        noteId={noteId}
         title={title}
         content={content}
         documentType={data.note.documentType as 'canvas.default' | 'canvas.mindmap'}

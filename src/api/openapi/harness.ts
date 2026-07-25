@@ -410,6 +410,59 @@ export const harnessOpenApiSpec = {
         },
       },
     },
+    '/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link-note': {
+      post: {
+        tags: ['Canvases'],
+        operationId: 'linkCanvasNodeToNote',
+        summary: 'Link a canvas node to a MinuNotes note',
+        description:
+          'Adds MinuNotes internal-link metadata to one canvas node while preserving external URLs and other node metadata. Requires edit access to the canvas and read access to the target note.',
+        parameters: [
+          { $ref: '#/components/parameters/NoteId' },
+          { name: 'nodeId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/LinkCanvasNodeToNoteRequest' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated canvas note summary',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteMutationResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link': {
+      delete: {
+        tags: ['Canvases'],
+        operationId: 'unlinkCanvasNode',
+        summary: 'Remove an internal note link from a canvas node',
+        description:
+          'Removes only MinuNotes internal-link metadata. External node URLs and other metadata are preserved.',
+        parameters: [
+          { $ref: '#/components/parameters/NoteId' },
+          { name: 'nodeId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'baseHash', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Updated canvas note summary',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteMutationResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+      },
+    },
     '/v1/harness/notes/{noteId}/canvas/from-syntax': {
       put: {
         tags: ['Canvases'],
@@ -691,6 +744,14 @@ export const harnessOpenApiSpec = {
           baseHash: { type: 'string' },
         },
       },
+      LinkCanvasNodeToNoteRequest: {
+        type: 'object',
+        required: ['targetNoteId'],
+        properties: {
+          targetNoteId: { type: 'string' },
+          baseHash: { type: 'string' },
+        },
+      },
       CreateCanvasFromSyntaxRequest: {
         type: 'object',
         required: ['folderId', 'syntax'],
@@ -780,7 +841,10 @@ export const harnessOpenApiSpec = {
           targetNoteId: { type: ['string', 'null'] },
           targetTitle: { type: 'string' },
           label: { type: ['string', 'null'] },
-          linkType: { type: 'string', enum: ['wikilink', 'internal-url', 'markdown-internal-url'] },
+          linkType: {
+            type: 'string',
+            enum: ['wikilink', 'internal-url', 'markdown-internal-url', 'canvas-note'],
+          },
           createdAt: { type: 'string' },
           updatedAt: { type: 'string' },
         },
@@ -813,7 +877,10 @@ export const harnessOpenApiSpec = {
           sourceFolderId: { type: 'string' },
           targetTitle: { type: 'string' },
           label: { type: ['string', 'null'] },
-          linkType: { type: 'string', enum: ['wikilink', 'internal-url', 'markdown-internal-url'] },
+          linkType: {
+            type: 'string',
+            enum: ['wikilink', 'internal-url', 'markdown-internal-url', 'canvas-note'],
+          },
           createdAt: { type: 'string' },
           updatedAt: { type: 'string' },
         },

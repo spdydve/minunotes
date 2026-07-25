@@ -77,6 +77,36 @@ curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
 
 Use syntax for generated diagrams/mind maps. Use raw JSON Canvas for exact imports or deterministic replacements.
 
+### Link canvas nodes to notes
+
+Canvas and mind-map nodes can reference MinuNotes notes through host metadata:
+
+```json
+{
+  "id": "node_a",
+  "type": "text",
+  "text": "Project plan",
+  "minunotes": {
+    "link": { "type": "note", "id": "note_target" }
+  }
+}
+```
+
+Use focused endpoints to add or remove an internal note link without replacing the full canvas:
+
+```bash
+curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
+  -X POST "$API/v1/harness/notes/note_canvas/canvas/nodes/node_a/link-note" \
+  -d '{"targetNoteId":"note_target","baseHash":"hash_from_read"}'
+
+curl -s -H "X-API-Key: ntak_..." \
+  -X DELETE "$API/v1/harness/notes/note_canvas/canvas/nodes/node_a/link?baseHash=hash_from_read"
+```
+
+Linking requires edit access to the canvas and read access to the target note. Internal links contribute to backlinks and graph results with `linkType: "canvas-note"`.
+
+External web links remain in the standard JSON Canvas `node.url` field. Internal link/unlink operations preserve `node.url` and unrelated node metadata, so a node can contain both an external URL and an internal note link.
+
 ## Edit payloads
 
 ```ts

@@ -17,6 +17,7 @@ import {
   type DocumentEdit,
   type DocumentType,
   editDocument,
+  linkCanvasNodeToNote,
   listFolders,
   listNoteEvents,
   moveDocuments,
@@ -27,6 +28,7 @@ import {
   searchDocumentLines,
   searchDocuments,
   serializeCanvasDocument,
+  unlinkCanvasNode,
 } from '../harness/commands';
 import { findSection, parseSections } from '../harness/sections';
 import type { auth } from '../lib/auth';
@@ -467,7 +469,13 @@ harnessRoutes.get('/notes/:noteId/links', async (c) => {
   return c.json({
     noteId,
     links: links.map((link) =>
-      link.targetNoteId && !visibleTargetIds.has(link.targetNoteId) ? { ...link, targetNoteId: null } : link
+      link.targetNoteId && !visibleTargetIds.has(link.targetNoteId)
+        ? {
+            ...link,
+            targetNoteId: null,
+            targetTitle: link.label?.trim() || link.targetNoteId,
+          }
+        : link
     ),
   });
 });
@@ -596,6 +604,71 @@ harnessRoutes.put('/notes/:noteId/canvas', async (c) => {
     canvas: JSON.parse(canvas),
     documentType: body.documentType,
     baseHash: body.baseHash,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+
+  if (!result.ok)
+    return c.json(
+      { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
+      result.status
+    );
+  return c.json(summarizeHarnessDocumentResult(result.value));
+});
+
+harnessRoutes.post('/notes/:noteId/canvas/nodes/:nodeId/link-note', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { targetNoteId?: string; baseHash?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (!body.targetNoteId?.trim()) return c.json({ error: 'Target note id is required' }, 400);
+
+  const current = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, 'edit'))) return c.json({ error: 'Forbidden' }, 403);
+
+  const [target] = await db
+    .select({ id: notes.id, folderId: notes.folderId })
+    .from(notes)
+    .where(and(eq(notes.id, body.targetNoteId), eq(notes.userId, user.id), eq(notes.type, 'note')))
+    .limit(1);
+  if (!target || !(await hasFolderPermission(c, target.folderId, 'read')))
+    return c.json({ error: 'Target note not found' }, 404);
+
+  const actor = getActor(c);
+  const result = await linkCanvasNodeToNote({
+    documentId: c.req.param('noteId'),
+    userId: user.id,
+    nodeId: c.req.param('nodeId'),
+    targetNoteId: target.id,
+    baseHash: body.baseHash,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+
+  if (!result.ok)
+    return c.json(
+      { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
+      result.status
+    );
+  return c.json(summarizeHarnessDocumentResult(result.value));
+});
+
+harnessRoutes.delete('/notes/:noteId/canvas/nodes/:nodeId/link', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const current = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
+  if (!current.ok) return c.json({ error: current.error }, current.status);
+  if (!(await hasFolderPermission(c, current.value.note.folderId, 'edit'))) return c.json({ error: 'Forbidden' }, 403);
+
+  const actor = getActor(c);
+  const result = await unlinkCanvasNode({
+    documentId: c.req.param('noteId'),
+    userId: user.id,
+    nodeId: c.req.param('nodeId'),
+    baseHash: c.req.query('baseHash'),
     actorType: actor.actorType,
     actorId: actor.actorId,
   });

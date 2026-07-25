@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { getMinuNotesNodeLink } from '../../shared/canvas-links';
 import { db } from '../db/client';
 import { noteLinks, notes } from '../db/schema';
 import { createId } from '../lib/id';
@@ -7,7 +8,7 @@ export type ParsedNoteLink = {
   targetTitle: string;
   targetNoteId: string | null;
   label: string | null;
-  linkType: 'wikilink' | 'internal-url' | 'markdown-internal-url';
+  linkType: 'wikilink' | 'internal-url' | 'markdown-internal-url' | 'canvas-note';
   raw: string;
   from: number;
   to: number;
@@ -91,6 +92,35 @@ export function parseNoteLinks(markdown: string): ParsedNoteLink[] {
   return [...parseWikiLinks(markdown), ...parseInternalNoteUrls(markdown)].sort((a, b) => a.from - b.from);
 }
 
+export function parseCanvasNoteLinks(content: string): ParsedNoteLink[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { nodes?: unknown }).nodes)) return [];
+
+  const links: ParsedNoteLink[] = [];
+  for (const [index, node] of (parsed as { nodes: unknown[] }).nodes.entries()) {
+    const link = getMinuNotesNodeLink(node);
+    if (!link) continue;
+    const nodeValue = node as { text?: unknown; label?: unknown };
+    const text = typeof nodeValue.text === 'string' ? nodeValue.text.trim() : '';
+    const label = typeof nodeValue.label === 'string' ? nodeValue.label.trim() : '';
+    links.push({
+      targetTitle: link.id,
+      targetNoteId: link.id,
+      label: text || label || null,
+      linkType: 'canvas-note',
+      raw: link.id,
+      from: index,
+      to: index,
+    });
+  }
+  return links;
+}
+
 async function resolveUniqueTargetNote(input: { userId: string; sourceNoteId: string; targetTitle: string }) {
   const normalized = normalizeNoteTitle(input.targetTitle);
   const rows = await db
@@ -112,8 +142,15 @@ async function resolveTargetNoteById(input: { userId: string; sourceNoteId: stri
   return target ?? null;
 }
 
-export async function reindexNoteLinks(input: { userId: string; noteId: string; markdown: string }) {
-  const parsed = parseNoteLinks(input.markdown);
+export async function reindexNoteLinks(input: {
+  userId: string;
+  noteId: string;
+  markdown: string;
+  documentType?: string;
+}) {
+  const parsed = input.documentType?.startsWith('canvas.')
+    ? parseCanvasNoteLinks(input.markdown)
+    : parseNoteLinks(input.markdown);
   await db.delete(noteLinks).where(and(eq(noteLinks.userId, input.userId), eq(noteLinks.sourceNoteId, input.noteId)));
   if (parsed.length === 0) return { links: [] };
 

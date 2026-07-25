@@ -26,6 +26,14 @@ A wikilink resolves when MinuNotes can uniquely match the target title to one no
 
 MinuNotes also indexes internal note URLs as links. If you paste a MinuNotes note URL into another note, it can appear as a backlink on the target note.
 
+## Canvas note links
+
+Canvas and mind-map nodes can link to internal notes. Select a node, open its context menu, and choose **Link to note…**. Linked nodes show a note badge that opens the target in a new MinuNotes tab.
+
+Internal canvas links are indexed alongside markdown links, so they appear in backlinks and graph APIs with `linkType: "canvas-note"`.
+
+Canvas nodes can also retain a separate external web link. External links use `node.url`; internal note links use MinuNotes metadata. Adding or removing one does not remove the other.
+
 ## Backlinks
 
 When a note has backlinks, a `Backlinks N` button appears near the top of the note on desktop/tablet. Open it to see notes that reference the current note.
@@ -42,4 +50,4 @@ GET /v1/harness/notes/:noteId/links
 GET /v1/harness/notes/orphans
 ```
 
-Outgoing links include unresolved wikilinks with `targetNoteId: null`.
+Outgoing links include unresolved wikilinks with `targetNoteId: null` and indexed canvas links with `linkType: "canvas-note"`.

@@ -13,6 +13,7 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - Safe note edit: `minunotes_search_notes` or `minunotes_read_note` → capture `contentHash` → `minunotes_edit_note` with `baseHash`.
 - Section edit: `minunotes_read_outline` → `minunotes_read_section` → targeted `replace_text` or `replace_range`.
 - Canvas update: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
+- Canvas note link: preserve the full canvas and set `node.minunotes.link = { "type": "note", "id": "note_…" }`; keep external links in `node.url`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
 
 ## Available tools
@@ -46,6 +47,7 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - Use exact, small edits.
 - Markdown patch edits only work for `documentType: "markdown"`.
 - For `canvas.default` and `canvas.mindmap`, use canvas JSON or Minu diagram syntax tools.
+- Internal canvas note links and external URLs are independent. Changing `node.minunotes.link` must not remove `node.url` or unrelated node metadata.
 - Preserve markdown structure, wikilinks, tags, and app-owned image URLs such as `/internal/attachments/.../content`.
 - If permission is denied, report it; do not retry unrelated actions.
 - After edits, report folder ID, note ID, and a concise summary of changes.

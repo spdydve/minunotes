@@ -202,13 +202,17 @@ export async function restoreNoteVersion(input: {
   if (!note) return { ok: false, status: 404, error: 'Note not found' } as const;
 
   if (current.content !== note.content || current.documentType !== note.documentType) {
-    if (note.documentType === 'markdown') {
-      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: note.content });
-      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: note.content });
-    } else {
-      await syncNoteAttachmentReferences({ noteId: note.id, userId: note.userId, markdown: '' });
-      await reindexNoteLinks({ noteId: note.id, userId: note.userId, markdown: '' });
-    }
+    await syncNoteAttachmentReferences({
+      noteId: note.id,
+      userId: note.userId,
+      markdown: note.documentType === 'markdown' ? note.content : '',
+    });
+    await reindexNoteLinks({
+      noteId: note.id,
+      userId: note.userId,
+      markdown: note.content,
+      documentType: note.documentType,
+    });
   }
   if (current.title !== note.title && note.documentType === 'markdown')
     await resolveUnresolvedNoteLinks({ noteId: note.id, userId: note.userId, title: note.title });
