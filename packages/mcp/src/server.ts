@@ -7,6 +7,19 @@ type DocumentEdit =
   | { type: 'replace_range'; from: number; to: number; text: string };
 
 const jsonObjectSchema = z.object({}).passthrough();
+const canvasDocumentSchema = z
+  .object({
+    nodes: z.array(z.unknown()),
+    edges: z.array(z.unknown()),
+  })
+  .passthrough();
+const canvasDocumentTypeSchema = z.enum(['canvas.default', 'canvas.mindmap']);
+
+export type CanvasDocument = {
+  nodes: unknown[];
+  edges: unknown[];
+  [key: string]: unknown;
+};
 
 function toolResult(data: unknown) {
   return {
@@ -38,7 +51,52 @@ export type NotesMcpClient = {
       noteId: string,
       input: { query: string; context?: number; limit?: number; caseSensitive?: boolean }
     ) => Promise<unknown>;
+    outline: (noteId: string) => Promise<unknown>;
     section: (noteId: string, sectionId: string) => Promise<unknown>;
+    events: (noteId: string, limit?: number) => Promise<unknown>;
+    tags: (noteId: string) => Promise<unknown>;
+    replaceTags: (noteId: string, tags: string[]) => Promise<unknown>;
+  };
+  canvases: {
+    create: (input: {
+      folderId: string;
+      title?: string;
+      canvas: CanvasDocument;
+      documentType?: 'canvas.default' | 'canvas.mindmap';
+    }) => Promise<unknown>;
+    createFromSyntax: (input: {
+      folderId: string;
+      title?: string;
+      syntax: string;
+      documentType?: 'canvas.default' | 'canvas.mindmap';
+    }) => Promise<unknown>;
+    replace: (
+      noteId: string,
+      input: {
+        baseHash: string;
+        title?: string;
+        canvas: CanvasDocument;
+        documentType?: 'canvas.default' | 'canvas.mindmap';
+      }
+    ) => Promise<unknown>;
+    replaceFromSyntax: (
+      noteId: string,
+      input: {
+        baseHash: string;
+        title?: string;
+        syntax: string;
+        documentType?: 'canvas.default' | 'canvas.mindmap';
+      }
+    ) => Promise<unknown>;
+    setNoteLink: (
+      noteId: string,
+      nodeId: string,
+      input: { targetNoteId: string; baseHash: string }
+    ) => Promise<unknown>;
+    removeNoteLink: (noteId: string, nodeId: string, baseHash: string) => Promise<unknown>;
+  };
+  tags: {
+    list: () => Promise<unknown>;
   };
 };
 
@@ -103,6 +161,116 @@ export function createNotesMcpServer(client: NotesMcpClient) {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ folderId, title, content }) => toolResult(await client.notes.create(folderId, { title, content }))
+  );
+
+  server.registerTool(
+    'notes_create_canvas',
+    {
+      title: 'Create canvas',
+      description:
+        'Create a canvas or mind map from JSON Canvas. Use this for exact node ids, positions, links, and metadata.',
+      inputSchema: {
+        folderId: z.string(),
+        title: z.string().optional(),
+        canvas: canvasDocumentSchema,
+        documentType: canvasDocumentTypeSchema.optional(),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ folderId, title, canvas, documentType }) =>
+      toolResult(await client.canvases.create({ folderId, title, canvas, documentType }))
+  );
+
+  server.registerTool(
+    'notes_create_canvas_from_syntax',
+    {
+      title: 'Create canvas from syntax',
+      description:
+        'Create a generated canvas or mind map from Minu diagram syntax. The compiler assigns layout and node ids.',
+      inputSchema: {
+        folderId: z.string(),
+        title: z.string().optional(),
+        syntax: z.string().min(1),
+        documentType: canvasDocumentTypeSchema.optional(),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ folderId, title, syntax, documentType }) =>
+      toolResult(await client.canvases.createFromSyntax({ folderId, title, syntax, documentType }))
+  );
+
+  server.registerTool(
+    'notes_replace_canvas',
+    {
+      title: 'Replace canvas',
+      description:
+        'Replace a complete canvas with JSON Canvas using a base hash. Use JSON when exact ids, links, and metadata must be retained.',
+      inputSchema: {
+        noteId: z.string(),
+        baseHash: z.string().min(1),
+        title: z.string().optional(),
+        canvas: canvasDocumentSchema,
+        documentType: canvasDocumentTypeSchema.optional(),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, baseHash, title, canvas, documentType }) =>
+      toolResult(await client.canvases.replace(noteId, { baseHash, title, canvas, documentType }))
+  );
+
+  server.registerTool(
+    'notes_replace_canvas_from_syntax',
+    {
+      title: 'Replace canvas from syntax',
+      description:
+        'Regenerate and replace a complete canvas from Minu diagram syntax using a base hash. This can replace node ids, layout, links, and metadata.',
+      inputSchema: {
+        noteId: z.string(),
+        baseHash: z.string().min(1),
+        title: z.string().optional(),
+        syntax: z.string().min(1),
+        documentType: canvasDocumentTypeSchema.optional(),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, baseHash, title, syntax, documentType }) =>
+      toolResult(await client.canvases.replaceFromSyntax(noteId, { baseHash, title, syntax, documentType }))
+  );
+
+  server.registerTool(
+    'notes_set_canvas_node_note_link',
+    {
+      title: 'Set canvas node note link',
+      description:
+        'Set or change one canvas node internal note link using a base hash. Preserves the node external URL and unrelated metadata.',
+      inputSchema: {
+        noteId: z.string(),
+        nodeId: z.string(),
+        targetNoteId: z.string(),
+        baseHash: z.string().min(1),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, nodeId, targetNoteId, baseHash }) =>
+      toolResult(await client.canvases.setNoteLink(noteId, nodeId, { targetNoteId, baseHash }))
+  );
+
+  server.registerTool(
+    'notes_remove_canvas_node_note_link',
+    {
+      title: 'Remove canvas node note link',
+      description:
+        'Remove one canvas node internal note link using a base hash. Preserves the node external URL and unrelated metadata.',
+      inputSchema: { noteId: z.string(), nodeId: z.string(), baseHash: z.string().min(1) },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, nodeId, baseHash }) => toolResult(await client.canvases.removeNoteLink(noteId, nodeId, baseHash))
   );
 
   server.registerTool(
@@ -193,6 +361,30 @@ export function createNotesMcpServer(client: NotesMcpClient) {
   );
 
   server.registerTool(
+    'notes_read_outline',
+    {
+      title: 'Read note outline',
+      description: 'Read a markdown note heading outline and discover section ids for notes_read_section.',
+      inputSchema: { noteId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId }) => toolResult(await client.notes.outline(noteId))
+  );
+
+  server.registerTool(
+    'notes_read_events',
+    {
+      title: 'Read note events',
+      description: 'Read recent activity events for a note, including actor, operation summary, and content hashes.',
+      inputSchema: { noteId: z.string(), limit: z.number().int().positive().max(100).optional() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId, limit }) => toolResult(await client.notes.events(noteId, limit))
+  );
+
+  server.registerTool(
     'notes_read_section',
     {
       title: 'Read note section',
@@ -202,6 +394,41 @@ export function createNotesMcpServer(client: NotesMcpClient) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ noteId, sectionId }) => toolResult(await client.notes.section(noteId, sectionId))
+  );
+
+  server.registerTool(
+    'notes_list_tags',
+    {
+      title: 'List tags',
+      description: 'List tags visible to the authorized MinuNotes connection.',
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async () => toolResult(await client.tags.list())
+  );
+
+  server.registerTool(
+    'notes_read_note_tags',
+    {
+      title: 'Read note tags',
+      description: 'Read all tags assigned to one note.',
+      inputSchema: { noteId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId }) => toolResult(await client.notes.tags(noteId))
+  );
+
+  server.registerTool(
+    'notes_replace_note_tags',
+    {
+      title: 'Replace note tags',
+      description: 'Replace all tags assigned to one note. Tags omitted from the array are removed.',
+      inputSchema: { noteId: z.string(), tags: z.array(z.string()).max(100) },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, tags }) => toolResult(await client.notes.replaceTags(noteId, tags))
   );
 
   server.registerPrompt(

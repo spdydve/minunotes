@@ -95,8 +95,52 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
         request(
           `/harness/notes/${encodeURIComponent(noteId)}/search-lines${toQueryString({ q: input.query, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`
         ),
+      outline: (noteId) => request(`/harness/notes/${encodeURIComponent(noteId)}/outline`),
       section: (noteId, sectionId) =>
         request(`/harness/notes/${encodeURIComponent(noteId)}/sections/${encodeURIComponent(sectionId)}`),
+      events: (noteId, limit) =>
+        request(`/harness/notes/${encodeURIComponent(noteId)}/events${toQueryString({ limit })}`),
+      tags: (noteId) => request(`/harness/notes/${encodeURIComponent(noteId)}/tags`),
+      replaceTags: (noteId, tags) =>
+        request(`/harness/notes/${encodeURIComponent(noteId)}/tags`, {
+          method: 'PUT',
+          body: JSON.stringify({ tags }),
+        }),
+    },
+    canvases: {
+      create: (input) =>
+        request('/harness/canvases', {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      createFromSyntax: (input) =>
+        request('/harness/canvases/from-syntax', {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      replace: (noteId, input) =>
+        request(`/harness/notes/${encodeURIComponent(noteId)}/canvas`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      replaceFromSyntax: (noteId, input) =>
+        request(`/harness/notes/${encodeURIComponent(noteId)}/canvas/from-syntax`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      setNoteLink: (noteId, nodeId, input) =>
+        request(`/harness/notes/${encodeURIComponent(noteId)}/canvas/nodes/${encodeURIComponent(nodeId)}/link-note`, {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      removeNoteLink: (noteId, nodeId, baseHash) =>
+        request(
+          `/harness/notes/${encodeURIComponent(noteId)}/canvas/nodes/${encodeURIComponent(nodeId)}/link${toQueryString({ baseHash })}`,
+          { method: 'DELETE' }
+        ),
+    },
+    tags: {
+      list: () => request('/harness/tags'),
     },
   };
 }

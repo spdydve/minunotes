@@ -12,8 +12,9 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - Find/create location: `minunotes_list_folders` → `minunotes_create_folder` if needed.
 - Safe note edit: `minunotes_search_notes` or `minunotes_read_note` → capture `contentHash` → `minunotes_edit_note` with `baseHash`.
 - Section edit: `minunotes_read_outline` → `minunotes_read_section` → targeted `replace_text` or `replace_range`.
-- Canvas update: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
-- Canvas note link: preserve the full canvas and set `node.minunotes.link = { "type": "note", "id": "note_…" }`; keep external links in `node.url`.
+- Canvas create/update: use Minu diagram syntax for generated layouts and JSON Canvas for exact IDs, positions, links, and metadata.
+- Canvas replacement: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
+- Canvas note link: `minunotes_read_note` → `minunotes_link_canvas_node_to_note` or `minunotes_unlink_canvas_node` with the latest `contentHash` as `baseHash`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
 
 ## Available tools
@@ -39,6 +40,8 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - `minunotes_create_canvas_from_syntax`
 - `minunotes_replace_canvas`
 - `minunotes_replace_canvas_from_syntax`
+- `minunotes_link_canvas_node_to_note`
+- `minunotes_unlink_canvas_node`
 
 ## Safety rules
 
@@ -47,7 +50,9 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - Use exact, small edits.
 - Markdown patch edits only work for `documentType: "markdown"`.
 - For `canvas.default` and `canvas.mindmap`, use canvas JSON or Minu diagram syntax tools.
-- Internal canvas note links and external URLs are independent. Changing `node.minunotes.link` must not remove `node.url` or unrelated node metadata.
+- Syntax replacement regenerates the complete canvas and can replace node IDs, layout, links, and metadata. Use JSON Canvas for deterministic replacement.
+- Prefer focused canvas link/unlink tools over whole-document replacement when only an internal target changes.
+- Internal canvas note links and external URLs are independent. Link/unlink operations must preserve `node.url` and unrelated node metadata.
 - Preserve markdown structure, wikilinks, tags, and app-owned image URLs such as `/internal/attachments/.../content`.
 - If permission is denied, report it; do not retry unrelated actions.
 - After edits, report folder ID, note ID, and a concise summary of changes.

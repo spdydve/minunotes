@@ -27,11 +27,20 @@ POST /v1/harness/notes
 POST /v1/harness/notes/:noteId/edit
 POST /v1/harness/canvases
 POST /v1/harness/canvases/from-syntax
+PUT /v1/harness/notes/:noteId/canvas
 PUT /v1/harness/notes/:noteId/canvas/from-syntax
+POST /v1/harness/notes/:noteId/canvas/nodes/:nodeId/link-note
+DELETE /v1/harness/notes/:noteId/canvas/nodes/:nodeId/link
+GET /v1/harness/notes/:noteId/outline
+GET /v1/harness/notes/:noteId/events
+GET /v1/harness/tags
+PUT /v1/harness/notes/:noteId/tags
 GET /openapi.json
 POST /mcp
 ```
 
 Use `X-API-Key` for direct `/v1/harness/*` API and OpenAPI-authenticated requests. Hosted MCP uses OAuth bearer tokens at `/mcp` (`Authorization: Bearer mnoac_...`). Local stdio MCP uses an owner-managed API key in the local process environment and calls the harness API.
 
-For generated canvases and mind maps, prefer Minu diagram syntax through the canvas harness endpoints. Use raw JSON Canvas only when exact import/replacement is needed.
+For generated canvases and mind maps, prefer Minu diagram syntax through the canvas harness endpoints. Use raw JSON Canvas when exact import or deterministic replacement is needed. Syntax replacement regenerates the whole canvas and can replace node IDs, positions, links, and metadata; use focused node-link operations for internal note targets.
+
+MCP exposes canvas lifecycle and note-link operations, note outlines and events, and user-facing tag behavior. Broader outgoing-link, backlink, orphan, and graph inspection tools remain deferred until MinuNotes has corresponding product UI semantics.

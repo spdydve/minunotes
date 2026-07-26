@@ -993,3 +993,172 @@ Deliver the two agreed immediate priorities before shared-workspace editing:
 ## Approval
 
 Planning only. Do not implement until approved.
+
+---
+
+# MCP Harness Parity Plan
+
+## Goal
+
+Expose the approved MinuNotes harness capabilities through both local stdio MCP and hosted OAuth MCP while keeping permissions, responses, and concurrency behavior delegated to the existing harness routes.
+
+## Approved scope
+
+### Canvas lifecycle
+
+- Create a canvas from JSON Canvas.
+- Create a canvas from Minu diagram syntax.
+- Replace a canvas from JSON Canvas.
+- Replace a canvas from Minu diagram syntax.
+
+### Canvas note links
+
+- Set or update one canvas node’s internal note link.
+- Remove one canvas node’s internal note link.
+
+### Structured note reads
+
+- Read a markdown note outline so agents can discover section IDs.
+- Read note activity events.
+
+### Tags
+
+- List visible tags.
+- Read tags for one note.
+- Replace all tags on one note.
+
+## Deferred scope
+
+- Outgoing-link inspection.
+- Backlink inspection through MCP.
+- Orphan-note discovery through MCP.
+- Broader graph traversal.
+- New graph UI.
+- Canvas note-link picker polish.
+- New harness routes or database changes.
+
+Deferred graph product and MCP work is documented in MinuNotes note `note_51ffff69de0349369b660b3dd3120a43`.
+
+## Decisions
+
+- Reuse the existing `/v1/harness` routes; MCP remains an adapter rather than a second domain implementation.
+- Keep local API-key MCP and hosted OAuth MCP clients behaviorally aligned.
+- Require `baseHash` for canvas replacement and node-link mutations even where the REST route can technically accept an omitted hash.
+- Treat link set as an upsert: the same tool creates or changes the node’s internal target.
+- Preserve existing harness permission behavior, including source edit access, target read access, and inaccessible-target redaction.
+- Describe Minu syntax as whole-document generation. Syntax replacement can regenerate node IDs, layout, and metadata; use focused link tools afterward and use JSON Canvas when exact metadata preservation is required.
+- Do not expose graph operations through MCP until their UI/product semantics are designed.
+
+## Proposed MCP tools
+
+- `notes_create_canvas`
+- `notes_create_canvas_from_syntax`
+- `notes_replace_canvas`
+- `notes_replace_canvas_from_syntax`
+- `notes_set_canvas_node_note_link`
+- `notes_remove_canvas_node_note_link`
+- `notes_read_outline`
+- `notes_read_events`
+- `notes_list_tags`
+- `notes_read_note_tags`
+- `notes_replace_note_tags`
+
+## Files to modify
+
+- `packages/mcp/src/server.ts`
+  - Extend `NotesMcpClient`.
+  - Add schemas, descriptions, annotations, and handlers for the approved tools.
+- `packages/mcp/src/config.ts`
+  - Add local API-key client adapters for each existing harness route.
+- `src/api/routes/mcp.ts`
+  - Add matching hosted OAuth client adapters.
+- `packages/mcp/tests/server.test.ts`
+  - Verify registration, schemas/annotations, and handler delegation.
+- `packages/mcp/tests/config.test.ts`
+  - Verify local client HTTP methods, paths, query parameters, and payloads.
+- `tests/mcp-route.test.ts`
+  - Verify hosted MCP permissions and representative read/write workflows.
+- `packages/mcp/README.md`
+  - Document the new tool inventory and safe canvas syntax guidance.
+- `src/frontend/docs/resources/mcp.mdx`
+  - Document the expanded MCP capabilities and deferred graph scope.
+- `src/frontend/docs/resources/agent-integrations.mdx`
+  - Update capability summaries if its current inventory is explicit.
+
+## Implementation phases
+
+### Phase 1 — Shared MCP contracts and tools ✅
+
+- [x] Extend `NotesMcpClient` with canvas, outline, events, and tag methods.
+- [x] Register all approved tools with focused Zod inputs.
+- [x] Mark read tools read-only/idempotent.
+- [x] Mark replacements and tag/link mutations destructive where they can overwrite current state.
+
+Verification:
+
+- [x] Run MCP server registration tests: 13 passed.
+- [x] Confirm tool names and annotations are stable.
+
+Phase note: `NotesMcpClient` now requires the new methods. Local and hosted adapters intentionally remain incomplete until Phase 2, so full package type/build verification is deferred to that phase.
+
+### Phase 2 — Local and hosted adapters ✅
+
+- [x] Implement matching route calls in `packages/mcp/src/config.ts`.
+- [x] Implement matching in-process harness calls in `src/api/routes/mcp.ts`.
+- [x] Keep payload shapes identical between transports.
+- [x] Encode note/node IDs and query parameters safely.
+
+Verification:
+
+- [x] Run the complete MCP package suite: 23 tests passed.
+- [x] Run hosted MCP route and canvas harness tests: 13 tests passed.
+- [x] Verify hosted OAuth read calls and write permission errors through Streamable HTTP.
+- [x] Verify stale hash, target visibility, and canvas link permission behavior through harness canvas coverage.
+- [x] Run `pnpm typecheck`.
+
+### Phase 3 — Documentation and package verification ✅
+
+- [x] Document JSON Canvas versus Minu syntax use cases.
+- [x] Warn that syntax replacement is whole-document replacement and may regenerate IDs/metadata.
+- [x] Document link set/update and remove behavior.
+- [x] Document outline/events/tags tools.
+- [x] Keep deferred graph operations out of the advertised MCP inventory.
+
+Verification:
+
+- [x] Build the MCP package.
+- [x] Export the MCP release package.
+- [x] Run `npm pack --dry-run`: 14 files, 10.8 kB package, 53.6 kB unpacked.
+
+### Phase 4 — Full verification ✅
+
+- [x] Run Biome on changed TypeScript files.
+- [x] Run `pnpm --filter @minunotes/mcp test`: 23 tests passed.
+- [x] Run `pnpm --filter @minunotes/mcp build`.
+- [x] Run targeted MCP route and affected harness tests: 25 tests passed.
+- [x] Run `pnpm typecheck`.
+- [x] Run `pnpm test`: 165 tests passed across 24 files.
+- [x] Run `pnpm build`.
+- [x] Review `git diff --check` and confirm the working tree contains only intended changes.
+- [x] Update the MinuNotes `Unreleased` changelog entry.
+
+Build note: the existing large-chunk warning remains; this work does not add frontend runtime dependencies.
+
+### Phase 5 — Pi skill and direct harness tools ✅
+
+- [x] Add focused Pi tools for setting/changing and removing canvas-node note links.
+- [x] Require `baseHash` and preserve the existing harness route semantics.
+- [x] Update the repository and installed Pi harness skills with focused link workflows and syntax-replacement guidance.
+- [x] Validate the extension loads through Pi and run Biome on the installed extension.
+
+Phase note: Pi extension validation passed. Biome reported four pre-existing warnings in the installed extension (`any` and `{}` types) and no errors.
+
+## Acceptance criteria
+
+- [x] Every approved tool works through local stdio MCP and hosted OAuth MCP.
+- [x] Existing harness authorization and conflict responses are preserved.
+- [x] Canvas syntax and JSON behavior are clearly distinguished.
+- [x] Link set/update and remove preserve external URLs through the existing focused harness operations.
+- [x] Outline makes existing section reads discoverable.
+- [x] Events and tags match existing UI/harness behavior.
+- [x] No graph MCP tools are introduced in this phase.

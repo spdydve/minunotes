@@ -52,7 +52,7 @@ Use hosted MCP for cloud agents, ChatGPT-style integrations, Lambda/container ag
 
 ## Tools
 
-Tools include:
+Folders and notes:
 
 - `notes_list_folders`
 - `notes_create_folder` (supports optional `parentFolderId` for subfolders)
@@ -61,10 +61,62 @@ Tools include:
 - `notes_create_note`
 - `notes_edit_note`
 - `notes_move_notes` (all-or-nothing, up to 100 notes)
+
+Structured reads:
+
 - `notes_search_lines`
 - `notes_read_lines`
 - `notes_search_note_lines`
+- `notes_read_outline`
 - `notes_read_section`
+- `notes_read_events`
+
+Canvas lifecycle and links:
+
+- `notes_create_canvas`
+- `notes_create_canvas_from_syntax`
+- `notes_replace_canvas`
+- `notes_replace_canvas_from_syntax`
+- `notes_set_canvas_node_note_link`
+- `notes_remove_canvas_node_note_link`
+
+Tags:
+
+- `notes_list_tags`
+- `notes_read_note_tags`
+- `notes_replace_note_tags`
+
+## Canvas JSON and Minu syntax
+
+Use JSON Canvas when exact node IDs, positions, external URLs, internal note links, or host metadata must be retained:
+
+```json
+{
+  "nodes": [
+    { "id": "node_a", "type": "text", "text": "Research", "x": 0, "y": 0, "width": 240, "height": 120 }
+  ],
+  "edges": []
+}
+```
+
+Use Minu diagram syntax when an agent should generate a laid-out flow or mind map without calculating coordinates:
+
+```txt
+diagram "Product plan" {
+  layout mindmap
+  Product
+  Product > Research
+  Product > Build
+}
+```
+
+Syntax creation and replacement compile the source into JSON Canvas. Syntax replacement is whole-document generation and can regenerate node IDs, positions, links, and metadata. Use JSON Canvas for deterministic replacement, and use the focused node-link tools after syntax generation when nodes need internal MinuNotes links.
+
+Canvas replacement and node-link mutations require a current `baseHash`. Setting a node note link creates or changes the target while preserving `node.url` and unrelated metadata. Removing the internal link also preserves the external URL.
+
+## Tool boundaries
+
+Tags are available because they already have user-facing Note Details behavior. Broader graph inspection—including outgoing links, backlinks, and orphan discovery—is intentionally not exposed through MCP yet; those product and UI semantics are deferred.
 
 Implementation notes:
 

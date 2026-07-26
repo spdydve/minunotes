@@ -118,8 +118,43 @@ function createHostedMcpClient(authState: {
         request(
           `/notes/${encodeURIComponent(noteId)}/search-lines${toQueryString({ q: input.query, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`
         ),
+      outline: (noteId) => request(`/notes/${encodeURIComponent(noteId)}/outline`),
       section: (noteId, sectionId) =>
         request(`/notes/${encodeURIComponent(noteId)}/sections/${encodeURIComponent(sectionId)}`),
+      events: (noteId, limit) => request(`/notes/${encodeURIComponent(noteId)}/events${toQueryString({ limit })}`),
+      tags: (noteId) => request(`/notes/${encodeURIComponent(noteId)}/tags`),
+      replaceTags: (noteId, tags) =>
+        request(`/notes/${encodeURIComponent(noteId)}/tags`, {
+          method: 'PUT',
+          body: JSON.stringify({ tags }),
+        }),
+    },
+    canvases: {
+      create: (input) => request('/canvases', { method: 'POST', body: JSON.stringify(input) }),
+      createFromSyntax: (input) => request('/canvases/from-syntax', { method: 'POST', body: JSON.stringify(input) }),
+      replace: (noteId, input) =>
+        request(`/notes/${encodeURIComponent(noteId)}/canvas`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      replaceFromSyntax: (noteId, input) =>
+        request(`/notes/${encodeURIComponent(noteId)}/canvas/from-syntax`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      setNoteLink: (noteId, nodeId, input) =>
+        request(`/notes/${encodeURIComponent(noteId)}/canvas/nodes/${encodeURIComponent(nodeId)}/link-note`, {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      removeNoteLink: (noteId, nodeId, baseHash) =>
+        request(
+          `/notes/${encodeURIComponent(noteId)}/canvas/nodes/${encodeURIComponent(nodeId)}/link${toQueryString({ baseHash })}`,
+          { method: 'DELETE' }
+        ),
+    },
+    tags: {
+      list: () => request('/tags'),
     },
   };
 }

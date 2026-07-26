@@ -42,6 +42,8 @@ npm pack --dry-run
 
 ## Available tools
 
+Folders and notes:
+
 - `notes_list_folders`
 - `notes_create_folder`
 - `notes_search`
@@ -49,11 +51,54 @@ npm pack --dry-run
 - `notes_create_note`
 - `notes_edit_note`
 - `notes_move_notes`
+
+Structured reads:
+
 - `notes_search_lines`
 - `notes_read_lines`
 - `notes_search_note_lines`
+- `notes_read_outline`
 - `notes_read_section`
+- `notes_read_events`
+
+Canvases and internal node links:
+
+- `notes_create_canvas`
+- `notes_create_canvas_from_syntax`
+- `notes_replace_canvas`
+- `notes_replace_canvas_from_syntax`
+- `notes_set_canvas_node_note_link`
+- `notes_remove_canvas_node_note_link`
+
+Tags:
+
+- `notes_list_tags`
+- `notes_read_note_tags`
+- `notes_replace_note_tags`
 
 Tool discovery is handled by the MCP protocol. Clients call `tools/list`; MinuNotes registers tool names, descriptions, schemas, annotations, and handlers.
 
 Move operations are all-or-nothing, capped at 100 notes, and require edit access to every source folder plus create access to the target folder.
+
+## Canvas JSON versus Minu syntax
+
+Use JSON Canvas for exact imports and replacements where node IDs, positions, external URLs, internal links, and metadata must remain deterministic.
+
+Use Minu diagram syntax for generated flows and mind maps:
+
+```txt
+diagram "Product plan" {
+  layout mindmap
+  Product
+  Product > Research
+  Product > Build
+}
+```
+
+Syntax is compiled into JSON Canvas. Replacing from syntax regenerates the complete document and can replace node IDs, layout, links, and metadata. Use the focused node-link tools after generation when nodes need internal note targets.
+
+Canvas replacement and node-link mutations require a current `baseHash`. Setting a node link creates or changes its internal target; removing it only removes the internal target. Both operations preserve the node’s external `url` and unrelated metadata.
+
+## Current MCP boundary
+
+Tag operations are exposed because tags already have user-facing Note Details behavior. Broader graph tools for outgoing links, backlinks, and orphan discovery remain deferred until their product and UI semantics are established.
