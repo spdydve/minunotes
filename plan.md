@@ -1162,3 +1162,213 @@ Phase note: Pi extension validation passed. Biome reported four pre-existing war
 - [x] Outline makes existing section reads discoverable.
 - [x] Events and tags match existing UI/harness behavior.
 - [x] No graph MCP tools are introduced in this phase.
+
+# Shared-View Wikilink Rendering
+
+Goal: render `[[X]]` wikilinks in the shared-note view the same way the editor does, without switching the shared view to CodeMirror. Keep the shared view on `MarkdownRenderer` so it stays lightweight and semantic. Editor-side quirks (raw `1.`/`2.`, CM6 code-block highlighter, editable table widget) are out of scope per the user — those wait for editable shared notes.
+
+## Decisions
+
+- Of the six renderer-vs-editor mismatches previously enumerated, only **wikilinks** is a renderer-side gap. The other five are editor behavior, not renderer defects. Address wikilinks only.
+- Keep `MarkdownRenderer` in the shared view. Do not switch to `MarkdownEditor` (perf, a11y, and folder-list cost are not worth it for read-only sharing today).
+- Render shared-view wikilinks as `me-wikilink me-wikilink--unknown` (dotted underline, link color). No `resolve` is possible without a public API, and that work is deferred.
+- Support both `[[X]]` and `[[X|Y]]` (alias). The label is the visible text; the target stays in the DOM for later resolution.
+- Implement via a small wrapper component that wraps `MarkdownRenderer` and post-processes the rendered DOM. No new dependencies, no fork, no patch.
+- Skip wikilink decoration inside `<pre>`, `<code>`, `<a>`, `<script>`, and `<style>` to avoid touching code blocks and existing links.
+
+## Files to create
+
+- `src/frontend/components/shared-markdown-renderer.tsx`
+  - Default export `SharedMarkdownRenderer` with the same prop shape as `MarkdownRenderer` (`value`, `codeHighlighter`, `className`).
+  - Internally renders `<MarkdownRenderer … />` inside a wrapper `<div>` with a ref.
+  - `useEffect` on `[value, codeHighlighter]`: walk text nodes in the renderer child, replace `[[X]]` / `[[X|Y]]` matches with `<a class="me-wikilink me-wikilink--unknown" data-wikilink-target="X">label</a>`.
+  - Reuse existing `me-wikilink` / `me-wikilink--unknown` classes from `@dpklabs/minueditor/theme.css` (already imported in `src/frontend/styles.css`) so no new CSS is needed.
+
+## Files to modify
+
+- `src/frontend/routes/share.$token.tsx`
+  - Swap `import { MarkdownRenderer } from '@dpklabs/minueditor'` for `import { SharedMarkdownRenderer } from '../components/shared-markdown-renderer'`.
+  - Swap the `<MarkdownRenderer … />` JSX for `<SharedMarkdownRenderer … />`.
+- `src/frontend/routes/share.folders.$token.tsx`
+  - Same import + JSX swap as above.
+
+## Verification
+
+- Manual: open a shared note containing `[[Some Note]]` and `[[note_abc|Custom label]]`. Verify both render as styled anchors (dotted underline) with the label text. Verify `[[X]]` inside a fenced code block is left alone.
+- Manual: open a shared folder, confirm multiple notes still render quickly (no CM6 mount cost).
+- `pnpm typecheck`.
+- `pnpm exec biome check --write src/frontend/components/shared-markdown-renderer.tsx src/frontend/routes/share.$token.tsx src/frontend/routes/share.folders.$token.tsx`.
+- Optional: add a `tests/browser/shared-wikilink.spec.ts` Playwright test that loads a shared note fixture with `[[X]]` and asserts the `.me-wikilink` element exists with the expected text and `data-wikilink-target` attribute.
+
+## Acceptance criteria
+
+- [ ] `[[X]]` and `[[X|Y]]` render as `.me-wikilink.me-wikilink--unknown` in both single-note and folder shared views.
+- [ ] Code blocks, existing links, and inline code are untouched by the decoration pass.
+- [ ] `MarkdownRenderer` remains the rendering engine — no CM6 in the shared view.
+- [ ] No new runtime dependencies; no public API changes.
+
+# Shared-View Wikilink Resolver
+
+Goal: in shared-note and shared-folder views, resolve `[[X]]` wikilinks to clickable links that navigate to the target's own shared view — but only when the target is reachable from the current share context. This is the security-sensitive follow-up to the rendering-only change above. Today, wikilinks render styled but go nowhere on click.
+
+## Security model (the rule)
+
+A target is **reachable** from the current share context iff one of the following holds:
+
+1. The target is the **currently-shared note** (self-link edge case — the resolver returns the same share token).
+2. The target has its own **active `note_share_links` entry** (not revoked, not expired).
+3. The target lives in a folder that the current share context **grants access to** — meaning the current share token is a folder share for an ancestor (or the note's own folder), or the current note-share is in a folder that has an active `folder_share_links` entry.
+
+If none of the above hold → the resolver returns `shareToken: null`. The frontend renders the wikilink as a "not available" placeholder. No `href` is constructed. No leak path exists.
+
+The resolver's response is intentionally narrow — `{ target, shareToken }`. It must never return the note's `/notes/<id>` URL, its title, folder, owner, or any other metadata. The label is taken from the markdown source by the frontend.
+
+## API contract
+
+`POST /internal/share/resolve`
+
+Request:
+```json
+{
+  "token": "<current share token>",
+  "targets": ["Some Note", "note_abc123", "https://notes.dpklabs.com/notes/note_xyz"]
+}
+```
+
+Response:
+```json
+{
+  "resolutions": [
+    { "target": "Some Note", "shareToken": "shr_…" },
+    { "target": "note_abc123", "shareToken": null },
+    { "target": "https://notes.dpklabs.com/notes/note_xyz", "shareToken": null }
+  ]
+}
+```
+
+Notes:
+- `token` is the share token from the URL the viewer is currently on. The resolver uses it to determine the share context (note or folder share).
+- `targets` is the de-duplicated list of wikilink target strings found in the rendered note. Order is preserved in the response.
+- `shareToken` is the *target's* share token, not the viewer's. Use it to construct `/share/<shareToken>` links.
+- A target may match a note by ID or by title; resolution checks reachability, not just existence.
+
+## Authz lookup strategy
+
+For each unique target:
+1. If the target matches the `note_<id>` pattern, look up the note by ID.
+2. Otherwise, look up the note by exact title match (single result required; if multiple notes share a title, return null).
+3. If no note is found, return `shareToken: null`.
+4. If a note is found, run the reachability check:
+   - Self-link → return the current share token.
+   - Note has its own active `note_share_links` entry → return that token.
+   - Current share is a folder share, target is in the shared folder (or a sub-folder) → return the folder share token.
+   - Current share is a note share, the current note and the target are in the same folder, and that folder has an active `folder_share_links` entry → return the folder share token.
+   - Otherwise → `shareToken: null`.
+
+Batched: one query for all candidate notes, one query for active note-share rows, one query for active folder-share rows, one query for the current share's context. Four queries total, regardless of target count.
+
+## Rate limiting and abuse prevention
+
+- Per-IP, per-token bucket: 60 requests/minute, 1000 requests/hour. Return `429` over the limit.
+- `targets` array capped at 500 entries per request.
+- Each target string capped at 256 chars.
+- Reject requests with malformed tokens before any DB work.
+
+## Caching and invalidation
+
+- Cache resolutions per `(shareToken, sortedTargetsHash)` for the lifetime of the share token.
+- TTL: 5 minutes (defense in depth; the underlying share token's own expiry is the real bound).
+- Cache invalidation: when a `note_share_links` or `folder_share_links` row is revoked or expires, evict all cache entries that include the affected share token *or* any share token that could have resolved through it (the latter is approximated by evicting all entries for the affected user).
+- Cache storage: in-memory LRU keyed by share token, since share tokens are already secret. Not persistent.
+
+## Audit logging
+
+- Log every resolver call: timestamp, share token (truncated), target count, number of resolutions returned, source IP.
+- No target strings or share tokens in full.
+- Required for any future incident review.
+
+## Files to create
+
+### Backend
+- `src/api/routes/shared-resolve.ts`
+  - `POST /resolve` handler. Validates body shape, applies rate limit, calls resolver, returns response.
+  - 400 on malformed body, 429 on rate limit, 200 otherwise.
+- `src/api/shared/wikilink-resolver.ts`
+  - `resolveWikilinks(token, targets) → resolutions[]`. Pure function over the DB. No HTTP.
+  - Encapsulates the four-query lookup strategy above.
+- `tests/shared-resolve.test.ts`
+  - Note-share → target with own share → resolves to note token.
+  - Note-share → target without share → null.
+  - Note-share → target in different folder → null.
+  - Note-share → self-link → resolves to same token.
+  - Folder-share → target in same folder → resolves to folder token.
+  - Folder-share → target in sub-folder → resolves to folder token.
+  - Folder-share → target with own share → resolves to note token (not folder token).
+  - Folder-share → target in different folder, no share → null.
+  - URL-form target → null.
+  - Title with no matching note → null.
+  - Title matching multiple notes → null.
+  - Revoked note share → null.
+  - Expired note share → null.
+  - Revoked folder share → null.
+  - Empty targets array → empty resolutions.
+  - Rate limit exceeded → 429.
+  - Malformed token → 400.
+  - Oversized targets array → 400.
+  - Cache hit on second identical request.
+  - Cache invalidation on share revoke.
+
+### Frontend
+- `src/frontend/lib/api.ts` — add `resolveSharedWikilinks(token, targets)` method.
+- `src/frontend/lib/shared-wikilink-resolver.ts` — client-side batching + caching.
+  - Collects unique `[[X]]` targets from the markdown source.
+  - Calls the resolver once per note load.
+  - Returns `Map<target, shareToken | null>`.
+- `src/frontend/components/shared-markdown-renderer.tsx` — update to:
+  - Accept the resolution map as a prop.
+  - Render resolved wikilinks as `<a href="/share/<token>">` with the `me-wikilink me-wikilink--resolved` class.
+  - Render unresolved wikilinks as the existing styled-but-no-`href` placeholder (current behavior).
+  - Skip the click handler that routed to "not available" — only attach `href` to resolved links.
+- `src/frontend/routes/share.$token.tsx` — call the resolver before rendering, pass the map to `SharedMarkdownRenderer`.
+- `src/frontend/routes/share.folders.$token.tsx` — same.
+
+### Optional test
+- `tests/browser/shared-wikilink-resolver.spec.ts` — Playwright spec that loads a shared note with `[[X]]` and asserts the resolved link points to the target's share URL.
+
+## Frontend rendering states
+
+| Resolver state | Visual | Click behavior |
+|---|---|---|
+| `shareToken !== null` | `me-wikilink me-wikilink--resolved` (solid underline, link color) | Navigate to `/share/<token>` |
+| `shareToken === null` | `me-wikilink me-wikilink--unknown` (dotted underline, link color) | No-op (no `href`) |
+| Loading | Same as `null` for one frame, then resolves | — |
+
+## Build phases (suggested order)
+
+1. **API + tests first** — build the resolver, batched lookups, rate limiting, audit log. Land with tests green.
+2. **OpenAPI** — document the new endpoint in `src/api/openapi/harness.ts` (or a new `share.ts`).
+3. **Cache layer** — add the in-memory LRU with invalidation on share revoke. Test invalidation paths.
+4. **Frontend integration** — collect targets, call resolver, pass map to renderer. Land with the rendering states above.
+5. **Browser test** — Playwright spec for the resolved and unresolved states.
+
+## Verification
+
+- `pnpm typecheck`
+- `pnpm exec biome check --write <changed-files>`
+- `pnpm test` — all 165+ existing tests pass, plus the new `shared-resolve.test.ts` cases.
+- Manual: open the two seeded notes from the previous phase, click wikilinks between them, confirm navigation to the other shared view.
+- Manual: open a shared note with a `[[Private Note]]` wikilink, confirm it renders as "not available" (dotted underline, no `href`).
+- Manual: revoke the target note's share, reload the source shared view (after cache TTL), confirm the link degrades to "not available".
+
+## Acceptance criteria
+
+- [ ] `POST /internal/share/resolve` returns `{ resolutions: [{ target, shareToken }] }` for any valid token + target list.
+- [ ] A target is resolvable iff the reachability rule above holds. All edge cases have tests.
+- [ ] The response never contains the note's `/notes/<id>` URL, title, folder, or any other metadata.
+- [ ] Rate limiting returns 429 above the threshold; oversized requests return 400.
+- [ ] Revoked/expired shares return `shareToken: null`.
+- [ ] Cache invalidation removes stale resolutions when a share is revoked.
+- [ ] Frontend renders resolved wikilinks as clickable links to `/share/<token>`.
+- [ ] Frontend renders unresolved wikilinks with no `href` (current "not available" behavior).
+- [ ] `pnpm test` and `pnpm typecheck` pass clean.
+- [ ] No new runtime dependencies.

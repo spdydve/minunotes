@@ -5,11 +5,11 @@ import {
   mindMapCanvasProfile,
   standardCanvasProfile,
 } from '@dpklabs/minucanvas';
-import { MarkdownRenderer } from '@dpklabs/minueditor';
 import { useQuery } from '@tanstack/react-query';
 import { createRoute } from '@tanstack/react-router';
 import type React from 'react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { SharedMarkdownRenderer } from '../components/shared-markdown-renderer';
 import { EmptyState } from '../components/ui/empty-state';
 import { ApiError, api, type DocumentType, type SharedFolderChild, type SharedFolderNote } from '../lib/api';
 import { editorCodeHighlighter } from '../lib/code-highlighter';
@@ -326,7 +326,7 @@ function SharedFolderNoteView({ note, onBack }: { note: SharedFolderNote; onBack
         <SharedFolderCanvas content={note.content} documentType={note.documentType} />
       ) : (
         <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-          <MarkdownRenderer
+          <SharedMarkdownRenderer
             value={note.content}
             codeHighlighter={editorCodeHighlighter}
             className="notes-minu-renderer"
