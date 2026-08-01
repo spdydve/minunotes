@@ -511,6 +511,39 @@ export const harnessOpenApiSpec = {
         },
       },
     },
+    '/internal/share/resolve': {
+      post: {
+        tags: ['Shared'],
+        operationId: 'resolveSharedWikilinks',
+        summary: 'Resolve wikilink targets to share tokens',
+        description:
+          "Public endpoint used by the shared-note view. Given a share token and a list of wikilink target strings found in the rendered note, returns a list of `{ target, shareToken }` pairs. A target resolves to a share token iff it is reachable from the current share context: the target is the currently-shared note (self-link), the target has its own active `note_share_links` entry, the target is in a folder covered by the current folder share, or the currently-shared note is in a folder with an active `folder_share_links` entry. Otherwise `shareToken` is `null`. The response is intentionally narrow: it never returns the target note's URL, title, folder, or any other metadata.",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ResolveSharedWikilinksRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Resolutions for the requested targets. Order matches the request order.',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ResolveSharedWikilinksResponse' },
+              },
+            },
+          },
+          '400': {
+            description:
+              'Malformed body, missing token, non-string targets, or targets exceeding the size limits (500 entries, 256 chars each).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+          },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: { ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
@@ -539,6 +572,44 @@ export const harnessOpenApiSpec = {
     },
     schemas: {
       ErrorResponse: { type: 'object', required: ['error'], properties: { error: { type: 'string' } } },
+      ResolveSharedWikilinksRequest: {
+        type: 'object',
+        required: ['token', 'targets'],
+        properties: {
+          token: {
+            type: 'string',
+            description: 'The share token from the URL the viewer is currently on.',
+          },
+          targets: {
+            type: 'array',
+            maxItems: 500,
+            items: { type: 'string', maxLength: 256 },
+            description:
+              'Wikilink target strings found in the rendered note. Each target is the literal text inside `[[...]]`, including the `note_xxx` ID form, the `Title` form, the `Title|Label` aliased form, and full URL forms (which never resolve).',
+          },
+        },
+      },
+      ResolveSharedWikilinksResponse: {
+        type: 'object',
+        required: ['resolutions'],
+        properties: {
+          resolutions: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/SharedWikilinkResolution' },
+          },
+        },
+      },
+      SharedWikilinkResolution: {
+        type: 'object',
+        required: ['target', 'shareToken'],
+        properties: {
+          target: { type: 'string', description: 'The original target string from the request.' },
+          shareToken: {
+            type: ['string', 'null'],
+            description: "The target's share token if reachable from the current share context, otherwise null.",
+          },
+        },
+      },
       Folder: {
         type: 'object',
         required: ['id', 'parentFolderId', 'title', 'isPrivate', 'isAgentReadOnly', 'createdAt', 'updatedAt'],

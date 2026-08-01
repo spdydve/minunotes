@@ -34,6 +34,39 @@ describe('harness OpenAPI spec', () => {
     expect(spec.components.schemas.Backlink?.properties?.linkType?.enum).toContain('canvas-note');
   });
 
+  it('documents the shared wikilink resolver as a public endpoint with no auth', async () => {
+    const response = await app.request('/openapi.json');
+    const spec = (await response.json()) as {
+      paths: Record<
+        string,
+        {
+          post?: {
+            tags?: string[];
+            operationId?: string;
+            security?: unknown[];
+            requestBody?: { content?: { 'application/json'?: { schema?: { $ref?: string } } } };
+            responses?: Record<string, { content?: { 'application/json'?: { schema?: { $ref?: string } } } }>;
+          };
+        }
+      >;
+      components: { schemas: Record<string, unknown> };
+    };
+
+    const path = spec.paths['/internal/share/resolve'];
+    expect(path?.post?.tags).toContain('Shared');
+    expect(path?.post?.operationId).toBe('resolveSharedWikilinks');
+    expect(path?.post?.security).toEqual([]);
+    expect(path?.post?.requestBody?.content?.['application/json']?.schema?.$ref).toBe(
+      '#/components/schemas/ResolveSharedWikilinksRequest'
+    );
+    expect(path?.post?.responses?.['200']?.content?.['application/json']?.schema?.$ref).toBe(
+      '#/components/schemas/ResolveSharedWikilinksResponse'
+    );
+    expect(spec.components.schemas).toHaveProperty('ResolveSharedWikilinksRequest');
+    expect(spec.components.schemas).toHaveProperty('ResolveSharedWikilinksResponse');
+    expect(spec.components.schemas).toHaveProperty('SharedWikilinkResolution');
+  });
+
   it('also serves the spec under the harness namespace', async () => {
     const response = await app.request('/v1/openapi.json');
 

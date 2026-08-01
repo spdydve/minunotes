@@ -156,7 +156,7 @@ function SharedFolderView() {
         </aside>
         <main className="min-w-0">
           {selectedNote ? (
-            <SharedFolderNoteView note={selectedNote} onBack={() => setSelectedNoteId(null)} />
+            <SharedFolderNoteView note={selectedNote} onBack={() => setSelectedNoteId(null)} shareToken={token} />
           ) : selectedFolder ? (
             <SharedFolderContents
               folder={selectedFolder}
@@ -300,7 +300,15 @@ function SharedFolderContents({
   );
 }
 
-function SharedFolderNoteView({ note, onBack }: { note: SharedFolderNote; onBack: () => void }) {
+function SharedFolderNoteView({
+  note,
+  onBack,
+  shareToken,
+}: {
+  note: SharedFolderNote;
+  onBack: () => void;
+  shareToken: string;
+}) {
   const isCanvas = note.documentType.startsWith('canvas.');
   return (
     <article className={isCanvas ? 'flex h-screen w-full flex-col overflow-hidden' : 'mx-auto w-full max-w-6xl p-4'}>
@@ -330,6 +338,7 @@ function SharedFolderNoteView({ note, onBack }: { note: SharedFolderNote; onBack
             value={note.content}
             codeHighlighter={editorCodeHighlighter}
             className="notes-minu-renderer"
+            shareToken={shareToken}
           />
         </div>
       )}

@@ -3,13 +3,32 @@ import { Hono } from 'hono';
 import { db } from '../db/client';
 import { folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
 import { hashShareToken } from '../lib/share-tokens';
+import { buildFolderCacheKey, buildNoteCacheKey, cachedJson } from '../middleware/shared-cache';
 
 export const shareRoutes = new Hono();
 
-shareRoutes.get('/folders/:token', async (c) => {
-  const token = c.req.param('token').trim();
-  if (!token) return c.json({ error: 'Shared folder not found' }, 404);
+type FolderResult =
+  | {
+      notFound: true;
+    }
+  | {
+      notFound: false;
+      value: {
+        folder: { id: string; title: string; updatedAt: Date };
+        folders: { id: string; parentFolderId: string | null; title: string; updatedAt: Date }[];
+        notes: {
+          id: string;
+          folderId: string;
+          title: string;
+          content: string;
+          documentType: string;
+          updatedAt: Date;
+        }[];
+        share: { id: string; permission: string; createdAt: Date };
+      };
+    };
 
+async function loadSharedFolder(token: string): Promise<FolderResult> {
   const tokenHash = hashShareToken(token);
   const now = new Date();
   const [row] = await db
@@ -32,7 +51,7 @@ shareRoutes.get('/folders/:token', async (c) => {
     )
     .limit(1);
 
-  if (!row) return c.json({ error: 'Shared folder not found' }, 404);
+  if (!row) return { notFound: true };
 
   const userFolders = await db
     .select({
@@ -70,22 +89,32 @@ shareRoutes.get('/folders/:token', async (c) => {
     .where(and(eq(notes.userId, row.folder.userId), eq(notes.type, 'note')))
     .orderBy(asc(notes.title));
 
-  return c.json({
-    folder: {
-      id: row.folder.id,
-      title: row.folder.title,
-      updatedAt: row.folder.updatedAt,
+  return {
+    notFound: false,
+    value: {
+      folder: {
+        id: row.folder.id,
+        title: row.folder.title,
+        updatedAt: row.folder.updatedAt,
+      },
+      folders: userFolders.filter((folder) => folder.id !== row.folder.id && folderIds.has(folder.id)),
+      notes: sharedNotes.filter((note) => folderIds.has(note.folderId)),
+      share: row.share,
     },
-    folders: userFolders.filter((folder) => folder.id !== row.folder.id && folderIds.has(folder.id)),
-    notes: sharedNotes.filter((note) => folderIds.has(note.folderId)),
-    share: row.share,
-  });
-});
+  };
+}
 
-shareRoutes.get('/:token', async (c) => {
-  const token = c.req.param('token').trim();
-  if (!token) return c.json({ error: 'Shared note not found' }, 404);
+type NoteResult =
+  | { notFound: true }
+  | {
+      notFound: false;
+      value: {
+        note: { title: string; content: string; documentType: string; updatedAt: Date };
+        share: { id: string; permission: string; createdAt: Date };
+      };
+    };
 
+async function loadSharedNote(token: string): Promise<NoteResult> {
   const tokenHash = hashShareToken(token);
   const now = new Date();
   const [row] = await db
@@ -108,15 +137,44 @@ shareRoutes.get('/:token', async (c) => {
     )
     .limit(1);
 
-  if (!row) return c.json({ error: 'Shared note not found' }, 404);
+  if (!row) return { notFound: true };
 
-  return c.json({
-    note: {
-      title: row.note.title,
-      content: row.note.content,
-      documentType: row.note.documentType,
-      updatedAt: row.note.updatedAt,
+  return {
+    notFound: false,
+    value: {
+      note: {
+        title: row.note.title,
+        content: row.note.content,
+        documentType: row.note.documentType,
+        updatedAt: row.note.updatedAt,
+      },
+      share: row.share,
     },
-    share: row.share,
+  };
+}
+
+shareRoutes.get('/folders/:token', async (c) => {
+  const token = c.req.param('token').trim();
+  if (!token) return c.json({ error: 'Shared folder not found' }, 404);
+
+  const result = await cachedJson({
+    key: buildFolderCacheKey(token),
+    token,
+    compute: () => loadSharedFolder(token),
   });
+  if (result.notFound) return c.json({ error: 'Shared folder not found' }, 404);
+  return c.json(result.value);
+});
+
+shareRoutes.get('/:token', async (c) => {
+  const token = c.req.param('token').trim();
+  if (!token) return c.json({ error: 'Shared note not found' }, 404);
+
+  const result = await cachedJson({
+    key: buildNoteCacheKey(token),
+    token,
+    compute: () => loadSharedNote(token),
+  });
+  if (result.notFound) return c.json({ error: 'Shared note not found' }, 404);
+  return c.json(result.value);
 });

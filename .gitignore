@@ -10,3 +10,5 @@ dist
 local.db
 *.db-journal
 .notes-attachments
+test-results
+playwright-report

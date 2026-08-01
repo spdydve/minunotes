@@ -394,6 +394,13 @@ export const api = {
       notes: SharedFolderNote[];
       share: { id: string; permission: 'read'; createdAt: string };
     }>(`/share/folders/${encodeURIComponent(token)}`),
+  resolveSharedWikilinks: (token: string, targets: string[]) =>
+    request<{
+      resolutions: Array<{ target: string; shareToken: string | null }>;
+    }>(`/share/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ token, targets }),
+    }),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
   noteVersions: (noteId: string, limit = 100) =>
     request<NoteVersionsResponse>(`/notes/${noteId}/versions?limit=${limit}`),

@@ -1,5 +1,6 @@
 import { type CodeHighlighter, MarkdownRenderer } from '@dpklabs/minueditor';
 import { useEffect, useRef } from 'react';
+import { api } from '../lib/api';
 
 const WIKILINK_PATTERN = /\[\[([^[\]\n|]+)(?:\|([^[\]\n]+))?\]\]/g;
 const SKIP_TAGS = new Set(['PRE', 'CODE', 'A', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
@@ -30,8 +31,9 @@ function findWikilinkTextNodes(root: HTMLElement): Text[] {
   return result;
 }
 
-function decorateWikilinks(root: HTMLElement): void {
+function decorateWikilinks(root: HTMLElement): string[] {
   const targets = findWikilinkTextNodes(root);
+  const uniqueTargets = new Set<string>();
   for (const textNode of targets) {
     const text = textNode.textContent ?? '';
     const fragment = document.createDocumentFragment();
@@ -50,6 +52,7 @@ function decorateWikilinks(root: HTMLElement): void {
       link.dataset.wikilinkTarget = target;
       link.textContent = label;
       fragment.appendChild(link);
+      uniqueTargets.add(target);
       lastIndex = WIKILINK_PATTERN.lastIndex;
       replaced = true;
       match = WIKILINK_PATTERN.exec(text);
@@ -61,26 +64,61 @@ function decorateWikilinks(root: HTMLElement): void {
       textNode.parentNode?.replaceChild(fragment, textNode);
     }
   }
+  return [...uniqueTargets];
+}
+
+function applyResolutions(root: HTMLElement, resolutions: Map<string, string>): void {
+  const links = root.querySelectorAll<HTMLAnchorElement>('a.me-wikilink[data-wikilink-target]');
+  for (const link of links) {
+    const target = link.dataset.wikilinkTarget;
+    if (!target) continue;
+    const shareToken = resolutions.get(target);
+    if (shareToken) {
+      link.href = `/share/${encodeURIComponent(shareToken)}`;
+      link.classList.remove('me-wikilink--unknown');
+      link.classList.add('me-wikilink--resolved');
+    }
+  }
 }
 
 export function SharedMarkdownRenderer({
   value,
   codeHighlighter,
   className,
+  shareToken,
 }: {
   value: string;
   codeHighlighter?: CodeHighlighter;
   className?: string;
+  shareToken?: string;
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
-    const rendered = wrapper.firstElementChild;
+    const rendered = wrapper.firstElementChild as HTMLElement | null;
     if (!rendered) return;
-    decorateWikilinks(rendered as HTMLElement);
-  }, [value, codeHighlighter]);
+    const targets = decorateWikilinks(rendered);
+    if (targets.length === 0 || !shareToken) return;
+    let cancelled = false;
+    api
+      .resolveSharedWikilinks(shareToken, targets)
+      .then((response) => {
+        if (cancelled) return;
+        const map = new Map<string, string>();
+        for (const resolution of response.resolutions) {
+          if (resolution.shareToken) map.set(resolution.target, resolution.shareToken);
+        }
+        applyResolutions(rendered, map);
+      })
+      .catch(() => {
+        // Leave wikilinks in their unresolved state.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [value, codeHighlighter, shareToken]);
 
   return (
     <div ref={wrapperRef}>
