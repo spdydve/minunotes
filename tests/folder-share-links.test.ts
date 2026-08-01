@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -184,6 +185,60 @@ describe('folder share links', () => {
     expect(body.notes.map((note) => note.title)).not.toContain('Template');
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe('read');
+  });
+
+  it('resolves only authored links for a selected note inside the shared subtree', async () => {
+    const { app, db, schema } = await setupFolderShareApp();
+    await db
+      .update(schema.notes)
+      .set({ content: '[[Child Note]] [[Outside Target]] [[Missing]]' })
+      .where(eq(schema.notes.id, 'note_a'));
+    await db.insert(schema.notes).values({
+      id: 'note_outside',
+      folderId: 'folder_private',
+      userId: 'user_a',
+      title: 'Outside Target',
+      content: '',
+      documentType: 'markdown',
+      type: 'note',
+      isApiEditable: true,
+      updatedByActorType: null,
+      updatedByActorId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(schema.noteShareLinks).values({
+      id: 'share_outside',
+      userId: 'user_a',
+      noteId: 'note_outside',
+      tokenHash: 'outside_hash',
+      token: 'outside-token',
+      permission: 'read',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const create = await app.request('/api/folders/folder_a/share-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const { shareLink } = (await create.json()) as { shareLink: { url: string } };
+    const token = tokenFromUrl(shareLink.url);
+
+    const response = await app.request(`/api/share/folders/${token}/notes/note_a/wikilinks`);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      resolutions: [
+        { target: 'Child Note', href: `/share/folders/${token}?note=note_child` },
+        { target: 'Outside Target', href: '/share/outside-token' },
+        { target: 'Missing', href: null },
+      ],
+    });
+
+    expect((await app.request(`/api/share/folders/${token}/notes/note_outside/wikilinks`)).status).toBe(404);
+    await app.request('/api/folders/folder_a/share-link', { method: 'DELETE' });
+    expect((await app.request(`/api/share/folders/${token}/notes/note_a/wikilinks`)).status).toBe(404);
   });
 
   it('returns existing active share metadata on repeated create', async () => {

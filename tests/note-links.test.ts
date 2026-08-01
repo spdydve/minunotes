@@ -130,6 +130,14 @@ describe('note link parser', () => {
     ]);
   });
 
+  it('ignores wikilink syntax inside inline and fenced code', () => {
+    expect(
+      parseWikiLinks(
+        'Resolve [[Visible]], not `[[Inline]]` or `multi-line\n[[Inline Multiline]]`.\n```md\n[[Fenced]]\n```\nAfter [[Also Visible]].'
+      )
+    ).toMatchObject([{ targetTitle: 'Visible' }, { targetTitle: 'Also Visible' }]);
+  });
+
   it('parses raw and markdown internal note URLs', () => {
     const raw = 'http://localhost:5173/notes/note_abc123';
     const markdown = '[Note B](http://localhost:5173/notes/note_def456)';

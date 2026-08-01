@@ -15,6 +15,8 @@ MinuEditor should understand the wikilink syntax and editor behavior, but it sho
 
 MinuNotes should provide note-specific behavior through callbacks.
 
+Public read-only resolution and share capability boundaries are documented in [Shared-View Wikilinks](./shared-view-wikilinks.md).
+
 ## Responsibilities
 
 ### MinuEditor owns

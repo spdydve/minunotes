@@ -24,7 +24,6 @@ import { mcpRoutes } from './routes/mcp';
 import { noteRoutes } from './routes/notes';
 import { oauthRoutes } from './routes/oauth';
 import { shareRoutes } from './routes/share';
-import { sharedResolveRoutes } from './routes/shared-resolve';
 
 const app = new Hono<{
   Variables: {
@@ -196,7 +195,6 @@ app.use('/internal/attachments/:attachmentId/complete', writeBodyLimit);
 app.route('/internal/folders', folderRoutes);
 app.route('/internal/notes', noteRoutes);
 app.route('/internal/share', shareRoutes);
-app.route('/internal/share', sharedResolveRoutes);
 app.route('/internal/oauth', oauthRoutes);
 app.route('/internal/attachments', attachmentRoutes);
 app.route('/internal/api-keys', apiKeyRoutes);

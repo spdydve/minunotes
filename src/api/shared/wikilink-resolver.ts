@@ -1,88 +1,113 @@
-import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { NOTE_ID_PATTERN, normalizeWikilinkTitle, parseWikilinks } from '../../shared/wikilinks';
 import { db } from '../db/client';
-import { folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
-import { hashShareToken } from '../lib/share-tokens';
+import { folders, noteShareLinks, notes } from '../db/schema';
 
-const NOTE_ID_PATTERN = /^note_[a-zA-Z0-9]+$/;
-const MAX_TARGET_LENGTH = 256;
-const MAX_TARGETS = 500;
+const DEFAULT_MAX_WIKILINKS = 100;
 
-export type WikilinkResolution = {
+export type SharedWikilinkResolution = {
   target: string;
-  shareToken: string | null;
+  href: string | null;
 };
 
-export type ResolverShareContext =
-  | { kind: 'note'; noteId: string; userId: string; token: string }
-  | { kind: 'folder'; folderId: string; userId: string; token: string };
+type SharedSourceNote = {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  documentType: string;
+};
 
-export type TargetCandidate = {
-  noteId: string;
+export type SharedWikilinkContext =
+  | { kind: 'note'; token: string; source: SharedSourceNote }
+  | { kind: 'folder'; token: string; folderId: string; source: SharedSourceNote };
+
+type CandidateNote = {
+  id: string;
   folderId: string;
+  title: string;
 };
 
-export class ResolverError extends Error {
-  constructor(
-    public code: 'invalid_token' | 'too_many_targets' | 'target_too_long' | 'invalid_targets',
-    message: string
-  ) {
-    super(message);
-    this.name = 'ResolverError';
-  }
-}
+type ActiveNoteShare = {
+  noteId: string;
+  token: string;
+};
 
-export async function resolveShareContext(token: string): Promise<ResolverShareContext | null> {
-  const trimmed = token.trim();
-  if (!trimmed) return null;
-  const tokenHash = hashShareToken(trimmed);
-  const now = new Date();
-  const activeShareFilter = and(
-    isNull(noteShareLinks.revokedAt),
-    or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
-  );
+type FolderRow = {
+  id: string;
+  parentFolderId: string | null;
+};
 
-  const [noteShare] = await db
-    .select({ noteId: noteShareLinks.noteId, userId: noteShareLinks.userId })
-    .from(noteShareLinks)
-    .where(and(eq(noteShareLinks.tokenHash, tokenHash), activeShareFilter))
-    .limit(1);
+export type SharedWikilinkRepository = {
+  findCandidateNotes(userId: string, idTargets: string[], titleTargets: string[]): Promise<CandidateNote[]>;
+  findActiveNoteShares(userId: string, noteIds: string[]): Promise<ActiveNoteShare[]>;
+  listFolders(userId: string): Promise<FolderRow[]>;
+};
 
-  if (noteShare) {
-    return { kind: 'note', noteId: noteShare.noteId, userId: noteShare.userId, token: trimmed };
-  }
+export const databaseSharedWikilinkRepository: SharedWikilinkRepository = {
+  async findCandidateNotes(userId, idTargets, titleTargets) {
+    if (idTargets.length === 0 && titleTargets.length === 0) return [];
 
-  const [folderShare] = await db
-    .select({ folderId: folderShareLinks.folderId, userId: folderShareLinks.userId })
-    .from(folderShareLinks)
-    .where(
-      and(
-        eq(folderShareLinks.tokenHash, tokenHash),
-        isNull(folderShareLinks.revokedAt),
-        or(isNull(folderShareLinks.expiresAt), gt(folderShareLinks.expiresAt, now))
+    const idFilter = idTargets.length > 0 ? inArray(notes.id, idTargets) : undefined;
+    const normalizedTitleTargets = titleTargets.map((target) => target.trim().toLowerCase());
+    const titleFilter =
+      normalizedTitleTargets.length > 0
+        ? inArray(sql<string>`lower(trim(${notes.title}))`, normalizedTitleTargets)
+        : undefined;
+    const targetFilter = idFilter && titleFilter ? or(idFilter, titleFilter) : (idFilter ?? titleFilter);
+    if (!targetFilter) return [];
+
+    return db
+      .select({ id: notes.id, folderId: notes.folderId, title: notes.title })
+      .from(notes)
+      .where(and(eq(notes.userId, userId), eq(notes.type, 'note'), targetFilter))
+      .orderBy(asc(notes.id));
+  },
+
+  async findActiveNoteShares(userId, noteIds) {
+    if (noteIds.length === 0) return [];
+    const now = new Date();
+    const rows = await db
+      .select({ noteId: noteShareLinks.noteId, token: noteShareLinks.token })
+      .from(noteShareLinks)
+      .where(
+        and(
+          eq(noteShareLinks.userId, userId),
+          inArray(noteShareLinks.noteId, noteIds),
+          isNotNull(noteShareLinks.token),
+          isNull(noteShareLinks.revokedAt),
+          or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
+        )
       )
-    )
-    .limit(1);
+      .orderBy(desc(noteShareLinks.updatedAt), asc(noteShareLinks.id));
+    return rows.flatMap((row) => (row.token ? [{ noteId: row.noteId, token: row.token }] : []));
+  },
 
-  if (folderShare) {
-    return { kind: 'folder', folderId: folderShare.folderId, userId: folderShare.userId, token: trimmed };
-  }
+  listFolders(userId) {
+    return db
+      .select({ id: folders.id, parentFolderId: folders.parentFolderId })
+      .from(folders)
+      .where(eq(folders.userId, userId));
+  },
+};
 
-  return null;
+function publicNoteHref(token: string): string {
+  return `/share/${encodeURIComponent(token)}`;
 }
 
-async function getFolderIdsForUser(userId: string, rootFolderId: string): Promise<Set<string>> {
-  const userFolders = await db
-    .select({ id: folders.id, parentFolderId: folders.parentFolderId })
-    .from(folders)
-    .where(eq(folders.userId, userId));
+function publicFolderNoteHref(token: string, noteId: string): string {
+  const search = new URLSearchParams({ note: noteId });
+  return `/share/folders/${encodeURIComponent(token)}?${search.toString()}`;
+}
 
+function collectFolderTreeIds(rootFolderId: string, rows: FolderRow[]): Set<string> {
   const ids = new Set([rootFolderId]);
   let added = true;
   while (added) {
     added = false;
-    for (const folder of userFolders) {
-      if (folder.parentFolderId && ids.has(folder.parentFolderId) && !ids.has(folder.id)) {
-        ids.add(folder.id);
+    for (const row of rows) {
+      if (row.parentFolderId && ids.has(row.parentFolderId) && !ids.has(row.id)) {
+        ids.add(row.id);
         added = true;
       }
     }
@@ -90,160 +115,72 @@ async function getFolderIdsForUser(userId: string, rootFolderId: string): Promis
   return ids;
 }
 
-export async function lookupTargetNotes(userId: string, targets: string[]): Promise<Map<string, TargetCandidate>> {
-  const result = new Map<string, TargetCandidate>();
-  if (targets.length === 0) return result;
-
-  const idTargets = targets.filter((t) => NOTE_ID_PATTERN.test(t));
-  const titleTargets = targets.filter((t) => !NOTE_ID_PATTERN.test(t));
-
-  if (idTargets.length > 0) {
-    const rows = await db
-      .select({ id: notes.id, folderId: notes.folderId })
-      .from(notes)
-      .where(and(eq(notes.userId, userId), inArray(notes.id, idTargets)));
-    for (const row of rows) {
-      result.set(row.id, { noteId: row.id, folderId: row.folderId });
-    }
+function authoredTargets(source: SharedSourceNote, maxWikilinks: number): string[] {
+  if (source.documentType !== 'markdown') return [];
+  const unique = new Set<string>();
+  for (const link of parseWikilinks(source.content)) {
+    unique.add(link.target);
+    if (unique.size >= maxWikilinks) break;
   }
-
-  if (titleTargets.length > 0) {
-    const rows = await db
-      .select({ id: notes.id, folderId: notes.folderId, title: notes.title })
-      .from(notes)
-      .where(and(eq(notes.userId, userId), inArray(notes.title, titleTargets)))
-      .orderBy(asc(notes.id));
-    const byTitle = new Map<string, TargetCandidate[]>();
-    for (const row of rows) {
-      const list = byTitle.get(row.title) ?? [];
-      list.push({ noteId: row.id, folderId: row.folderId });
-      byTitle.set(row.title, list);
-    }
-    for (const [title, list] of byTitle) {
-      if (list.length === 1) {
-        result.set(title, list[0]);
-      }
-    }
-  }
-
-  return result;
+  return [...unique];
 }
 
-async function findActiveNoteShareToken(userId: string, noteId: string): Promise<string | null> {
-  const now = new Date();
-  const [row] = await db
-    .select({ token: noteShareLinks.token })
-    .from(noteShareLinks)
-    .where(
-      and(
-        eq(noteShareLinks.userId, userId),
-        eq(noteShareLinks.noteId, noteId),
-        isNull(noteShareLinks.revokedAt),
-        or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
-      )
-    )
-    .limit(1);
-  return row?.token ?? null;
-}
+export async function resolveSourceWikilinks(
+  context: SharedWikilinkContext,
+  options: { repository?: SharedWikilinkRepository; maxWikilinks?: number } = {}
+): Promise<SharedWikilinkResolution[]> {
+  const repository = options.repository ?? databaseSharedWikilinkRepository;
+  const maxWikilinks = options.maxWikilinks ?? DEFAULT_MAX_WIKILINKS;
+  const targets = authoredTargets(context.source, maxWikilinks);
+  if (targets.length === 0) return [];
 
-async function findActiveFolderShareTokenForFolder(userId: string, folderId: string): Promise<string | null> {
-  const now = new Date();
-  const [row] = await db
-    .select({ token: folderShareLinks.token })
-    .from(folderShareLinks)
-    .where(
-      and(
-        eq(folderShareLinks.userId, userId),
-        eq(folderShareLinks.folderId, folderId),
-        isNull(folderShareLinks.revokedAt),
-        or(isNull(folderShareLinks.expiresAt), gt(folderShareLinks.expiresAt, now))
-      )
-    )
-    .limit(1);
-  return row?.token ?? null;
-}
+  const idTargets = targets.filter((target) => NOTE_ID_PATTERN.test(target));
+  const titleTargets = targets.filter((target) => !NOTE_ID_PATTERN.test(target));
+  const candidates = await repository.findCandidateNotes(context.source.userId, idTargets, titleTargets);
 
-export async function checkReachability(
-  context: ResolverShareContext,
-  candidate: TargetCandidate,
-  currentNoteFolderId?: string
-): Promise<string | null> {
-  if (context.kind === 'note') {
-    if (candidate.noteId === context.noteId) {
-      return context.token;
-    }
-    if (currentNoteFolderId && candidate.folderId) {
-      const folderIds = await getFolderIdsForUser(context.userId, currentNoteFolderId);
-      if (folderIds.has(candidate.folderId)) {
-        const folderToken = await findActiveFolderShareTokenForFolder(context.userId, currentNoteFolderId);
-        if (folderToken) return folderToken;
-      }
-    }
-    return findActiveNoteShareToken(context.userId, candidate.noteId);
+  const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const candidatesByTitle = new Map<string, CandidateNote[]>();
+  for (const candidate of candidates) {
+    const key = normalizeWikilinkTitle(candidate.title);
+    const rows = candidatesByTitle.get(key) ?? [];
+    rows.push(candidate);
+    candidatesByTitle.set(key, rows);
   }
 
-  const folderIds = await getFolderIdsForUser(context.userId, context.folderId);
-  if (folderIds.has(candidate.folderId)) {
-    return context.token;
-  }
-  return findActiveNoteShareToken(context.userId, candidate.noteId);
-}
-
-export type ResolveOptions = {
-  maxTargets?: number;
-  maxTargetLength?: number;
-};
-
-export async function resolveWikilinks(
-  token: string,
-  targets: string[],
-  options: ResolveOptions = {}
-): Promise<WikilinkResolution[]> {
-  const maxTargets = options.maxTargets ?? MAX_TARGETS;
-  const maxTargetLength = options.maxTargetLength ?? MAX_TARGET_LENGTH;
-
-  if (typeof token !== 'string' || !token.trim()) {
-    throw new ResolverError('invalid_token', 'Token is required');
-  }
-  if (!Array.isArray(targets)) {
-    throw new ResolverError('invalid_targets', 'Targets must be an array');
-  }
-  if (targets.length > maxTargets) {
-    throw new ResolverError('too_many_targets', `Maximum ${maxTargets} targets allowed`);
-  }
+  const candidateForTarget = new Map<string, CandidateNote>();
   for (const target of targets) {
-    if (typeof target !== 'string') {
-      throw new ResolverError('invalid_targets', 'Each target must be a string');
-    }
-    if (target.length > maxTargetLength) {
-      throw new ResolverError('target_too_long', `Target exceeds ${maxTargetLength} characters`);
-    }
+    const candidate = NOTE_ID_PATTERN.test(target)
+      ? candidatesById.get(target)
+      : (() => {
+          const matches = candidatesByTitle.get(normalizeWikilinkTitle(target)) ?? [];
+          return matches.length === 1 ? matches[0] : undefined;
+        })();
+    if (candidate) candidateForTarget.set(target, candidate);
   }
 
-  const context = await resolveShareContext(token);
-  if (!context) {
-    return targets.map((target) => ({ target, shareToken: null }));
+  const candidateIds = [...new Set([...candidateForTarget.values()].map((candidate) => candidate.id))];
+  const [activeShares, folderRows] = await Promise.all([
+    repository.findActiveNoteShares(context.source.userId, candidateIds),
+    context.kind === 'folder' ? repository.listFolders(context.source.userId) : Promise.resolve([]),
+  ]);
+  const activeShareByNoteId = new Map<string, string>();
+  for (const share of activeShares) {
+    if (!activeShareByNoteId.has(share.noteId)) activeShareByNoteId.set(share.noteId, share.token);
   }
+  const sharedFolderIds = context.kind === 'folder' ? collectFolderTreeIds(context.folderId, folderRows) : null;
 
-  const candidates = await lookupTargetNotes(context.userId, targets);
-  let currentNoteFolderId: string | undefined;
-  if (context.kind === 'note') {
-    const [row] = await db
-      .select({ folderId: notes.folderId })
-      .from(notes)
-      .where(eq(notes.id, context.noteId))
-      .limit(1);
-    currentNoteFolderId = row?.folderId ?? undefined;
-  }
-  const resolutions: WikilinkResolution[] = [];
-  for (const target of targets) {
-    const candidate = candidates.get(target);
-    if (!candidate) {
-      resolutions.push({ target, shareToken: null });
-      continue;
+  return targets.map((target) => {
+    const candidate = candidateForTarget.get(target);
+    if (!candidate) return { target, href: null };
+
+    if (context.kind === 'note' && candidate.id === context.source.id) {
+      return { target, href: publicNoteHref(context.token) };
     }
-    const shareToken = await checkReachability(context, candidate, currentNoteFolderId);
-    resolutions.push({ target, shareToken });
-  }
-  return resolutions;
+    if (context.kind === 'folder' && sharedFolderIds?.has(candidate.folderId)) {
+      return { target, href: publicFolderNoteHref(context.token, candidate.id) };
+    }
+
+    const noteShareToken = activeShareByNoteId.get(candidate.id);
+    return { target, href: noteShareToken ? publicNoteHref(noteShareToken) : null };
+  });
 }

@@ -7,7 +7,7 @@ export const harnessOpenApiSpec = {
   },
   servers: [{ url: '/' }],
   security: [{ ApiKeyAuth: [] }],
-  tags: [{ name: 'Folders' }, { name: 'Notes' }, { name: 'Canvases' }, { name: 'Tags' }],
+  tags: [{ name: 'Folders' }, { name: 'Notes' }, { name: 'Canvases' }, { name: 'Tags' }, { name: 'Shared' }],
   paths: {
     '/v1/harness/tags': {
       get: {
@@ -511,43 +511,49 @@ export const harnessOpenApiSpec = {
         },
       },
     },
-    '/internal/share/resolve': {
-      post: {
+    '/internal/share/{token}': {
+      get: {
         tags: ['Shared'],
-        operationId: 'resolveSharedWikilinks',
-        summary: 'Resolve wikilink targets to share tokens',
-        description:
-          "Public endpoint used by the shared-note view. Given a share token and a list of wikilink target strings found in the rendered note, returns a list of `{ target, shareToken }` pairs. A target resolves to a share token iff it is reachable from the current share context: the target is the currently-shared note (self-link), the target has its own active `note_share_links` entry, the target is in a folder covered by the current folder share, or the currently-shared note is in a folder with an active `folder_share_links` entry. Otherwise `shareToken` is `null`. The response is intentionally narrow: it never returns the target note's URL, title, folder, or any other metadata.",
+        operationId: 'readSharedNote',
+        summary: 'Read a publicly shared note and its authored wikilink destinations',
         security: [],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ResolveSharedWikilinksRequest' },
-            },
-          },
-        },
+        parameters: [{ $ref: '#/components/parameters/ShareToken' }],
         responses: {
           '200': {
-            description: 'Resolutions for the requested targets. Order matches the request order.',
+            description: 'Shared note content and source-bound public wikilink destinations',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/PublicSharedNoteResponse' } } },
+          },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/internal/share/folders/{token}/notes/{noteId}/wikilinks': {
+      get: {
+        tags: ['Shared'],
+        operationId: 'readSharedFolderNoteWikilinks',
+        summary: 'Read authored wikilink destinations for one note in a publicly shared folder',
+        description:
+          'The token must be active and the source note must belong to the shared folder subtree. The endpoint accepts no target list and returns no private note metadata.',
+        security: [],
+        parameters: [{ $ref: '#/components/parameters/ShareToken' }, { $ref: '#/components/parameters/NoteId' }],
+        responses: {
+          '200': {
+            description: 'Source-bound public wikilink destinations',
             content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ResolveSharedWikilinksResponse' },
-              },
+              'application/json': { schema: { $ref: '#/components/schemas/SharedWikilinkResolutionsResponse' } },
             },
           },
-          '400': {
-            description:
-              'Malformed body, missing token, non-string targets, or targets exceeding the size limits (500 entries, 256 chars each).',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
-          },
+          '404': { $ref: '#/components/responses/NotFound' },
         },
       },
     },
   },
   components: {
     securitySchemes: { ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
-    parameters: { NoteId: { name: 'noteId', in: 'path', required: true, schema: { type: 'string' } } },
+    parameters: {
+      NoteId: { name: 'noteId', in: 'path', required: true, schema: { type: 'string' } },
+      ShareToken: { name: 'token', in: 'path', required: true, schema: { type: 'string' } },
+    },
     responses: {
       BadRequest: {
         description: 'Bad request',
@@ -572,24 +578,18 @@ export const harnessOpenApiSpec = {
     },
     schemas: {
       ErrorResponse: { type: 'object', required: ['error'], properties: { error: { type: 'string' } } },
-      ResolveSharedWikilinksRequest: {
+      SharedWikilinkResolution: {
         type: 'object',
-        required: ['token', 'targets'],
+        required: ['target', 'href'],
         properties: {
-          token: {
-            type: 'string',
-            description: 'The share token from the URL the viewer is currently on.',
-          },
-          targets: {
-            type: 'array',
-            maxItems: 500,
-            items: { type: 'string', maxLength: 256 },
-            description:
-              'Wikilink target strings found in the rendered note. Each target is the literal text inside `[[...]]`, including the `note_xxx` ID form, the `Title` form, the `Title|Label` aliased form, and full URL forms (which never resolve).',
+          target: { type: 'string', description: 'An authored wikilink target from the shared source note.' },
+          href: {
+            type: ['string', 'null'],
+            description: 'A safe public /share/ destination when reachable, otherwise null.',
           },
         },
       },
-      ResolveSharedWikilinksResponse: {
+      SharedWikilinkResolutionsResponse: {
         type: 'object',
         required: ['resolutions'],
         properties: {
@@ -599,14 +599,34 @@ export const harnessOpenApiSpec = {
           },
         },
       },
-      SharedWikilinkResolution: {
+      PublicSharedNote: {
         type: 'object',
-        required: ['target', 'shareToken'],
+        required: ['title', 'content', 'documentType', 'updatedAt'],
         properties: {
-          target: { type: 'string', description: 'The original target string from the request.' },
-          shareToken: {
-            type: ['string', 'null'],
-            description: "The target's share token if reachable from the current share context, otherwise null.",
+          title: { type: 'string' },
+          content: { type: 'string' },
+          documentType: { type: 'string', enum: ['markdown', 'canvas.default', 'canvas.mindmap'] },
+          updatedAt: { type: 'string' },
+        },
+      },
+      PublicShareSummary: {
+        type: 'object',
+        required: ['id', 'permission', 'createdAt'],
+        properties: {
+          id: { type: 'string' },
+          permission: { type: 'string', enum: ['read'] },
+          createdAt: { type: 'string' },
+        },
+      },
+      PublicSharedNoteResponse: {
+        type: 'object',
+        required: ['note', 'share', 'resolutions'],
+        properties: {
+          note: { $ref: '#/components/schemas/PublicSharedNote' },
+          share: { $ref: '#/components/schemas/PublicShareSummary' },
+          resolutions: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/SharedWikilinkResolution' },
           },
         },
       },

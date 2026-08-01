@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -92,7 +93,9 @@ async function setupShareApp() {
 }
 
 function tokenFromUrl(url: string) {
-  return new URL(url).pathname.split('/').pop()!;
+  const token = new URL(url).pathname.split('/').pop();
+  if (!token) throw new Error('Missing share token in URL');
+  return token;
 }
 
 afterEach(async () => {
@@ -118,6 +121,7 @@ describe('note share links', () => {
     const body = (await publicRead.json()) as {
       note: { title: string; content: string; documentType: string };
       share: { id: string; permission: string };
+      resolutions: Array<{ target: string; href: string | null }>;
     };
     expect(body.note).toEqual({
       title: 'A Note',
@@ -127,6 +131,73 @@ describe('note share links', () => {
     });
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe('read');
+    expect(body.resolutions).toEqual([]);
+  });
+
+  it('returns fresh source-bound wikilink destinations with the shared note', async () => {
+    const { app, db, schema } = await setupShareApp();
+    await db
+      .update(schema.notes)
+      .set({ content: '[[Shared Target]] [[Private Target]] [[Missing]]' })
+      .where(eq(schema.notes.id, 'note_a'));
+    await db.insert(schema.notes).values([
+      {
+        id: 'note_shared',
+        folderId: 'folder_a',
+        userId: 'user_a',
+        title: 'Shared Target',
+        content: '',
+        documentType: 'markdown',
+        type: 'note',
+        isApiEditable: true,
+        updatedByActorType: null,
+        updatedByActorId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 'note_private',
+        folderId: 'folder_a',
+        userId: 'user_a',
+        title: 'Private Target',
+        content: '',
+        documentType: 'markdown',
+        type: 'note',
+        isApiEditable: true,
+        updatedByActorType: null,
+        updatedByActorId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const sourceCreate = await app.request('/api/notes/note_a/share-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const targetCreate = await app.request('/api/notes/note_shared/share-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const sourceToken = tokenFromUrl(((await sourceCreate.json()) as { shareLink: { url: string } }).shareLink.url);
+    const targetToken = tokenFromUrl(((await targetCreate.json()) as { shareLink: { url: string } }).shareLink.url);
+
+    const first = (await (await app.request(`/api/share/${sourceToken}`)).json()) as {
+      resolutions: Array<{ target: string; href: string | null }>;
+    };
+    expect(first.resolutions).toEqual([
+      { target: 'Shared Target', href: `/share/${targetToken}` },
+      { target: 'Private Target', href: null },
+      { target: 'Missing', href: null },
+    ]);
+
+    await app.request('/api/notes/note_shared/share-link', { method: 'DELETE' });
+    const afterRevoke = (await (await app.request(`/api/share/${sourceToken}`)).json()) as {
+      resolutions: Array<{ target: string; href: string | null }>;
+    };
+    expect(afterRevoke.resolutions[0]).toEqual({ target: 'Shared Target', href: null });
   });
 
   it('creates a share link for canvas notes', async () => {

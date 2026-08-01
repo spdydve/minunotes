@@ -116,7 +116,7 @@ function SharedNoteView() {
               value={data.note.content}
               codeHighlighter={editorCodeHighlighter}
               className="notes-minu-renderer"
-              shareToken={token}
+              resolutions={data.resolutions}
             />
           </div>
         )}

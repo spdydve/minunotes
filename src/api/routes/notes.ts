@@ -18,7 +18,6 @@ import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from '../notes/tags';
 import { getNoteVersion, listNoteVersions, restoreNoteVersion, serializeVersion } from '../notes/versions';
-import { invalidateCacheForNote, invalidateCacheForShareToken } from '../shared/cache-invalidation';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -351,13 +350,7 @@ noteRoutes.delete('/:noteId/share-link', async (c) => {
   if (!note) return c.json({ error: 'Note not found' }, 404);
 
   const now = new Date();
-  const [existing] = await db
-    .select({ token: noteShareLinks.token })
-    .from(noteShareLinks)
-    .where(and(eq(noteShareLinks.noteId, noteId), eq(noteShareLinks.userId, user.id), isNull(noteShareLinks.revokedAt)))
-    .limit(1);
   await db.update(noteShareLinks).set({ revokedAt: now, updatedAt: now }).where(activeShareWhere(noteId, user.id));
-  if (existing?.token) invalidateCacheForShareToken(existing.token);
   return c.json({ ok: true });
 });
 
@@ -516,7 +509,6 @@ noteRoutes.patch('/:noteId', async (c) => {
       { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
       result.status
     );
-  await invalidateCacheForNote(c.req.param('noteId'), result.value.note.folderId);
   return c.json(result.value);
 });
 
@@ -524,12 +516,6 @@ noteRoutes.delete('/:noteId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const [existing] = await db
-    .select({ folderId: notes.folderId })
-    .from(notes)
-    .where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, user.id)))
-    .limit(1);
   await db.delete(notes).where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, user.id)));
-  if (existing) await invalidateCacheForNote(c.req.param('noteId'), existing.folderId);
   return c.json({ ok: true });
 });

@@ -52,7 +52,7 @@ export const browserFixture = {
     id: 'note_linked',
     folderId: 'folder_browser',
     title: 'Linked Note',
-    content: 'See [[Target Note]] and [[note_target|Target by ID]] for more.',
+    content: 'See [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].',
     documentType: 'markdown',
     type: 'note',
     isApiEditable: true,
@@ -105,15 +105,14 @@ export const browserFixture = {
 export async function mockBrowserApi(page: Page, options: { uploadFails?: boolean } = {}) {
   const notes = new Map<string, Note>([
     [browserFixture.source.id, { ...browserFixture.source }],
+    [browserFixture.linked.id, { ...browserFixture.linked }],
     [browserFixture.canvas.id, { ...browserFixture.canvas }],
     [browserFixture.target.id, { ...browserFixture.target }],
     [browserFixture.child.id, { ...browserFixture.child }],
-    [browserFixture.linked.id, { ...browserFixture.linked }],
   ]);
   const noteShareTokens = new Map<string, string>([
-    [`note_share_${browserFixture.source.id}`, browserFixture.source.id],
-    [`note_share_${browserFixture.target.id}`, browserFixture.target.id],
     [`note_share_${browserFixture.linked.id}`, browserFixture.linked.id],
+    [`note_share_${browserFixture.target.id}`, browserFixture.target.id],
   ]);
   const saveRequests: Array<{ noteId: string; body: Record<string, unknown> }> = [];
   let hashVersion = 1;
@@ -202,30 +201,34 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
           })),
         share: { id: 'folder_share_browser', permission: 'read', createdAt: now },
       });
-    const noteShareMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/share-link$/);
-    if (noteShareMatch) {
-      const note = notes.get(noteShareMatch[1]);
-      if (!note) return json({ error: 'Note not found' }, 404);
-      const token = `note_share_${note.id}`;
-      noteShareTokens.set(token, note.id);
-      return json(
-        {
-          shareLink: {
-            id: `note_share_${note.id}`,
-            noteId: note.id,
-            permission: 'read',
-            url: `http://localhost:5173/share/${token}`,
-            createdAt: now,
-            updatedAt: now,
-          },
-        },
-        201
-      );
+
+    const folderNoteWikilinksMatch = path.match(
+      /^\/share\/folders\/folder_share_token\/notes\/(note_[a-zA-Z0-9_]+)\/wikilinks$/
+    );
+    if (folderNoteWikilinksMatch && method === 'GET') {
+      const note = notes.get(folderNoteWikilinksMatch[1]);
+      if (!note) return json({ error: 'Shared note not found' }, 404);
+      return json({
+        resolutions:
+          note.id === browserFixture.linked.id
+            ? [
+                {
+                  target: 'Target Note',
+                  href: `/share/folders/folder_share_token?note=${browserFixture.target.id}`,
+                },
+                {
+                  target: browserFixture.target.id,
+                  href: `/share/folders/folder_share_token?note=${browserFixture.target.id}`,
+                },
+                { target: 'Missing Note', href: null },
+              ]
+            : [],
+      });
     }
 
-    const shareTokenMatch = path.match(/^\/share\/(note_share_[a-zA-Z0-9_]+)$/);
-    if (shareTokenMatch && method === 'GET') {
-      const token = shareTokenMatch[1];
+    const sharedNoteMatch = path.match(/^\/share\/(note_share_note_[a-zA-Z0-9_]+)$/);
+    if (sharedNoteMatch && method === 'GET') {
+      const token = sharedNoteMatch[1];
       const noteId = noteShareTokens.get(token);
       const note = noteId ? notes.get(noteId) : undefined;
       if (!note) return json({ error: 'Shared note not found' }, 404);
@@ -236,26 +239,16 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
           documentType: note.documentType,
           updatedAt: note.updatedAt,
         },
-        share: { id: `note_share_${note.id}`, permission: 'read', createdAt: now },
+        share: { id: `share_${note.id}`, permission: 'read', createdAt: now },
+        resolutions:
+          note.id === browserFixture.linked.id
+            ? [
+                { target: 'Target Note', href: `/share/note_share_${browserFixture.target.id}` },
+                { target: browserFixture.target.id, href: `/share/note_share_${browserFixture.target.id}` },
+                { target: 'Missing Note', href: null },
+              ]
+            : [],
       });
-    }
-
-    if (path === '/share/resolve' && method === 'POST') {
-      const body = request.postDataJSON() as { token: string; targets: string[] };
-      const sourceNoteId = noteShareTokens.get(body.token);
-      const sourceNote = sourceNoteId ? notes.get(sourceNoteId) : undefined;
-      const resolutions = body.targets.map((target) => {
-        const resolved = [...notes.values()].find(
-          (note) =>
-            note.id === target || note.title === target || (target.includes('|') && note.title === target.split('|')[0])
-        );
-        if (!resolved) return { target, shareToken: null };
-        const token = `note_share_${resolved.id}`;
-        noteShareTokens.set(token, resolved.id);
-        return { target, shareToken: token };
-      });
-      void sourceNote;
-      return json({ resolutions });
     }
 
     if (path === '/notes/recent' && method === 'GET')

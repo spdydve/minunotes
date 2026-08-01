@@ -1372,3 +1372,161 @@ Batched: one query for all candidate notes, one query for active note-share rows
 - [ ] Frontend renders unresolved wikilinks with no `href` (current "not available" behavior).
 - [ ] `pnpm test` and `pnpm typecheck` pass clean.
 - [ ] No new runtime dependencies.
+
+---
+
+# Shared-View Wikilink Resolver Remediation Plan
+
+Goal: replace the generic token resolver and process-local TTL cache with source-bound wikilink destinations that preserve share capability boundaries, support direct navigation inside folder shares, remain fresh after owner writes, and stay simple until production measurements justify broader optimization.
+
+## Decisions
+
+- Keep the renderer-only foundation from commit `73086fa`.
+- Remove the process-local LRU cache, cache middleware, invalidation hooks, and cache tests from `ead8ab9`.
+- Do not expose a generic endpoint that accepts arbitrary target guesses. Resolve only wikilinks actually authored in the shared source note.
+- Include wikilink resolutions in the shared-note content response rather than making a second client request.
+- Return narrow server-generated public destinations as `{ target, href }`; unresolved targets return `href: null`.
+- A single-note share may resolve:
+  - a self-link to its current public URL;
+  - an authored target with its own active note share to that target's public note URL;
+  - nothing through an unrelated folder-share token.
+- A folder-share note may resolve:
+  - an authored target inside the current shared folder subtree to `/share/folders/<current-token>?note=<note-id>`;
+  - an authored target outside the subtree only when it has its own active note share;
+  - all other targets to `href: null`.
+- Keep the existing shared-folder response contract, including note content. Payload splitting is a separate performance project that requires measurement and is not necessary for wikilink navigation.
+- Add a source-bound read-only endpoint for one selected note inside a folder share. It returns only that note's authored wikilink resolutions; it does not accept arbitrary targets or duplicate note content.
+- Use the existing wikilink parser/link index where practical, with shared target normalization so the backend resolution keys and renderer `data-wikilink-target` values cannot drift.
+- Resolve candidates and active shares in bounded batch queries. No per-target database calls.
+- Keep rate limiting and audit logging deferred, but apply the existing request-size middleware to any new public write endpoint if one remains. The preferred design uses GET endpoints and no client-supplied target array.
+
+## Cache decision record
+
+The first release will not use an application TTL cache because:
+
+- immediate revocation, regeneration, deletion, and edit freshness are security/correctness requirements;
+- invalidation would need to cover user edits, harness edits, restores, moves, creates, deletes, folder hierarchy mutations, share lifecycle changes, ancestor folder shares, and resolver dependencies under other source tokens;
+- a process-local cache does not absorb aggregate traffic across multiple serverless instances;
+- entry-count limits do not bound memory when shared-folder payloads contain arbitrary note content;
+- a bounded batch resolver and smaller folder responses should be measured before introducing invalidation complexity.
+
+If production measurements later justify caching, prefer this order:
+
+1. Client/TanStack Query caching for the current page lifecycle.
+2. Conditional requests and ETags for shared resources.
+3. In-flight request coalescing to collapse identical concurrent work without retaining stale data.
+4. CDN or distributed caching only with an explicit revocation/purge strategy and documented maximum stale window.
+5. If an application cache is still needed, use hashed, order-correct, byte-bounded keys; dependency/version-based invalidation; active-share expiry bounds; and cold-concurrency tests with instrumented computation/DB counts.
+
+## Files to remove
+
+- `src/api/middleware/shared-cache.ts`
+- `src/api/shared/cache.ts`
+- `src/api/shared/cache-invalidation.ts`
+- `src/api/routes/shared-resolve.ts`
+- `tests/shared-cache.test.ts`
+
+## Files to create
+
+- `docs/implementation/shared-view-wikilinks.md`
+  - Document capability boundaries, source-bound resolution, public destination shapes, folder deep-link behavior, the no-cache decision, and the measured path for adding caching later.
+- Optional `src/shared/wikilinks.ts`
+  - Extract shared parsing/target-normalization helpers if needed to keep API indexing and shared rendering aligned.
+
+## Files to modify
+
+### Backend
+
+- `src/api/index.ts`
+  - Remove the generic resolver route registration/import.
+  - Remove cache-related imports and add request middleware only if the final endpoint shape requires it.
+- `src/api/routes/share.ts`
+  - Remove cached response wrappers.
+  - Include source-bound `{ target, href }` resolutions in single-note responses.
+  - Preserve the existing folder landing response contract.
+  - Add `GET /internal/share/folders/:token/notes/:noteId/wikilinks` for one authorized source note's resolutions.
+  - Ensure the token is active and the source note belongs to the shared folder subtree on every request.
+- `src/api/shared/wikilink-resolver.ts`
+  - Rewrite around a validated source note/share context.
+  - Intersect resolution with wikilinks authored in that source.
+  - Batch candidate, note-share, and folder-tree lookups.
+  - Return public hrefs rather than bare tokens.
+- `src/api/notes/links.ts`
+  - Reuse shared wikilink target normalization if extracted; preserve existing backlink/index behavior.
+- `src/api/routes/notes.ts` and `src/api/routes/folders.ts`
+  - Remove all cache invalidation imports and hooks.
+- `src/api/openapi/harness.ts`
+  - Remove the generic `/internal/share/resolve` operation and schemas.
+  - Document the revised shared-note/folder-note response shapes if public share endpoints remain in this spec.
+
+### Frontend
+
+- `src/frontend/lib/api.ts`
+  - Remove `resolveSharedWikilinks()`.
+  - Add `{ target, href }` resolution types to shared-note responses.
+  - Preserve the existing shared-folder response type and add `sharedFolderNoteWikilinks(token, noteId)`.
+- `src/frontend/components/shared-markdown-renderer.tsx`
+  - Remove resolver API effects and `shareToken` coupling.
+  - Accept a resolution list/map as a prop and apply only server-provided public hrefs.
+  - Preserve unresolved links without `href` and preserve skipped code/link elements.
+- `src/frontend/routes/share.$token.tsx`
+  - Pass response resolutions directly to the renderer.
+- `src/frontend/routes/share.folders.$token.tsx`
+  - Drive selected note state from a validated `?note=` search parameter using the already-loaded folder payload.
+  - Fetch only the selected note's source-bound resolutions.
+  - Pass its resolutions to the renderer.
+  - Keep folder/back navigation and invalid-note behavior clear.
+
+### Tests
+
+- `tests/shared-resolve.test.ts`
+  - Rewrite as source-bound shared-wikilink integration coverage, or rename to `tests/shared-wikilinks.test.ts`.
+  - Cover authored vs arbitrary targets, self-links, active/revoked/expired note shares, duplicate titles, stable ID targets, cross-user targets, folder subtree targets, outside-folder targets, and narrow response fields.
+  - Instrument DB/computation boundaries where practical to assert query count does not grow with target count.
+- `tests/share-links.test.ts`
+  - Verify note share responses include fresh source-bound resolutions and revoked/regenerated links stop immediately.
+- `tests/folder-share-links.test.ts`
+  - Verify the existing folder landing contract remains stable, selected-note resolution enforces subtree membership, and revoke/regeneration take effect immediately.
+- `tests/openapi.test.ts`
+  - Remove generic resolver assertions and verify revised response schemas if documented.
+- `tests/browser/fixtures.ts`
+  - Replace generic resolver mocks with shared-note responses and selected-folder-note wikilink responses containing destinations.
+- `tests/browser/shared-wikilinks.spec.ts`
+  - Add genuine unresolved-link coverage.
+  - Cover independently shared note navigation.
+  - Cover direct navigation within a folder share and loading a folder URL with `?note=`.
+  - Confirm arbitrary/unshared targets receive no `href`.
+- Update other tests whose shared-folder fixtures currently expect note content in the landing response.
+
+## Implementation checklist
+
+- [x] Phase 1: Remove cache and generic resolver surface.
+  - Evidence: no cache/resolver references remain; `pnpm typecheck`, 165 unit/integration tests, and 14 browser tests pass.
+- [x] Phase 2: Implement source-bound batched destination resolution.
+  - Evidence: shared parser excludes inline/fenced code; resolver returns only `{ target, href }` for authored links; note contexts do not bridge folder capabilities; folder contexts use subtree deep links; repository-call count remains constant at three for 100 targets; 174 unit/integration tests and typecheck pass.
+- [x] Phase 3: Wire source-bound resolutions into shared-note responses and add the authorized selected-folder-note wikilink endpoint without changing the folder payload.
+  - Evidence: shared-note GET responses include fresh source-bound resolutions; `GET /internal/share/folders/:token/notes/:noteId/wikilinks` validates active token and subtree membership; the existing folder landing payload remains unchanged; 176 unit/integration tests and typecheck pass.
+- [x] Phase 4: Simplify frontend rendering to consume server-provided destinations and support `?note=` folder deep links.
+  - Evidence: shared-note views consume response resolutions; folder views fetch only selected-note resolutions; route search state supports direct `?note=` loading and back-to-folder behavior; renderer applies only server-provided `/share/` hrefs and resets stale hrefs; typecheck and existing folder-sharing browser tests pass.
+- [x] Phase 5: Update API, integration, security, and browser tests.
+  - Evidence: OpenAPI documents both public source-bound GET responses; integration tests cover authored/unresolved links, capability boundaries, subtree enforcement, revoke freshness, and constant batched repository calls; browser tests cover note-share navigation, genuine unresolved links, direct folder `?note=` loading, in-folder navigation, and back behavior; 177 unit/integration tests and 16 browser tests pass.
+- [x] Phase 6: Add the implementation/caching decision document.
+  - Evidence: `docs/implementation/shared-view-wikilinks.md` records optimization priorities, capability boundaries, source-bound contracts, frontend behavior, bounded database work, the no-cache rationale, and requirements for any measured future cache; the existing MinuEditor wikilink spec links to it.
+- [x] Phase 7: Run formatting, typecheck, targeted tests, full tests, browser tests, and production build.
+  - Evidence: Biome completed on every changed TypeScript/TSX file with only existing unsafe class-order/non-null warnings; typecheck passed; 177 unit/integration tests passed; 16 browser tests passed; production build passed with the existing large-chunk advisory; `git diff --check` passed; generated Playwright artifacts were removed; final security review added multiline inline-code exclusion coverage.
+
+## Verification
+
+- `pnpm exec biome check --write <changed-files>`
+- `pnpm typecheck`
+- Targeted tests for shared notes, folder shares, wikilink resolution, OpenAPI, and browser navigation.
+- `pnpm test`
+- `pnpm test:browser`
+- `pnpm build`
+- Confirm the working tree contains no generated Playwright artifacts.
+
+## Approval status
+
+- [x] Detailed remediation plan approved.
+- [x] Implementation started.
+- [x] Agent implementation and automated verification complete.

@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getMinuNotesNodeLink } from '../../shared/canvas-links';
+import { NOTE_ID_PATTERN, normalizeWikilinkTitle, parseWikilinks } from '../../shared/wikilinks';
 import { db } from '../db/client';
 import { noteLinks, notes } from '../db/schema';
 import { createId } from '../lib/id';
@@ -14,38 +15,24 @@ export type ParsedNoteLink = {
   to: number;
 };
 
-const WIKILINK_PATTERN = /\[\[([^\]\n]+)\]\]/g;
-const NOTE_ID_PATTERN = /^note_[a-zA-Z0-9]+$/;
 const NOTE_URL_PATTERN = String.raw`(?:https?:\/\/)?[^\s)]+\/notes\/(note_[a-zA-Z0-9]+)|\/notes\/(note_[a-zA-Z0-9]+)`;
 const MARKDOWN_INTERNAL_URL_PATTERN = new RegExp(String.raw`\[([^\]\n]+)\]\((${NOTE_URL_PATTERN})\)`, 'g');
 const RAW_INTERNAL_URL_PATTERN = new RegExp(String.raw`(?<!\]\()(?:${NOTE_URL_PATTERN})`, 'g');
 
 export function normalizeNoteTitle(title: string) {
-  return title.trim().replace(/\s+/g, ' ').toLowerCase();
+  return normalizeWikilinkTitle(title);
 }
 
 export function parseWikiLinks(markdown: string): ParsedNoteLink[] {
-  const links: ParsedNoteLink[] = [];
-  for (const match of markdown.matchAll(WIKILINK_PATTERN)) {
-    const rawInner = match[1]?.trim();
-    if (!rawInner) continue;
-
-    const [rawTitle, ...labelParts] = rawInner.split('|');
-    const targetTitle = rawTitle?.trim().replace(/\s+/g, ' ') ?? '';
-    if (!targetTitle) continue;
-
-    const label = labelParts.length > 0 ? labelParts.join('|').trim() || null : null;
-    links.push({
-      targetTitle,
-      targetNoteId: NOTE_ID_PATTERN.test(targetTitle) ? targetTitle : null,
-      label,
-      linkType: 'wikilink',
-      raw: match[0],
-      from: match.index ?? 0,
-      to: (match.index ?? 0) + match[0].length,
-    });
-  }
-  return links;
+  return parseWikilinks(markdown).map((link) => ({
+    targetTitle: link.target,
+    targetNoteId: NOTE_ID_PATTERN.test(link.target) ? link.target : null,
+    label: link.label,
+    linkType: 'wikilink',
+    raw: link.raw,
+    from: link.from,
+    to: link.to,
+  }));
 }
 
 export function parseInternalNoteUrls(markdown: string): ParsedNoteLink[] {

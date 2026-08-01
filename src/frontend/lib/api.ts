@@ -150,6 +150,7 @@ export type FolderShareLink = {
   url: string | null;
 };
 export type SharedNote = { title: string; content: string; documentType: DocumentType; updatedAt: string };
+export type SharedWikilinkResolution = { target: string; href: string | null };
 export type SharedFolderNote = SharedNote & { id: string; folderId: string };
 export type SharedFolder = { id: string; title: string; updatedAt: string };
 export type SharedFolderChild = { id: string; parentFolderId: string | null; title: string; updatedAt: string };
@@ -384,9 +385,11 @@ export const api = {
     }),
   revokeNoteShareLink: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}/share-link`, { method: 'DELETE' }),
   sharedNote: (token: string) =>
-    request<{ note: SharedNote; share: { id: string; permission: 'read'; createdAt: string } }>(
-      `/share/${encodeURIComponent(token)}`
-    ),
+    request<{
+      note: SharedNote;
+      share: { id: string; permission: 'read'; createdAt: string };
+      resolutions: SharedWikilinkResolution[];
+    }>(`/share/${encodeURIComponent(token)}`),
   sharedFolder: (token: string) =>
     request<{
       folder: SharedFolder;
@@ -394,13 +397,10 @@ export const api = {
       notes: SharedFolderNote[];
       share: { id: string; permission: 'read'; createdAt: string };
     }>(`/share/folders/${encodeURIComponent(token)}`),
-  resolveSharedWikilinks: (token: string, targets: string[]) =>
-    request<{
-      resolutions: Array<{ target: string; shareToken: string | null }>;
-    }>(`/share/resolve`, {
-      method: 'POST',
-      body: JSON.stringify({ token, targets }),
-    }),
+  sharedFolderNoteWikilinks: (token: string, noteId: string) =>
+    request<{ resolutions: SharedWikilinkResolution[] }>(
+      `/share/folders/${encodeURIComponent(token)}/notes/${encodeURIComponent(noteId)}/wikilinks`
+    ),
   noteEvents: (noteId: string, limit = 25) => request<NoteEventsResponse>(`/notes/${noteId}/events?limit=${limit}`),
   noteVersions: (noteId: string, limit = 100) =>
     request<NoteVersionsResponse>(`/notes/${noteId}/versions?limit=${limit}`),

@@ -7,7 +7,6 @@ import type { auth } from '../lib/auth';
 import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { buildFolderShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
-import { invalidateCacheForShareToken } from '../shared/cache-invalidation';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -206,22 +205,10 @@ folderRoutes.delete('/:folderId/share-link', async (c) => {
   if (!folder) return c.json({ error: 'Folder not found' }, 404);
 
   const now = new Date();
-  const [existing] = await db
-    .select({ token: folderShareLinks.token })
-    .from(folderShareLinks)
-    .where(
-      and(
-        eq(folderShareLinks.folderId, folder.id),
-        eq(folderShareLinks.userId, user.id),
-        isNull(folderShareLinks.revokedAt)
-      )
-    )
-    .limit(1);
   await db
     .update(folderShareLinks)
     .set({ revokedAt: now, updatedAt: now })
     .where(activeFolderShareWhere(folder.id, user.id));
-  if (existing?.token) invalidateCacheForShareToken(existing.token);
   return c.json({ ok: true });
 });
 

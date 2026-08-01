@@ -1,9 +1,12 @@
 import { type CodeHighlighter, MarkdownRenderer } from '@dpklabs/minueditor';
-import { useEffect, useRef } from 'react';
-import { api } from '../lib/api';
+import { memo, useEffect, useRef } from 'react';
+import { canonicalizeWikilinkTarget } from '../../shared/wikilinks';
+import type { SharedWikilinkResolution } from '../lib/api';
 
 const WIKILINK_PATTERN = /\[\[([^[\]\n|]+)(?:\|([^[\]\n]+))?\]\]/g;
 const SKIP_TAGS = new Set(['PRE', 'CODE', 'A', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
+const EMPTY_RESOLUTIONS: SharedWikilinkResolution[] = [];
+const StableMarkdownRenderer = memo(MarkdownRenderer);
 
 function isInsideSkipped(node: Text, root: HTMLElement): boolean {
   let parent = node.parentElement;
@@ -31,9 +34,8 @@ function findWikilinkTextNodes(root: HTMLElement): Text[] {
   return result;
 }
 
-function decorateWikilinks(root: HTMLElement): string[] {
+function decorateWikilinks(root: HTMLElement): void {
   const targets = findWikilinkTextNodes(root);
-  const uniqueTargets = new Set<string>();
   for (const textNode of targets) {
     const text = textNode.textContent ?? '';
     const fragment = document.createDocumentFragment();
@@ -45,14 +47,13 @@ function decorateWikilinks(root: HTMLElement): string[] {
       if (match.index > lastIndex) {
         fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
       }
-      const target = match[1].trim();
-      const label = (match[2] ?? target).trim();
+      const target = canonicalizeWikilinkTarget(match[1]);
+      const label = canonicalizeWikilinkTarget(match[2] ?? target);
       const link = document.createElement('a');
       link.className = 'me-wikilink me-wikilink--unknown';
       link.dataset.wikilinkTarget = target;
       link.textContent = label;
       fragment.appendChild(link);
-      uniqueTargets.add(target);
       lastIndex = WIKILINK_PATTERN.lastIndex;
       replaced = true;
       match = WIKILINK_PATTERN.exec(text);
@@ -64,20 +65,22 @@ function decorateWikilinks(root: HTMLElement): string[] {
       textNode.parentNode?.replaceChild(fragment, textNode);
     }
   }
-  return [...uniqueTargets];
 }
 
-function applyResolutions(root: HTMLElement, resolutions: Map<string, string>): void {
+function applyResolutions(root: HTMLElement, resolutions: SharedWikilinkResolution[]): void {
+  const hrefs = new Map(resolutions.map((resolution) => [resolution.target, resolution.href]));
   const links = root.querySelectorAll<HTMLAnchorElement>('a.me-wikilink[data-wikilink-target]');
   for (const link of links) {
+    link.removeAttribute('href');
+    link.classList.remove('me-wikilink--resolved');
+    link.classList.add('me-wikilink--unknown');
+
     const target = link.dataset.wikilinkTarget;
-    if (!target) continue;
-    const shareToken = resolutions.get(target);
-    if (shareToken) {
-      link.href = `/share/${encodeURIComponent(shareToken)}`;
-      link.classList.remove('me-wikilink--unknown');
-      link.classList.add('me-wikilink--resolved');
-    }
+    const href = target ? hrefs.get(target) : null;
+    if (!href?.startsWith('/share/')) continue;
+    link.setAttribute('href', href);
+    link.classList.remove('me-wikilink--unknown');
+    link.classList.add('me-wikilink--resolved');
   }
 }
 
@@ -85,44 +88,27 @@ export function SharedMarkdownRenderer({
   value,
   codeHighlighter,
   className,
-  shareToken,
+  resolutions = EMPTY_RESOLUTIONS,
 }: {
   value: string;
   codeHighlighter?: CodeHighlighter;
   className?: string;
-  shareToken?: string;
+  resolutions?: SharedWikilinkResolution[];
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
-    const rendered = wrapper.firstElementChild as HTMLElement | null;
+    const rendered = wrapper.firstElementChild;
     if (!rendered) return;
-    const targets = decorateWikilinks(rendered);
-    if (targets.length === 0 || !shareToken) return;
-    let cancelled = false;
-    api
-      .resolveSharedWikilinks(shareToken, targets)
-      .then((response) => {
-        if (cancelled) return;
-        const map = new Map<string, string>();
-        for (const resolution of response.resolutions) {
-          if (resolution.shareToken) map.set(resolution.target, resolution.shareToken);
-        }
-        applyResolutions(rendered, map);
-      })
-      .catch(() => {
-        // Leave wikilinks in their unresolved state.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [value, codeHighlighter, shareToken]);
+    decorateWikilinks(rendered as HTMLElement);
+    applyResolutions(rendered as HTMLElement, resolutions);
+  }, [value, codeHighlighter, resolutions]);
 
   return (
     <div ref={wrapperRef}>
-      <MarkdownRenderer value={value} codeHighlighter={codeHighlighter} className={className} />
+      <StableMarkdownRenderer value={value} codeHighlighter={codeHighlighter} className={className} />
     </div>
   );
 }

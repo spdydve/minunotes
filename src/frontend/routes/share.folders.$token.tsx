@@ -6,16 +6,24 @@ import {
   standardCanvasProfile,
 } from '@dpklabs/minucanvas';
 import { useQuery } from '@tanstack/react-query';
-import { createRoute } from '@tanstack/react-router';
+import { createRoute, useNavigate } from '@tanstack/react-router';
 import type React from 'react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SharedMarkdownRenderer } from '../components/shared-markdown-renderer';
 import { EmptyState } from '../components/ui/empty-state';
-import { ApiError, api, type DocumentType, type SharedFolderChild, type SharedFolderNote } from '../lib/api';
+import {
+  ApiError,
+  api,
+  type DocumentType,
+  type SharedFolderChild,
+  type SharedFolderNote,
+  type SharedWikilinkResolution,
+} from '../lib/api';
 import { editorCodeHighlighter } from '../lib/code-highlighter';
 import { rootRoute } from './__root';
 
 const EMPTY_CANVAS: JsonCanvasDocument = { nodes: [], edges: [] };
+const EMPTY_WIKILINK_RESOLUTIONS: SharedWikilinkResolution[] = [];
 
 type CanvasViewport = { x: number; y: number; zoom: number };
 type SharedFolderTreeNode =
@@ -89,17 +97,31 @@ function findFolderNode(node: SharedFolderTreeNode, folderId: string): SharedFol
 
 function SharedFolderView() {
   const { token } = folderShareRoute.useParams();
+  const { note: selectedNoteId } = folderShareRoute.useSearch();
+  const navigate = useNavigate();
   const { data, error, isLoading } = useQuery({
     queryKey: ['shared-folder', token],
     queryFn: () => api.sharedFolder(token),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const selectedNote = useMemo(
     () => data?.notes.find((note) => note.id === selectedNoteId) ?? null,
     [data?.notes, selectedNoteId]
   );
+  const { data: wikilinkData } = useQuery({
+    queryKey: ['shared-folder-note-wikilinks', token, selectedNote?.id],
+    queryFn: () => api.sharedFolderNoteWikilinks(token, selectedNote?.id ?? ''),
+    enabled: Boolean(selectedNote && !selectedNote.documentType.startsWith('canvas.')),
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
+  });
+  const setSelectedNote = (noteId: string | null) => {
+    void navigate({
+      to: '/share/folders/$token',
+      params: { token },
+      search: { note: noteId ?? undefined },
+    });
+  };
   const folderTree = useMemo(
     () =>
       data?.folder ? buildSharedFolderTree({ root: data.folder, folders: data.folders, notes: data.notes }) : null,
@@ -107,8 +129,8 @@ function SharedFolderView() {
   );
   const selectedFolder = useMemo(() => {
     if (!folderTree) return null;
-    return findFolderNode(folderTree, selectedFolderId ?? folderTree.id) ?? folderTree;
-  }, [folderTree, selectedFolderId]);
+    return findFolderNode(folderTree, selectedFolderId ?? selectedNote?.folderId ?? folderTree.id) ?? folderTree;
+  }, [folderTree, selectedFolderId, selectedNote?.folderId]);
 
   if (isLoading)
     return (
@@ -148,7 +170,7 @@ function SharedFolderView() {
                 selectedFolderId={selectedFolder?.id ?? null}
                 onSelectFolder={(folderId) => {
                   setSelectedFolderId(folderId);
-                  setSelectedNoteId(null);
+                  setSelectedNote(null);
                 }}
               />
             ) : null}
@@ -156,12 +178,22 @@ function SharedFolderView() {
         </aside>
         <main className="min-w-0">
           {selectedNote ? (
-            <SharedFolderNoteView note={selectedNote} onBack={() => setSelectedNoteId(null)} shareToken={token} />
+            <SharedFolderNoteView
+              note={selectedNote}
+              resolutions={wikilinkData?.resolutions ?? EMPTY_WIKILINK_RESOLUTIONS}
+              onBack={() => {
+                setSelectedFolderId(selectedNote.folderId);
+                setSelectedNote(null);
+              }}
+            />
           ) : selectedFolder ? (
             <SharedFolderContents
               folder={selectedFolder}
-              onSelectFolder={setSelectedFolderId}
-              onSelectNote={setSelectedNoteId}
+              onSelectFolder={(folderId) => {
+                setSelectedFolderId(folderId);
+                setSelectedNote(null);
+              }}
+              onSelectNote={setSelectedNote}
             />
           ) : (
             <div className="grid min-h-[60vh] place-items-center p-6">
@@ -302,12 +334,12 @@ function SharedFolderContents({
 
 function SharedFolderNoteView({
   note,
+  resolutions,
   onBack,
-  shareToken,
 }: {
   note: SharedFolderNote;
+  resolutions: SharedWikilinkResolution[];
   onBack: () => void;
-  shareToken: string;
 }) {
   const isCanvas = note.documentType.startsWith('canvas.');
   return (
@@ -338,7 +370,7 @@ function SharedFolderNoteView({
             value={note.content}
             codeHighlighter={editorCodeHighlighter}
             className="notes-minu-renderer"
-            shareToken={shareToken}
+            resolutions={resolutions}
           />
         </div>
       )}
@@ -387,5 +419,8 @@ function SharedFolderShell({ children }: { children: React.ReactNode }) {
 export const folderShareRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/share/folders/$token',
+  validateSearch: (search: Record<string, unknown>) => ({
+    note: typeof search.note === 'string' && search.note ? search.note : undefined,
+  }),
   component: SharedFolderView,
 });
