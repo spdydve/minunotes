@@ -15,6 +15,22 @@ test('renders source-bound resolved and unresolved links in a shared note', asyn
   await expect(missing).toHaveClass(/me-wikilink--unknown/);
   await expect(missing).not.toHaveAttribute('href', /.+/);
 
+  const codeBlocks = page.locator('.me-static-codeblock');
+  await expect(codeBlocks).toHaveCount(3);
+  await expect(codeBlocks.first().locator('.me-lang-label')).toHaveText('ts');
+  await expect(codeBlocks.first()).toHaveCSS('border-top-style', 'solid');
+  await expect(codeBlocks.first().locator('.me-codeblock-header')).toHaveCSS('display', 'flex');
+  await expect(codeBlocks.first().locator('.me-codeblock-body')).toHaveCSS('overflow-x', 'auto');
+  await expect(codeBlocks.first().getByRole('button', { name: 'Copy code' })).toBeVisible();
+  await expect(codeBlocks.nth(1).locator('.me-lang-label')).toHaveText('unknownlang');
+  await expect(codeBlocks.nth(1).locator('.me-codeblock-body')).toContainText('fallback code');
+  await expect(codeBlocks.nth(2).locator('.me-lang-label')).toHaveCount(0);
+
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await codeBlocks.first().getByRole('button', { name: 'Copy code' }).click();
+  await expect(codeBlocks.first().getByRole('button', { name: 'Copy code' })).toHaveText('Copied');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('const answer: number = 42;');
+
   await byTitle.click();
   await expect(page).toHaveURL(`/share/note_share_${browserFixture.target.id}`);
   await expect(page.getByRole('heading', { name: browserFixture.target.title })).toBeVisible();

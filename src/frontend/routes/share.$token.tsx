@@ -13,7 +13,6 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { SharedMarkdownRenderer } from '../components/shared-markdown-renderer';
 import { EmptyState } from '../components/ui/empty-state';
 import { ApiError, api, type DocumentType } from '../lib/api';
-import { editorCodeHighlighter } from '../lib/code-highlighter';
 import { rootRoute } from './__root';
 
 const EMPTY_CANVAS: JsonCanvasDocument = { nodes: [], edges: [] };
@@ -114,7 +113,6 @@ function SharedNoteView() {
           <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
             <SharedMarkdownRenderer
               value={data.note.content}
-              codeHighlighter={editorCodeHighlighter}
               className="notes-minu-renderer"
               resolutions={data.resolutions}
             />

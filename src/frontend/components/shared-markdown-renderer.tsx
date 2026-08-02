@@ -1,12 +1,11 @@
-import { type CodeHighlighter, MarkdownRenderer } from '@dpklabs/minueditor';
-import { memo, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { canonicalizeWikilinkTarget } from '../../shared/wikilinks';
 import type { SharedWikilinkResolution } from '../lib/api';
+import { NotesMarkdownRenderer } from './notes-markdown-renderer';
 
 const WIKILINK_PATTERN = /\[\[([^[\]\n|]+)(?:\|([^[\]\n]+))?\]\]/g;
 const SKIP_TAGS = new Set(['PRE', 'CODE', 'A', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
 const EMPTY_RESOLUTIONS: SharedWikilinkResolution[] = [];
-const StableMarkdownRenderer = memo(MarkdownRenderer);
 
 function isInsideSkipped(node: Text, root: HTMLElement): boolean {
   let parent = node.parentElement;
@@ -86,29 +85,21 @@ function applyResolutions(root: HTMLElement, resolutions: SharedWikilinkResoluti
 
 export function SharedMarkdownRenderer({
   value,
-  codeHighlighter,
   className,
   resolutions = EMPTY_RESOLUTIONS,
 }: {
   value: string;
-  codeHighlighter?: CodeHighlighter;
   className?: string;
   resolutions?: SharedWikilinkResolution[];
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const rendered = wrapper.firstElementChild;
+    const rendered = wrapperRef.current?.firstElementChild;
     if (!rendered) return;
     decorateWikilinks(rendered as HTMLElement);
     applyResolutions(rendered as HTMLElement, resolutions);
-  }, [value, codeHighlighter, resolutions]);
+  }, [value, resolutions]);
 
-  return (
-    <div ref={wrapperRef}>
-      <StableMarkdownRenderer value={value} codeHighlighter={codeHighlighter} className={className} />
-    </div>
-  );
+  return <NotesMarkdownRenderer ref={wrapperRef} value={value} className={className} />;
 }

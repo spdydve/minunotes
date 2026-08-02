@@ -4,7 +4,7 @@
 
 Make wikilinks clickable in public, read-only note and folder shares without exposing private note metadata, bridging unrelated share capabilities, mounting the editor, or serving stale content after owner changes.
 
-Shared views continue to use `MarkdownRenderer`. The application decorates rendered `[[Target]]` and `[[Target|Label]]` syntax and applies only public destinations supplied by the API.
+Shared views continue to use `MarkdownRenderer` through the thin application-level `NotesMarkdownRenderer` adapter. The adapter owns common static presentation such as syntax highlighting and lightweight code-block Copy controls without mounting CodeMirror. `SharedMarkdownRenderer` remains the public-policy layer: it decorates rendered `[[Target]]` and `[[Target|Label]]` syntax and applies only public destinations supplied by the API.
 
 ## Optimization priorities
 
@@ -108,7 +108,9 @@ The endpoint accepts no request body or caller-supplied targets.
 
 ## Frontend behavior
 
-`SharedMarkdownRenderer` post-processes the semantic HTML produced by `MarkdownRenderer`:
+`NotesMarkdownRenderer` standardizes application-level static presentation while delegating Markdown parsing to MinuEditor's `MarkdownRenderer`. It supplies the default MinuNotes highlighter and a static fenced-code shell with language, Copy feedback, themed header/body surfaces, and safe fallback rendering for unsupported or unlabeled code. It does not resolve notes or contain share authorization logic.
+
+`SharedMarkdownRenderer` composes that adapter and post-processes the semantic HTML for public wikilinks:
 
 - resolved links receive `me-wikilink--resolved` and the server-provided public `href`;
 - unresolved links retain `me-wikilink--unknown` and have no `href`;
@@ -116,7 +118,7 @@ The endpoint accepts no request body or caller-supplied targets.
 - existing links, inline code, fenced code, scripts, styles, and similar code-like elements are not decorated;
 - resolution updates remove any stale href before applying the latest result.
 
-`MarkdownRenderer` is memoized inside the wrapper so a resolution-only update does not replace its rendered HTML and remove imperative enhancements such as table-scroller wrappers.
+`MarkdownRenderer` is memoized inside `NotesMarkdownRenderer` so a resolution-only update does not replace its rendered HTML and remove imperative enhancements such as table-scroller wrappers. The static adapter is intentionally not a Markdown parser fork; richer static-shell and structured renderer extension support should move upstream to MinuEditor over time.
 
 Folder note selection is stored in `?note=<note-id>`. This makes folder wikilink destinations directly loadable and preserves browser navigation without adding a new route hierarchy.
 

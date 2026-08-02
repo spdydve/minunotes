@@ -19,7 +19,6 @@ import {
   type SharedFolderNote,
   type SharedWikilinkResolution,
 } from '../lib/api';
-import { editorCodeHighlighter } from '../lib/code-highlighter';
 import { rootRoute } from './__root';
 
 const EMPTY_CANVAS: JsonCanvasDocument = { nodes: [], edges: [] };
@@ -366,12 +365,7 @@ function SharedFolderNoteView({
         <SharedFolderCanvas content={note.content} documentType={note.documentType} />
       ) : (
         <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-          <SharedMarkdownRenderer
-            value={note.content}
-            codeHighlighter={editorCodeHighlighter}
-            className="notes-minu-renderer"
-            resolutions={resolutions}
-          />
+          <SharedMarkdownRenderer value={note.content} className="notes-minu-renderer" resolutions={resolutions} />
         </div>
       )}
     </article>

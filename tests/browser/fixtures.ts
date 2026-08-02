@@ -52,7 +52,8 @@ export const browserFixture = {
     id: 'note_linked',
     folderId: 'folder_browser',
     title: 'Linked Note',
-    content: 'See [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].',
+    content:
+      'See [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].\n\n```ts\nconst answer: number = 42;\n```\n\n```unknownlang\nfallback code\n```\n\n```\nplain code\n```',
     documentType: 'markdown',
     type: 'note',
     isApiEditable: true,

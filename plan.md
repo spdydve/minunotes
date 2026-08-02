@@ -1530,3 +1530,15 @@ If production measurements later justify caching, prefer this order:
 - [x] Detailed remediation plan approved.
 - [x] Implementation started.
 - [x] Agent implementation and automated verification complete.
+
+## Approved follow-up: static renderer parity
+
+- [x] Document the immediate workaround, application wrapper, upstream MinuEditor work, and adjacent parity/security concerns in `MinuEditor → backlog`.
+- [x] Add a lightweight static code-block shell with language and Copy behavior without mounting CodeMirror.
+- [x] Extract generic static presentation into `NotesMarkdownRenderer`.
+- [x] Keep `SharedMarkdownRenderer` focused on server-authorized public wikilink decoration.
+- [x] Verify labeled, unlabeled, highlighted, and fallback code blocks plus clipboard behavior.
+- [x] Run Biome, typecheck, unit/integration tests, browser tests, production build, and artifact checks.
+  - Evidence: Biome completed with existing unsafe class-order/CSS warnings; typecheck passed; 177 unit/integration tests passed; 16 browser tests passed; production build passed with the existing large-chunk advisory; browser coverage verifies highlighted, unsupported-language, and unlabeled shells, local overflow, styling, and clipboard output.
+
+Raw Markdown HTML and URL sanitization remain a separate security work package: the repository has no sanitizer dependency, and adopting one requires an explicit compatibility and policy decision rather than an unreviewed renderer change.
