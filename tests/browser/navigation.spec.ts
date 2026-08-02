@@ -25,6 +25,26 @@ test('preserves nested folder context while navigating between folders and notes
   await expect(page).toHaveURL('/');
 });
 
+test('uses a static brand and aligns sidebar controls with desktop breadcrumbs', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/');
+
+  const brand = page.getByText('MinuNotes', { exact: true });
+  const collapse = page.getByRole('button', { name: 'Collapse sidebar' });
+  const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(page.getByRole('link', { name: 'MinuNotes', exact: true })).toHaveCount(0);
+
+  const [brandBox, collapseBox, breadcrumbBox] = await Promise.all([
+    brand.boundingBox(),
+    collapse.boundingBox(),
+    breadcrumb.boundingBox(),
+  ]);
+  if (!brandBox || !collapseBox || !breadcrumbBox) throw new Error('Navigation header elements must be visible');
+  const breadcrumbCenter = breadcrumbBox.y + breadcrumbBox.height / 2;
+  expect(Math.abs(brandBox.y + brandBox.height / 2 - breadcrumbCenter)).toBeLessThanOrEqual(1);
+  expect(Math.abs(collapseBox.y + collapseBox.height / 2 - breadcrumbCenter)).toBeLessThanOrEqual(1);
+});
+
 test('supports Home to folder to note navigation with browser history', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/');

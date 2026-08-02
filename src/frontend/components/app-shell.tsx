@@ -113,7 +113,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         {desktopSidebarCollapsed ? (
           <button
-            className="fixed left-4 top-4 z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"
+            className="fixed left-4 top-[5px] z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"
             type="button"
             aria-label="Expand sidebar"
             onClick={() => setDesktopSidebarCollapsed(false)}
