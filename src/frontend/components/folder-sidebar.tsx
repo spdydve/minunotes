@@ -199,7 +199,10 @@ export function FolderSidebar({
       </div>
       {isLoading && <p className="text-sm text-slate-500">Loading...</p>}
       {error && <p className="text-xs text-red-600">API unavailable. Check VITE_API_URL.</p>}
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto pb-4" aria-label="Primary">
+      <nav
+        className="notes-sidebar-scroll -mr-4 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4 pr-4"
+        aria-label="Primary"
+      >
         <Link
           to="/"
           className={`block rounded-md px-3 py-2 text-sm ${navigation.section === 'home' ? 'bg-[var(--notes-hover)] font-semibold text-[var(--notes-text)]' : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'}`}

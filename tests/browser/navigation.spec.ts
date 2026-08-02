@@ -45,6 +45,29 @@ test('uses a static brand and aligns sidebar controls with desktop breadcrumbs',
   expect(Math.abs(collapseBox.y + collapseBox.height / 2 - breadcrumbCenter)).toBeLessThanOrEqual(1);
 });
 
+test('keeps the narrow sidebar scrollbar unobtrusive without disabling scroll', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  for (let index = 0; index < 20; index += 1) {
+    api.folders.push({
+      ...browserFixture.folder,
+      id: `folder_scroll_${index}`,
+      title: `Scrollable folder ${index + 1}`,
+    });
+  }
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await page.goto('/');
+
+  const primary = page.getByRole('navigation', { name: 'Primary' });
+  const [sidebarBox, primaryBox] = await Promise.all([page.locator('aside').boundingBox(), primary.boundingBox()]);
+  if (!sidebarBox || !primaryBox) throw new Error('Sidebar navigation must be visible');
+  expect(Math.abs(primaryBox.x + primaryBox.width - (sidebarBox.x + sidebarBox.width))).toBeLessThanOrEqual(1);
+  await expect.poll(() => primary.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect.poll(() => primary.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe('thin');
+  await primary.hover();
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => primary.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+});
+
 test('supports Home to folder to note navigation with browser history', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/');
