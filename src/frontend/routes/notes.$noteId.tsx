@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createRoute, useBlocker, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BacklinksPanel } from '../components/backlinks-panel';
 import { NoteActionsPopover } from '../components/note-actions-popover';
@@ -9,6 +8,7 @@ import { NoteEditor } from '../components/note-editor';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
 import { ApiError, api } from '../lib/api';
+import { internalNoteLinkTarget } from '../lib/link-policy';
 import { rootRoute } from './__root';
 
 function NoteView() {
@@ -244,7 +244,8 @@ function NoteView() {
       },
       onOpen: (target: string) => {
         void findNote(target).then((note) => {
-          if (note) void nav({ to: '/notes/$noteId', params: { noteId: note.id } });
+          if (note && internalNoteLinkTarget('wikilink') === 'current-tab')
+            void nav({ to: '/notes/$noteId', params: { noteId: note.id } });
         });
       },
     };
@@ -290,6 +291,7 @@ function NoteView() {
         <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
           <span>This note was updated elsewhere. Reload to view the latest version.</span>
           <button
+            type="button"
             className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
             onClick={reloadLatest}
           >
@@ -330,16 +332,6 @@ function NoteView() {
         updatedMeta={updatedMeta}
         staleNotice={staleNotice}
         actions={actions}
-        navigation={
-          <Button
-            variant="secondary"
-            className="inline-flex h-9 items-center gap-2 px-2.5 py-0"
-            onClick={() => nav({ to: '/folders/$folderId', params: { folderId: data.note.folderId } })}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Notes</span>
-          </Button>
-        }
       />
     );
   }

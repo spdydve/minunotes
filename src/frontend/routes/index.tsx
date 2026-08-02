@@ -7,6 +7,8 @@ import { rootRoute } from './__root';
 
 function Index() {
   const { data, isLoading } = useQuery({ queryKey: ['notes', 'recent'], queryFn: () => api.recentNotes(10) });
+  const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
+  const folderTitles = Object.fromEntries((folders.data?.folders ?? []).map((folder) => [folder.id, folder.title]));
 
   if (isLoading) return <p className="notes-muted text-sm">Loading recent notes...</p>;
 
@@ -17,7 +19,7 @@ function Index() {
         <p className="notes-muted mt-1 text-sm">Your latest notes across all folders.</p>
       </div>
       {data?.notes.length ? (
-        <NotesTable notes={data.notes} queryKey={['notes', 'recent']} />
+        <NotesTable notes={data.notes} queryKey={['notes', 'recent']} folderTitles={folderTitles} />
       ) : (
         <EmptyState>Create or select a folder to begin.</EmptyState>
       )}

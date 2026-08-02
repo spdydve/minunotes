@@ -17,6 +17,7 @@ import { FileText, Link2, Unlink, X } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getMinuNotesNodeLink, type MinuNotesNodeExtra } from '../../shared/canvas-links';
 import { api, type SearchNote } from '../lib/api';
+import { internalNoteLinkTarget } from '../lib/link-policy';
 
 const EMPTY_CANVAS: JsonCanvasDocument<MinuNotesNodeExtra> = { nodes: [], edges: [] };
 
@@ -99,7 +100,8 @@ export function NoteCanvasEditor({
 
   const openNote = (targetNoteId: string | undefined) => {
     if (!targetNoteId) return;
-    window.open(`/notes/${encodeURIComponent(targetNoteId)}`, '_blank', 'noopener,noreferrer');
+    const target = internalNoteLinkTarget('canvas-node') === 'new-tab' ? '_blank' : '_self';
+    window.open(`/notes/${encodeURIComponent(targetNoteId)}`, target, 'noopener,noreferrer');
   };
 
   const linkNodeToNote = (nodeId: string, note: SearchNote) => {

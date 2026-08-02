@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createRoute } from '@tanstack/react-router';
 import { Copy } from 'lucide-react';
 import type React from 'react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SharedMarkdownRenderer } from '../components/shared-markdown-renderer';
 import { EmptyState } from '../components/ui/empty-state';
 import { ApiError, api, type DocumentType } from '../lib/api';
@@ -40,6 +40,11 @@ function SharedNoteView() {
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  useEffect(() => {
+    const title = data?.note.title ?? (error ? 'Shared note unavailable' : 'Shared note');
+    document.title = `${title} - MinuNotes`;
+  }, [data?.note.title, error]);
 
   if (isLoading)
     return (

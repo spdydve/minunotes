@@ -9,7 +9,15 @@ import { Button } from './ui/button';
 
 const columnHelper = createColumnHelper<Note>();
 
-export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unknown[] }) {
+export function NotesTable({
+  notes,
+  queryKey,
+  folderTitles,
+}: {
+  notes: Note[];
+  queryKey?: unknown[];
+  folderTitles?: Record<string, string>;
+}) {
   const qc = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const remove = useMutation({
@@ -86,13 +94,24 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
     columnHelper.accessor('title', {
       header: 'Title',
       cell: (info) => (
-        <Link
-          className="font-medium text-[var(--notes-text)] transition-colors hover:text-[var(--notes-blue)]"
-          to="/notes/$noteId"
-          params={{ noteId: info.row.original.id }}
-        >
-          {info.getValue()}
-        </Link>
+        <div>
+          <Link
+            className="font-medium text-[var(--notes-text)] transition-colors hover:text-[var(--notes-blue)]"
+            to="/notes/$noteId"
+            params={{ noteId: info.row.original.id }}
+          >
+            {info.getValue()}
+          </Link>
+          {folderTitles?.[info.row.original.folderId] ? (
+            <Link
+              to="/folders/$folderId"
+              params={{ folderId: info.row.original.folderId }}
+              className="mt-1 block text-[var(--notes-muted)] text-xs hover:text-[var(--notes-text)]"
+            >
+              {folderTitles[info.row.original.folderId]}
+            </Link>
+          ) : null}
+        </div>
       ),
     }),
     columnHelper.accessor('createdAt', {
@@ -171,6 +190,15 @@ export function NotesTable({ notes, queryKey }: { notes: Note[]; queryKey?: unkn
                   >
                     {note.title}
                   </Link>
+                  {folderTitles?.[note.folderId] ? (
+                    <Link
+                      to="/folders/$folderId"
+                      params={{ folderId: note.folderId }}
+                      className="mt-1 block text-[var(--notes-muted)] text-xs hover:text-[var(--notes-text)]"
+                    >
+                      {folderTitles[note.folderId]}
+                    </Link>
+                  ) : null}
                   <p className="mt-1 text-[var(--notes-muted)] text-xs">
                     Created {new Date(note.createdAt).toLocaleString()}
                   </p>

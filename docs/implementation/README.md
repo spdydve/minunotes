@@ -6,6 +6,7 @@ Reusable implementation notes for editor and harness features.
 
 ## Documents
 
+- [In-app Navigation](./in-app-navigation.md)
 - [External Agent Helpers Roadmap](./external-agent-helpers-roadmap.md)
 - [Stale Document Detection](./stale-document-detection.md)
 - [Agent Thread Notes](./agent-thread-notes.md)

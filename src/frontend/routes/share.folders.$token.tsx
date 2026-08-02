@@ -8,7 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { createRoute, useNavigate } from '@tanstack/react-router';
 import type React from 'react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SharedMarkdownRenderer } from '../components/shared-markdown-renderer';
 import { EmptyState } from '../components/ui/empty-state';
 import {
@@ -108,6 +108,11 @@ function SharedFolderView() {
     () => data?.notes.find((note) => note.id === selectedNoteId) ?? null,
     [data?.notes, selectedNoteId]
   );
+  useEffect(() => {
+    const title = selectedNote?.title ?? data?.folder.title ?? (error ? 'Shared folder unavailable' : 'Shared folder');
+    document.title = `${title} - MinuNotes`;
+  }, [data?.folder.title, error, selectedNote?.title]);
+
   const { data: wikilinkData } = useQuery({
     queryKey: ['shared-folder-note-wikilinks', token, selectedNote?.id],
     queryFn: () => api.sharedFolderNoteWikilinks(token, selectedNote?.id ?? ''),

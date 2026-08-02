@@ -1,4 +1,5 @@
 import { createRoute, Link } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { ResourceDocLayout } from '../components/resource-doc-layout';
 import { getResourceDoc } from '../docs/resources';
 import { rootRoute } from './__root';
@@ -6,6 +7,10 @@ import { rootRoute } from './__root';
 function ResourceDocView() {
   const { slug } = resourceDocRoute.useParams();
   const doc = getResourceDoc(slug);
+
+  useEffect(() => {
+    document.title = `${doc?.title ?? 'Resource not found'} - MinuNotes`;
+  }, [doc?.title]);
 
   if (!doc) {
     return (

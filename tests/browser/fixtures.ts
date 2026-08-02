@@ -103,7 +103,8 @@ export const browserFixture = {
   } satisfies Note,
 };
 
-export async function mockBrowserApi(page: Page, options: { uploadFails?: boolean } = {}) {
+export async function mockBrowserApi(page: Page, options: { uploadFails?: boolean; folderCreateFails?: boolean } = {}) {
+  const folders = [{ ...browserFixture.folder }, { ...browserFixture.childFolder }];
   const notes = new Map<string, Note>([
     [browserFixture.source.id, { ...browserFixture.source }],
     [browserFixture.linked.id, { ...browserFixture.linked }],
@@ -149,11 +150,24 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
       });
     }
 
-    if (path === '/folders' && method === 'GET')
-      return json({ folders: [browserFixture.folder, browserFixture.childFolder] });
+    if (path === '/folders' && method === 'GET') return json({ folders });
 
-    if (path === `/folders/${browserFixture.folder.id}/notes` && method === 'GET')
-      return json({ notes: [...notes.values()].filter((note) => note.folderId === browserFixture.folder.id) });
+    if (path === '/folders' && method === 'POST') {
+      if (options.folderCreateFails) return json({ error: 'Folder creation unavailable' }, 500);
+      const body = request.postDataJSON() as { title?: string; parentFolderId?: string | null };
+      const folder = {
+        ...browserFixture.folder,
+        id: `folder_created_${folders.length + 1}`,
+        parentFolderId: body.parentFolderId ?? null,
+        title: body.title ?? 'Untitled folder',
+      };
+      folders.push(folder);
+      return json({ folder }, 201);
+    }
+
+    const folderNotesMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)\/notes$/);
+    if (folderNotesMatch && method === 'GET')
+      return json({ notes: [...notes.values()].filter((note) => note.folderId === folderNotesMatch[1]) });
 
     if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'GET')
       return json({ shareLink: folderShareLink });
@@ -292,6 +306,9 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
       );
     }
 
+    const noteEventsMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/events$/);
+    if (noteEventsMatch && method === 'GET') return json({ noteId: noteEventsMatch[1], events: [] });
+
     const noteMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)$/);
     if (noteMatch) {
       const note = notes.get(noteMatch[1]);
@@ -310,12 +327,34 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
     if (statusMatch) return json({ noteId: statusMatch[1], contentHash: `hash_${hashVersion}`, updatedAt: now });
 
     const backlinksMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/backlinks$/);
-    if (backlinksMatch) return json({ noteId: backlinksMatch[1], backlinks: [] });
+    if (backlinksMatch) {
+      const noteId = backlinksMatch[1];
+      return json({
+        noteId,
+        backlinks:
+          noteId === browserFixture.target.id
+            ? [
+                {
+                  id: 'link_browser',
+                  sourceNoteId: browserFixture.linked.id,
+                  sourceTitle: browserFixture.linked.title,
+                  sourceFolderId: browserFixture.linked.folderId,
+                  targetTitle: browserFixture.target.title,
+                  label: null,
+                  linkType: 'wikilink',
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              ]
+            : [],
+      });
+    }
 
     return json({ error: `Unhandled browser fixture request: ${method} ${path}` }, 404);
   });
 
   return {
+    folders,
     notes,
     saveRequests,
     async expectSavedContent(content: string) {

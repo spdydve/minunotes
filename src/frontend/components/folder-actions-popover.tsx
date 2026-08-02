@@ -91,17 +91,6 @@ export function FolderActionsPopover({
           >
             Move
           </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              setOpen(false);
-              nav({
-                to: '/folders/$folderId/settings',
-                params: { folderId: folder.id },
-              });
-            }}
-          >
-            Template settings
-          </ActionMenuButton>
           <DeleteConfirmDialog
             label="folder"
             warning="All notes in this folder will be permanently lost."
