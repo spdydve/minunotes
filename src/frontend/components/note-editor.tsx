@@ -276,7 +276,7 @@ export function NoteEditor({
             });
             if (!initialEditing && view.hasFocus) view.contentDOM.blur();
           }}
-          className="notes-minu-editor"
+          className={`notes-minu-editor ${editorMode === 'source' ? 'notes-minu-editor--source' : ''}`}
         />
       </div>
       {imagePickerOpen ? (

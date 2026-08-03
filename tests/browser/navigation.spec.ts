@@ -33,6 +33,10 @@ test('uses a static brand and aligns sidebar controls with desktop breadcrumbs',
   const collapse = page.getByRole('button', { name: 'Collapse sidebar' });
   const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
   await expect(page.getByRole('link', { name: 'MinuNotes', exact: true })).toHaveCount(0);
+  await expect
+    .poll(() => page.locator('html').evaluate((element) => getComputedStyle(element).fontFamily))
+    .toContain('system-ui');
+  await expect.poll(() => brand.evaluate((element) => getComputedStyle(element).fontFamily)).toContain('ui-monospace');
 
   const [brandBox, collapseBox, breadcrumbBox] = await Promise.all([
     brand.boundingBox(),

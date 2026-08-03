@@ -7,6 +7,7 @@ test('autosaves editor content and preserves it after reload', async ({ page }) 
 
   const editor = page.locator('.cm-content');
   await expect(editor).toBeVisible();
+  await expect.poll(() => editor.evaluate((element) => getComputedStyle(element).fontFamily)).toContain('system-ui');
   await editor.click();
   await page.keyboard.press('End');
   await page.keyboard.type(' Updated.');
@@ -29,6 +30,7 @@ test('switches between live and source editing and autosaves raw markdown change
   const editor = page.locator('.cm-content');
   await expect(page.locator('.me-image-wrapper')).toHaveCount(0);
   await expect(editor).toContainText(markdown);
+  await expect.poll(() => editor.evaluate((element) => getComputedStyle(element).fontFamily)).toContain('ui-monospace');
 
   await editor.click();
   await page.keyboard.press('End');

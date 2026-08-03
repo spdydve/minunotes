@@ -164,7 +164,7 @@ export function FolderSidebar({
   return (
     <aside className="flex h-full min-h-0 w-full flex-col border-r border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 md:h-screen md:w-72">
       <div className="mb-4 flex items-center justify-between gap-2 md:-mt-4 md:h-11 md:shrink-0">
-        <span className="px-1 py-0.5 font-semibold">MinuNotes</span>
+        <span className="px-1 py-0.5 font-mono font-semibold">MinuNotes</span>
         {onCollapse ? (
           <button
             className="rounded-md border border-[var(--notes-border)] p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
