@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 export const noteThemes = [
   { id: 'catppuccin-latte', label: 'Catppuccin Latte' },
   { id: 'catppuccin-frappe', label: 'Catppuccin Frappé' },
@@ -11,6 +13,7 @@ export type NoteThemeId = (typeof noteThemes)[number]['id'];
 
 const themeClassPrefix = 'theme-';
 const storageKey = 'notes-theme';
+const themeListeners = new Set<() => void>();
 
 export function getStoredTheme(): NoteThemeId {
   if (typeof window === 'undefined') return 'catppuccin-mocha';
@@ -24,4 +27,18 @@ export function applyNoteTheme(themeId: NoteThemeId) {
   root.classList.add(`${themeClassPrefix}${themeId}`);
   root.style.colorScheme = themeId === 'catppuccin-latte' ? 'light' : 'dark';
   window.localStorage.setItem(storageKey, themeId);
+  for (const listener of themeListeners) listener();
+}
+
+function subscribeToNoteTheme(listener: () => void) {
+  themeListeners.add(listener);
+  return () => themeListeners.delete(listener);
+}
+
+export function useNoteTheme(): NoteThemeId {
+  return useSyncExternalStore(subscribeToNoteTheme, getStoredTheme, () => 'catppuccin-mocha');
+}
+
+export function getMermaidTheme(themeId: NoteThemeId): 'default' | 'dark' {
+  return themeId === 'catppuccin-latte' ? 'default' : 'dark';
 }

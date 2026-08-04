@@ -63,3 +63,46 @@ Use the image command or Markdown image syntax:
 ```
 
 Uploaded app images use MinuNotes attachment URLs. Keep those URLs unchanged when editing notes manually or with agents.
+
+## Callouts
+
+Use GitHub-style callouts for information that needs a semantic status:
+
+```md
+> [!NOTE]
+> Useful context for the reader.
+
+> [!TIP]
+> A recommended approach.
+
+> [!IMPORTANT]
+> Required information.
+
+> [!WARNING]
+> Something that needs attention.
+
+> [!CAUTION]
+> A risky or destructive action.
+```
+
+Callouts remain portable blockquote Markdown. Unknown or malformed callout markers render as normal quotes.
+
+## Mermaid diagrams
+
+Mermaid fenced blocks render as diagrams in Live mode and shared/read-only notes:
+
+````md
+```mermaid
+flowchart LR
+  Draft --> Review
+  Review --> Publish
+```
+````
+
+Use **Edit source** on a diagram or switch to Source mode to edit its Markdown. Invalid diagrams retain their source and show an error rather than discarding content.
+
+## Rich paste
+
+Pasting formatted browser, Google Docs, or Notion content converts safe headings, formatting, links, lists, quotes, tables, and code into Markdown. Pasting spreadsheet cells converts tab-delimited content into a Markdown table. Use `Cmd/Ctrl+Shift+V` when you want plain text instead.
+
+Pasted image files continue to use MinuNotes attachment storage.

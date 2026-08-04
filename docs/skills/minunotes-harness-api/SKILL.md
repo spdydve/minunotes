@@ -26,6 +26,12 @@ X-API-Key: <MINUNOTES_API_KEY>
 
 Use JSON for request/response bodies.
 
+## Rich Markdown
+
+- GitHub-style callouts use `> [!NOTE]`, `TIP`, `IMPORTANT`, `WARNING`, or `CAUTION`.
+- Mermaid diagrams use ordinary fenced `mermaid` code blocks.
+- Treat both as portable Markdown and preserve their markers and fences during edits.
+
 ## Safety and editing rules
 
 - Use only the harness/API. Do not use browser access unless explicitly asked.

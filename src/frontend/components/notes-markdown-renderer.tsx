@@ -1,6 +1,7 @@
 import { type CodeHighlighter, MarkdownRenderer } from '@dpklabs/minueditor';
 import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { editorCodeHighlighter } from '../lib/code-highlighter';
+import { getMermaidTheme, useNoteTheme } from '../lib/themes';
 
 const StableMarkdownRenderer = memo(MarkdownRenderer);
 
@@ -49,6 +50,8 @@ export const NotesMarkdownRenderer = forwardRef<
   }
 >(function NotesMarkdownRenderer({ value, codeHighlighter = editorCodeHighlighter, className }, forwardedRef) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const noteTheme = useNoteTheme();
+  const mermaid = useMemo(() => ({ theme: getMermaidTheme(noteTheme) }), [noteTheme]);
   useImperativeHandle(forwardedRef, () => wrapperRef.current as HTMLDivElement, []);
 
   const staticCodeHighlighter = useMemo<CodeHighlighter>(
@@ -102,7 +105,12 @@ export const NotesMarkdownRenderer = forwardRef<
 
   return (
     <div ref={wrapperRef}>
-      <StableMarkdownRenderer value={value} codeHighlighter={staticCodeHighlighter} className={className} />
+      <StableMarkdownRenderer
+        value={value}
+        codeHighlighter={staticCodeHighlighter}
+        className={className}
+        mermaid={mermaid}
+      />
     </div>
   );
 });

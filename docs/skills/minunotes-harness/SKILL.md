@@ -43,6 +43,12 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - `minunotes_link_canvas_node_to_note`
 - `minunotes_unlink_canvas_node`
 
+## Rich Markdown
+
+- GitHub-style callouts use `> [!NOTE]`, `TIP`, `IMPORTANT`, `WARNING`, or `CAUTION`.
+- Mermaid diagrams use ordinary fenced `mermaid` code blocks.
+- Treat both as portable Markdown and preserve their markers and fences during edits.
+
 ## Safety rules
 
 - Read/search before editing.

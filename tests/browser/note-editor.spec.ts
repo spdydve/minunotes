@@ -42,6 +42,49 @@ test('switches between live and source editing and autosaves raw markdown change
   await expect(page.locator('.me-image-wrapper')).toBeVisible();
 });
 
+test('renders callouts and Mermaid diagrams in live mode', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  api.notes.set(browserFixture.source.id, {
+    ...browserFixture.source,
+    content: '> [!TIP]\n> Review before publishing.\n\n```mermaid\nflowchart LR\n  Draft --> Publish\n```',
+  });
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  await expect(page.locator('.me-callout-label--tip')).toBeVisible();
+  const diagram = page.locator('.me-mermaid-block');
+  await expect(diagram).toHaveClass(/me-mermaid-block--ready/, { timeout: 15_000 });
+  await expect(diagram.locator('svg')).toBeVisible();
+
+  const nodeFill = () =>
+    diagram
+      .locator('svg .node rect')
+      .first()
+      .evaluate((element) => getComputedStyle(element).fill);
+  const darkNodeFill = await nodeFill();
+  await page.getByLabel('Open settings').click();
+  await page.getByLabel('Theme').selectOption('catppuccin-latte');
+  await expect(page.locator('html')).toHaveClass(/theme-catppuccin-latte/);
+  await expect.poll(nodeFill).not.toBe(darkNodeFill);
+});
+
+test('converts rich HTML paste into portable Markdown', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const editor = page.locator('.cm-content');
+  await editor.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await editor.evaluate((element) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/html', '<h2>Imported heading</h2><p><strong>Bold</strong> text</p>');
+    clipboardData.setData('text/plain', 'Imported heading\nBold text');
+    element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+  });
+
+  await expect.poll(() => api.saveRequests.at(-1)?.body.content).toContain('## Imported heading');
+  await expect.poll(() => api.saveRequests.at(-1)?.body.content).toContain('**Bold** text');
+});
+
 test('inserts a heading through the slash-command menu', async ({ page }) => {
   const api = await mockBrowserApi(page);
   await page.goto(`/notes/${browserFixture.source.id}`);

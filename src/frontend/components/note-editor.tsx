@@ -15,9 +15,10 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { editorCodeHighlighter } from '../lib/code-highlighter';
 import { editorCodeLanguages } from '../lib/editor-languages';
+import { getMermaidTheme, useNoteTheme } from '../lib/themes';
 
 type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>['onViewReady']>>[0];
 
@@ -65,6 +66,8 @@ export function NoteEditor({
   const editorViewRef = useRef<EditorViewLike | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorKeydownCleanupRef = useRef<(() => void) | null>(null);
+  const noteTheme = useNoteTheme();
+  const mermaid = useMemo(() => ({ theme: getMermaidTheme(noteTheme) }), [noteTheme]);
   const titleValue = title === 'Untitled note' || title === 'Untitled template' ? '' : title;
 
   useEffect(() => () => editorKeydownCleanupRef.current?.(), []);
@@ -179,6 +182,7 @@ export function NoteEditor({
           minHeight={520}
           codeLanguages={editorCodeLanguages}
           codeHighlighter={editorCodeHighlighter}
+          mermaid={mermaid}
           spellCheck={true}
           autoCorrect="on"
           autoComplete="on"

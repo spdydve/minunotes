@@ -36,6 +36,20 @@ test('renders source-bound resolved and unresolved links in a shared note', asyn
   await expect(page.getByRole('heading', { name: browserFixture.target.title })).toBeVisible();
 });
 
+test('renders callouts and Mermaid diagrams in a shared note', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  api.notes.set(browserFixture.linked.id, {
+    ...browserFixture.linked,
+    content: '> [!WARNING]\n> Check this first.\n\n```mermaid\nflowchart LR\n  Shared --> Safe\n```',
+  });
+  await page.goto(`/share/note_share_${browserFixture.linked.id}`);
+
+  await expect(page.locator('blockquote.me-callout--warning')).toContainText('Check this first.');
+  const diagram = page.locator('.me-mermaid-block');
+  await expect(diagram).toHaveClass(/me-mermaid-block--ready/, { timeout: 15_000 });
+  await expect(diagram.locator('svg')).toBeVisible();
+});
+
 test('loads and navigates folder-shared notes through the note search parameter', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto(`/share/folders/folder_share_token?note=${browserFixture.linked.id}`);
