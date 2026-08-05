@@ -5,6 +5,7 @@ import { db } from '../db/client';
 import { attachments, notes } from '../db/schema';
 import type { auth } from '../lib/auth';
 import { getAttachmentMarkdownUrl, getObjectStorage } from '../storage';
+import { activeAttachmentWhere, activeNoteWhere } from '../trash/policy';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -56,7 +57,7 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
   const [note] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, c.req.param('noteId'))))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
 
@@ -126,7 +127,7 @@ attachmentRoutes.post('/:attachmentId/complete', async (c) => {
   const [attachment] = await db
     .select()
     .from(attachments)
-    .where(and(eq(attachments.id, c.req.param('attachmentId')), eq(attachments.userId, user.id)))
+    .where(activeAttachmentWhere(user.id, eq(attachments.id, c.req.param('attachmentId'))))
     .limit(1);
   if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
 
@@ -155,7 +156,7 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
   const [note] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, c.req.param('noteId'))))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
 
@@ -212,7 +213,7 @@ attachmentRoutes.get('/:attachmentId/content', async (c) => {
   const [attachment] = await db
     .select()
     .from(attachments)
-    .where(and(eq(attachments.id, c.req.param('attachmentId')), eq(attachments.userId, user.id)))
+    .where(activeAttachmentWhere(user.id, eq(attachments.id, c.req.param('attachmentId'))))
     .limit(1);
   if (!attachment || attachment.deletedAt) return c.json({ error: 'Attachment not found' }, 404);
   if (attachment.status !== 'ready') return c.json({ error: 'Attachment is not ready' }, 404);

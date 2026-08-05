@@ -32,6 +32,13 @@ Use JSON for request/response bodies.
 - Mermaid diagrams use ordinary fenced `mermaid` code blocks.
 - Treat both as portable Markdown and preserve their markers and fences during edits.
 
+## Trash boundary
+
+- Harness folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only.
+- A trashed note, template, or folder subtree is unavailable through `/v1/harness/*` and normally returns `404` when addressed by ID.
+- The harness API cannot list Trash or trash, restore, or permanently delete content. Those owner-only operations require the authenticated MinuNotes web interface.
+- Do not interpret `404` as proof that content was permanently deleted; it may be outside the key's scope or recoverable in the owner's Trash.
+
 ## Safety and editing rules
 
 - Use only the harness/API. Do not use browser access unless explicitly asked.

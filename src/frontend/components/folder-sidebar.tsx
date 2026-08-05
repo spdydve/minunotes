@@ -219,6 +219,14 @@ export function FolderSidebar({
         >
           Templates
         </Link>
+        <Link
+          to="/trash"
+          className={`block rounded-md px-3 py-2 text-sm ${navigation.section === 'trash' ? 'bg-[var(--notes-hover)] font-semibold text-[var(--notes-text)]' : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'}`}
+          aria-current={navigation.section === 'trash' ? 'page' : undefined}
+          onClick={onNavigate}
+        >
+          Trash
+        </Link>
         <div className="mt-4 flex items-center justify-between px-2 pb-1">
           <p className="font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">Folders</p>
           <CreateFolderDialog

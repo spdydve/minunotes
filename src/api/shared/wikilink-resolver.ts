@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from 'dri
 import { NOTE_ID_PATTERN, normalizeWikilinkTitle, parseWikilinks } from '../../shared/wikilinks';
 import { db } from '../db/client';
 import { folders, noteShareLinks, notes } from '../db/schema';
+import { activeNoteWhere, filterActiveFolderHierarchy } from '../trash/policy';
 
 const DEFAULT_MAX_WIKILINKS = 100;
 
@@ -60,7 +61,7 @@ export const databaseSharedWikilinkRepository: SharedWikilinkRepository = {
     return db
       .select({ id: notes.id, folderId: notes.folderId, title: notes.title })
       .from(notes)
-      .where(and(eq(notes.userId, userId), eq(notes.type, 'note'), targetFilter))
+      .where(activeNoteWhere(userId, eq(notes.type, 'note'), targetFilter))
       .orderBy(asc(notes.id));
   },
 
@@ -83,11 +84,12 @@ export const databaseSharedWikilinkRepository: SharedWikilinkRepository = {
     return rows.flatMap((row) => (row.token ? [{ noteId: row.noteId, token: row.token }] : []));
   },
 
-  listFolders(userId) {
-    return db
+  async listFolders(userId) {
+    const rows = await db
       .select({ id: folders.id, parentFolderId: folders.parentFolderId })
       .from(folders)
-      .where(eq(folders.userId, userId));
+      .where(and(eq(folders.userId, userId), isNull(folders.deletedAt)));
+    return filterActiveFolderHierarchy(rows);
   },
 };
 

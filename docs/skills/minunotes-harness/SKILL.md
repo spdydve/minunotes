@@ -49,6 +49,13 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - Mermaid diagrams use ordinary fenced `mermaid` code blocks.
 - Treat both as portable Markdown and preserve their markers and fences during edits.
 
+## Trash boundary
+
+- Folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only.
+- A trashed note, template, or folder subtree is unavailable through harness tools and normally returns not found when addressed by ID.
+- Harness tools cannot list Trash or trash, restore, or permanently delete content. Those owner-only operations require the authenticated MinuNotes web interface.
+- Do not interpret a not-found response as proof that content was permanently deleted; it may be outside the connection's scope or recoverable in the owner's Trash.
+
 ## Safety rules
 
 - Read/search before editing.

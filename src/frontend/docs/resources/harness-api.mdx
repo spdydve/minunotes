@@ -37,6 +37,12 @@ curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
 
 Move responses return compact note metadata and no content.
 
+## Trash boundary
+
+The harness API exposes active content only. Trashed notes, templates, and folder subtrees are omitted from folder lists, search, line search, tags, graph results, and attachment access. Direct requests for trashed IDs return not found.
+
+Harness and API-key clients cannot list Trash or trash, restore, or permanently delete content. Owners must use the authenticated MinuNotes web interface. A not-found response can also mean the item is outside the key's scope, so it does not prove permanent deletion.
+
 ## Safe editing flow
 
 1. Search or list folders.

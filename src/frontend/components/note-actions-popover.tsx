@@ -20,7 +20,7 @@ export function NoteActionsPopover({
   icon = 'more',
 }: {
   note: Note;
-  onDelete: () => void;
+  onDelete: () => unknown | Promise<unknown>;
   onToggleApiEditable?: () => void;
   onNoteUpdated?: (response: { note: Note; contentHash: string }) => void;
   editorMode?: 'live' | 'source';
@@ -137,10 +137,13 @@ export function NoteActionsPopover({
           ) : null}
           <DeleteConfirmDialog
             label="note"
-            warning="This note will be permanently lost."
+            heading="Move note to Trash?"
+            warning="You can restore this note later from Trash. Public share links will be revoked."
+            actionLabel="Move to Trash"
+            requiresTypedConfirmation={false}
             onConfirm={onDelete}
             onOpenChange={setOpen}
-            trigger={<ActionMenuItemLabel destructive>Delete note</ActionMenuItemLabel>}
+            trigger={<ActionMenuItemLabel destructive>Move to Trash</ActionMenuItemLabel>}
           />
         </PopoverContent>
       </Popover>

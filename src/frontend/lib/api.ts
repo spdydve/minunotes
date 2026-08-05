@@ -160,7 +160,15 @@ export type NoteEvent = {
   userId: string;
   actorType: 'user' | 'agent' | 'system';
   actorId: string | null;
-  eventType: 'create' | 'update' | 'edit_patch' | 'move' | 'toggle_api_editable' | 'restore';
+  eventType:
+    | 'create'
+    | 'update'
+    | 'edit_patch'
+    | 'move'
+    | 'toggle_api_editable'
+    | 'restore'
+    | 'trash'
+    | 'restore_from_trash';
   summary: string;
   beforeHash: string | null;
   afterHash: string | null;
@@ -229,6 +237,22 @@ export type NoteVersion = NoteVersionSummary & {
   createdAtValue: string;
   isApiEditable: boolean;
 };
+export type TrashedNote = Pick<
+  Note,
+  'id' | 'folderId' | 'title' | 'documentType' | 'type' | 'createdAt' | 'updatedAt'
+> & {
+  deletedAt: string;
+  originalFolderTitle: string | null;
+  originalFolderAvailable: boolean;
+};
+export type TrashedFolder = Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'createdAt' | 'updatedAt'> & {
+  deletedAt: string;
+  originalParentTitle: string | null;
+  originalParentAvailable: boolean;
+  descendantFolderCount: number;
+  noteCount: number;
+};
+export type TrashResponse = { notes: TrashedNote[]; folders: TrashedFolder[] };
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type NoteVersionsResponse = { noteId: string; versions: NoteVersionSummary[] };
 export type DocumentEdit =
@@ -359,7 +383,10 @@ export const api = {
   ) => request<{ folder: Folder }>(`/folders/${folderId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   moveFolder: (folderId: string, parentFolderId: string | null) =>
     request<{ folder: Folder }>(`/folders/${folderId}`, { method: 'PATCH', body: JSON.stringify({ parentFolderId }) }),
-  deleteFolder: (folderId: string) => request<{ ok: true }>(`/folders/${folderId}`, { method: 'DELETE' }),
+  deleteFolder: (folderId: string) =>
+    request<{ ok: true; deletedAt: string; folderCount: number; noteCount: number }>(`/folders/${folderId}`, {
+      method: 'DELETE',
+    }),
   templates: () => request<{ templates: Note[] }>('/notes/templates'),
   folderTemplates: (folderId: string) => request<{ templates: Note[] }>(`/folders/${folderId}/templates`),
   templateFolders: (templateId: string) => request<{ folders: Folder[] }>(`/notes/templates/${templateId}/folders`),
@@ -505,5 +532,25 @@ export const api = {
       }
     }
   },
-  deleteNote: (noteId: string) => request<{ ok: true }>(`/notes/${noteId}`, { method: 'DELETE' }),
+  trash: () => request<TrashResponse>('/trash'),
+  restoreTrashedNote: (noteId: string, folderId?: string) =>
+    request<{ note: Note; restoredToOriginalFolder: boolean }>(`/trash/notes/${noteId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(folderId ? { folderId } : {}),
+    }),
+  permanentlyDeleteTrashedNote: (noteId: string) =>
+    request<{ ok: true; deletedAttachmentCount: number }>(`/trash/notes/${noteId}`, { method: 'DELETE' }),
+  restoreTrashedFolder: (folderId: string) =>
+    request<{ folder: Folder; restoredAtTopLevel: boolean; noteCount: number }>(`/trash/folders/${folderId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  permanentlyDeleteTrashedFolder: (folderId: string) =>
+    request<{
+      ok: true;
+      deletedFolderCount: number;
+      deletedNoteCount: number;
+      deletedAttachmentCount: number;
+    }>(`/trash/folders/${folderId}`, { method: 'DELETE' }),
+  deleteNote: (noteId: string) => request<{ ok: true; deletedAt: string }>(`/notes/${noteId}`, { method: 'DELETE' }),
 };

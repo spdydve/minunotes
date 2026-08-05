@@ -8,6 +8,7 @@ import {
   type OAuthAuthorization,
   oauthAuthorizationFolderPermissions,
 } from '../db/schema';
+import { activeFolderWhere, filterActiveFolderHierarchy } from '../trash/policy';
 
 export type FolderPermissionKind = 'read' | 'create' | 'edit';
 
@@ -19,7 +20,8 @@ export type FolderAccessTree = {
 };
 
 export async function loadFolderAccessTree(userId: string): Promise<FolderAccessTree> {
-  const rows = await db.select().from(folders).where(eq(folders.userId, userId));
+  const selected = await db.select().from(folders).where(activeFolderWhere(userId));
+  const rows = filterActiveFolderHierarchy(selected);
   const byId = new Map(rows.map((folder) => [folder.id, folder]));
   const privateFolderIds = new Set<string>();
   const agentReadOnlyFolderIds = new Set<string>();
@@ -172,10 +174,6 @@ function actorAllowsPermission(
   if (permission === 'read') return actor.canRead;
   if (permission === 'create') return actor.canCreate;
   return actor.canEdit;
-}
-
-function apiKeyAllowsPermission(apiKey: ApiKey, permission: FolderPermissionKind) {
-  return actorAllowsPermission(apiKey, permission);
 }
 
 function isWritePermission(permission: FolderPermissionKind) {

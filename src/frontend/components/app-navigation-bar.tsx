@@ -40,6 +40,12 @@ function DestinationLink({
           {children}
         </Link>
       );
+    case 'trash':
+      return (
+        <Link to="/trash" {...common}>
+          {children}
+        </Link>
+      );
     case 'folder-settings':
       return (
         <Link to="/folders/$folderId/settings" params={{ folderId: destination.folderId }} {...common}>

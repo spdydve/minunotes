@@ -51,6 +51,10 @@ GET /v1/harness/notes/:noteId/links
 GET /v1/harness/notes/orphans
 ```
 
+## Trash boundary
+
+Skill-driven harness operations see active content only. Trashed content returns not found and is omitted from lists and search. Skills do not provide Trash listing, restore, or permanent-delete operations; owners perform those actions in the authenticated web interface.
+
 ## Portable skill file
 
 The skill text is available in the repository docs:
@@ -69,4 +73,4 @@ Agents can also use:
 - OpenAPI documents at `/openapi.json` and `/v1/openapi.json`
 - Direct REST calls to `/v1/harness/*`
 
-All of these use the same scoped API-key permission model.
+Direct REST and OpenAPI use scoped API keys. Hosted MCP uses scoped OAuth authorization, and local MCP uses an owner-managed scoped API key. All integration paths exclude trashed content.

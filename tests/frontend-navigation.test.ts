@@ -70,7 +70,12 @@ describe('app navigation model', () => {
     expect(model.parent?.label).toBe('Home');
   });
 
-  it('models top-level settings and resources', () => {
+  it('models Trash, top-level settings, and resources', () => {
+    const trash = buildAppNavigationModel({ pathname: '/trash', folders });
+    expect(trash.section).toBe('trash');
+    expect(trash.mobileTitle).toBe('Trash');
+    expect(trash.parent?.label).toBe('Home');
+    expect(trash.breadcrumbs.map((item) => item.label)).toEqual(['Home', 'Trash']);
     expect(labels('/settings/api-access')).toEqual(['Home', 'API Access']);
     expect(labels('/resources/wikilinks-backlinks')).toEqual(['Home', 'Resources', 'Wikilinks Backlinks']);
   });

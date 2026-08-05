@@ -6,6 +6,7 @@ Reusable implementation notes for editor and harness features.
 
 ## Documents
 
+- [Trash and Recovery](./trash-and-recovery.md)
 - [In-app Navigation](./in-app-navigation.md)
 - [External Agent Helpers Roadmap](./external-agent-helpers-roadmap.md)
 - [Stale Document Detection](./stale-document-detection.md)

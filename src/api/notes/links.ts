@@ -1,9 +1,10 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { getMinuNotesNodeLink } from '../../shared/canvas-links';
 import { NOTE_ID_PATTERN, normalizeWikilinkTitle, parseWikilinks } from '../../shared/wikilinks';
 import { db } from '../db/client';
 import { noteLinks, notes } from '../db/schema';
 import { createId } from '../lib/id';
+import { activeNoteWhere } from '../trash/policy';
 
 export type ParsedNoteLink = {
   targetTitle: string;
@@ -113,7 +114,7 @@ async function resolveUniqueTargetNote(input: { userId: string; sourceNoteId: st
   const rows = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.userId, input.userId), sql`lower(${notes.title}) = ${normalized}`))
+    .where(activeNoteWhere(input.userId, sql`lower(${notes.title}) = ${normalized}`))
     .limit(2);
   const candidates = rows.filter((row) => row.id !== input.sourceNoteId);
   return candidates.length === 1 ? candidates[0].id : null;
@@ -124,7 +125,7 @@ async function resolveTargetNoteById(input: { userId: string; sourceNoteId: stri
   const [target] = await db
     .select({ id: notes.id, title: notes.title })
     .from(notes)
-    .where(and(eq(notes.id, input.targetNoteId), eq(notes.userId, input.userId)))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.targetNoteId)))
     .limit(1);
   return target ?? null;
 }
@@ -181,7 +182,7 @@ export async function resolveUnresolvedNoteLinks(input: { userId: string; title:
   const candidates = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.userId, input.userId), sql`lower(${notes.title}) = ${normalized}`))
+    .where(activeNoteWhere(input.userId, sql`lower(${notes.title}) = ${normalized}`))
     .limit(2);
   if (candidates.length !== 1) return;
 
@@ -201,11 +202,11 @@ export async function listOutgoingLinks(input: { userId: string; noteId: string 
   const source = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId)))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
     .limit(1);
   if (source.length === 0) return null;
 
-  return db
+  const links = await db
     .select({
       id: noteLinks.id,
       sourceNoteId: noteLinks.sourceNoteId,
@@ -219,10 +220,21 @@ export async function listOutgoingLinks(input: { userId: string; noteId: string 
     .from(noteLinks)
     .where(and(eq(noteLinks.userId, input.userId), eq(noteLinks.sourceNoteId, input.noteId)))
     .orderBy(noteLinks.targetTitle);
+
+  const targetIds = links.map((link) => link.targetNoteId).filter((id): id is string => Boolean(id));
+  if (targetIds.length === 0) return links;
+  const activeTargets = await db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(activeNoteWhere(input.userId, inArray(notes.id, targetIds)));
+  const activeTargetIds = new Set(activeTargets.map((target) => target.id));
+  return links.map((link) =>
+    link.targetNoteId && !activeTargetIds.has(link.targetNoteId) ? { ...link, targetNoteId: null } : link
+  );
 }
 
 export async function listOrphanNotes(input: { userId: string }) {
-  return db
+  const candidates = await db
     .select({
       id: notes.id,
       folderId: notes.folderId,
@@ -232,21 +244,33 @@ export async function listOrphanNotes(input: { userId: string }) {
       updatedAt: notes.updatedAt,
     })
     .from(notes)
+    .where(activeNoteWhere(input.userId, eq(notes.type, 'note')))
+    .orderBy(notes.title);
+  if (candidates.length === 0) return candidates;
+
+  const incoming = await db
+    .select({ targetNoteId: noteLinks.targetNoteId })
+    .from(noteLinks)
+    .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
     .where(
       and(
-        eq(notes.userId, input.userId),
-        eq(notes.type, 'note'),
-        sql`not exists (select 1 from ${noteLinks} where ${noteLinks.targetNoteId} = ${notes.id} and ${noteLinks.userId} = ${input.userId})`
+        eq(noteLinks.userId, input.userId),
+        inArray(
+          noteLinks.targetNoteId,
+          candidates.map((note) => note.id)
+        ),
+        activeNoteWhere(input.userId)
       )
-    )
-    .orderBy(notes.title);
+    );
+  const linkedIds = new Set(incoming.map((link) => link.targetNoteId));
+  return candidates.filter((note) => !linkedIds.has(note.id));
 }
 
 export async function listBacklinks(input: { userId: string; noteId: string }) {
   const target = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId)))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
     .limit(1);
   if (target.length === 0) return null;
 
@@ -264,6 +288,8 @@ export async function listBacklinks(input: { userId: string; noteId: string }) {
     })
     .from(noteLinks)
     .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
-    .where(and(eq(noteLinks.userId, input.userId), eq(noteLinks.targetNoteId, input.noteId)))
+    .where(
+      and(eq(noteLinks.userId, input.userId), eq(noteLinks.targetNoteId, input.noteId), activeNoteWhere(input.userId))
+    )
     .orderBy(notes.title);
 }

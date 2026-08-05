@@ -163,6 +163,12 @@ Useful graph and organization endpoints include:
 - `GET /v1/harness/notes/:noteId/links`
 - `GET /v1/harness/notes/orphans`
 
+## Trash boundary
+
+Harness, OpenAPI, and MCP operations expose active content only. Trashed notes, templates, and folder subtrees disappear from folder lists, search, direct reads, metadata, graph results, and attachment access. A direct request for a trashed item returns not found.
+
+Agents cannot list Trash or trash, restore, or permanently delete content. Owners must use the authenticated MinuNotes web interface for those operations. A not-found response does not prove permanent deletion because the item may be outside the integration's scope or recoverable in Trash.
+
 ## Best practices
 
 - Use one API key per agent/project.

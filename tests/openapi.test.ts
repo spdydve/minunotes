@@ -8,6 +8,7 @@ describe('harness OpenAPI spec', () => {
     expect(response.status).toBe(200);
     const spec = (await response.json()) as {
       openapi: string;
+      info: { description?: string };
       paths: Record<string, unknown>;
       components: {
         securitySchemes: Record<string, unknown>;
@@ -16,6 +17,7 @@ describe('harness OpenAPI spec', () => {
     };
 
     expect(spec.openapi).toBe('3.1.0');
+    expect(spec.info.description).toContain('Trashed content is excluded');
     expect(spec.components.securitySchemes.ApiKeyAuth).toMatchObject({
       type: 'apiKey',
       in: 'header',
@@ -32,6 +34,9 @@ describe('harness OpenAPI spec', () => {
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link');
     expect(spec.components.schemas.NoteLink?.properties?.linkType?.enum).toContain('canvas-note');
     expect(spec.components.schemas.Backlink?.properties?.linkType?.enum).toContain('canvas-note');
+    expect(Object.keys(spec.paths).some((path) => path.includes('/trash'))).toBe(false);
+    expect(spec.paths).not.toHaveProperty('/v1/harness/notes/{noteId}.delete');
+    expect(spec.paths).not.toHaveProperty('/v1/harness/folders/{folderId}.delete');
   });
 
   it('documents source-bound shared wikilink destinations as public read endpoints', async () => {

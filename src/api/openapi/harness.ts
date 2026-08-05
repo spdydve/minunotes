@@ -3,7 +3,8 @@ export const harnessOpenApiSpec = {
   info: {
     title: 'MinuNotes Harness API',
     version: '0.1.0',
-    description: 'Agent-focused API for scoped MinuNotes folder and note workflows.',
+    description:
+      'Agent-focused API for scoped active MinuNotes content. Trashed content is excluded, and Trash lifecycle operations are owner-only and not exposed by this specification.',
   },
   servers: [{ url: '/' }],
   security: [{ ApiKeyAuth: [] }],
@@ -27,7 +28,8 @@ export const harnessOpenApiSpec = {
       get: {
         tags: ['Folders'],
         operationId: 'listFolders',
-        summary: 'List accessible folders',
+        summary: 'List accessible active folders',
+        description: 'Returns active folders only. Trashed folders and descendants of trashed folders are excluded.',
         responses: {
           '200': {
             description: 'Folders visible to the API key',
@@ -61,7 +63,8 @@ export const harnessOpenApiSpec = {
       get: {
         tags: ['Notes'],
         operationId: 'searchNotes',
-        summary: 'Search notes',
+        summary: 'Search active notes',
+        description: 'Searches active notes only. Trashed notes and notes below trashed folders are excluded.',
         parameters: [
           { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
           { name: 'tag', in: 'query', schema: { type: 'string' } },
@@ -199,7 +202,8 @@ export const harnessOpenApiSpec = {
       get: {
         tags: ['Notes'],
         operationId: 'getNote',
-        summary: 'Read a note',
+        summary: 'Read an active note',
+        description: 'Returns not found when the note or any folder ancestor is trashed.',
         parameters: [{ $ref: '#/components/parameters/NoteId' }],
         responses: {
           '200': {

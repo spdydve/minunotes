@@ -24,6 +24,7 @@ import { mcpRoutes } from './routes/mcp';
 import { noteRoutes } from './routes/notes';
 import { oauthRoutes } from './routes/oauth';
 import { shareRoutes } from './routes/share';
+import { trashRoutes } from './routes/trash';
 
 const app = new Hono<{
   Variables: {
@@ -157,6 +158,8 @@ app.use('/oauth/authorizations/*', authenticationMiddleware);
 app.use('/internal/folders', authenticationMiddleware);
 app.use('/internal/folders/*', authenticationMiddleware);
 app.use('/internal/notes/*', authenticationMiddleware);
+app.use('/internal/trash', authenticationMiddleware);
+app.use('/internal/trash/*', authenticationMiddleware);
 app.use('/internal/attachments', authenticationMiddleware);
 app.use('/internal/attachments/*', authenticationMiddleware);
 app.use('/internal/api-keys', authenticationMiddleware);
@@ -177,6 +180,8 @@ app.use('/internal/folders/:folderId/notes', writeBodyLimit);
 app.use('/internal/notes/:noteId', writeBodyLimit);
 app.use('/internal/notes/:noteId/edit', writeBodyLimit);
 app.use('/internal/notes/:noteId/share-link', writeBodyLimit);
+app.use('/internal/trash/notes/:noteId/restore', writeBodyLimit);
+app.use('/internal/trash/folders/:folderId/restore', writeBodyLimit);
 app.use('/internal/api-keys', writeBodyLimit);
 app.use('/internal/api-keys/:keyId', writeBodyLimit);
 app.use('/internal/oauth/clients', writeBodyLimit);
@@ -195,6 +200,7 @@ app.use('/internal/attachments/:attachmentId/complete', writeBodyLimit);
 app.route('/internal/folders', folderRoutes);
 app.route('/internal/notes', noteRoutes);
 app.route('/internal/share', shareRoutes);
+app.route('/internal/trash', trashRoutes);
 app.route('/internal/oauth', oauthRoutes);
 app.route('/internal/attachments', attachmentRoutes);
 app.route('/internal/api-keys', apiKeyRoutes);

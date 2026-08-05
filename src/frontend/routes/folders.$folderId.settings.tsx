@@ -55,7 +55,11 @@ function FolderSettingsView() {
     mutationFn: () => api.deleteFolder(folderId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['folders'] });
-      nav({ to: '/' });
+      qc.invalidateQueries({ queryKey: ['notes'] });
+      qc.invalidateQueries({ queryKey: ['templates'] });
+      qc.invalidateQueries({ queryKey: ['folder-templates'] });
+      qc.removeQueries({ queryKey: ['note'] });
+      return nav({ to: '/' });
     },
   });
 
@@ -188,13 +192,16 @@ function FolderSettingsView() {
       <div className="rounded-lg border border-[var(--notes-button-destructive-border)] bg-[var(--notes-button-destructive-bg)] p-4">
         <h3 className="font-semibold text-[var(--notes-button-destructive-text)]">Danger zone</h3>
         <p className="mt-1 text-sm text-[var(--notes-button-destructive-text)]">
-          Deleting this folder permanently removes all notes in it.
+          Move this folder, its subfolders, and their notes to Trash so they can be restored later.
         </p>
         <div className="mt-4">
           <DeleteConfirmDialog
             label="folder"
-            warning="All notes in this folder will be permanently lost."
-            onConfirm={() => remove.mutate()}
+            heading="Move folder to Trash?"
+            warning="This folder, its subfolders, and their notes will move to Trash. Public share links will be revoked."
+            actionLabel="Move to Trash"
+            requiresTypedConfirmation={false}
+            onConfirm={() => remove.mutateAsync()}
           />
         </div>
       </div>

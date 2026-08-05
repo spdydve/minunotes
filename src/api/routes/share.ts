@@ -8,6 +8,7 @@ import {
   resolveSourceWikilinks,
   type SharedWikilinkRepository,
 } from '../shared/wikilink-resolver';
+import { activeNoteWhere, filterActiveFolderHierarchy } from '../trash/policy';
 
 export const shareRoutes = new Hono();
 
@@ -28,16 +29,19 @@ async function loadActiveFolderShare(token: string) {
     .where(
       and(
         eq(folderShareLinks.tokenHash, tokenHash),
+        isNull(folders.deletedAt),
         isNull(folderShareLinks.revokedAt),
         or(isNull(folderShareLinks.expiresAt), gt(folderShareLinks.expiresAt, now))
       )
     )
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  const activeFolders = await loadUserFolders(row.folder.userId);
+  return activeFolders.some((folder) => folder.id === row.folder.id) ? row : null;
 }
 
 async function loadUserFolders(userId: string) {
-  return db
+  const rows = await db
     .select({
       id: folders.id,
       parentFolderId: folders.parentFolderId,
@@ -45,8 +49,9 @@ async function loadUserFolders(userId: string) {
       updatedAt: folders.updatedAt,
     })
     .from(folders)
-    .where(eq(folders.userId, userId))
+    .where(and(eq(folders.userId, userId), isNull(folders.deletedAt)))
     .orderBy(asc(folders.title));
+  return filterActiveFolderHierarchy(rows);
 }
 
 function collectFolderTreeIds(rootFolderId: string, userFolders: Array<{ id: string; parentFolderId: string | null }>) {
@@ -75,7 +80,7 @@ shareRoutes.get('/folders/:token/notes/:noteId/wikilinks', async (c) => {
   const [source] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, row.folder.userId), eq(notes.type, 'note')))
+    .where(activeNoteWhere(row.folder.userId, eq(notes.id, c.req.param('noteId')), eq(notes.type, 'note')))
     .limit(1);
   if (!source || !folderIds.has(source.folderId)) return c.json({ error: 'Shared note not found' }, 404);
 
@@ -108,7 +113,7 @@ shareRoutes.get('/folders/:token', async (c) => {
       updatedAt: notes.updatedAt,
     })
     .from(notes)
-    .where(and(eq(notes.userId, row.folder.userId), eq(notes.type, 'note')))
+    .where(activeNoteWhere(row.folder.userId, eq(notes.type, 'note')))
     .orderBy(asc(notes.title));
 
   return c.json({
@@ -140,9 +145,12 @@ shareRoutes.get('/:token', async (c) => {
     })
     .from(noteShareLinks)
     .innerJoin(notes, eq(noteShareLinks.noteId, notes.id))
+    .innerJoin(folders, eq(notes.folderId, folders.id))
     .where(
       and(
         eq(noteShareLinks.tokenHash, tokenHash),
+        isNull(notes.deletedAt),
+        isNull(folders.deletedAt),
         isNull(noteShareLinks.revokedAt),
         or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
       )
@@ -150,6 +158,9 @@ shareRoutes.get('/:token', async (c) => {
     .limit(1);
 
   if (!row) return c.json({ error: 'Shared note not found' }, 404);
+  const activeFolders = await loadUserFolders(row.note.userId);
+  if (!activeFolders.some((folder) => folder.id === row.note.folderId))
+    return c.json({ error: 'Shared note not found' }, 404);
   const resolutions = await resolveSourceWikilinks({ kind: 'note', token, source: row.note });
   return c.json({
     note: {

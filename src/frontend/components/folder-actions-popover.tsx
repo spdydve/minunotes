@@ -32,7 +32,11 @@ export function FolderActionsPopover({
     mutationFn: () => api.deleteFolder(folder.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['folders'] });
-      nav({ to: '/' });
+      qc.invalidateQueries({ queryKey: ['notes'] });
+      qc.invalidateQueries({ queryKey: ['templates'] });
+      qc.invalidateQueries({ queryKey: ['folder-templates'] });
+      qc.removeQueries({ queryKey: ['note'] });
+      return nav({ to: '/' });
     },
   });
 
@@ -93,11 +97,14 @@ export function FolderActionsPopover({
           </ActionMenuButton>
           <DeleteConfirmDialog
             label="folder"
-            warning="All notes in this folder will be permanently lost."
-            onConfirm={() => remove.mutate()}
+            heading="Move folder to Trash?"
+            warning="This folder, its subfolders, and their notes will move to Trash. Public share links will be revoked."
+            actionLabel="Move to Trash"
+            requiresTypedConfirmation={false}
+            onConfirm={() => remove.mutateAsync()}
             trigger={
               <span className="block w-full rounded-md px-3 py-2 text-left text-sm text-[var(--notes-button-destructive-text)] transition-colors hover:bg-[var(--notes-button-destructive-soft-hover)]">
-                Delete
+                Move to Trash
               </span>
             }
           />

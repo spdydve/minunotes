@@ -86,12 +86,16 @@ export const folders = sqliteTable(
     title: text('title').notNull(),
     isPrivate: integer('is_private', { mode: 'boolean' }).notNull().default(false),
     isAgentReadOnly: integer('is_agent_read_only', { mode: 'boolean' }).notNull().default(false),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+    trashBatchId: text('trash_batch_id'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
     index('folders_user_id_idx').on(table.userId),
     index('folders_parent_folder_id_idx').on(table.parentFolderId),
+    index('folders_user_deleted_at_idx').on(table.userId, table.deletedAt),
+    index('folders_trash_batch_id_idx').on(table.trashBatchId),
   ]
 );
 
@@ -285,6 +289,8 @@ export const notes = sqliteTable(
     isApiEditable: integer('is_api_editable', { mode: 'boolean' }).notNull().default(true),
     updatedByActorType: text('updated_by_actor_type'),
     updatedByActorId: text('updated_by_actor_id'),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+    trashBatchId: text('trash_batch_id'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -293,6 +299,8 @@ export const notes = sqliteTable(
     index('notes_folder_id_idx').on(table.folderId),
     index('notes_type_idx').on(table.type),
     index('notes_document_type_idx').on(table.documentType),
+    index('notes_user_deleted_at_idx').on(table.userId, table.deletedAt),
+    index('notes_trash_batch_id_idx').on(table.trashBatchId),
   ]
 );
 

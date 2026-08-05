@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
 import {
@@ -40,6 +40,7 @@ import {
 import { createId } from '../lib/id';
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from '../notes/tags';
+import { activeNoteWhere } from '../trash/policy';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -128,7 +129,7 @@ harnessRoutes.get('/tags', async (c) => {
   const visibleNotes = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.userId, user.id), inArray(notes.folderId, readableIds)));
+    .where(activeNoteWhere(user.id, inArray(notes.folderId, readableIds)));
   return c.json({ tags: await listUserTags({ userId: user.id, noteIds: visibleNotes.map((note) => note.id) }) });
 });
 
@@ -389,7 +390,7 @@ harnessRoutes.get('/notes/:noteId/tags', async (c) => {
   const [note] = await db
     .select({ id: notes.id, folderId: notes.folderId })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
   if (!(await hasFolderPermission(c, note.folderId, 'read'))) return c.json({ error: 'Forbidden' }, 403);
@@ -404,7 +405,7 @@ harnessRoutes.put('/notes/:noteId/tags', async (c) => {
   const [note] = await db
     .select({ id: notes.id, folderId: notes.folderId, isApiEditable: notes.isApiEditable })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
   if (!(await hasFolderPermission(c, note.folderId, 'edit')) || !note.isApiEditable)
@@ -461,9 +462,7 @@ harnessRoutes.get('/notes/:noteId/links', async (c) => {
     ? await db
         .select({ id: notes.id })
         .from(notes)
-        .where(
-          and(eq(notes.userId, user.id), inArray(notes.id, targetIds), inArray(notes.folderId, [...readableFolderIds]))
-        )
+        .where(activeNoteWhere(user.id, inArray(notes.id, targetIds), inArray(notes.folderId, [...readableFolderIds])))
     : [];
   const visibleTargetIds = new Set(visibleTargets.map((note) => note.id));
   return c.json({
@@ -631,7 +630,7 @@ harnessRoutes.post('/notes/:noteId/canvas/nodes/:nodeId/link-note', async (c) =>
   const [target] = await db
     .select({ id: notes.id, folderId: notes.folderId })
     .from(notes)
-    .where(and(eq(notes.id, body.targetNoteId), eq(notes.userId, user.id), eq(notes.type, 'note')))
+    .where(activeNoteWhere(user.id, eq(notes.id, body.targetNoteId), eq(notes.type, 'note')))
     .limit(1);
   if (!target || !(await hasFolderPermission(c, target.folderId, 'read')))
     return c.json({ error: 'Target note not found' }, 404);

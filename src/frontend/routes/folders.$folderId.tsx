@@ -83,7 +83,7 @@ function FolderContentsTable({
 }: {
   items: ContentItem[];
   allFolders: Folder[];
-  onDeleteNote: (note: Note) => void;
+  onDeleteNote: (note: Note) => unknown | Promise<unknown>;
 }) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   const visibleNotes = items.flatMap((item) => (item.kind === 'note' ? [item.note] : []));
@@ -354,7 +354,8 @@ function FolderView() {
     mutationFn: ({ noteId }: { noteId: string }) => api.deleteNote(noteId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['notes', folderId] });
-      qc.invalidateQueries({ queryKey: ['note', variables.noteId] });
+      qc.invalidateQueries({ queryKey: ['notes', 'recent'] });
+      qc.removeQueries({ queryKey: ['note', variables.noteId] });
     },
   });
 
@@ -462,7 +463,7 @@ function FolderView() {
         <FolderContentsTable
           items={items}
           allFolders={allFolders}
-          onDeleteNote={(note) => remove.mutate({ noteId: note.id })}
+          onDeleteNote={(note) => remove.mutateAsync({ noteId: note.id })}
         />
       ) : (
         <EmptyState>No folders or notes yet.</EmptyState>

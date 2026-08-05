@@ -13,12 +13,21 @@ import { folders, type Note, noteEvents, notes, noteTags, noteVersions, tags } f
 import { createId } from '../lib/id';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from '../notes/links';
 import { createNoteVersion, maybeCreateUserCheckpoint } from '../notes/versions';
+import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 import { applyDocumentEdits, type DocumentEdit } from './edits';
 import { hashMarkdown } from './hash';
 import { getLineRange, searchLines } from './line-search';
 
 export type ActorType = 'user' | 'agent' | 'system';
-export type NoteEventType = 'create' | 'update' | 'edit_patch' | 'move' | 'toggle_api_editable' | 'restore';
+export type NoteEventType =
+  | 'create'
+  | 'update'
+  | 'edit_patch'
+  | 'move'
+  | 'toggle_api_editable'
+  | 'restore'
+  | 'trash'
+  | 'restore_from_trash';
 
 export type DocumentCommandResult<T> =
   | { ok: true; value: T }
@@ -28,7 +37,7 @@ export type DocumentCommandResult<T> =
   | { ok: false; status: 409; error: string; currentHash: string };
 
 export async function listFolders(input: { userId: string }) {
-  const rows = await db.select().from(folders).where(eq(folders.userId, input.userId)).orderBy(asc(folders.title));
+  const rows = await db.select().from(folders).where(activeFolderWhere(input.userId)).orderBy(asc(folders.title));
   return { ok: true, value: { folders: rows } } satisfies DocumentCommandResult<{ folders: typeof rows }>;
 }
 
@@ -86,8 +95,8 @@ export function compileDiagramSyntax(input: { syntax: string; documentType?: Doc
 export async function listDocuments(input: { userId: string; folderId?: string; type?: NoteType }) {
   const type = input.type ?? 'note';
   const where = input.folderId
-    ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId), eq(notes.type, type))
-    : and(eq(notes.userId, input.userId), eq(notes.type, type));
+    ? activeNoteWhere(input.userId, eq(notes.folderId, input.folderId), eq(notes.type, type))
+    : activeNoteWhere(input.userId, eq(notes.type, type));
   const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title));
   return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
 }
@@ -183,12 +192,12 @@ export async function searchAllDocumentLines(input: {
 
   const pattern = `%${query}%`;
   const where = input.folderId
-    ? and(
-        eq(notes.userId, input.userId),
+    ? activeNoteWhere(
+        input.userId,
         eq(notes.folderId, input.folderId),
         or(like(notes.title, pattern), like(notes.content, pattern))
       )
-    : and(eq(notes.userId, input.userId), or(like(notes.title, pattern), like(notes.content, pattern)));
+    : activeNoteWhere(input.userId, or(like(notes.title, pattern), like(notes.content, pattern)));
   const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title)).limit(50);
   const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
   const matches: Array<
@@ -267,7 +276,7 @@ export async function searchDocuments(input: { userId: string; query: string; li
     .leftJoin(tags, and(eq(tags.id, noteTags.tagId), eq(tags.userId, input.userId)))
     .where(
       and(
-        eq(notes.userId, input.userId),
+        activeNoteWhere(input.userId),
         eq(notes.type, type),
         or(
           like(notes.title, pattern),
@@ -339,6 +348,8 @@ export function getNoteEventSummary(
   if (eventType === 'edit_patch') return 'Patched note content';
   if (eventType === 'move') return 'Moved note to another folder';
   if (eventType === 'restore') return 'Restored note version';
+  if (eventType === 'trash') return 'Moved note to Trash';
+  if (eventType === 'restore_from_trash') return 'Restored note from Trash';
   if (eventType === 'toggle_api_editable')
     return details.isApiEditable ? 'Enabled API editing' : 'Disabled API editing';
 
@@ -424,7 +435,7 @@ export async function createDocument(input: {
   const [folder] = await db
     .select()
     .from(folders)
-    .where(and(eq(folders.id, input.folderId), eq(folders.userId, input.userId)))
+    .where(activeFolderWhere(input.userId, eq(folders.id, input.folderId)))
     .limit(1);
   if (!folder) return { ok: false, status: 404, error: 'Folder not found' } satisfies DocumentCommandResult<never>;
 
@@ -502,7 +513,7 @@ export async function readDocument(input: { documentId: string; userId: string }
   const [note] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, input.documentId), eq(notes.userId, input.userId)))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.documentId)))
     .limit(1);
   if (!note) return { ok: false, status: 404, error: 'Note not found' } satisfies DocumentCommandResult<never>;
 
@@ -630,7 +641,7 @@ export async function moveDocuments(input: {
   const [targetFolder] = await db
     .select({ id: folders.id })
     .from(folders)
-    .where(and(eq(folders.id, input.targetFolderId), eq(folders.userId, input.userId)))
+    .where(activeFolderWhere(input.userId, eq(folders.id, input.targetFolderId)))
     .limit(1);
   if (!targetFolder)
     return { ok: false, status: 404, error: 'Destination folder not found' } satisfies DocumentCommandResult<never>;
@@ -638,7 +649,7 @@ export async function moveDocuments(input: {
   const currentNotes = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.userId, input.userId), inArray(notes.id, documentIds)));
+    .where(activeNoteWhere(input.userId, inArray(notes.id, documentIds)));
   if (currentNotes.length !== documentIds.length)
     return { ok: false, status: 404, error: 'One or more notes were not found' } satisfies DocumentCommandResult<never>;
 
@@ -778,7 +789,7 @@ export async function updateDocument(input: UpdateDocumentInput) {
     const [folder] = await db
       .select()
       .from(folders)
-      .where(and(eq(folders.id, input.folderId), eq(folders.userId, input.userId)))
+      .where(activeFolderWhere(input.userId, eq(folders.id, input.folderId)))
       .limit(1);
     if (!folder)
       return { ok: false, status: 404, error: 'Destination folder not found' } satisfies DocumentCommandResult<never>;
@@ -904,7 +915,7 @@ export async function linkCanvasNodeToNote(
   const [target] = await db
     .select({ id: notes.id, title: notes.title })
     .from(notes)
-    .where(and(eq(notes.id, input.targetNoteId), eq(notes.userId, input.userId), eq(notes.type, 'note')))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.targetNoteId), eq(notes.type, 'note')))
     .limit(1);
   if (!target) return { ok: false, status: 404, error: 'Target note not found' } satisfies DocumentCommandResult<never>;
 

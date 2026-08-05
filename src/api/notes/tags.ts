@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { noteTags, tags } from '../db/schema';
+import { notes, noteTags, tags } from '../db/schema';
 import { createId } from '../lib/id';
+import { activeNoteWhere } from '../trash/policy';
 
 export type SerializedTag = { id: string; name: string; normalizedName: string; noteCount?: number };
 
@@ -43,11 +44,12 @@ export async function listUserTags(input: { userId: string; noteIds?: string[] }
       noteCount: sql<number>`count(${noteTags.id})`,
     })
     .from(tags)
-    .leftJoin(noteTags, eq(noteTags.tagId, tags.id))
+    .innerJoin(noteTags, eq(noteTags.tagId, tags.id))
+    .innerJoin(notes, eq(noteTags.noteId, notes.id))
     .where(
       input.noteIds
-        ? and(eq(tags.userId, input.userId), inArray(noteTags.noteId, input.noteIds))
-        : eq(tags.userId, input.userId)
+        ? and(eq(tags.userId, input.userId), inArray(noteTags.noteId, input.noteIds), activeNoteWhere(input.userId))
+        : and(eq(tags.userId, input.userId), activeNoteWhere(input.userId))
     )
     .groupBy(tags.id)
     .orderBy(asc(tags.name));
@@ -59,7 +61,8 @@ export async function listNoteTags(input: { userId: string; noteId: string }) {
     .select({ id: tags.id, name: tags.name, normalizedName: tags.normalizedName })
     .from(noteTags)
     .innerJoin(tags, eq(noteTags.tagId, tags.id))
-    .where(and(eq(noteTags.userId, input.userId), eq(noteTags.noteId, input.noteId)))
+    .innerJoin(notes, eq(noteTags.noteId, notes.id))
+    .where(and(eq(noteTags.userId, input.userId), eq(noteTags.noteId, input.noteId), activeNoteWhere(input.userId)))
     .orderBy(asc(tags.name));
 }
 
@@ -138,5 +141,8 @@ export async function noteIdsForTag(input: { userId: string; tag: string }) {
     .select({ noteId: noteTags.noteId })
     .from(noteTags)
     .innerJoin(tags, eq(noteTags.tagId, tags.id))
-    .where(and(eq(noteTags.userId, input.userId), eq(tags.normalizedName, normalizedName)));
+    .innerJoin(notes, eq(noteTags.noteId, notes.id))
+    .where(
+      and(eq(noteTags.userId, input.userId), eq(tags.normalizedName, normalizedName), activeNoteWhere(input.userId))
+    );
 }

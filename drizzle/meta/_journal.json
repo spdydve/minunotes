@@ -169,6 +169,13 @@
       "when": 1781863000000,
       "tag": "0023_folder_share_links",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1785892278628,
+      "tag": "0024_soft_starbolt",
+      "breakpoints": true
     }
   ]
 }

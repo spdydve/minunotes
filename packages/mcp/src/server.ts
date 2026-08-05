@@ -107,7 +107,8 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_list_folders',
     {
       title: 'List folders',
-      description: 'List folders available to the authorized MinuNotes connection.',
+      description:
+        'List active folders available to the authorized MinuNotes connection. Trashed folder subtrees are excluded.',
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
@@ -131,7 +132,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_search',
     {
       title: 'Search notes',
-      description: 'Search notes visible to the authorized MinuNotes connection.',
+      description: 'Search active notes visible to the authorized MinuNotes connection. Trashed content is excluded.',
       inputSchema: { query: z.string() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -143,7 +144,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_get_note',
     {
       title: 'Get note',
-      description: 'Read a note by id.',
+      description: 'Read an active note by id. Trashed content returns not found.',
       inputSchema: { noteId: z.string() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

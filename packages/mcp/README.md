@@ -116,6 +116,8 @@ Canvas replacement and node-link mutations require a current `baseHash`. Setting
 
 ## Tool boundaries
 
+MCP tools expose active content only. Trashed notes, templates, and folder subtrees are omitted from lists and search and return not found on direct reads. Hosted and local MCP intentionally provide no tools to list Trash or trash, restore, or permanently delete content. Owners perform those operations through the authenticated MinuNotes web interface.
+
 Tags are available because they already have user-facing Note Details behavior. Broader graph inspection—including outgoing links, backlinks, and orphan discovery—is intentionally not exposed through MCP yet; those product and UI semantics are deferred.
 
 Implementation notes:

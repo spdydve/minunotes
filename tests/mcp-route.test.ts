@@ -53,7 +53,8 @@ describe('hosted MCP route', () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.result.tools.map((tool: { name: string }) => tool.name)).toEqual(
+    const toolNames = body.result.tools.map((tool: { name: string }) => tool.name);
+    expect(toolNames).toEqual(
       expect.arrayContaining([
         'notes_move_notes',
         'notes_create_canvas',
@@ -69,6 +70,7 @@ describe('hosted MCP route', () => {
         'notes_replace_note_tags',
       ])
     );
+    expect(toolNames.filter((name: string) => /trash|restore|permanent.*delete/i.test(name))).toEqual([]);
   });
 
   it('calls a new read tool through the hosted OAuth adapter', async () => {

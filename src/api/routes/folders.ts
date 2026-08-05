@@ -7,6 +7,8 @@ import type { auth } from '../lib/auth';
 import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { buildFolderShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
+import { trashFolder } from '../trash/operations';
+import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -123,7 +125,7 @@ folderRoutes.patch('/:folderId', async (c) => {
       ...(body.parentFolderId !== undefined ? { parentFolderId: body.parentFolderId } : {}),
       updatedAt: new Date(),
     })
-    .where(and(eq(folders.id, c.req.param('folderId')), eq(folders.userId, user.id)))
+    .where(activeFolderWhere(user.id, eq(folders.id, c.req.param('folderId'))))
     .returning();
 
   if (!folder) return c.json({ error: 'Folder not found' }, 404);
@@ -200,7 +202,7 @@ folderRoutes.delete('/:folderId/share-link', async (c) => {
   const [folder] = await db
     .select({ id: folders.id })
     .from(folders)
-    .where(and(eq(folders.id, c.req.param('folderId')), eq(folders.userId, user.id)))
+    .where(activeFolderWhere(user.id, eq(folders.id, c.req.param('folderId'))))
     .limit(1);
   if (!folder) return c.json({ error: 'Folder not found' }, 404);
 
@@ -229,11 +231,12 @@ folderRoutes.get('/:folderId/templates', async (c) => {
     .select({ template: notes })
     .from(templateFolderAssignments)
     .innerJoin(notes, eq(templateFolderAssignments.templateId, notes.id))
+    .innerJoin(folders, eq(templateFolderAssignments.folderId, folders.id))
     .where(
       and(
         eq(templateFolderAssignments.userId, user.id),
-        eq(templateFolderAssignments.folderId, c.req.param('folderId')),
-        eq(notes.type, 'template')
+        activeFolderWhere(user.id, eq(folders.id, c.req.param('folderId'))),
+        activeNoteWhere(user.id, eq(notes.type, 'template'))
       )
     );
   return c.json({ templates: rows.map((row) => row.template) });
@@ -271,15 +274,7 @@ folderRoutes.delete('/:folderId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const folderId = c.req.param('folderId');
-  const childFolders = await db
-    .select({ id: folders.id })
-    .from(folders)
-    .where(and(eq(folders.parentFolderId, folderId), eq(folders.userId, user.id)))
-    .limit(1);
-  if (childFolders.length > 0) return c.json({ error: 'Move or delete subfolders before deleting this folder' }, 400);
-
-  await db.delete(notes).where(and(eq(notes.folderId, folderId), eq(notes.userId, user.id)));
-  await db.delete(folders).where(and(eq(folders.id, folderId), eq(folders.userId, user.id)));
-  return c.json({ ok: true });
+  const result = await trashFolder({ userId: user.id, folderId: c.req.param('folderId') });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ ok: true, ...result.value });
 });

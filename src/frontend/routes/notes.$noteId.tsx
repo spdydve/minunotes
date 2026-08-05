@@ -104,12 +104,19 @@ function NoteView() {
 
   const remove = useMutation({
     mutationFn: () => api.deleteNote(noteId),
-    onSuccess: () =>
-      nav(
-        data!.note.type === 'template'
+    onSuccess: () => {
+      const deletedNote = data?.note;
+      qc.removeQueries({ queryKey: ['note', noteId] });
+      qc.invalidateQueries({ queryKey: ['notes', 'recent'] });
+      if (!deletedNote) return nav({ to: '/' });
+      qc.invalidateQueries({ queryKey: ['notes', deletedNote.folderId] });
+      if (deletedNote.type === 'template') qc.invalidateQueries({ queryKey: ['templates'] });
+      return nav(
+        deletedNote.type === 'template'
           ? { to: '/templates' }
-          : { to: '/folders/$folderId', params: { folderId: data!.note.folderId } }
-      ),
+          : { to: '/folders/$folderId', params: { folderId: deletedNote.folderId } }
+      );
+    },
   });
   const toggleApiEditable = useMutation({
     mutationFn: () => api.saveNote(noteId, { isApiEditable: !data!.note.isApiEditable }),
@@ -310,7 +317,7 @@ function NoteView() {
     <NoteActionsPopover
       note={data.note}
       icon="settings"
-      onDelete={() => remove.mutate()}
+      onDelete={() => remove.mutateAsync()}
       onToggleApiEditable={() => toggleApiEditable.mutate()}
       onNoteUpdated={applyDetailsUpdate}
       editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}

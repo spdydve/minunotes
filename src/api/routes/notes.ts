@@ -18,6 +18,8 @@ import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from '../notes/tags';
 import { getNoteVersion, listNoteVersions, restoreNoteVersion, serializeVersion } from '../notes/versions';
+import { trashNote } from '../trash/operations';
+import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -81,7 +83,7 @@ noteRoutes.get('/templates', async (c) => {
   const rows = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.userId, user.id), eq(notes.type, 'template')));
+    .where(activeNoteWhere(user.id, eq(notes.type, 'template')));
   return c.json({ templates: rows });
 });
 
@@ -92,10 +94,13 @@ noteRoutes.get('/templates/:templateId/folders', async (c) => {
     .select({ folder: folders })
     .from(templateFolderAssignments)
     .innerJoin(folders, eq(templateFolderAssignments.folderId, folders.id))
+    .innerJoin(notes, eq(templateFolderAssignments.templateId, notes.id))
     .where(
       and(
         eq(templateFolderAssignments.userId, user.id),
-        eq(templateFolderAssignments.templateId, c.req.param('templateId'))
+        eq(templateFolderAssignments.templateId, c.req.param('templateId')),
+        activeFolderWhere(user.id),
+        activeNoteWhere(user.id, eq(notes.type, 'template'))
       )
     );
   return c.json({ folders: rows.map((row) => row.folder) });
@@ -108,7 +113,7 @@ noteRoutes.put('/templates/:templateId/folders', async (c) => {
   const [template] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, templateId), eq(notes.userId, user.id), eq(notes.type, 'template')))
+    .where(activeNoteWhere(user.id, eq(notes.id, templateId), eq(notes.type, 'template')))
     .limit(1);
   if (!template) return c.json({ error: 'Template not found' }, 404);
   const body = (await c.req.json().catch(() => null)) as { folderIds?: string[] } | null;
@@ -117,7 +122,7 @@ noteRoutes.put('/templates/:templateId/folders', async (c) => {
     const valid = await db
       .select({ id: folders.id })
       .from(folders)
-      .where(and(eq(folders.userId, user.id), inArray(folders.id, folderIds)));
+      .where(activeFolderWhere(user.id, inArray(folders.id, folderIds)));
     if (valid.length !== folderIds.length) return c.json({ error: 'One or more folders were not found' }, 400);
   }
   await db
@@ -164,7 +169,7 @@ noteRoutes.get('/recent', async (c) => {
   const rows = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.userId, user.id), eq(notes.type, 'note')))
+    .where(activeNoteWhere(user.id, eq(notes.type, 'note')))
     .orderBy(desc(notes.updatedAt))
     .limit(Number.isFinite(limit) && limit > 0 ? Math.min(limit, 50) : 10);
 
@@ -186,7 +191,7 @@ noteRoutes.get('/:noteId/tags', async (c) => {
   const [note] = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
   return c.json({ tags: await listNoteTags({ userId: user.id, noteId }) });
@@ -200,7 +205,7 @@ noteRoutes.put('/:noteId/tags', async (c) => {
   const [note] = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
   const body = (await c.req.json().catch(() => null)) as { tags?: string[] } | null;
@@ -283,7 +288,7 @@ noteRoutes.get('/:noteId/share-link', async (c) => {
   const [note] = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
 
@@ -299,7 +304,7 @@ noteRoutes.post('/:noteId/share-link', async (c) => {
   const [note] = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
 
@@ -345,7 +350,7 @@ noteRoutes.delete('/:noteId/share-link', async (c) => {
   const [note] = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, noteId), eq(notes.userId, user.id)))
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
 
@@ -516,6 +521,7 @@ noteRoutes.delete('/:noteId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  await db.delete(notes).where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, user.id)));
-  return c.json({ ok: true });
+  const result = await trashNote({ userId: user.id, noteId: c.req.param('noteId') });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ ok: true, ...result.value });
 });

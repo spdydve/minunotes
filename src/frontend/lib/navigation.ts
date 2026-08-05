@@ -16,6 +16,7 @@ export type NavigationDestination =
   | { kind: 'folder'; folderId: string }
   | { kind: 'note'; noteId: string }
   | { kind: 'templates' }
+  | { kind: 'trash' }
   | { kind: 'folder-settings'; folderId: string }
   | { kind: 'folder-template'; folderId: string }
   | { kind: 'api-access' }
@@ -28,7 +29,7 @@ export type NavigationItem = {
 };
 
 export type AppNavigationModel = {
-  section: 'home' | 'folders' | 'templates' | 'settings' | 'resources' | 'other';
+  section: 'home' | 'folders' | 'templates' | 'trash' | 'settings' | 'resources' | 'other';
   activeFolderId: string | null;
   breadcrumbs: NavigationItem[];
   mobileTitle: string;
@@ -156,6 +157,17 @@ export function buildAppNavigationModel({
       activeFolderId: null,
       breadcrumbs: [home, templates],
       mobileTitle: 'Templates',
+      parent: home,
+    };
+  }
+
+  if (pathname === '/trash') {
+    const trash: NavigationItem = { label: 'Trash', destination: { kind: 'trash' } };
+    return {
+      section: 'trash',
+      activeFolderId: null,
+      breadcrumbs: [home, trash],
+      mobileTitle: 'Trash',
       parent: home,
     };
   }

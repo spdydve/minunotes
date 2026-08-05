@@ -5,6 +5,7 @@ import { db } from '../db/client';
 import { folders, type Note, type NoteVersion, noteEvents, notes, noteVersions } from '../db/schema';
 import { hashMarkdown } from '../harness/hash';
 import { createId } from '../lib/id';
+import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from './links';
 
 export type NoteVersionReason = 'create' | 'autosave_checkpoint' | 'before_agent_edit' | 'before_restore' | 'manual';
@@ -115,7 +116,7 @@ export async function listNoteVersions(input: { userId: string; noteId: string; 
   const [note] = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId)))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
     .limit(1);
   if (!note) return null;
 
@@ -137,6 +138,13 @@ export async function listNoteVersions(input: { userId: string; noteId: string; 
 }
 
 export async function getNoteVersion(input: { userId: string; noteId: string; versionId: string }) {
+  const [note] = await db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
+    .limit(1);
+  if (!note) return null;
+
   const [version] = await db
     .select()
     .from(noteVersions)
@@ -161,7 +169,7 @@ export async function restoreNoteVersion(input: {
   const [current] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId)))
+    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
     .limit(1);
   if (!current) return { ok: false, status: 404, error: 'Note not found' } as const;
 
@@ -171,7 +179,7 @@ export async function restoreNoteVersion(input: {
   const [folder] = await db
     .select({ id: folders.id })
     .from(folders)
-    .where(and(eq(folders.id, version.folderId), eq(folders.userId, input.userId)))
+    .where(activeFolderWhere(input.userId, eq(folders.id, version.folderId)))
     .limit(1);
   if (!folder) return { ok: false, status: 404, error: 'Version folder no longer exists' } as const;
 

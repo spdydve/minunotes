@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 23; index += 1) {
+  for (let index = 0; index <= 24; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -143,7 +143,7 @@ describe('folder hierarchy', () => {
     expect(tooDeepResponse.status).toBe(400);
   });
 
-  it('toggles private folders and blocks deleting folders with children', async () => {
+  it('toggles private folders and moves folder subtrees to Trash', async () => {
     const { app } = await setupFolderApp();
 
     const parent = await createFolder(app, 'Parent');
@@ -159,7 +159,10 @@ describe('folder hierarchy', () => {
     expect(folder.isPrivate).toBe(true);
 
     const deleteResponse = await app.request(`/api/folders/${parent.id}`, { method: 'DELETE' });
-    expect(deleteResponse.status).toBe(400);
+    expect(deleteResponse.status).toBe(200);
+    await expect(deleteResponse.json()).resolves.toMatchObject({ ok: true, folderCount: 2, noteCount: 0 });
+    const listResponse = await app.request('/api/folders');
+    await expect(listResponse.json()).resolves.toEqual({ folders: [] });
   });
 
   it('moves folders to another parent and top level', async () => {

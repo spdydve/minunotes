@@ -105,8 +105,12 @@ function ApiAccessSettingsView() {
                 <DeleteConfirmDialog
                   label="API key"
                   warning="This API key will immediately lose access to all folders and cannot be restored."
-                  onConfirm={() => revoke.mutate(key.id)}
-                  trigger={<Button disabled={revoke.isPending}>Revoke</Button>}
+                  onConfirm={() => revoke.mutateAsync(key.id)}
+                  trigger={
+                    <span className="block rounded-md border border-[var(--notes-button-secondary-border)] bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)]">
+                      Revoke
+                    </span>
+                  }
                 />
               )}
             </div>
@@ -160,8 +164,12 @@ function ApiAccessSettingsView() {
                     <DeleteConfirmDialog
                       label="app"
                       warning="This app will be revoked and its connected app tokens will stop working."
-                      onConfirm={() => revokeOAuthClient.mutate(client.id)}
-                      trigger={<Button disabled={revokeOAuthClient.isPending}>Revoke</Button>}
+                      onConfirm={() => revokeOAuthClient.mutateAsync(client.id)}
+                      trigger={
+                        <span className="block rounded-md border border-[var(--notes-button-secondary-border)] bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)]">
+                          Revoke
+                        </span>
+                      }
                     />
                   )}
                 </div>
@@ -235,8 +243,12 @@ function ApiAccessSettingsView() {
                       <DeleteConfirmDialog
                         label="connected app"
                         warning="This app will immediately lose access to MinuNotes and cannot use existing tokens."
-                        onConfirm={() => revokeConnectedApp.mutate(authorization.id)}
-                        trigger={<Button disabled={revokeConnectedApp.isPending}>Revoke</Button>}
+                        onConfirm={() => revokeConnectedApp.mutateAsync(authorization.id)}
+                        trigger={
+                          <span className="block rounded-md border border-[var(--notes-button-secondary-border)] bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)]">
+                            Revoke
+                          </span>
+                        }
                       />
                     )}
                   </div>

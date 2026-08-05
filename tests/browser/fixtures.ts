@@ -88,6 +88,55 @@ export const browserFixture = {
     createdAt: now,
     updatedAt: now,
   } satisfies Note,
+  template: {
+    id: 'note_template',
+    folderId: 'folder_browser',
+    title: 'Browser Template',
+    content: '# Template',
+    documentType: 'markdown',
+    type: 'template',
+    isApiEditable: true,
+    updatedByActorType: 'user',
+    updatedByActorId: 'user_browser',
+    createdAt: now,
+    updatedAt: now,
+  } satisfies Note,
+  trashedNote: {
+    id: 'note_trashed',
+    folderId: 'folder_browser',
+    title: 'Recoverable Note',
+    documentType: 'markdown' as const,
+    type: 'note' as const,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: now,
+    originalFolderTitle: 'Browser tests',
+    originalFolderAvailable: true,
+  },
+  trashedTemplate: {
+    id: 'note_trashed_template',
+    folderId: 'folder_missing',
+    title: 'Recoverable Template',
+    documentType: 'markdown' as const,
+    type: 'template' as const,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: now,
+    originalFolderTitle: null,
+    originalFolderAvailable: false,
+  },
+  trashedFolder: {
+    id: 'folder_trashed',
+    parentFolderId: 'folder_missing',
+    title: 'Recoverable Folder',
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: now,
+    originalParentTitle: null,
+    originalParentAvailable: false,
+    descendantFolderCount: 2,
+    noteCount: 3,
+  },
   target: {
     id: 'note_target',
     folderId: 'folder_browser',
@@ -103,15 +152,31 @@ export const browserFixture = {
   } satisfies Note,
 };
 
-export async function mockBrowserApi(page: Page, options: { uploadFails?: boolean; folderCreateFails?: boolean } = {}) {
+export async function mockBrowserApi(
+  page: Page,
+  options: {
+    uploadFails?: boolean;
+    folderCreateFails?: boolean;
+    noteTrashFails?: boolean;
+    trashLoadFails?: boolean;
+    trashMutationFails?: boolean;
+    emptyTrash?: boolean;
+  } = {}
+) {
   const folders = [{ ...browserFixture.folder }, { ...browserFixture.childFolder }];
   const notes = new Map<string, Note>([
     [browserFixture.source.id, { ...browserFixture.source }],
     [browserFixture.linked.id, { ...browserFixture.linked }],
     [browserFixture.canvas.id, { ...browserFixture.canvas }],
+    [browserFixture.template.id, { ...browserFixture.template }],
     [browserFixture.target.id, { ...browserFixture.target }],
     [browserFixture.child.id, { ...browserFixture.child }],
   ]);
+  const trashNotes = options.emptyTrash
+    ? []
+    : [{ ...browserFixture.trashedNote }, { ...browserFixture.trashedTemplate }];
+  const trashFolders = options.emptyTrash ? [] : [{ ...browserFixture.trashedFolder }];
+  const trashMutationRequests: Array<{ method: string; path: string; body: unknown }> = [];
   const noteShareTokens = new Map<string, string>([
     [`note_share_${browserFixture.linked.id}`, browserFixture.linked.id],
     [`note_share_${browserFixture.target.id}`, browserFixture.target.id],
@@ -150,6 +215,82 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
       });
     }
 
+    if (path === '/trash' && method === 'GET') {
+      if (options.trashLoadFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
+      return json({ notes: trashNotes, folders: trashFolders });
+    }
+
+    const restoreTrashNoteMatch = path.match(/^\/trash\/notes\/(note_[a-zA-Z0-9_]+)\/restore$/);
+    if (restoreTrashNoteMatch && method === 'POST') {
+      const body = request.postDataJSON() as { folderId?: string };
+      trashMutationRequests.push({ method, path, body });
+      if (options.trashMutationFails) return json({ error: 'Trashed note not found' }, 404);
+      const index = trashNotes.findIndex((note) => note.id === restoreTrashNoteMatch[1]);
+      if (index < 0) return json({ error: 'Trashed note not found' }, 404);
+      const [trashed] = trashNotes.splice(index, 1);
+      const folderId = body.folderId ?? trashed.folderId;
+      const note: Note = {
+        id: trashed.id,
+        folderId,
+        title: trashed.title,
+        content: '# Restored',
+        documentType: trashed.documentType,
+        type: trashed.type,
+        isApiEditable: true,
+        updatedByActorType: 'user',
+        updatedByActorId: 'user_browser',
+        createdAt: trashed.createdAt,
+        updatedAt: now,
+      };
+      notes.set(note.id, note);
+      return json({ note, restoredToOriginalFolder: !body.folderId });
+    }
+
+    const purgeTrashNoteMatch = path.match(/^\/trash\/notes\/(note_[a-zA-Z0-9_]+)$/);
+    if (purgeTrashNoteMatch && method === 'DELETE') {
+      trashMutationRequests.push({ method, path, body: null });
+      if (options.trashMutationFails) return json({ error: 'Trashed note not found' }, 404);
+      const index = trashNotes.findIndex((note) => note.id === purgeTrashNoteMatch[1]);
+      if (index < 0) return json({ error: 'Trashed note not found' }, 404);
+      trashNotes.splice(index, 1);
+      return json({ ok: true, deletedAttachmentCount: 1 });
+    }
+
+    const restoreTrashFolderMatch = path.match(/^\/trash\/folders\/(folder_[a-zA-Z0-9_]+)\/restore$/);
+    if (restoreTrashFolderMatch && method === 'POST') {
+      trashMutationRequests.push({ method, path, body: request.postDataJSON() });
+      if (options.trashMutationFails) return json({ error: 'Trashed folder not found' }, 404);
+      const index = trashFolders.findIndex((folder) => folder.id === restoreTrashFolderMatch[1]);
+      if (index < 0) return json({ error: 'Trashed folder not found' }, 404);
+      const [trashed] = trashFolders.splice(index, 1);
+      const folder = {
+        id: trashed.id,
+        parentFolderId: null,
+        title: trashed.title,
+        isPrivate: false,
+        isAgentReadOnly: false,
+        createdAt: trashed.createdAt,
+        updatedAt: now,
+      };
+      folders.push(folder);
+      return json({ folder, restoredAtTopLevel: true, noteCount: trashed.noteCount });
+    }
+
+    const purgeTrashFolderMatch = path.match(/^\/trash\/folders\/(folder_[a-zA-Z0-9_]+)$/);
+    if (purgeTrashFolderMatch && method === 'DELETE') {
+      trashMutationRequests.push({ method, path, body: null });
+      if (options.trashMutationFails) return json({ error: 'Trashed folder not found' }, 404);
+      const index = trashFolders.findIndex((folder) => folder.id === purgeTrashFolderMatch[1]);
+      if (index < 0) return json({ error: 'Trashed folder not found' }, 404);
+      const [trashed] = trashFolders.splice(index, 1);
+      return json({
+        ok: true,
+        deletedFolderCount: trashed.descendantFolderCount + 1,
+        deletedNoteCount: trashed.noteCount,
+        deletedAttachmentCount: 0,
+      });
+    }
+
     if (path === '/folders' && method === 'GET') return json({ folders });
 
     if (path === '/folders' && method === 'POST') {
@@ -165,9 +306,39 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
       return json({ folder }, 201);
     }
 
+    const folderMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)$/);
+    if (folderMatch && method === 'DELETE') {
+      const rootId = folderMatch[1];
+      const deletedIds = new Set([rootId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const folder of folders) {
+          if (folder.parentFolderId && deletedIds.has(folder.parentFolderId) && !deletedIds.has(folder.id)) {
+            deletedIds.add(folder.id);
+            changed = true;
+          }
+        }
+      }
+      const deletedNoteIds = [...notes.values()].filter((note) => deletedIds.has(note.folderId)).map((note) => note.id);
+      for (const noteId of deletedNoteIds) notes.delete(noteId);
+      for (let index = folders.length - 1; index >= 0; index -= 1) {
+        if (deletedIds.has(folders[index].id)) folders.splice(index, 1);
+      }
+      return json({ ok: true, deletedAt: now, folderCount: deletedIds.size, noteCount: deletedNoteIds.length });
+    }
+
     const folderNotesMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)\/notes$/);
-    if (folderNotesMatch && method === 'GET')
-      return json({ notes: [...notes.values()].filter((note) => note.folderId === folderNotesMatch[1]) });
+    if (folderNotesMatch && method === 'GET') {
+      if (!folders.some((folder) => folder.id === folderNotesMatch[1])) return json({ error: 'Folder not found' }, 404);
+      const type = url.searchParams.get('type') === 'template' ? 'template' : 'note';
+      return json({
+        notes: [...notes.values()].filter((note) => note.folderId === folderNotesMatch[1] && note.type === type),
+      });
+    }
+
+    if (path === '/notes/templates' && method === 'GET')
+      return json({ templates: [...notes.values()].filter((note) => note.type === 'template') });
 
     if (path === `/folders/${browserFixture.folder.id}/share-link` && method === 'GET')
       return json({ shareLink: folderShareLink });
@@ -268,7 +439,9 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
 
     if (path === '/notes/recent' && method === 'GET')
       return json({
-        notes: [...notes.values()].map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
+        notes: [...notes.values()]
+          .filter((note) => note.type === 'note')
+          .map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
       });
 
     if (path === '/notes/move' && method === 'POST') {
@@ -314,6 +487,11 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
       const note = notes.get(noteMatch[1]);
       if (!note) return json({ error: 'Note not found' }, 404);
       if (method === 'GET') return json({ note, contentHash: `hash_${hashVersion}` });
+      if (method === 'DELETE') {
+        if (options.noteTrashFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
+        notes.delete(note.id);
+        return json({ ok: true, deletedAt: now });
+      }
       if (method === 'PATCH') {
         const body = request.postDataJSON() as Partial<Pick<Note, 'title' | 'content'>>;
         Object.assign(note, body, { updatedAt: now });
@@ -356,6 +534,9 @@ export async function mockBrowserApi(page: Page, options: { uploadFails?: boolea
   return {
     folders,
     notes,
+    trashNotes,
+    trashFolders,
+    trashMutationRequests,
     saveRequests,
     async expectSavedContent(content: string) {
       await expect.poll(() => saveRequests.at(-1)?.body.content).toBe(content);

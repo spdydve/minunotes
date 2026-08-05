@@ -26,7 +26,8 @@ export function NotesTable({
       const note = notes.find((item) => item.id === variables.noteId);
       if (!note) return;
       qc.invalidateQueries({ queryKey: queryKey ?? ['notes', note.folderId] });
-      qc.invalidateQueries({ queryKey: ['note', note.id] });
+      qc.invalidateQueries({ queryKey: ['notes', 'recent'] });
+      qc.removeQueries({ queryKey: ['note', note.id] });
       setSelectedIds((current) => {
         const next = new Set(current);
         next.delete(note.id);
@@ -133,7 +134,7 @@ export function NotesTable({
         <div className="flex justify-end">
           <NoteActionsPopover
             note={info.row.original}
-            onDelete={() => remove.mutate({ noteId: info.row.original.id })}
+            onDelete={() => remove.mutateAsync({ noteId: info.row.original.id })}
           />
         </div>
       ),
@@ -207,7 +208,7 @@ export function NotesTable({
                   </p>
                 </div>
               </div>
-              <NoteActionsPopover note={note} onDelete={() => remove.mutate({ noteId: note.id })} />
+              <NoteActionsPopover note={note} onDelete={() => remove.mutateAsync({ noteId: note.id })} />
             </div>
           </div>
         ))}

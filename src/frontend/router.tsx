@@ -15,6 +15,7 @@ import { apiAccessSettingsRoute } from './routes/settings.api-access';
 import { shareRoute } from './routes/share.$token';
 import { folderShareRoute } from './routes/share.folders.$token';
 import { templatesRoute } from './routes/templates';
+import { trashRoute } from './routes/trash';
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -23,6 +24,7 @@ const routeTree = rootRoute.addChildren([
   folderTemplateSettingsRoute,
   folderSettingsRoute,
   templatesRoute,
+  trashRoute,
   noteRoute,
   noteActivityRoute,
   authRoute,
