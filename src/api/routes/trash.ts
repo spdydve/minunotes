@@ -1,6 +1,7 @@
 import { type Context, Hono } from 'hono';
 import type { auth } from '../lib/auth';
 import {
+  listTrashedFolderContents,
   listTrashedFolders,
   listTrashedNotes,
   permanentlyDeleteTrashedFolder,
@@ -28,6 +29,14 @@ trashRoutes.get('/', async (c) => {
     listTrashedFolders({ userId: user.id }),
   ]);
   return c.json({ notes, folders });
+});
+
+trashRoutes.get('/folders/:folderId/contents', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const result = await listTrashedFolderContents({ userId: user.id, folderId: c.req.param('folderId') });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json(result.value);
 });
 
 trashRoutes.post('/notes/:noteId/restore', async (c) => {

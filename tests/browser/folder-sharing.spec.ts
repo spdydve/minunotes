@@ -39,6 +39,25 @@ test('moves selected notes from a folder list', async ({ page }) => {
   await expect(page.getByRole('link', { name: browserFixture.target.title })).toHaveCount(0);
 });
 
+test('moves selected notes to Trash from a folder list', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto(`/folders/${browserFixture.folder.id}`);
+
+  const table = page.locator('table');
+  await table.getByLabel(`Select ${browserFixture.source.title}`).check();
+  await table.getByLabel(`Select ${browserFixture.target.title}`).check();
+  await expect(page.getByText('2 notes selected')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Trash', exact: true }).click();
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog.getByRole('heading', { name: 'Move 2 items to Trash?' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Move to Trash' }).click();
+
+  await expect(page.getByText('2 notes selected')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: browserFixture.source.title })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: browserFixture.target.title })).toHaveCount(0);
+});
+
 test('keeps rendered table backgrounds constrained to the table width', async ({ page }) => {
   const api = await mockBrowserApi(page);
   api.notes.set(browserFixture.source.id, {

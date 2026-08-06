@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api, type Folder, type TrashedFolder, type TrashedNote } from '../lib/api';
+import { api, type Folder, type TrashedFolder, type TrashedFolderContents, type TrashedNote } from '../lib/api';
 import { DeleteConfirmDialog } from './delete-confirm-dialog';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
@@ -11,7 +11,7 @@ function deletedAtLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
-function noteKind(note: TrashedNote) {
+function noteKind(note: Pick<TrashedNote, 'type' | 'documentType'>) {
   if (note.type === 'template') return 'Template';
   if (note.documentType.startsWith('canvas.')) return 'Canvas';
   return 'Note';
@@ -26,6 +26,58 @@ function folderLocation(folder: TrashedFolder) {
   if (!folder.parentFolderId) return 'Top level';
   if (folder.originalParentAvailable && folder.originalParentTitle) return folder.originalParentTitle;
   return 'Original parent unavailable';
+}
+
+function FolderContentsTree({ contents }: { contents: TrashedFolderContents }) {
+  const childFolders = new Map<string, TrashedFolderContents['folders']>();
+  const folderNotes = new Map<string, TrashedFolderContents['notes']>();
+
+  for (const folder of contents.folders) {
+    if (folder.id === contents.rootFolderId || !folder.parentFolderId) continue;
+    const siblings = childFolders.get(folder.parentFolderId) ?? [];
+    siblings.push(folder);
+    childFolders.set(folder.parentFolderId, siblings);
+  }
+  for (const note of contents.notes) {
+    const siblings = folderNotes.get(note.folderId) ?? [];
+    siblings.push(note);
+    folderNotes.set(note.folderId, siblings);
+  }
+
+  const renderChildren = (folderId: string, ancestors: Set<string>) => {
+    const directNotes = folderNotes.get(folderId) ?? [];
+    const directFolders = childFolders.get(folderId) ?? [];
+    if (directNotes.length === 0 && directFolders.length === 0) return null;
+
+    return (
+      <ul className="ml-3 space-y-1 border-[var(--notes-border)] border-l pl-3">
+        {directFolders.map((folder) => {
+          const cyclic = ancestors.has(folder.id);
+          return (
+            <li key={folder.id}>
+              <div className="flex min-w-0 items-center gap-2 py-1 text-sm">
+                <span className="truncate font-medium">{folder.title}</span>
+                <span className="notes-muted text-xs">Folder</span>
+              </div>
+              {cyclic ? null : renderChildren(folder.id, new Set([...ancestors, folder.id]))}
+            </li>
+          );
+        })}
+        {directNotes.map((note) => (
+          <li key={note.id} className="flex min-w-0 items-center gap-2 py-1 text-sm">
+            <span className="truncate">{note.title}</span>
+            <span className="notes-muted text-xs">{noteKind(note)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  return (
+    renderChildren(contents.rootFolderId, new Set([contents.rootFolderId])) ?? (
+      <p className="notes-muted text-sm">This folder batch has no child items.</p>
+    )
+  );
 }
 
 type RestoreTarget = { note: TrashedNote; folderId: string };
@@ -44,6 +96,13 @@ export function TrashTable({
   const nav = useNavigate();
   const qc = useQueryClient();
   const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null);
+  const [contentsFolderId, setContentsFolderId] = useState<string | null>(null);
+  const folderContents = useQuery({
+    queryKey: ['trash', 'folders', contentsFolderId, 'contents'],
+    queryFn: () => api.trashedFolderContents(contentsFolderId as string),
+    enabled: Boolean(contentsFolderId),
+    retry: false,
+  });
 
   const refreshActiveContent = () => {
     qc.invalidateQueries({ queryKey: ['trash'] });
@@ -60,6 +119,7 @@ export function TrashTable({
     },
     onSuccess: (_result, input) => {
       refreshActiveContent();
+      if (input.kind === 'folder' && contentsFolderId === input.item.id) setContentsFolderId(null);
       if (input.kind === 'note') {
         setRestoreTarget(null);
         qc.removeQueries({ queryKey: ['note', input.item.id] });
@@ -77,6 +137,7 @@ export function TrashTable({
         : api.permanentlyDeleteTrashedFolder(input.item.id),
     onSuccess: (_result, input) => {
       refreshActiveContent();
+      if (input.kind === 'folder' && contentsFolderId === input.item.id) setContentsFolderId(null);
       if (input.kind === 'note') qc.removeQueries({ queryKey: ['note', input.item.id] });
     },
   });
@@ -120,41 +181,66 @@ export function TrashTable({
               const restoring =
                 restore.isPending && restore.variables?.kind === 'folder' && restore.variables.item.id === folder.id;
               return (
-                <li key={folder.id} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{folder.title}</p>
-                    <p className="notes-muted mt-1 text-sm">
-                      From {folderLocation(folder)} · Deleted {deletedAtLabel(folder.deletedAt)}
-                    </p>
-                    <p className="notes-muted mt-1 text-xs">
-                      {folder.descendantFolderCount} {folder.descendantFolderCount === 1 ? 'subfolder' : 'subfolders'} ·{' '}
-                      {folder.noteCount} {folder.noteCount === 1 ? 'note' : 'notes'}
-                    </p>
+                <li key={folder.id} className="p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{folder.title}</p>
+                      <p className="notes-muted mt-1 text-sm">
+                        From {folderLocation(folder)} · Deleted {deletedAtLabel(folder.deletedAt)}
+                      </p>
+                      <p className="notes-muted mt-1 text-xs">
+                        {folder.descendantFolderCount} {folder.descendantFolderCount === 1 ? 'subfolder' : 'subfolders'}{' '}
+                        · {folder.noteCount} {folder.noteCount === 1 ? 'note' : 'notes'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button
+                        aria-expanded={contentsFolderId === folder.id}
+                        aria-controls={`trash-folder-contents-${folder.id}`}
+                        onClick={() => setContentsFolderId((current) => (current === folder.id ? null : folder.id))}
+                      >
+                        {contentsFolderId === folder.id ? 'Hide contents' : 'View contents'}
+                      </Button>
+                      <Button
+                        aria-label={`Restore ${folder.title}`}
+                        disabled={restore.isPending || purge.isPending}
+                        onClick={() => {
+                          restore.reset();
+                          restore.mutate({ kind: 'folder', item: folder });
+                        }}
+                      >
+                        {restoring ? 'Restoring…' : 'Restore'}
+                      </Button>
+                      <DeleteConfirmDialog
+                        label={folder.title}
+                        heading={`Permanently delete ${folder.title}?`}
+                        warning={`This permanently deletes this folder batch, including ${folder.descendantFolderCount} subfolders and ${folder.noteCount} notes. This cannot be undone.`}
+                        actionLabel="Permanently delete"
+                        onConfirm={() => purge.mutateAsync({ kind: 'folder', item: folder })}
+                        trigger={
+                          <span className="block rounded-md border border-[var(--notes-button-destructive-border)] bg-[var(--notes-button-destructive-bg)] px-3 py-2 text-[var(--notes-button-destructive-text)] text-sm transition-colors hover:bg-[var(--notes-button-destructive-hover)]">
+                            Permanently delete
+                          </span>
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button
-                      aria-label={`Restore ${folder.title}`}
-                      disabled={restore.isPending || purge.isPending}
-                      onClick={() => {
-                        restore.reset();
-                        restore.mutate({ kind: 'folder', item: folder });
-                      }}
+                  {contentsFolderId === folder.id ? (
+                    <div
+                      id={`trash-folder-contents-${folder.id}`}
+                      className="mt-4 rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-3"
                     >
-                      {restoring ? 'Restoring…' : 'Restore'}
-                    </Button>
-                    <DeleteConfirmDialog
-                      label={folder.title}
-                      heading={`Permanently delete ${folder.title}?`}
-                      warning={`This permanently deletes this folder batch, including ${folder.descendantFolderCount} subfolders and ${folder.noteCount} notes. This cannot be undone.`}
-                      actionLabel="Permanently delete"
-                      onConfirm={() => purge.mutateAsync({ kind: 'folder', item: folder })}
-                      trigger={
-                        <span className="block rounded-md border border-[var(--notes-button-destructive-border)] bg-[var(--notes-button-destructive-bg)] px-3 py-2 text-[var(--notes-button-destructive-text)] text-sm transition-colors hover:bg-[var(--notes-button-destructive-hover)]">
-                          Permanently delete
-                        </span>
-                      }
-                    />
-                  </div>
+                      <p className="mb-2 font-medium text-sm">Contents of {folder.title}</p>
+                      {folderContents.isLoading ? <p className="notes-muted text-sm">Loading contents…</p> : null}
+                      {folderContents.error ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2" role="alert">
+                          <p className="text-red-600 text-sm">Unable to load folder contents.</p>
+                          <Button onClick={() => void folderContents.refetch()}>Try again</Button>
+                        </div>
+                      ) : null}
+                      {folderContents.data ? <FolderContentsTree contents={folderContents.data} /> : null}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}

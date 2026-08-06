@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   attachments,
@@ -72,6 +72,87 @@ export async function listTrashedNotes(input: { userId: string }) {
         ]
       : []
   );
+}
+
+export type TrashedFolderContents = {
+  rootFolderId: string;
+  folders: Array<{
+    id: string;
+    parentFolderId: string | null;
+    title: string;
+    deletedAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+  notes: Array<{
+    id: string;
+    folderId: string;
+    title: string;
+    documentType: 'markdown' | 'canvas.default' | 'canvas.mindmap';
+    type: 'note' | 'template';
+    deletedAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+};
+
+export async function listTrashedFolderContents(input: {
+  userId: string;
+  folderId: string;
+}): Promise<TrashOperationResult<TrashedFolderContents>> {
+  const [root] = await db
+    .select({ id: folders.id })
+    .from(folders)
+    .where(
+      and(
+        eq(folders.id, input.folderId),
+        eq(folders.userId, input.userId),
+        isNotNull(folders.deletedAt),
+        eq(folders.trashBatchId, input.folderId)
+      )
+    )
+    .limit(1);
+  if (!root) return { ok: false, status: 404, error: 'Trashed folder not found' };
+
+  const [folderRows, noteRows] = await Promise.all([
+    db
+      .select({
+        id: folders.id,
+        parentFolderId: folders.parentFolderId,
+        title: folders.title,
+        deletedAt: folders.deletedAt,
+        createdAt: folders.createdAt,
+        updatedAt: folders.updatedAt,
+      })
+      .from(folders)
+      .where(
+        and(eq(folders.userId, input.userId), isNotNull(folders.deletedAt), eq(folders.trashBatchId, input.folderId))
+      )
+      .orderBy(asc(folders.title)),
+    db
+      .select({
+        id: notes.id,
+        folderId: notes.folderId,
+        title: notes.title,
+        documentType: notes.documentType,
+        type: notes.type,
+        deletedAt: notes.deletedAt,
+        createdAt: notes.createdAt,
+        updatedAt: notes.updatedAt,
+      })
+      .from(notes)
+      .where(and(eq(notes.userId, input.userId), isNotNull(notes.deletedAt), eq(notes.trashBatchId, input.folderId)))
+      .orderBy(asc(notes.title)),
+  ]);
+
+  return {
+    ok: true,
+    value: {
+      rootFolderId: root.id,
+      folders: folderRows.flatMap((folder) => (folder.deletedAt ? [{ ...folder, deletedAt: folder.deletedAt }] : [])),
+      notes: noteRows.flatMap((note) => (note.deletedAt ? [{ ...note, deletedAt: note.deletedAt }] : [])),
+    },
+  };
 }
 
 export type TrashedFolderSummary = {
@@ -489,53 +570,65 @@ export async function permanentlyDeleteTrashedFolder(input: {
     : { ok: false, status: 404, error: 'Trashed folder not found' };
 }
 
+class NoteTrashStateChangedError extends Error {}
+
+export async function trashNotes(input: {
+  userId: string;
+  noteIds: string[];
+}): Promise<TrashOperationResult<{ deletedAt: Date; noteCount: number }>> {
+  const noteIds = [...new Set(input.noteIds)];
+  if (noteIds.length === 0) return { ok: false, status: 404, error: 'No notes were found' };
+
+  const current = await db
+    .select({ id: notes.id, userId: notes.userId, content: notes.content })
+    .from(notes)
+    .where(activeNoteWhere(input.userId, inArray(notes.id, noteIds)));
+  if (current.length !== noteIds.length) return { ok: false, status: 404, error: 'One or more notes were not found' };
+
+  const now = new Date();
+  try {
+    await db.transaction(async (tx) => {
+      const changed = await tx
+        .update(notes)
+        .set({ deletedAt: now, trashBatchId: null, updatedByActorType: 'user', updatedByActorId: null })
+        .where(activeNoteWhere(input.userId, inArray(notes.id, noteIds)))
+        .returning({ id: notes.id });
+      if (changed.length !== noteIds.length) throw new NoteTrashStateChangedError();
+
+      await tx
+        .update(noteShareLinks)
+        .set({ revokedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(noteShareLinks.userId, input.userId),
+            inArray(noteShareLinks.noteId, noteIds),
+            isNull(noteShareLinks.revokedAt)
+          )
+        );
+      await tx
+        .insert(noteEvents)
+        .values(
+          current.map((note) =>
+            noteTrashEvent(note, { eventType: 'trash', summary: 'Moved note to Trash', createdAt: now })
+          )
+        );
+    });
+  } catch (error) {
+    if (error instanceof NoteTrashStateChangedError)
+      return { ok: false, status: 409, error: 'Note trash state changed; refresh and try again' };
+    throw error;
+  }
+
+  return { ok: true, value: { deletedAt: now, noteCount: noteIds.length } };
+}
+
 export async function trashNote(input: {
   userId: string;
   noteId: string;
 }): Promise<TrashOperationResult<{ deletedAt: Date }>> {
-  const [current] = await db
-    .select({ id: notes.id, content: notes.content })
-    .from(notes)
-    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
-    .limit(1);
-  if (!current) return { ok: false, status: 404, error: 'Note not found' };
-
-  const now = new Date();
-  const contentHash = hashMarkdown(current.content);
-  const trashed = await db.transaction(async (tx) => {
-    const [note] = await tx
-      .update(notes)
-      .set({ deletedAt: now, trashBatchId: null, updatedByActorType: 'user', updatedByActorId: null })
-      .where(and(eq(notes.id, input.noteId), eq(notes.userId, input.userId), isNull(notes.deletedAt)))
-      .returning({ id: notes.id });
-    if (!note) return false;
-
-    await tx
-      .update(noteShareLinks)
-      .set({ revokedAt: now, updatedAt: now })
-      .where(
-        and(
-          eq(noteShareLinks.noteId, input.noteId),
-          eq(noteShareLinks.userId, input.userId),
-          isNull(noteShareLinks.revokedAt)
-        )
-      );
-    await tx.insert(noteEvents).values({
-      id: createId('note_event'),
-      noteId: input.noteId,
-      userId: input.userId,
-      actorType: 'user',
-      actorId: null,
-      eventType: 'trash',
-      summary: 'Moved note to Trash',
-      beforeHash: contentHash,
-      afterHash: contentHash,
-      createdAt: now,
-    });
-    return true;
-  });
-
-  return trashed ? { ok: true, value: { deletedAt: now } } : { ok: false, status: 404, error: 'Note not found' };
+  const result = await trashNotes({ userId: input.userId, noteIds: [input.noteId] });
+  if (!result.ok) return result.status === 404 ? { ok: false, status: 404, error: 'Note not found' } : result;
+  return { ok: true, value: { deletedAt: result.value.deletedAt } };
 }
 
 export async function restoreTrashedNote(input: {

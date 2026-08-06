@@ -143,6 +143,35 @@ describe('folder Trash lifecycle', () => {
     expect(folders.folders).toEqual([]);
     expect(trash.folders).toEqual([expect.objectContaining({ id: root.id, descendantFolderCount: 1, noteCount: 2 })]);
 
+    expect(
+      (
+        await app.request(`/api/trash/folders/${root.id}/contents`, {
+          headers: { 'x-user': 'b' },
+        })
+      ).status
+    ).toBe(404);
+    const contentsResponse = await app.request(`/api/trash/folders/${root.id}/contents`);
+    expect(contentsResponse.status).toBe(200);
+    const contents = (await contentsResponse.json()) as {
+      rootFolderId: string;
+      folders: Array<{ id: string; parentFolderId: string | null }>;
+      notes: Array<{ id: string; folderId: string; content?: string }>;
+    };
+    expect(contents.rootFolderId).toBe(root.id);
+    expect(contents.folders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: root.id }),
+        expect.objectContaining({ id: child.id, parentFolderId: root.id }),
+      ])
+    );
+    expect(contents.notes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: rootNote.id, folderId: root.id }),
+        expect.objectContaining({ id: childNote.id, folderId: child.id }),
+      ])
+    );
+    expect(contents.notes.every((note) => note.content === undefined)).toBe(true);
+
     const storedFolders = await db.select().from(schema.folders);
     const storedNotes = await db.select().from(schema.notes);
     expect(storedFolders.map((folder) => folder.trashBatchId)).toEqual([root.id, root.id]);

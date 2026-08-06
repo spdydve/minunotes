@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -85,10 +85,10 @@ async function createFolder(app: Hono, title: string, user = 'a') {
   return ((await response.json()) as { folder: { id: string } }).folder;
 }
 
-async function createNote(app: Hono, folderId: string, title = 'Recoverable note') {
+async function createNote(app: Hono, folderId: string, title = 'Recoverable note', user = 'a') {
   const response = await app.request(`/api/folders/${folderId}/notes`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-user': user },
     body: JSON.stringify({ title, content: '# Recoverable\n\nBody' }),
   });
   expect(response.status).toBe(201);
@@ -263,6 +263,52 @@ describe('note Trash lifecycle', () => {
       note: { id: note.id, folderId: destination.id },
       restoredToOriginalFolder: false,
     });
+  });
+
+  it('atomically moves selected notes to Trash and revokes their shares', async () => {
+    const { app, db, schema } = await setupTrashNotesApp();
+    const folder = await createFolder(app, 'Notes');
+    const first = await createNote(app, folder.id, 'First');
+    const second = await createNote(app, folder.id, 'Second');
+
+    for (const note of [first, second]) {
+      expect(
+        (
+          await app.request(`/api/notes/${note.id}/share-link`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          })
+        ).status
+      ).toBe(201);
+    }
+
+    const rejected = await app.request('/api/notes/trash', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: [first.id, 'note_missing'] }),
+    });
+    expect(rejected.status).toBe(404);
+    expect(
+      await db.select({ id: schema.notes.id }).from(schema.notes).where(isNull(schema.notes.deletedAt))
+    ).toHaveLength(2);
+
+    const response = await app.request('/api/notes/trash', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ noteIds: [first.id, second.id] }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, noteCount: 2 });
+
+    const [trashed, shares, events] = await Promise.all([
+      db.select().from(schema.notes).where(isNotNull(schema.notes.deletedAt)),
+      db.select().from(schema.noteShareLinks).where(isNotNull(schema.noteShareLinks.revokedAt)),
+      db.select().from(schema.noteEvents).where(eq(schema.noteEvents.eventType, 'trash')),
+    ]);
+    expect(trashed).toHaveLength(2);
+    expect(shares).toHaveLength(2);
+    expect(events).toHaveLength(2);
   });
 
   it('permanently deletes only trashed owner notes and removes attachment objects', async () => {

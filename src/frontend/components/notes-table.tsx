@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { api, type Note } from '../lib/api';
 import { MoveNotesDialog } from './move-notes-dialog';
 import { NoteActionsPopover } from './note-actions-popover';
+import { TrashNotesDialog } from './trash-notes-dialog';
 import { Button } from './ui/button';
 
 const columnHelper = createColumnHelper<Note>();
@@ -164,6 +165,7 @@ export function NotesTable({
               if (queryKey) qc.invalidateQueries({ queryKey });
             }}
           />
+          <TrashNotesDialog notes={selectedNotes} queryKey={queryKey} onTrashed={() => setSelectedIds(new Set())} />
         </div>
       </div>
     ) : null;

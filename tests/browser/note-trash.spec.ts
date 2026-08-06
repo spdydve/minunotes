@@ -39,6 +39,24 @@ test('moves notes to Trash from folder and Recent Notes tables', async ({ page }
   expect(fixture.notes.has(browserFixture.target.id)).toBe(false);
 });
 
+test('moves selected notes to Trash from Recent Notes', async ({ page }) => {
+  const fixture = await mockBrowserApi(page);
+  await page.goto('/');
+
+  const table = page.locator('table');
+  await table.getByLabel(`Select ${browserFixture.source.title}`).check();
+  await table.getByLabel(`Select ${browserFixture.target.title}`).check();
+  await page.getByRole('button', { name: 'Trash', exact: true }).click();
+
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog.getByRole('heading', { name: 'Move 2 items to Trash?' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Move to Trash' }).click();
+
+  await expect(page.getByText('2 notes selected')).toHaveCount(0);
+  expect(fixture.notes.has(browserFixture.source.id)).toBe(false);
+  expect(fixture.notes.has(browserFixture.target.id)).toBe(false);
+});
+
 test('keeps the confirmation open when moving to Trash fails', async ({ page }) => {
   const fixture = await mockBrowserApi(page, { noteTrashFails: true });
   await page.goto(`/notes/${browserFixture.source.id}`);

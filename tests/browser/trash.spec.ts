@@ -33,6 +33,26 @@ test('shows recoverable content separately from the active tree and blocks direc
   await expect(page.getByRole('heading', { name: 'Shared note unavailable' })).toBeVisible();
 });
 
+test('shows a trashed folder batch as a nested hierarchy on demand', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/trash');
+
+  const row = trashRow(page, browserFixture.trashedFolder.title);
+  await expect(page.getByText('Project overview')).toHaveCount(0);
+  await row.getByRole('button', { name: 'View contents' }).click();
+
+  const contents = row.getByText(`Contents of ${browserFixture.trashedFolder.title}`).locator('..');
+  await expect(contents.getByText('Project overview')).toBeVisible();
+  const research = contents.getByRole('listitem').filter({ hasText: 'Research' }).first();
+  await expect(research).toContainText('Competitor notes');
+  await expect(research).toContainText('Archive');
+  await expect(research).toContainText('Planning board');
+  await expect(contents.getByText('Canvas')).toBeVisible();
+
+  await row.getByRole('button', { name: 'Hide contents' }).click();
+  await expect(page.getByText('Project overview')).toHaveCount(0);
+});
+
 test('restores a note to its original folder and opens it', async ({ page }) => {
   const fixture = await mockBrowserApi(page);
   await page.goto('/trash');

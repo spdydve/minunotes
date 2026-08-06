@@ -50,7 +50,7 @@ A trashed ID returns `404` through active-content APIs. Search, folder listings,
 
 Trashing content atomically revokes affected public note and folder share links. Restoration never reactivates a revoked link; the owner must create a new share.
 
-Trash listing, restore, and purge routes require an authenticated owner session under `/internal/trash`. They are not included in the harness OpenAPI document or MCP tool registry.
+Trash listing, folder-batch inspection, restore, and purge routes require an authenticated owner session under `/internal/trash`. Folder inspection returns titles, types, timestamps, and hierarchy references for batch members without returning note content. These routes are not included in the harness OpenAPI document or MCP tool registry.
 
 Harness, OpenAPI, hosted MCP, local MCP, OAuth, and API-key clients:
 
@@ -74,16 +74,18 @@ Authenticated application routes:
 
 ```txt
 GET    /internal/trash
+GET    /internal/trash/folders/:folderId/contents
 POST   /internal/trash/notes/:noteId/restore
 DELETE /internal/trash/notes/:noteId
 POST   /internal/trash/folders/:folderId/restore
 DELETE /internal/trash/folders/:folderId
 ```
 
-The existing note and folder delete routes now move active content to Trash:
+The existing note and folder delete routes now move active content to Trash. The notes table also uses an atomic bulk action for selected notes, templates, and canvases:
 
 ```txt
 DELETE /internal/notes/:noteId
+POST   /internal/notes/trash
 DELETE /internal/folders/:folderId
 ```
 

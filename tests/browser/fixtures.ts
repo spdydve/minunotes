@@ -137,6 +137,67 @@ export const browserFixture = {
     descendantFolderCount: 2,
     noteCount: 3,
   },
+  trashedFolderContents: {
+    rootFolderId: 'folder_trashed',
+    folders: [
+      {
+        id: 'folder_trashed',
+        parentFolderId: 'folder_missing',
+        title: 'Recoverable Folder',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      },
+      {
+        id: 'folder_trashed_research',
+        parentFolderId: 'folder_trashed',
+        title: 'Research',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      },
+      {
+        id: 'folder_trashed_archive',
+        parentFolderId: 'folder_trashed_research',
+        title: 'Archive',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      },
+    ],
+    notes: [
+      {
+        id: 'note_trashed_overview',
+        folderId: 'folder_trashed',
+        title: 'Project overview',
+        documentType: 'markdown' as const,
+        type: 'note' as const,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      },
+      {
+        id: 'note_trashed_competitors',
+        folderId: 'folder_trashed_research',
+        title: 'Competitor notes',
+        documentType: 'markdown' as const,
+        type: 'note' as const,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      },
+      {
+        id: 'note_trashed_canvas',
+        folderId: 'folder_trashed_archive',
+        title: 'Planning board',
+        documentType: 'canvas.default' as const,
+        type: 'note' as const,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      },
+    ],
+  },
   target: {
     id: 'note_target',
     folderId: 'folder_browser',
@@ -219,6 +280,9 @@ export async function mockBrowserApi(
       if (options.trashLoadFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
       return json({ notes: trashNotes, folders: trashFolders });
     }
+
+    if (path === `/trash/folders/${browserFixture.trashedFolder.id}/contents` && method === 'GET')
+      return json(browserFixture.trashedFolderContents);
 
     const restoreTrashNoteMatch = path.match(/^\/trash\/notes\/(note_[a-zA-Z0-9_]+)\/restore$/);
     if (restoreTrashNoteMatch && method === 'POST') {
@@ -443,6 +507,13 @@ export async function mockBrowserApi(
           .filter((note) => note.type === 'note')
           .map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
       });
+
+    if (path === '/notes/trash' && method === 'POST') {
+      const body = request.postDataJSON() as { noteIds?: string[] };
+      const noteIds = body.noteIds ?? [];
+      for (const noteId of noteIds) notes.delete(noteId);
+      return json({ ok: true, deletedAt: now, noteCount: noteIds.length });
+    }
 
     if (path === '/notes/move' && method === 'POST') {
       const body = request.postDataJSON() as { noteIds?: string[]; targetFolderId?: string };

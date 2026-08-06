@@ -252,6 +252,15 @@ export type TrashedFolder = Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'cr
   descendantFolderCount: number;
   noteCount: number;
 };
+export type TrashedFolderContents = {
+  rootFolderId: string;
+  folders: Array<Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'createdAt' | 'updatedAt'> & { deletedAt: string }>;
+  notes: Array<
+    Pick<Note, 'id' | 'folderId' | 'title' | 'documentType' | 'type' | 'createdAt' | 'updatedAt'> & {
+      deletedAt: string;
+    }
+  >;
+};
 export type TrashResponse = { notes: TrashedNote[]; folders: TrashedFolder[] };
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type NoteVersionsResponse = { noteId: string; versions: NoteVersionSummary[] };
@@ -465,6 +474,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ noteIds, targetFolderId }),
     }),
+  trashNotes: (noteIds: string[]) =>
+    request<{ ok: true; deletedAt: string; noteCount: number }>('/notes/trash', {
+      method: 'POST',
+      body: JSON.stringify({ noteIds }),
+    }),
   searchNotes: (q: string, type: NoteType = 'note', limit?: number, tag?: string) =>
     request<{ notes: SearchNote[] }>(
       `/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
@@ -533,6 +547,7 @@ export const api = {
     }
   },
   trash: () => request<TrashResponse>('/trash'),
+  trashedFolderContents: (folderId: string) => request<TrashedFolderContents>(`/trash/folders/${folderId}/contents`),
   restoreTrashedNote: (noteId: string, folderId?: string) =>
     request<{ note: Note; restoredToOriginalFolder: boolean }>(`/trash/notes/${noteId}/restore`, {
       method: 'POST',

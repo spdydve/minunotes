@@ -18,7 +18,7 @@ import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
 import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from '../notes/tags';
 import { getNoteVersion, listNoteVersions, restoreNoteVersion, serializeVersion } from '../notes/versions';
-import { trashNote } from '../trash/operations';
+import { trashNote, trashNotes } from '../trash/operations';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 
 type Variables = {
@@ -424,6 +424,25 @@ noteRoutes.get('/:noteId/sections/:sectionId', async (c) => {
       content: result.value.note.content.slice(section.contentFrom, section.contentTo),
     },
   });
+});
+
+noteRoutes.post('/trash', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { noteIds?: string[] } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (!Array.isArray(body.noteIds) || body.noteIds.length === 0)
+    return c.json({ error: 'At least one note id is required' }, 400);
+  if (!body.noteIds.every((noteId) => typeof noteId === 'string' && noteId.length > 0))
+    return c.json({ error: 'Note ids must be non-empty strings' }, 400);
+
+  const noteIds = [...new Set(body.noteIds)];
+  if (noteIds.length > 100) return c.json({ error: 'No more than 100 notes may be trashed at once' }, 400);
+
+  const result = await trashNotes({ userId: user.id, noteIds });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ ok: true, ...result.value });
 });
 
 noteRoutes.post('/move', async (c) => {

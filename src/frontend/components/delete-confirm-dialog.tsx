@@ -7,6 +7,7 @@ export function DeleteConfirmDialog({
   heading,
   warning,
   actionLabel = 'Delete',
+  triggerLabel,
   requiresTypedConfirmation = true,
   onConfirm,
   trigger,
@@ -16,6 +17,7 @@ export function DeleteConfirmDialog({
   heading?: string;
   warning: string;
   actionLabel?: string;
+  triggerLabel?: string;
   requiresTypedConfirmation?: boolean;
   onConfirm: () => unknown | Promise<unknown>;
   trigger?: ReactNode;
@@ -67,7 +69,7 @@ export function DeleteConfirmDialog({
         </button>
       ) : (
         <DialogTrigger asChild>
-          <Button variant="destructive">{actionLabel}</Button>
+          <Button variant="destructive">{triggerLabel ?? actionLabel}</Button>
         </DialogTrigger>
       )}
       <DialogContent

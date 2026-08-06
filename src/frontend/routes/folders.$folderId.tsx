@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { FolderActionsPopover } from '../components/folder-actions-popover';
 import { MoveNotesDialog } from '../components/move-notes-dialog';
 import { NoteActionsPopover } from '../components/note-actions-popover';
+import { TrashNotesDialog } from '../components/trash-notes-dialog';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
@@ -79,10 +80,12 @@ function compareContentItemsByUpdatedDesc(a: ContentItem, b: ContentItem) {
 function FolderContentsTable({
   items,
   allFolders,
+  queryKey,
   onDeleteNote,
 }: {
   items: ContentItem[];
   allFolders: Folder[];
+  queryKey: unknown[];
   onDeleteNote: (note: Note) => unknown | Promise<unknown>;
 }) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
@@ -122,6 +125,7 @@ function FolderContentsTable({
             Clear
           </Button>
           <MoveNotesDialog notes={selectedNotes} onMoved={() => setSelectedNoteIds(new Set())} />
+          <TrashNotesDialog notes={selectedNotes} queryKey={queryKey} onTrashed={() => setSelectedNoteIds(new Set())} />
         </div>
       </div>
     ) : null;
@@ -463,6 +467,7 @@ function FolderView() {
         <FolderContentsTable
           items={items}
           allFolders={allFolders}
+          queryKey={['notes', folderId]}
           onDeleteNote={(note) => remove.mutateAsync({ noteId: note.id })}
         />
       ) : (
