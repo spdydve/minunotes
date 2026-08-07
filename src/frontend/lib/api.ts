@@ -242,11 +242,13 @@ export type TrashedNote = Pick<
   'id' | 'folderId' | 'title' | 'documentType' | 'type' | 'createdAt' | 'updatedAt'
 > & {
   deletedAt: string;
+  purgeAfter: string;
   originalFolderTitle: string | null;
   originalFolderAvailable: boolean;
 };
 export type TrashedFolder = Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'createdAt' | 'updatedAt'> & {
   deletedAt: string;
+  purgeAfter: string;
   originalParentTitle: string | null;
   originalParentAvailable: boolean;
   descendantFolderCount: number;
@@ -254,14 +256,24 @@ export type TrashedFolder = Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'cr
 };
 export type TrashedFolderContents = {
   rootFolderId: string;
-  folders: Array<Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'createdAt' | 'updatedAt'> & { deletedAt: string }>;
+  folders: Array<
+    Pick<Folder, 'id' | 'parentFolderId' | 'title' | 'createdAt' | 'updatedAt'> & {
+      deletedAt: string;
+      purgeAfter: string;
+    }
+  >;
   notes: Array<
     Pick<Note, 'id' | 'folderId' | 'title' | 'documentType' | 'type' | 'createdAt' | 'updatedAt'> & {
       deletedAt: string;
+      purgeAfter: string;
     }
   >;
 };
-export type TrashResponse = { notes: TrashedNote[]; folders: TrashedFolder[] };
+export type TrashResponse = {
+  notes: TrashedNote[];
+  folders: TrashedFolder[];
+  retention: { days: number; automaticPurgeEnabled: boolean };
+};
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type NoteVersionsResponse = { noteId: string; versions: NoteVersionSummary[] };
 export type DocumentEdit =

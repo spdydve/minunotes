@@ -9,6 +9,7 @@ import {
   restoreTrashedFolder,
   restoreTrashedNote,
 } from '../trash/operations';
+import { getTrashAutoPurgeMode, TRASH_RETENTION_DAYS } from '../trash/retention';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -28,7 +29,14 @@ trashRoutes.get('/', async (c) => {
     listTrashedNotes({ userId: user.id }),
     listTrashedFolders({ userId: user.id }),
   ]);
-  return c.json({ notes, folders });
+  return c.json({
+    notes,
+    folders,
+    retention: {
+      days: TRASH_RETENTION_DAYS,
+      automaticPurgeEnabled: getTrashAutoPurgeMode() === 'enabled',
+    },
+  });
 });
 
 trashRoutes.get('/folders/:folderId/contents', async (c) => {

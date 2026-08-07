@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   attachments,
@@ -21,6 +21,7 @@ import {
 import { createId } from '../lib/id';
 import { getObjectStorage } from '../storage';
 import { activeFolderWhere, activeNoteWhere } from './policy';
+import { getTrashPurgeAfter } from './retention';
 
 export type TrashOperationResult<T> =
   | { ok: true; value: T }
@@ -34,6 +35,7 @@ export type TrashedNoteSummary = {
   documentType: 'markdown' | 'canvas.default' | 'canvas.mindmap';
   type: 'note' | 'template';
   deletedAt: Date;
+  purgeAfter: Date;
   createdAt: Date;
   updatedAt: Date;
   originalFolderTitle: string | null;
@@ -49,6 +51,7 @@ export async function listTrashedNotes(input: { userId: string }) {
       documentType: notes.documentType,
       type: notes.type,
       deletedAt: notes.deletedAt,
+      purgeAfter: notes.purgeAfter,
       createdAt: notes.createdAt,
       updatedAt: notes.updatedAt,
       originalFolderTitle: folders.title,
@@ -67,6 +70,7 @@ export async function listTrashedNotes(input: { userId: string }) {
           {
             ...row,
             deletedAt: row.deletedAt,
+            purgeAfter: row.purgeAfter ?? getTrashPurgeAfter(row.deletedAt),
             originalFolderAvailable: activeFolderIds.has(row.folderId),
           } satisfies TrashedNoteSummary,
         ]
@@ -81,6 +85,7 @@ export type TrashedFolderContents = {
     parentFolderId: string | null;
     title: string;
     deletedAt: Date;
+    purgeAfter: Date;
     createdAt: Date;
     updatedAt: Date;
   }>;
@@ -91,6 +96,7 @@ export type TrashedFolderContents = {
     documentType: 'markdown' | 'canvas.default' | 'canvas.mindmap';
     type: 'note' | 'template';
     deletedAt: Date;
+    purgeAfter: Date;
     createdAt: Date;
     updatedAt: Date;
   }>;
@@ -121,6 +127,7 @@ export async function listTrashedFolderContents(input: {
         parentFolderId: folders.parentFolderId,
         title: folders.title,
         deletedAt: folders.deletedAt,
+        purgeAfter: folders.purgeAfter,
         createdAt: folders.createdAt,
         updatedAt: folders.updatedAt,
       })
@@ -137,6 +144,7 @@ export async function listTrashedFolderContents(input: {
         documentType: notes.documentType,
         type: notes.type,
         deletedAt: notes.deletedAt,
+        purgeAfter: notes.purgeAfter,
         createdAt: notes.createdAt,
         updatedAt: notes.updatedAt,
       })
@@ -149,8 +157,22 @@ export async function listTrashedFolderContents(input: {
     ok: true,
     value: {
       rootFolderId: root.id,
-      folders: folderRows.flatMap((folder) => (folder.deletedAt ? [{ ...folder, deletedAt: folder.deletedAt }] : [])),
-      notes: noteRows.flatMap((note) => (note.deletedAt ? [{ ...note, deletedAt: note.deletedAt }] : [])),
+      folders: folderRows.flatMap((folder) =>
+        folder.deletedAt
+          ? [
+              {
+                ...folder,
+                deletedAt: folder.deletedAt,
+                purgeAfter: folder.purgeAfter ?? getTrashPurgeAfter(folder.deletedAt),
+              },
+            ]
+          : []
+      ),
+      notes: noteRows.flatMap((note) =>
+        note.deletedAt
+          ? [{ ...note, deletedAt: note.deletedAt, purgeAfter: note.purgeAfter ?? getTrashPurgeAfter(note.deletedAt) }]
+          : []
+      ),
     },
   };
 }
@@ -160,6 +182,7 @@ export type TrashedFolderSummary = {
   parentFolderId: string | null;
   title: string;
   deletedAt: Date;
+  purgeAfter: Date;
   createdAt: Date;
   updatedAt: Date;
   originalParentTitle: string | null;
@@ -187,6 +210,7 @@ export async function listTrashedFolders(input: { userId: string }) {
           parentFolderId: root.parentFolderId,
           title: root.title,
           deletedAt: root.deletedAt as Date,
+          purgeAfter: root.purgeAfter ?? getTrashPurgeAfter(root.deletedAt as Date),
           createdAt: root.createdAt,
           updatedAt: root.updatedAt,
           originalParentTitle: root.parentFolderId ? (byId.get(root.parentFolderId)?.title ?? null) : null,
@@ -235,11 +259,12 @@ export async function trashFolder(input: {
     .where(activeNoteWhere(input.userId, inArray(notes.folderId, folderIds)));
   const noteIds = activeNotes.map((note) => note.id);
   const now = new Date();
+  const purgeAfter = getTrashPurgeAfter(now);
 
   const trashed = await db.transaction(async (tx) => {
     const changedFolders = await tx
       .update(folders)
-      .set({ deletedAt: now, trashBatchId: root.id })
+      .set({ deletedAt: now, purgeAfter, trashBatchId: root.id })
       .where(and(eq(folders.userId, input.userId), inArray(folders.id, folderIds), isNull(folders.deletedAt)))
       .returning({ id: folders.id });
     if (changedFolders.length !== folderIds.length) throw new Error('Folder trash state changed');
@@ -247,7 +272,13 @@ export async function trashFolder(input: {
     if (noteIds.length > 0) {
       const changedNotes = await tx
         .update(notes)
-        .set({ deletedAt: now, trashBatchId: root.id, updatedByActorType: 'user', updatedByActorId: null })
+        .set({
+          deletedAt: now,
+          purgeAfter,
+          trashBatchId: root.id,
+          updatedByActorType: 'user',
+          updatedByActorId: null,
+        })
         .where(and(eq(notes.userId, input.userId), inArray(notes.id, noteIds), isNull(notes.deletedAt)))
         .returning({ id: notes.id });
       if (changedNotes.length !== noteIds.length) throw new Error('Note trash state changed');
@@ -326,7 +357,7 @@ export async function restoreTrashedFolder(input: {
   const restored = await db.transaction(async (tx) => {
     const changedFolders = await tx
       .update(folders)
-      .set({ deletedAt: null, trashBatchId: null })
+      .set({ deletedAt: null, purgeAfter: null, trashBatchId: null })
       .where(
         and(eq(folders.userId, input.userId), isNotNull(folders.deletedAt), eq(folders.trashBatchId, input.folderId))
       )
@@ -346,6 +377,7 @@ export async function restoreTrashedFolder(input: {
         .update(notes)
         .set({
           deletedAt: null,
+          purgeAfter: null,
           trashBatchId: null,
           updatedByActorType: 'user',
           updatedByActorId: null,
@@ -374,6 +406,7 @@ export async function restoreTrashedFolder(input: {
 export async function permanentlyDeleteTrashedFolder(input: {
   userId: string;
   folderId: string;
+  purgeBefore?: Date;
 }): Promise<
   TrashOperationResult<{ deletedFolderCount: number; deletedNoteCount: number; deletedAttachmentCount: number }>
 > {
@@ -383,7 +416,11 @@ export async function permanentlyDeleteTrashedFolder(input: {
     .where(
       and(eq(folders.userId, input.userId), isNotNull(folders.deletedAt), eq(folders.trashBatchId, input.folderId))
     );
-  if (!batchFolders.some((folder) => folder.id === input.folderId))
+  const purgeBefore = input.purgeBefore;
+  if (
+    !batchFolders.some((folder) => folder.id === input.folderId) ||
+    (purgeBefore && batchFolders.some((folder) => !folder.purgeAfter || folder.purgeAfter > purgeBefore))
+  )
     return { ok: false, status: 404, error: 'Trashed folder not found' };
 
   const folderIds = batchFolders.map((folder) => folder.id);
@@ -453,7 +490,12 @@ export async function permanentlyDeleteTrashedFolder(input: {
       .update(folders)
       .set({ trashBatchId: claimId })
       .where(
-        and(eq(folders.userId, input.userId), inArray(folders.id, folderIds), eq(folders.trashBatchId, input.folderId))
+        and(
+          eq(folders.userId, input.userId),
+          inArray(folders.id, folderIds),
+          eq(folders.trashBatchId, input.folderId),
+          input.purgeBefore ? lte(folders.purgeAfter, input.purgeBefore) : undefined
+        )
       )
       .returning({ id: folders.id });
     if (claimedFolders.length !== folderIds.length) throw new Error('Folder purge state changed');
@@ -461,7 +503,14 @@ export async function permanentlyDeleteTrashedFolder(input: {
       const claimedNotes = await tx
         .update(notes)
         .set({ trashBatchId: claimId })
-        .where(and(eq(notes.userId, input.userId), inArray(notes.id, noteIds), eq(notes.trashBatchId, input.folderId)))
+        .where(
+          and(
+            eq(notes.userId, input.userId),
+            inArray(notes.id, noteIds),
+            eq(notes.trashBatchId, input.folderId),
+            input.purgeBefore ? lte(notes.purgeAfter, input.purgeBefore) : undefined
+          )
+        )
         .returning({ id: notes.id });
       if (claimedNotes.length !== noteIds.length) throw new Error('Note purge state changed');
     }
@@ -586,11 +635,12 @@ export async function trashNotes(input: {
   if (current.length !== noteIds.length) return { ok: false, status: 404, error: 'One or more notes were not found' };
 
   const now = new Date();
+  const purgeAfter = getTrashPurgeAfter(now);
   try {
     await db.transaction(async (tx) => {
       const changed = await tx
         .update(notes)
-        .set({ deletedAt: now, trashBatchId: null, updatedByActorType: 'user', updatedByActorId: null })
+        .set({ deletedAt: now, purgeAfter, trashBatchId: null, updatedByActorType: 'user', updatedByActorId: null })
         .where(activeNoteWhere(input.userId, inArray(notes.id, noteIds)))
         .returning({ id: notes.id });
       if (changed.length !== noteIds.length) throw new NoteTrashStateChangedError();
@@ -674,6 +724,7 @@ export async function restoreTrashedNote(input: {
       .set({
         folderId: destination.id,
         deletedAt: null,
+        purgeAfter: null,
         trashBatchId: null,
         updatedByActorType: 'user',
         updatedByActorId: null,
@@ -715,6 +766,7 @@ export async function restoreTrashedNote(input: {
 export async function permanentlyDeleteTrashedNote(input: {
   userId: string;
   noteId: string;
+  purgeBefore?: Date;
 }): Promise<TrashOperationResult<{ deletedAttachmentCount: number }>> {
   const claimId = createId('purge');
   const [claimed] = await db
@@ -725,7 +777,8 @@ export async function permanentlyDeleteTrashedNote(input: {
         eq(notes.id, input.noteId),
         eq(notes.userId, input.userId),
         isNotNull(notes.deletedAt),
-        isNull(notes.trashBatchId)
+        isNull(notes.trashBatchId),
+        input.purgeBefore ? lte(notes.purgeAfter, input.purgeBefore) : undefined
       )
     )
     .returning({ id: notes.id });

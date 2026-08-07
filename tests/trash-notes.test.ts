@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 24; index += 1) {
+  for (let index = 0; index <= 25; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -140,7 +140,9 @@ describe('note Trash lifecycle', () => {
         originalFolderTitle: string;
         originalFolderAvailable: boolean;
         deletedAt: string;
+        purgeAfter: string;
       }>;
+      retention: { days: number; automaticPurgeEnabled: boolean };
     };
     expect(trash.notes).toEqual([
       expect.objectContaining({
@@ -148,6 +150,7 @@ describe('note Trash lifecycle', () => {
         originalFolderTitle: 'Notes',
         originalFolderAvailable: true,
         deletedAt: expect.any(String),
+        purgeAfter: expect.any(String),
       }),
     ]);
 
@@ -157,6 +160,10 @@ describe('note Trash lifecycle', () => {
     const noteTagRows = await db.select().from(schema.noteTags).where(eq(schema.noteTags.noteId, note.id));
     const [shareRow] = await db.select().from(schema.noteShareLinks).where(eq(schema.noteShareLinks.noteId, note.id));
     expect(storedNote.deletedAt).toBeInstanceOf(Date);
+    expect(storedNote.purgeAfter).toBeInstanceOf(Date);
+    if (!storedNote.deletedAt || !storedNote.purgeAfter) throw new Error('Missing Trash retention deadline');
+    expect(storedNote.purgeAfter.getTime() - storedNote.deletedAt.getTime()).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(trash.retention).toEqual({ days: 30, automaticPurgeEnabled: false });
     expect(versions.length).toBeGreaterThan(0);
     expect(noteTagRows).toHaveLength(1);
     expect(events.map((event) => event.eventType)).toContain('trash');
@@ -198,6 +205,8 @@ describe('note Trash lifecycle', () => {
     expect((await app.request(`/api/share/${token}`)).status).toBe(404);
     expect(((await (await app.request('/api/trash')).json()) as { notes: unknown[] }).notes).toEqual([]);
 
+    const [restoredNote] = await db.select().from(schema.notes).where(eq(schema.notes.id, note.id));
+    expect(restoredNote).toMatchObject({ deletedAt: null, purgeAfter: null, trashBatchId: null });
     const events = await db.select().from(schema.noteEvents).where(eq(schema.noteEvents.noteId, note.id));
     expect(events.map((event) => event.eventType)).toEqual(expect.arrayContaining(['trash', 'restore_from_trash']));
   });

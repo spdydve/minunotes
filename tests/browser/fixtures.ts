@@ -15,6 +15,7 @@ type Note = {
 };
 
 const now = '2026-07-12T00:00:00.000Z';
+const purgeAfter = '2026-08-11T00:00:00.000Z';
 
 export const browserFixture = {
   folder: {
@@ -110,6 +111,7 @@ export const browserFixture = {
     createdAt: now,
     updatedAt: now,
     deletedAt: now,
+    purgeAfter,
     originalFolderTitle: 'Browser tests',
     originalFolderAvailable: true,
   },
@@ -122,6 +124,7 @@ export const browserFixture = {
     createdAt: now,
     updatedAt: now,
     deletedAt: now,
+    purgeAfter,
     originalFolderTitle: null,
     originalFolderAvailable: false,
   },
@@ -132,6 +135,7 @@ export const browserFixture = {
     createdAt: now,
     updatedAt: now,
     deletedAt: now,
+    purgeAfter,
     originalParentTitle: null,
     originalParentAvailable: false,
     descendantFolderCount: 2,
@@ -147,6 +151,7 @@ export const browserFixture = {
         createdAt: now,
         updatedAt: now,
         deletedAt: now,
+        purgeAfter,
       },
       {
         id: 'folder_trashed_research',
@@ -155,6 +160,7 @@ export const browserFixture = {
         createdAt: now,
         updatedAt: now,
         deletedAt: now,
+        purgeAfter,
       },
       {
         id: 'folder_trashed_archive',
@@ -163,6 +169,7 @@ export const browserFixture = {
         createdAt: now,
         updatedAt: now,
         deletedAt: now,
+        purgeAfter,
       },
     ],
     notes: [
@@ -175,6 +182,7 @@ export const browserFixture = {
         createdAt: now,
         updatedAt: now,
         deletedAt: now,
+        purgeAfter,
       },
       {
         id: 'note_trashed_competitors',
@@ -185,6 +193,7 @@ export const browserFixture = {
         createdAt: now,
         updatedAt: now,
         deletedAt: now,
+        purgeAfter,
       },
       {
         id: 'note_trashed_canvas',
@@ -195,6 +204,7 @@ export const browserFixture = {
         createdAt: now,
         updatedAt: now,
         deletedAt: now,
+        purgeAfter,
       },
     ],
   },
@@ -222,6 +232,7 @@ export async function mockBrowserApi(
     trashLoadFails?: boolean;
     trashMutationFails?: boolean;
     emptyTrash?: boolean;
+    automaticPurgeEnabled?: boolean;
   } = {}
 ) {
   const folders = [{ ...browserFixture.folder }, { ...browserFixture.childFolder }];
@@ -278,7 +289,11 @@ export async function mockBrowserApi(
 
     if (path === '/trash' && method === 'GET') {
       if (options.trashLoadFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
-      return json({ notes: trashNotes, folders: trashFolders });
+      return json({
+        notes: trashNotes,
+        folders: trashFolders,
+        retention: { days: 30, automaticPurgeEnabled: options.automaticPurgeEnabled ?? false },
+      });
     }
 
     if (path === `/trash/folders/${browserFixture.trashedFolder.id}/contents` && method === 'GET')

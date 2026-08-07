@@ -7,8 +7,18 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { EmptyState } from './ui/empty-state';
 
-function deletedAtLabel(value: string) {
+function dateTimeLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function purgeAfterLabel(value: string, automaticPurgeEnabled: boolean) {
+  const deadline = new Date(value);
+  const deadlineLabel = dateTimeLabel(value);
+  if (!automaticPurgeEnabled) return `Eligible after ${deadlineLabel}; automatic deletion is not active`;
+
+  const daysRemaining = Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (daysRemaining <= 0) return `Awaiting automatic permanent deletion · Scheduled ${deadlineLabel}`;
+  return `Permanently deleted in ${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'} · ${deadlineLabel}`;
 }
 
 function noteKind(note: Pick<TrashedNote, 'type' | 'documentType'>) {
@@ -88,10 +98,12 @@ export function TrashTable({
   notes,
   folders,
   activeFolders,
+  retention,
 }: {
   notes: TrashedNote[];
   folders: TrashedFolder[];
   activeFolders: Folder[];
+  retention: { days: number; automaticPurgeEnabled: boolean };
 }) {
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -159,6 +171,17 @@ export function TrashTable({
 
   return (
     <div className="space-y-8">
+      <div className="rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-4 text-sm">
+        {retention.automaticPurgeEnabled ? (
+          <p>Items in Trash are permanently deleted {retention.days} days after they were moved here.</p>
+        ) : (
+          <p>
+            Items become eligible for permanent deletion after {retention.days} days. Automatic deletion is not active
+            while the rollout is being evaluated.
+          </p>
+        )}
+      </div>
+
       {restoreError && !restoreTarget ? (
         <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-red-600 text-sm" role="alert">
           {restoreError}
@@ -186,7 +209,10 @@ export function TrashTable({
                     <div className="min-w-0">
                       <p className="truncate font-medium">{folder.title}</p>
                       <p className="notes-muted mt-1 text-sm">
-                        From {folderLocation(folder)} · Deleted {deletedAtLabel(folder.deletedAt)}
+                        From {folderLocation(folder)} · Deleted {dateTimeLabel(folder.deletedAt)}
+                      </p>
+                      <p className="notes-muted mt-1 text-xs">
+                        {purgeAfterLabel(folder.purgeAfter, retention.automaticPurgeEnabled)}
                       </p>
                       <p className="notes-muted mt-1 text-xs">
                         {folder.descendantFolderCount} {folder.descendantFolderCount === 1 ? 'subfolder' : 'subfolders'}{' '}
@@ -277,7 +303,10 @@ export function TrashTable({
                       </span>
                     </div>
                     <p className="notes-muted mt-1 text-sm">
-                      From {noteLocation(note)} · Deleted {deletedAtLabel(note.deletedAt)}
+                      From {noteLocation(note)} · Deleted {dateTimeLabel(note.deletedAt)}
+                    </p>
+                    <p className="notes-muted mt-1 text-xs">
+                      {purgeAfterLabel(note.purgeAfter, retention.automaticPurgeEnabled)}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">

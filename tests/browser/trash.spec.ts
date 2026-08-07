@@ -21,7 +21,12 @@ test('shows recoverable content separately from the active tree and blocks direc
   await expect(page.getByText(browserFixture.trashedTemplate.title)).toBeVisible();
   await expect(page.getByText('Original parent unavailable', { exact: false })).toBeVisible();
   await expect(page.getByText('Original folder unavailable', { exact: false })).toBeVisible();
-  await expect(page.getByText(/30 days|automatically deleted/i)).toHaveCount(0);
+  await expect(
+    page.getByText(
+      'Items become eligible for permanent deletion after 30 days. Automatic deletion is not active while the rollout is being evaluated.'
+    )
+  ).toBeVisible();
+  await expect(trashRow(page, browserFixture.trashedNote.title)).toContainText('automatic deletion is not active');
 
   await page.goto(`/notes/${browserFixture.trashedNote.id}`);
   await expect(page.getByRole('heading', { name: 'Note not found' })).toBeVisible();
@@ -31,6 +36,21 @@ test('shows recoverable content separately from the active tree and blocks direc
 
   await page.goto(`/share/note_share_${browserFixture.trashedNote.id}`);
   await expect(page.getByRole('heading', { name: 'Shared note unavailable' })).toBeVisible();
+});
+
+test('shows enabled 30-day automatic-deletion messaging', async ({ page }) => {
+  await mockBrowserApi(page, { automaticPurgeEnabled: true });
+  await page.goto('/trash');
+
+  await expect(
+    page.getByText('Items in Trash are permanently deleted 30 days after they were moved here.')
+  ).toBeVisible();
+  await expect(trashRow(page, browserFixture.trashedNote.title)).toContainText(
+    /Permanently deleted in|Awaiting automatic permanent deletion/
+  );
+  await expect(trashRow(page, browserFixture.trashedFolder.title)).toContainText(
+    /Permanently deleted in|Awaiting automatic permanent deletion/
+  );
 });
 
 test('shows a trashed folder batch as a nested hierarchy on demand', async ({ page }) => {

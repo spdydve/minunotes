@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 
-async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, from = 0, through = 24) {
+async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, from = 0, through = 25) {
   for (let index = from; index <= through; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
@@ -125,10 +125,27 @@ describe('Trash active-content policy', () => {
     `);
 
     await runMigrations(client, 24, 24);
-    const folder = await client.execute("select deleted_at, trash_batch_id from folders where id = 'folder_existing'");
-    const note = await client.execute("select deleted_at, trash_batch_id from notes where id = 'note_existing'");
-    expect(folder.rows[0]).toMatchObject({ deleted_at: null, trash_batch_id: null });
-    expect(note.rows[0]).toMatchObject({ deleted_at: null, trash_batch_id: null });
+    await client.executeMultiple(`
+      insert into folders (id, user_id, title, deleted_at, trash_batch_id)
+        values ('folder_trashed', 'user_existing', 'Trashed folder', unixepoch(), 'folder_trashed');
+      insert into notes (id, folder_id, user_id, title, content, deleted_at, trash_batch_id)
+        values ('note_trashed', 'folder_trashed', 'user_existing', 'Trashed note', 'Body', unixepoch(), 'folder_trashed');
+    `);
+    const minimumDeadline = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 - 5;
+
+    await runMigrations(client, 25, 25);
+    const folder = await client.execute(
+      "select deleted_at, trash_batch_id, purge_after from folders where id = 'folder_existing'"
+    );
+    const note = await client.execute(
+      "select deleted_at, trash_batch_id, purge_after from notes where id = 'note_existing'"
+    );
+    const trashedFolder = await client.execute("select purge_after from folders where id = 'folder_trashed'");
+    const trashedNote = await client.execute("select purge_after from notes where id = 'note_trashed'");
+    expect(folder.rows[0]).toMatchObject({ deleted_at: null, trash_batch_id: null, purge_after: null });
+    expect(note.rows[0]).toMatchObject({ deleted_at: null, trash_batch_id: null, purge_after: null });
+    expect(Number(trashedFolder.rows[0]?.purge_after)).toBeGreaterThanOrEqual(minimumDeadline);
+    expect(Number(trashedNote.rows[0]?.purge_after)).toBeGreaterThanOrEqual(minimumDeadline);
     client.close();
   });
 

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 24; index += 1) {
+  for (let index = 0; index <= 25; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -175,7 +175,15 @@ describe('folder Trash lifecycle', () => {
     const storedFolders = await db.select().from(schema.folders);
     const storedNotes = await db.select().from(schema.notes);
     expect(storedFolders.map((folder) => folder.trashBatchId)).toEqual([root.id, root.id]);
+    expect(storedFolders.every((folder) => folder.purgeAfter instanceof Date)).toBe(true);
+    expect(storedFolders.map((folder) => folder.purgeAfter?.getTime())).toEqual([
+      storedFolders[0]?.purgeAfter?.getTime(),
+      storedFolders[0]?.purgeAfter?.getTime(),
+    ]);
     expect(storedNotes.map((note) => note.trashBatchId)).toEqual([root.id, root.id]);
+    expect(storedNotes.every((note) => note.purgeAfter?.getTime() === storedFolders[0]?.purgeAfter?.getTime())).toBe(
+      true
+    );
     expect(storedNotes.map((note) => note.id)).toEqual(expect.arrayContaining([rootNote.id, childNote.id]));
     const events = await db.select().from(schema.noteEvents);
     expect(events.filter((event) => event.eventType === 'trash')).toHaveLength(2);
@@ -211,8 +219,18 @@ describe('folder Trash lifecycle', () => {
 
     const [storedChild] = await db.select().from(schema.folders).where(eq(schema.folders.id, child.id));
     const [storedNote] = await db.select().from(schema.notes).where(eq(schema.notes.id, note.id));
-    expect(storedChild).toMatchObject({ parentFolderId: root.id, deletedAt: null, trashBatchId: null });
-    expect(storedNote).toMatchObject({ folderId: child.id, deletedAt: null, trashBatchId: null });
+    expect(storedChild).toMatchObject({
+      parentFolderId: root.id,
+      deletedAt: null,
+      purgeAfter: null,
+      trashBatchId: null,
+    });
+    expect(storedNote).toMatchObject({
+      folderId: child.id,
+      deletedAt: null,
+      purgeAfter: null,
+      trashBatchId: null,
+    });
     const events = await db.select().from(schema.noteEvents).where(eq(schema.noteEvents.noteId, note.id));
     expect(events.map((event) => event.eventType)).toContain('restore_from_trash');
   });
@@ -267,6 +285,7 @@ describe('folder Trash lifecycle', () => {
       ).status
     ).toBe(200);
     expect((await app.request(`/api/folders/${child.id}`, { method: 'DELETE' })).status).toBe(200);
+    const [childBeforeParentTrash] = await db.select().from(schema.folders).where(eq(schema.folders.id, child.id));
     expect((await app.request(`/api/folders/${parent.id}`, { method: 'DELETE' })).status).toBe(200);
 
     const storageKey = `users/${users[0].id}/notes/${parentNote.id}/attachments/att_parent-image.png`;
@@ -335,11 +354,17 @@ describe('folder Trash lifecycle', () => {
     expect(storedChild).toMatchObject({
       parentFolderId: null,
       deletedAt: expect.any(Date),
+      purgeAfter: childBeforeParentTrash.purgeAfter,
       trashBatchId: child.id,
       isPrivate: true,
       isAgentReadOnly: true,
     });
-    expect(storedChildNote).toMatchObject({ folderId: child.id, deletedAt: expect.any(Date), trashBatchId: child.id });
+    expect(storedChildNote).toMatchObject({
+      folderId: child.id,
+      deletedAt: expect.any(Date),
+      purgeAfter: childBeforeParentTrash.purgeAfter,
+      trashBatchId: child.id,
+    });
     expect(storedMovedNote).toMatchObject({ folderId: outside.id, deletedAt: null });
     expect(movedVersions.length).toBeGreaterThan(0);
     expect(movedVersions.every((version) => version.folderId === outside.id)).toBe(true);

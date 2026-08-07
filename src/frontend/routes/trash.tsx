@@ -47,6 +47,7 @@ function TrashView() {
         notes={trash.data?.notes ?? []}
         folders={trash.data?.folders ?? []}
         activeFolders={folders.data?.folders ?? []}
+        retention={trash.data?.retention ?? { days: 30, automaticPurgeEnabled: false }}
       />
     </section>
   );

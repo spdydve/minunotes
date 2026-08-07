@@ -12,19 +12,20 @@ Content has three lifecycle states:
 
 1. **Active** — visible through the application and authorized integrations.
 2. **Recoverable** — stored with `deleted_at`, hidden from active reads, and listed in Trash.
-3. **Purged** — permanently removed after explicit typed confirmation.
+3. **Purge eligible** — still recoverable after its 30-day `purge_after` deadline until a cleanup run claims it.
+4. **Purged** — permanently removed manually after explicit typed confirmation or by an enabled retention worker.
 
-There is no automatic retention or scheduled purge. Recoverable content remains in Trash until a user restores or permanently deletes it.
+Every Trash operation assigns a durable deadline 30 days after deletion. Restoration clears the deadline, and trashing restored content starts a new 30-day period. Manual permanent deletion remains available before the deadline.
 
 ### Notes and templates
 
-An individually trashed note or template receives `deleted_at` and a null `trash_batch_id`. Its content, versions, activity, tags, links, template assignments, and attachment records remain stored while it is recoverable.
+An individually trashed note, template, or canvas receives `deleted_at`, `purge_after`, and a null `trash_batch_id`. Its content, versions, activity, tags, links, template assignments, and attachment records remain stored while it is recoverable.
 
 Restoration uses the original folder when that folder is active. If the original folder is missing or trashed, the user must select an active destination they own.
 
 ### Folder subtrees
 
-Trashing a folder computes its active descendant tree with cycle protection. The root folder ID becomes `trash_batch_id` for the root, active descendants, and active notes in that subtree.
+Trashing a folder computes its active descendant tree with cycle protection. The root folder ID becomes `trash_batch_id` for the root, active descendants, and active notes in that subtree. Every member receives the same deletion time and purge deadline.
 
 Restoring the batch preserves its internal hierarchy. If the root's original parent is unavailable, the root is restored at the top level.
 
@@ -64,7 +65,7 @@ This boundary prevents an integration token from becoming a recovery or destruct
 
 Attachment objects remain available only while their note is active. Trashing a note immediately blocks attachment reads without deleting stored bytes.
 
-Permanent deletion claims the trashed item, deletes its attachment objects from configured storage, and then removes database rows transactionally. If object deletion fails, the purge claim is released so the item remains recoverable and visible in Trash.
+Permanent deletion claims the trashed item, deletes its attachment objects from configured storage, and then removes database rows transactionally. Manual and scheduled cleanup use the same operations. If object deletion fails, the purge claim is released so the item remains recoverable, visible in Trash, and eligible for a later retry.
 
 Unused tags are removed after permanent note deletion. Attachments and metadata belonging to unrelated notes are preserved.
 
@@ -91,8 +92,18 @@ DELETE /internal/folders/:folderId
 
 Only permanent deletion requires typing `delete` in the application.
 
+## Retention worker and rollout
+
+A non-local daily `TrashCleanup` schedule invokes `src/api/trash/cleanup-handler.ts`. Runs are bounded by `TRASH_AUTO_PURGE_LIMIT` and controlled by `TRASH_AUTO_PURGE_MODE`:
+
+- `disabled` performs no candidate scan or deletion and is the default;
+- `dry-run` reports bounded candidate IDs and counts for eligible standalone items and folder-batch roots without deleting them;
+- `enabled` permanently deletes eligible items through the existing claimed purge operations.
+
+Standalone notes are processed before folder roots so an eligible note does not unnecessarily block its containing folder batch. Overlapping or stale claims fail safely, and one item failure does not stop the remainder of a bounded run. The authenticated Trash response exposes whether automatic deletion is enabled so the interface can distinguish a real deletion countdown from an eligibility date during rollout.
+
 ## Migration and operations
 
-Migration `0024_soft_starbolt.sql` adds nullable `deleted_at` and `trash_batch_id` columns and indexes. Existing rows migrate with null values and remain active.
+Migration `0024_soft_starbolt.sql` adds nullable `deleted_at` and `trash_batch_id` columns and indexes. Migration `0025_closed_brother_voodoo.sql` adds nullable `purge_after` columns and eligibility indexes. Active rows remain null; already-trashed rows receive a fresh deadline 30 days after migration application, preventing immediate deletion during rollout.
 
-Production migration, deployment, release, and any future retention worker remain separate approval-gated operations.
+Production migration, deployment, release, dry-run evaluation, and enabling automatic deletion remain separate approval-gated operations.
