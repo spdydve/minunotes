@@ -40,7 +40,7 @@ export type TrashedNoteSummary = {
   originalFolderAvailable: boolean;
 };
 
-export async function listTrashedNotes(input: { userId: string }) {
+export async function listTrashedNotes(input: { userId: string; offset?: number; limit?: number }) {
   const rows = await db
     .select({
       id: notes.id,
@@ -56,7 +56,9 @@ export async function listTrashedNotes(input: { userId: string }) {
     .from(notes)
     .leftJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
     .where(and(eq(notes.userId, input.userId), isNotNull(notes.deletedAt), isNull(notes.trashBatchId)))
-    .orderBy(desc(notes.deletedAt), desc(notes.updatedAt));
+    .orderBy(desc(notes.deletedAt), desc(notes.updatedAt), asc(notes.id))
+    .limit(input.limit ? input.limit + 1 : -1)
+    .offset(input.offset ?? 0);
 
   const activeFolders = await db.select({ id: folders.id }).from(folders).where(activeFolderWhere(input.userId));
   const activeFolderIds = new Set(activeFolders.map((folder) => folder.id));
@@ -168,7 +170,7 @@ export type TrashedFolderSummary = {
   noteCount: number;
 };
 
-export async function listTrashedFolders(input: { userId: string }) {
+export async function listTrashedFolders(input: { userId: string; offset?: number; limit?: number }) {
   const allFolders = await db.select().from(folders).where(eq(folders.userId, input.userId));
   const byId = new Map(allFolders.map((folder) => [folder.id, folder]));
   const activeFolders = await db.select({ id: folders.id }).from(folders).where(activeFolderWhere(input.userId));
@@ -196,7 +198,8 @@ export async function listTrashedFolders(input: { userId: string }) {
           noteCount: batchNotes.filter((note) => note.trashBatchId === root.id).length,
         }) satisfies TrashedFolderSummary
     )
-    .sort((left, right) => right.deletedAt.getTime() - left.deletedAt.getTime());
+    .sort((left, right) => right.deletedAt.getTime() - left.deletedAt.getTime() || left.id.localeCompare(right.id))
+    .slice(input.offset ?? 0, input.limit ? (input.offset ?? 0) + input.limit + 1 : undefined);
 }
 
 function noteTrashEvent(

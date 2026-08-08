@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Save, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type Note } from '../lib/api';
+import { api, type Note, type NoteListItem } from '../lib/api';
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -35,7 +35,7 @@ export function NoteDetailsDialog({
   onOpenChange,
   onNoteUpdated,
 }: {
-  note: Note;
+  note: NoteListItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNoteUpdated?: (response: { note: Note; contentHash: string }) => void;

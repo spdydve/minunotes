@@ -1,395 +1,165 @@
-# Trash and recovery implementation plan
+# Harness API evaluation plan
+
+## Goals
+
+- Add a Postman Collection v2.1 generated from the harness OpenAPI document, with configurable API URL and `X-API-Key` variables plus useful request examples/scripts for evaluation.
+- Reduce discovery/search payloads so agents receive metadata first and explicitly expand a note only through the existing read/lines/section endpoints.
+- Preserve useful matched context for information-finding searches without repeating full note metadata in every match.
+
+## Proposed changes
+
+1. **Compact discovery responses**
+   - Add response mappers/types for compact folders and notes.
+   - Make `GET /v1/harness/notes/search` and `GET /v1/harness/notes/orphans` return compact note metadata, never note content.
+   - Make `GET /v1/harness/folders` return only integration-relevant folder metadata (no owner/database fields).
+   - Keep explicit `GET /v1/harness/notes/{noteId}`, `/lines`, and `/sections/{sectionId}` as the expansion paths.
+
+2. **Lean line-search responses**
+   - Keep line text and requested context for `search-lines` because it is the targeted information-retrieval path.
+   - Remove repeated hash/size/line-count fields from each cross-note match; retain note identity and location so the agent can expand the selected note explicitly.
+   - Keep single-note line search metadata only where it is useful to follow up safely.
+
+3. **OpenAPI and docs/tests**
+   - Update schemas/descriptions to accurately distinguish compact discovery records from full note reads.
+   - Add route tests covering absence of `content` and owner-only fields, and line-search compactness.
+   - Update the portable API skill/docs with the search-then-expand workflow.
+
+4. **Postman collection**
+   - Add a checked-in generated collection artifact covering the OpenAPI harness endpoints, grouped by tags.
+   - Add a repeatable generation script that imports the local OpenAPI object and emits the collection, avoiding hand-maintained endpoint drift.
+   - Include collection variables for `baseUrl`, `apiKey`, `folderId`, `noteId`, `sectionId`, `nodeId`, `targetNoteId`, `baseHash`, and `shareToken`; include safe example bodies and a minimal smoke-test flow.
+
+## Files expected to change/create
+
+- `src/api/routes/harness.ts`
+- `src/api/harness/commands.ts`
+- `src/api/openapi/harness.ts`
+- `tests/openapi.test.ts` and/or a focused harness response test
+- `docs/skills/minunotes-harness-api/SKILL.md`
+- `docs/skills/minunotes-harness/SKILL.md` if the portable tool guidance needs parallel wording
+- `docs/frontend`/resource documentation only if the public API docs need updating
+- `scripts/generate-postman-collection.ts`
+- `postman/minunotes-harness.postman_collection.json`
+- `package.json` (generation script)
+- `plan.md`
+
+## Verification
+
+- Run focused harness/OpenAPI tests, including response-shape assertions.
+- Run the Postman generation command and verify the checked-in collection is reproducible and valid JSON.
+- Run `pnpm exec biome check --write` on changed source/JSON/TS files.
+- Run `pnpm typecheck` and the relevant Vitest tests.
+
+## Implementation status
+
+Approved and implemented.
+
+- [x] Compact folder, note-search, and orphan responses.
+- [x] Preserve explicit full-note, line-range, outline, and section expansion paths.
+- [x] Remove repeated cross-note line-search hashes, sizes, and line counts while retaining match context.
+- [x] Update OpenAPI schemas/descriptions and route regression coverage.
+- [x] Update tool-first and curl/API skills.
+- [x] Add the generated Postman collection and repeatable `pnpm postman:generate` command.
+
+## Verification record
+
+- Focused Vitest tests pass for note links, harness folder access, and OpenAPI behavior.
+- `pnpm typecheck` passes.
+- Postman generation completes and emits valid Collection v2.1 JSON.
+- Biome changed-file check completed.
+
+# Follow-up plan: paginated retrieval and compact internal lists
 
 ## Goal
 
-Replace immediate hard deletion of MinuNotes notes, templates, and folders with a recoverable Trash workflow while preserving authorization boundaries, portable Markdown, versions, activity, tags, links, and attachments.
+Prevent large collections from producing unnecessarily expensive agent or application responses while preserving simple retrieval workflows. The harness will use opaque cursor pagination; the authenticated internal API will use conventional page/offset pagination.
 
-## Execution contract
+## Phase 1 — Cursor pagination for the harness
 
-### Objective
+### Contract
 
-- Move notes, templates, and folder subtrees to Trash instead of physically deleting them.
-- Let the owner restore trashed content or permanently delete it from Trash.
-- Ensure trashed content is inaccessible from normal application, public-share, harness, MCP, OAuth, and API-key surfaces.
-- Explicitly clean up attachment objects during permanent deletion.
+- Add optional `limit` and opaque `cursor` parameters to high-volume harness discovery endpoints.
+- Return the existing array fields plus `pageInfo: { hasMore, nextCursor }`; return `nextCursor: null` when exhausted.
+- Encode the query, filters, authorization-relevant scope, sort position, and a version marker inside the cursor so cursors cannot be reused for a different search or scope.
+- Do not return total counts; they add work and are not needed for agent retrieval.
+- Keep compact note/folder/tag metadata and line-search context from the completed work.
 
-### Definition of done
+### Endpoints
 
-- Active-content queries consistently exclude trashed notes and folders.
-- A user can trash and restore a note or template.
-- A user can trash and restore a folder subtree without first deleting children.
-- Trash has a dedicated authenticated route and sidebar destination.
-- Public links stop working immediately when their note or folder is trashed and do not reactivate after restore.
-- Permanent deletion is available only from Trash and requires typed confirmation.
-- Permanent deletion removes associated attachment objects as well as database records.
-- Existing authorization, folder hierarchy, version history, and editor behavior remain intact.
-- Required unit, integration, browser, type, formatting, and build checks pass.
+- `GET /v1/harness/folders`
+- `GET /v1/harness/tags`
+- `GET /v1/harness/notes/search`
+- `GET /v1/harness/notes/orphans`
+- `GET /v1/harness/notes/search-lines`
 
-### Constraints
+Targeted reads (`read note`, `read lines`, `outline`, and `section`) remain explicit expansion operations and do not need collection pagination. Single-note line search can retain its bounded `limit` until a real use case requires paging through one document.
 
-- Keep Markdown and canvas source formats unchanged.
-- Do not expose delete, restore, or purge operations through harness, MCP, OAuth, or API-key tools in this milestone.
-- Preserve note versions and events while an item is in Trash.
-- Preserve tags, link records, template assignments, and attachments while recoverable.
-- Do not silently reactivate revoked public links after restore.
-- Do not add scheduled automatic purge in the first release; show retention language only after a cleanup schedule exists.
-- Keep changes phase-bounded and review each phase before advancing.
+### Implementation checklist
 
-### Product defaults to implement
-
-- Note/template action label: `Move to Trash`.
-- Folder action moves its active subtree to Trash.
-- Normal trash actions do not require typing `delete`; permanent deletion does.
-- Restore uses the original folder/parent when it is active.
-- If a note's original folder is unavailable, require the user to choose an active destination folder.
-- If a folder root's original parent is unavailable, restore that root at the top level and explain why.
-- Trashing revokes applicable note and folder share links.
-- Restoring does not recreate or reactivate those links.
-- Automatic 30-day purge is deferred until manual Trash behavior is proven.
-
-## Baseline findings
-
-- `DELETE /notes/:noteId` currently hard-deletes a note and returns success without checking whether a row existed.
-- `DELETE /folders/:folderId` hard-deletes notes and then the folder; it blocks folders with direct children and is not expressed as one reusable domain operation.
-- Foreign-key cascades currently remove note versions, events, shares, tags, assignments, links, and attachment metadata.
-- Incoming note links use `ON DELETE SET NULL`; recoverable deletion must instead hide trashed targets without destroying the relationship.
-- Attachment object storage is not explicitly cleaned when a note/folder row cascades away, so current hard deletion can orphan stored files.
-- All active note/folder queries currently assume that every row is visible; filtering is distributed across routes, harness commands, link resolution, sharing, and folder-access helpers.
-- UI confirmation always requires typing `delete`, closes before mutation success, and has limited pending/error treatment.
-- Harness and MCP do not currently expose note/folder deletion.
-
-## Proposed data model
-
-Add nullable Trash metadata to notes and folders:
-
-- `deleted_at` — when the item entered Trash.
-- `trash_batch_id` — shared identifier for items moved together as a folder subtree; null for an individually trashed note/template.
-
-Behavior:
-
-- Individual note/template trash sets only its `deleted_at`.
-- Folder trash computes the active descendant subtree and marks its folders and active notes with one batch ID.
-- Existing independently trashed descendants are not absorbed into a later batch.
-- Restore updates only the selected note or the selected folder batch.
-- Active queries require `deleted_at IS NULL` and an active folder.
-- Permanent folder purge preserves separately trashed descendant roots by detaching them before deleting the selected batch.
-
-Indexes:
-
-- Notes by user/deletion time and trash batch.
-- Folders by user/deletion time and trash batch.
-
-## API shape
-
-Retain `DELETE` as the user-facing move-to-Trash action for compatibility:
-
-- `DELETE /notes/:noteId` — move an active note/template to Trash.
-- `DELETE /folders/:folderId` — move an active folder subtree to Trash.
-- `GET /trash` — list recoverable note/template items and folder trash roots.
-- `POST /trash/notes/:noteId/restore` — restore one note/template; accepts a destination folder when the original is unavailable.
-- `DELETE /trash/notes/:noteId` — permanently delete one trashed note/template.
-- `POST /trash/folders/:folderId/restore` — restore one folder batch.
-- `DELETE /trash/folders/:folderId` — permanently delete one folder batch.
-
-All mutation routes must:
-
-- Require the authenticated owner.
-- Return 404 for missing, inaccessible, or wrong-state items.
-- Use shared domain functions rather than route-local delete statements.
-- Return enough restored location data for deterministic navigation and cache invalidation.
-
-## Phase 1 — Data model and active-content policy
-
-### Files to create
-
-- `drizzle/0024_*.sql` — generated Trash metadata migration and indexes.
-- `src/api/trash/policy.ts` — shared active-row predicates/helpers.
-- `tests/trash-policy.test.ts` — focused policy and migration-level behavior.
-
-### Files to modify
-
-- `src/api/db/schema.ts`
-- `drizzle/meta/_journal.json` and generated snapshot metadata
-- `src/api/harness/commands.ts`
-- `src/api/lib/folder-access.ts`
-- `src/api/routes/notes.ts`
-- `src/api/routes/folders.ts`
-- `src/api/routes/harness.ts`
-- `src/api/routes/attachments.ts`
-- `src/api/routes/share.ts`
-- `src/api/notes/links.ts`
-- `src/api/notes/tags.ts`
-- `src/api/notes/versions.ts`
-- `src/api/shared/wikilink-resolver.ts`
-
-### Checklist
-
-- [x] Add nullable Trash columns and indexes without changing existing rows.
-- [x] Define shared active note/folder predicates.
-- [x] Exclude trashed rows from normal reads, lists, search, line search, templates, recents, tags, links, versions, events, attachments, and folder access.
-- [x] Ensure notes in trashed/inactive folders cannot be read through direct IDs.
-- [x] Exclude trashed content from public note/folder shares and shared wikilink resolution.
-- [x] Keep harness, MCP, OAuth, and API-key behavior read-safe without exposing Trash operations.
-- [x] Add regression tests for direct access and every major query category.
+- [x] Add shared cursor encoding/decoding and query-fingerprint validation.
+- [x] Apply stable deterministic ordering and fetch one item beyond the requested limit to compute `hasMore`.
+- [x] Preserve folder/API-key/OAuth filtering before pagination and never let cursors bypass scope checks.
+- [x] Update Hono routes, command helpers, OpenAPI schemas, MCP input schemas/client adapters, Postman examples, and both harness skills.
+- [x] Add tests for first page, continuation, exhaustion, invalid/mismatched cursors, query changes, filter changes, and scoped authorization.
 
 ### Verification
 
-- `pnpm exec biome check --write <changed-files>`
-- `pnpm typecheck`
-- Targeted tests: harness, folder access, links, tags, versions, shares, shared wikilinks, attachments, and Trash policy.
-- `pnpm db:generate` output review; do not apply production migrations.
+- Root and MCP focused tests, OpenAPI assertions, cursor reproducibility tests, typecheck, Biome, and Postman generation.
 
-### Human gate
+## Phase 2 — Paginated and compact internal API
 
-- Review the migration and active-content query audit before adding mutation behavior.
+### Contract
 
-## Phase 2 — Note and template Trash lifecycle
+- Add `page` and bounded `limit` parameters to internal list/search endpoints.
+- Return existing collection properties for compatibility plus `page`, `limit`, and `hasMore`; do not require expensive total counts initially.
+- Introduce compact internal list DTOs that omit full `content` and other fields not needed by list/table/search UI. Keep full note content on explicit note reads.
+- Use deterministic ordering with an explicit tie-breaker, such as `updatedAt DESC, id ASC` or `title ASC, id ASC`.
 
-### Files to create
+### Backend endpoints to audit and update
 
-- `src/api/trash/operations.ts` — owner-scoped trash, restore, and purge operations.
-- `src/api/routes/trash.ts` — authenticated Trash listing and lifecycle routes.
-- `tests/trash-notes.test.ts`
+- `GET /api/folders`
+- `GET /api/folders/:folderId/notes`
+- `GET /api/folders/:folderId/templates`
+- `GET /api/notes/search`
+- `GET /api/notes/recent`
+- `GET /api/notes/orphans`
+- `GET /api/notes/templates`
+- `GET /api/trash` and folder-trash contents where large collections are possible
 
-### Files to modify
+Also audit tags, backlinks, events, versions, and shared-folder assembly separately; add pagination only where the response can grow materially and the UI or consumer can use it.
 
-- `src/api/index.ts` — mount Trash routes.
-- `src/api/routes/notes.ts` — replace hard delete with move-to-Trash.
-- `src/api/db/schema.ts` only if event typing is extended.
-- `src/frontend/lib/api.ts`
-- `src/frontend/components/note-actions-popover.tsx`
-- `src/frontend/routes/notes.$noteId.tsx`
-- `src/frontend/components/notes-table.tsx`
-- `src/frontend/routes/folders.$folderId.tsx`
-- `src/frontend/routes/templates.tsx`
-- `src/frontend/components/delete-confirm-dialog.tsx` or a new shared confirmation primitive.
+### Implementation checklist
 
-### Checklist
-
-- [x] Move active note/template rows to Trash instead of deleting them.
-- [x] Revoke active note share links in the same domain operation.
-- [x] Preserve versions, events, tags, links, assignments, and attachments.
-- [x] Restore to the original active folder; require a valid owner-selected destination when it is unavailable.
-- [x] Permanently purge only trashed notes/templates.
-- [x] Delete attachment objects before removing attachment/database rows.
-- [x] Return 404 for wrong-state and cross-user operations.
-- [x] Update labels, pending states, mutation errors, cache invalidation, and post-action navigation.
-- [x] Evaluate a short Undo opportunity; defer it because there is no notification framework and the dedicated Trash UI will provide reliable restoration.
+- [x] Define shared page/limit parsing and compact list serializers.
+- [x] Change database selects to avoid loading full note bodies for list responses where possible.
+- [x] Preserve fields required by note actions, folder tables, search dialog, recent notes, templates, and Trash UI.
+- [x] Update API client response types and frontend queries/components to consume `hasMore` and navigate or load additional pages.
+- [x] Keep explicit note reads and editor navigation behavior unchanged.
+- [x] Add regression tests proving list responses omit `content` and page boundaries are correct.
 
 ### Verification
 
-- Unit/integration tests for trash, repeat trash, restore, fallback restore, purge, share revocation, link visibility, version preservation, and attachment cleanup.
-- Browser coverage for move-to-Trash from editor, folder table, Recent Notes, and Templates.
-- Existing note editor autosave/navigation-blocking tests remain green.
+- Backend route tests, frontend/browser coverage for folder navigation/search/recent/templates/Trash, typecheck, Biome, and production build.
 
-### Human gate
+## Phase 3 — Consumer and documentation rollout
 
-- Review note/template behavior before enabling folder subtree operations.
+- [x] Update frontend API contracts.
+- [x] Update harness/API skills with cursor continuation examples and guidance not to fetch every page blindly.
+- [x] Update Postman collection generation with endpoint-specific cursor examples.
+- [x] Add a migration/compatibility note for clients that currently assume an unpaginated array.
+- [x] Measure response sizes and query behavior before and after on a representative large folder (50 synthetic 10 KB notes: 514,591 bytes full vs 13,077 bytes compact, 97.5% reduction).
 
-## Phase 3 — Folder subtree Trash lifecycle
+## Evaluation notes and intentional exceptions
 
-### Files to modify
+- Approved for implementation.
+- `GET /internal/folders` remains unpaginated because the sidebar, hierarchy validation, destination picker, and inherited privacy/read-only state require a complete tree. Paginating it would create incomplete parent paths and more client requests, not less work.
+- Folder-template assignments and trashed-folder contents remain unpaginated because they are relationship/hierarchy payloads; their note records are compact, and selected template bodies now use explicit note reads.
+- Tags, backlinks, events, and versions keep their existing bounded or relationship-specific behavior. They should only gain pagination with a corresponding consumer workflow.
+- Cross-note line search still has to inspect candidate bodies because the database has no full-text index. The response is bounded and cursor-paginated; adding FTS is a separate storage/indexing project.
+- Orphan discovery computes the active graph before slicing pages to preserve correct orphan semantics. It selects compact metadata only; a graph/index redesign would be needed to make this fully keyset-driven.
 
-- `src/api/trash/operations.ts`
-- `src/api/routes/trash.ts`
-- `src/api/routes/folders.ts`
-- `src/api/lib/folder-access.ts`
-- `src/frontend/lib/api.ts`
-- `src/frontend/components/folder-actions-popover.tsx`
-- `src/frontend/routes/folders.$folderId.settings.tsx`
-- `src/frontend/components/folder-sidebar.tsx`
-- `tests/folders.test.ts`
-- `tests/harness-folder-access.test.ts`
-- `tests/folder-share-links.test.ts`
-- `tests/trash-folders.test.ts`
+## Remaining verification
 
-### Checklist
-
-- [x] Compute an owner-scoped active descendant tree with cycle protection.
-- [x] Trash the selected folder, active descendants, and active notes as one batch.
-- [x] Remove the current “delete children first” restriction for move-to-Trash.
-- [x] Revoke active folder and note shares affected by the subtree.
-- [x] Restore the batch with original hierarchy intact.
-- [x] Restore the root at top level when its original parent is missing or trashed.
-- [x] Preserve independently trashed descendants as separate Trash entries.
-- [x] Detach separate trashed descendants safely before permanent parent-batch purge.
-- [x] Delete attachment objects for every note being permanently purged.
-- [x] Keep private/read-only/API-key inheritance boundaries unchanged for active folders.
-- [x] Invalidate folder, recent-note, template, navigation, and active-note caches.
-
-### Verification
-
-- Tests for nested trees, mixed active/trashed descendants, restore fallback, share revocation, unauthorized access, attachment cleanup, and permanent purge.
-- Browser coverage for nested folder trash, disappearance from sidebar, restore, and purge.
-
-### Human gate
-
-- Review subtree and edge-case behavior before exposing permanent deletion broadly.
-
-## Phase 4 — Trash interface and permanent deletion
-
-### Files to create
-
-- `src/frontend/routes/trash.tsx`
-- `src/frontend/components/trash-table.tsx` or focused note/folder Trash list components.
-- `tests/browser/trash.spec.ts`
-
-### Files to modify
-
-- `src/frontend/router.tsx`
-- `src/frontend/components/folder-sidebar.tsx`
-- `src/frontend/lib/navigation.ts`
-- `tests/frontend-navigation.test.ts`
-- `src/frontend/components/delete-confirm-dialog.tsx`
-- `src/frontend/styles.css` only if existing tokens/utilities are insufficient.
-
-### Checklist
-
-- [x] Add a Trash destination near Templates/settings without mixing trashed folders into the active folder tree.
-- [x] Show notes/templates and folder trash roots with original location and deletion time.
-- [x] Provide Restore and Permanently delete actions.
-- [x] Require typing `delete` only for permanent deletion.
-- [x] Show pending states and actionable errors without closing dialogs prematurely.
-- [x] Navigate predictably after restore.
-- [x] Add accessible empty, loading, and error states.
-- [x] Add responsive desktop/mobile behavior and keyboard/focus coverage.
-- [x] Do not advertise automatic retention until a scheduled purge exists.
-
-### Verification
-
-- Browser tests for note, template, nested folder, restore fallback, permanent deletion, direct-route 404, mobile Trash access, keyboard focus, and public-share invalidation.
-- Confirm unknown and stale Trash IDs fail safely.
-
-## Phase 5 — Documentation, cleanup, and release readiness
-
-### Files to create
-
-- `docs/implementation/trash-and-recovery.md`
-
-### Files to modify
-
-- `docs/implementation/README.md`
-- User-facing resource documentation if Trash behavior needs inclusion.
-- `plan.md` phase status ledger during implementation.
-
-### Checklist
-
-- [x] Document lifecycle, security behavior, restore fallback, link behavior, share revocation, and attachment purge.
-- [x] Document that agent/harness Trash operations remain out of scope.
-- [x] Review all remaining direct `db.delete(notes)` and `db.delete(folders)` calls.
-- [x] Review all note/folder selects for active-content predicates.
-- [x] Confirm no generated test artifacts remain.
-- [x] Add the completed feature to `MinuNotes — Unreleased` after implementation approval.
-
-### Final verification
-
-- `pnpm exec biome check --write <all changed files>`
-- `pnpm typecheck`
-- `pnpm test`
-- `pnpm test:browser`
-- `pnpm build`
-- `git diff --check`
-- Review generated migration SQL and metadata.
-- Run local migration against a populated development fixture and verify existing rows remain active.
-- Do not deploy, migrate production, commit, tag, or release without explicit approval.
-
-## Expected file inventory
-
-### New
-
-- Generated `drizzle/0024_*.sql` and metadata snapshot
-- `src/api/trash/policy.ts`
-- `src/api/trash/operations.ts`
-- `src/api/routes/trash.ts`
-- `src/frontend/routes/trash.tsx`
-- Focused Trash UI components as needed
-- `tests/trash-policy.test.ts`
-- `tests/trash-notes.test.ts`
-- `tests/trash-folders.test.ts`
-- `tests/browser/trash.spec.ts`
-- `docs/implementation/trash-and-recovery.md`
-
-### Existing areas expected to change
-
-- Database schema and generated migration metadata
-- API route mounting and note/folder/trash/share/attachment routes
-- Harness commands, folder access, tags, versions, links, and shared wikilink resolution
-- Frontend API types, router, navigation model/sidebar, action menus, tables, editor and folder routes
-- Relevant unit/integration/browser tests and implementation documentation index
-
-## Explicitly out of scope
-
-- Agent/API-key/MCP delete or restore tools.
-- Trash sharing or public recovery links.
-- Collaborative deletion approval.
-- Scheduled automatic purge and retention workers.
-- Account deletion changes.
-- Export/backup implementation.
-- Generic undo/notification framework.
-- Changes to Markdown, canvas, or MinuEditor document formats.
-
-## Approval and phase status
-
-- [x] Existing delete-flow audit completed.
-- [x] Product defaults proposed and approved.
-- [x] Detailed implementation plan approved.
-- [x] Phase 1 started.
-- [x] Phase 1 reviewed.
-- [x] Phase 2 started.
-- [x] Phase 2 reviewed.
-- [x] Phase 3 started.
-- [x] Phase 3 reviewed.
-- [x] Phase 4 started.
-- [x] Phase 4 reviewed.
-- [x] Phase 5 completed and release-ready.
-
-## Phase status ledger
-
-- Phase 1 — Complete.
-  - Added recoverable-delete metadata and indexes through migration `0024_soft_starbolt`.
-  - Added shared hierarchy-aware active-content predicates and applied them across application, integration, sharing, metadata, links, tags, versions, and attachment reads.
-  - Trashed link targets remain stored but serialize as unresolved; trashed link sources do not count toward backlinks or orphan status.
-  - Added migration and cross-surface regression coverage in `tests/trash-policy.test.ts` and advanced migration fixtures through `0024`.
-  - Verification: Biome completed on changed TypeScript files with existing warnings only; typecheck passed; 189/189 unit/integration tests passed; production build passed with the existing large-chunk advisory; `git diff --check` passed.
-  - Human gate: Phase 1 was accepted when Phase 2 was started.
-- Phase 2 — Complete.
-  - Replaced note/template hard deletion with owner-scoped move-to-Trash operations and immediate share revocation.
-  - Added authenticated Trash listing, restore, and permanent-delete endpoints without exposing lifecycle mutations to harness, MCP, OAuth, or API keys.
-  - Preserved versions, events, tags, links, assignments, and attachments while recoverable; recorded Trash and restore activity events.
-  - Added claimed permanent purge with explicit attachment-object deletion and unused-tag cleanup.
-  - Updated note actions to use simple `Move to Trash` confirmation, async pending/error handling, cache invalidation, and deterministic post-delete navigation.
-  - Added backend lifecycle coverage in `tests/trash-notes.test.ts` and browser coverage for editor, folder, Recent Notes, Templates, and mutation failures in `tests/browser/note-trash.spec.ts`.
-  - Verification: Biome completed on changed files with existing warnings only; typecheck passed; 194/194 unit/integration tests passed; 38/38 targeted browser tests passed; production build passed with the existing large-chunk advisory; `git diff --check` passed.
-  - Decision: short Undo was deferred until the dedicated Trash interface rather than introducing a generic notification framework.
-  - Human gate: Phase 2 was accepted when Phase 3 was started.
-- Phase 3 — Complete.
-  - Replaced folder hard deletion with owner-scoped subtree batching across active descendants and notes; folders no longer need children removed first.
-  - Added folder Trash summaries, subtree restore, top-level fallback restore, and permanent folder-batch purge endpoints.
-  - Revoked affected note and folder shares while preserving recoverable versions, events, tags, links, assignments, permissions, and attachments.
-  - Preserved separately trashed child subtrees during parent purge, including inherited private and agent-read-only boundaries after detachment.
-  - Blocked parent purge while standalone trashed notes still reference the subtree, preventing foreign-key cascades from destroying recoverable notes.
-  - Rehomed attachment metadata and version snapshots belonging to notes moved outside a purged subtree so unrelated active content remains intact.
-  - Added attachment purge claims with rollback on storage failure, broad frontend cache invalidation, and simple `Move to Trash` folder confirmations.
-  - Added six folder lifecycle integration tests in `tests/trash-folders.test.ts`, updated folder behavior coverage, and added nested subtree browser coverage in `tests/browser/folder-trash.spec.ts`.
-  - Verification: Biome completed on changed files with existing warnings only; typecheck passed; 200/200 unit/integration tests passed; 28/28 navigation and Trash browser tests passed, including 5/5 final focused Trash tests; production build passed with the existing large-chunk advisory; `git diff --check` passed.
-  - Sequencing note: browser restore and permanent-purge flows remain for Phase 4 because those controls belong to the dedicated Trash interface; Phase 3 covers them through integration tests.
-  - Human gate: Phase 3 was accepted when Phase 4 was started.
-- Phase 4 — Complete.
-  - Added the authenticated `/trash` route, route-aware breadcrumbs/title, and desktop/mobile sidebar destination without mixing deleted folders into the active tree.
-  - Added responsive folder-root and note/template lists with item type, original-location availability, deletion time, and subtree counts.
-  - Added deterministic restore navigation, including active-folder destination selection for notes/templates whose original folder is unavailable and top-level folder fallback.
-  - Added typed `delete` confirmation only for permanent deletion, pending labels, in-dialog mutation errors, stale-ID safety, and attachment/subtree warnings.
-  - Rebuilt the shared confirmation dialog on Radix Dialog for focus trapping, Escape behavior, trigger focus restoration, and pending-state dismissal protection; updated revocation triggers to preserve valid interactive markup and async errors.
-  - Added accessible loading, retryable error, empty, and no-destination states; no automatic-retention promise is shown.
-  - Added `tests/browser/trash.spec.ts` with eight browser cases covering note/template/folder restore, fallback, destination selection, note and nested-folder purge, direct-route/public-share denial, mobile access, keyboard focus, stale mutations, empty state, and load failure.
-  - Verification: Biome completed on Phase 4 files with existing class-order warnings only; typecheck passed; 200/200 unit/integration tests passed; final focused Trash browser run passed 13/13 and navigation run passed 23/23; production build passed with the existing large-chunk advisory; `git diff --check` passed.
-  - Human gate: Phase 4 was accepted when Phase 5 was started.
-- Phase 5 — Complete and release-ready.
-  - Added `docs/implementation/trash-and-recovery.md` and indexed the lifecycle, restore fallback, security, share revocation, attachment purge, migration, and internal endpoint behavior.
-  - Audited all direct note/folder deletes; only permanent purge operations in `src/api/trash/operations.ts` hard-delete notes or folders.
-  - Audited note/folder selects across routes, harness commands, metadata, links, versions, sharing, and Trash operations; active surfaces use shared active-content predicates while raw deleted-row access remains isolated to Trash lifecycle operations.
-  - Documented the active-content and owner-only Trash boundary in project/global harness skills, direct API guidance, in-app resources, OpenAPI descriptions, the MCP package, and agent integration guidance.
-  - Kept Trash listing, restore, and purge absent from harness, OpenAPI, hosted MCP, local MCP, OAuth tools, and API-key tools; added tests that enforce the absence and confirm trashed-content read/write denial.
-  - Removed generated Playwright result artifacts and confirmed migration `0024_soft_starbolt.sql` remains the only schema delta; populated-fixture migration coverage confirms existing rows remain active.
-  - Verification: Biome completed across 57 changed code files with existing class-order warnings only; root and MCP typechecks passed; 200/200 unit/integration tests passed; full browser suite passed 55/55; root and MCP builds passed with the existing web large-chunk advisory; `pnpm db:generate` reported no schema changes; `git diff --check` passed.
-  - Human gate: implementation approval was recorded when the user requested committing all completed work; `MinuNotes — Unreleased` was updated in note `note_26227aa114ee4ef4bfd9d782c7d528f4`.
+- [x] Full root and MCP test suites.
+- [x] Final Biome changed-file pass, typecheck, production build, and reproducible Postman generation.
+- [x] Compatibility note and representative response/query measurement.

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createRoute, useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
 import { NotesTable } from '../components/notes-table';
+import { PaginationControls } from '../components/pagination-controls';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
 import { api } from '../lib/api';
@@ -9,10 +11,11 @@ import { rootRoute } from './__root';
 function TemplatesView() {
   const nav = useNavigate();
   const qc = useQueryClient();
+  const [page, setPage] = useState(1);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
   const templates = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => api.templates().then((result) => result.templates),
+    queryKey: ['templates', page],
+    queryFn: () => api.templates(page),
   });
   const create = useMutation({
     mutationFn: async () => {
@@ -44,7 +47,7 @@ function TemplatesView() {
     <section className="mx-auto w-full max-w-5xl">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Templates</h2>
+          <h2 className="font-semibold text-xl">Templates</h2>
           <p className="notes-muted mt-1 text-sm">Reusable markdown notes for creating new notes.</p>
         </div>
         <Button onClick={() => create.mutate()} disabled={create.isPending}>
@@ -52,17 +55,22 @@ function TemplatesView() {
         </Button>
       </div>
       {create.error ? (
-        <p className="mb-4 text-sm text-red-500">
+        <p className="mb-4 text-red-500 text-sm">
           {create.error instanceof Error ? create.error.message : 'Unable to create template'}
         </p>
       ) : null}
-      {templates.data?.length ? (
-        <NotesTable notes={templates.data} queryKey={['templates']} />
+      {templates.data?.templates.length ? (
+        <NotesTable notes={templates.data.templates} queryKey={['templates']} />
       ) : (
         <EmptyState title="No templates yet">
           <p>Create your first template to reuse note structure and content.</p>
         </EmptyState>
       )}
+      <PaginationControls
+        page={templates.data?.page ?? page}
+        hasMore={templates.data?.hasMore ?? false}
+        onPageChange={setPage}
+      />
     </section>
   );
 }

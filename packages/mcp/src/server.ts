@@ -30,11 +30,11 @@ function toolResult(data: unknown) {
 
 export type NotesMcpClient = {
   folders: {
-    list: () => Promise<unknown>;
+    list: (input?: { limit?: number; cursor?: string }) => Promise<unknown>;
     create: (input: { title: string; parentFolderId?: string }) => Promise<unknown>;
   };
   notes: {
-    search: (query: string) => Promise<unknown>;
+    search: (input: { query: string; tag?: string; limit?: number; cursor?: string }) => Promise<unknown>;
     get: (noteId: string) => Promise<unknown>;
     create: (folderId: string, input: { title?: string; content?: string }) => Promise<unknown>;
     edit: (noteId: string, edits: DocumentEdit[], baseHash?: string) => Promise<unknown>;
@@ -45,6 +45,7 @@ export type NotesMcpClient = {
       context?: number;
       limit?: number;
       caseSensitive?: boolean;
+      cursor?: string;
     }) => Promise<unknown>;
     lines: (noteId: string, input: { from?: number; to?: number }) => Promise<unknown>;
     searchNoteLines: (
@@ -96,7 +97,7 @@ export type NotesMcpClient = {
     removeNoteLink: (noteId: string, nodeId: string, baseHash: string) => Promise<unknown>;
   };
   tags: {
-    list: () => Promise<unknown>;
+    list: (input?: { limit?: number; cursor?: string }) => Promise<unknown>;
   };
 };
 
@@ -108,11 +109,15 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'List folders',
       description:
-        'List active folders available to the authorized MinuNotes connection. Trashed folder subtrees are excluded.',
+        'List cursor-paginated compact folder metadata available to the authorized MinuNotes connection. Continue with pageInfo.nextCursor when hasMore is true. Trashed folder subtrees are excluded.',
+      inputSchema: {
+        limit: z.number().int().positive().max(100).optional(),
+        cursor: z.string().min(1).optional(),
+      },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async () => toolResult(await client.folders.list())
+    async ({ limit, cursor }) => toolResult(await client.folders.list({ limit, cursor }))
   );
 
   server.registerTool(
@@ -132,12 +137,18 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_search',
     {
       title: 'Search notes',
-      description: 'Search active notes visible to the authorized MinuNotes connection. Trashed content is excluded.',
-      inputSchema: { query: z.string() },
+      description:
+        'Search active notes visible to the authorized MinuNotes connection. Returns cursor-paginated compact metadata without full note content. Continue with pageInfo.nextCursor when hasMore is true; use notes_get_note, notes_read_lines, or notes_read_section to expand a result. Trashed content is excluded.',
+      inputSchema: {
+        query: z.string(),
+        tag: z.string().optional(),
+        limit: z.number().int().positive().max(100).optional(),
+        cursor: z.string().min(1).optional(),
+      },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async ({ query }) => toolResult(await client.notes.search(query))
+    async ({ query, tag, limit, cursor }) => toolResult(await client.notes.search({ query, tag, limit, cursor }))
   );
 
   server.registerTool(
@@ -315,19 +326,21 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_search_lines',
     {
       title: 'Search note lines',
-      description: 'Search matching lines across notes visible to the authorized MinuNotes connection.',
+      description:
+        'Search cursor-paginated matching lines across notes visible to the authorized MinuNotes connection. Continue with pageInfo.nextCursor when hasMore is true.',
       inputSchema: {
         query: z.string(),
         folderId: z.string().optional(),
-        context: z.number().optional(),
-        limit: z.number().optional(),
+        context: z.number().int().min(0).max(5).optional(),
+        limit: z.number().int().positive().max(100).optional(),
         caseSensitive: z.boolean().optional(),
+        cursor: z.string().min(1).optional(),
       },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async ({ query, folderId, context, limit, caseSensitive }) =>
-      toolResult(await client.notes.searchLines({ query, folderId, context, limit, caseSensitive }))
+    async ({ query, folderId, context, limit, caseSensitive, cursor }) =>
+      toolResult(await client.notes.searchLines({ query, folderId, context, limit, caseSensitive, cursor }))
   );
 
   server.registerTool(
@@ -401,11 +414,16 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_list_tags',
     {
       title: 'List tags',
-      description: 'List tags visible to the authorized MinuNotes connection.',
+      description:
+        'List cursor-paginated tags visible to the authorized MinuNotes connection. Continue with pageInfo.nextCursor when hasMore is true.',
+      inputSchema: {
+        limit: z.number().int().positive().max(100).optional(),
+        cursor: z.string().min(1).optional(),
+      },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async () => toolResult(await client.tags.list())
+    async ({ limit, cursor }) => toolResult(await client.tags.list({ limit, cursor }))
   );
 
   server.registerTool(

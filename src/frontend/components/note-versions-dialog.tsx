@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type Note, type NoteResponse, type NoteVersionSummary } from '../lib/api';
+import { api, type NoteListItem, type NoteResponse, type NoteVersionSummary } from '../lib/api';
 import { Button } from './ui/button';
 
 function reasonLabel(reason: NoteVersionSummary['reason']) {
@@ -29,7 +29,7 @@ export function NoteVersionsDialog({
   onOpenChange,
   onNoteUpdated,
 }: {
-  note: Note;
+  note: NoteListItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNoteUpdated?: (response: NoteResponse) => void;
@@ -48,7 +48,10 @@ export function NoteVersionsDialog({
   );
   const selectedVersion = useQuery({
     queryKey: ['note-version', note.id, selectedSummary?.id],
-    queryFn: () => api.noteVersion(note.id, selectedSummary!.id),
+    queryFn: () => {
+      if (!selectedSummary) throw new Error('Select a version');
+      return api.noteVersion(note.id, selectedSummary.id);
+    },
     enabled: open && Boolean(selectedSummary),
   });
 

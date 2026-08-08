@@ -14,9 +14,11 @@ import {
 import { findSection, parseSections } from '../harness/sections';
 import type { auth } from '../lib/auth';
 import { createId } from '../lib/id';
+import { pageRows, parsePageRequest } from '../lib/pagination';
 import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
-import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from '../notes/tags';
+import { compactNoteSelection } from '../notes/listing';
+import { listNoteTags, listUserTags, setNoteTags } from '../notes/tags';
 import { getNoteVersion, listNoteVersions, restoreNoteVersion, serializeVersion } from '../notes/versions';
 import { trashNote, trashNotes } from '../trash/operations';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
@@ -80,11 +82,16 @@ noteRoutes.get('/templates', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
+  const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
   const rows = await db
-    .select()
+    .select(compactNoteSelection)
     .from(notes)
-    .where(activeNoteWhere(user.id, eq(notes.type, 'template')));
-  return c.json({ templates: rows });
+    .where(activeNoteWhere(user.id, eq(notes.type, 'template')))
+    .orderBy(desc(notes.updatedAt), notes.title, notes.id)
+    .limit(page.limit + 1)
+    .offset(page.offset);
+  const result = pageRows(rows, page);
+  return c.json({ templates: result.items, page: result.page, limit: result.limit, hasMore: result.hasMore });
 });
 
 noteRoutes.get('/templates/:templateId/folders', async (c) => {
@@ -146,41 +153,53 @@ noteRoutes.get('/search', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
+  const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
   const q = c.req.query('q')?.trim();
-  if (!q) return c.json({ notes: [] });
+  if (!q) return c.json({ notes: [], page: page.page, limit: page.limit, hasMore: false });
 
   const type = c.req.query('type') === 'template' ? 'template' : 'note';
-  const requestedLimit = Number.parseInt(c.req.query('limit') ?? '', 10);
-  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
-  const result = await searchDocuments({ userId: user.id, query: q, limit, type });
   const tag = c.req.query('tag')?.trim();
-  if (!tag) return c.json({ notes: result.value.documents });
-
-  const tagged = await noteIdsForTag({ userId: user.id, tag });
-  const taggedIds = new Set(tagged.map((row) => row.noteId));
-  return c.json({ notes: result.value.documents.filter((note) => taggedIds.has(note.id)) });
+  const result = await searchDocuments({
+    userId: user.id,
+    query: q,
+    limit: page.limit,
+    offset: page.offset,
+    type,
+    tag,
+  });
+  return c.json({
+    notes: result.value.documents,
+    page: page.page,
+    limit: page.limit,
+    hasMore: result.value.pageInfo.hasMore,
+  });
 });
 
 noteRoutes.get('/recent', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const limit = Number.parseInt(c.req.query('limit') ?? '', 10);
+  const page = parsePageRequest(c.req.query('page'), c.req.query('limit'), { defaultLimit: 10, maxLimit: 50 });
   const rows = await db
-    .select()
+    .select(compactNoteSelection)
     .from(notes)
     .where(activeNoteWhere(user.id, eq(notes.type, 'note')))
-    .orderBy(desc(notes.updatedAt))
-    .limit(Number.isFinite(limit) && limit > 0 ? Math.min(limit, 50) : 10);
+    .orderBy(desc(notes.updatedAt), notes.id)
+    .limit(page.limit + 1)
+    .offset(page.offset);
+  const result = pageRows(rows, page);
 
-  return c.json({ notes: rows });
+  return c.json({ notes: result.items, page: result.page, limit: result.limit, hasMore: result.hasMore });
 });
 
 noteRoutes.get('/orphans', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  return c.json({ notes: await listOrphanNotes({ userId: user.id }) });
+  const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
+  const rows = await listOrphanNotes({ userId: user.id });
+  const result = pageRows(rows.slice(page.offset, page.offset + page.limit + 1), page);
+  return c.json({ notes: result.items, page: result.page, limit: result.limit, hasMore: result.hasMore });
 });
 
 noteRoutes.get('/:noteId/tags', async (c) => {

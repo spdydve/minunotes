@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api, type Note } from '../lib/api';
+import { api, type Note, type NoteListItem } from '../lib/api';
 import { DeleteConfirmDialog } from './delete-confirm-dialog';
 import { MoveNoteDialog } from './move-note-dialog';
 import { NoteDetailsDialog } from './note-details-dialog';
@@ -19,7 +19,7 @@ export function NoteActionsPopover({
   onEditorModeChange,
   icon = 'more',
 }: {
-  note: Note;
+  note: NoteListItem;
   onDelete: () => unknown | Promise<unknown>;
   onToggleApiEditable?: () => void;
   onNoteUpdated?: (response: { note: Note; contentHash: string }) => void;
@@ -43,13 +43,16 @@ export function NoteActionsPopover({
   };
 
   const duplicate = useMutation({
-    mutationFn: () =>
-      api.createNote(note.folderId, {
+    mutationFn: async () => {
+      const content =
+        'content' in note && typeof note.content === 'string' ? note.content : (await api.note(note.id)).note.content;
+      return api.createNote(note.folderId, {
         title: `${note.title} copy`,
-        content: note.content,
+        content,
         type: note.type,
         documentType: note.documentType,
-      }),
+      });
+    },
     onSuccess: ({ note: duplicateNote }) => {
       qc.invalidateQueries({
         queryKey: [duplicateNote.type === 'template' ? 'templates' : 'notes', duplicateNote.folderId],

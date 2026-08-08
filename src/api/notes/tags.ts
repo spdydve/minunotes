@@ -34,8 +34,8 @@ export function normalizeTagInput(input: string[]) {
   return values.slice(0, 50);
 }
 
-export async function listUserTags(input: { userId: string; noteIds?: string[] }) {
-  if (input.noteIds && input.noteIds.length === 0) return [];
+export async function listUserTags(input: { userId: string; noteIds?: string[]; folderIds?: string[] }) {
+  if (input.noteIds?.length === 0 || input.folderIds?.length === 0) return [];
   const rows = await db
     .select({
       id: tags.id,
@@ -47,12 +47,15 @@ export async function listUserTags(input: { userId: string; noteIds?: string[] }
     .innerJoin(noteTags, eq(noteTags.tagId, tags.id))
     .innerJoin(notes, eq(noteTags.noteId, notes.id))
     .where(
-      input.noteIds
-        ? and(eq(tags.userId, input.userId), inArray(noteTags.noteId, input.noteIds), activeNoteWhere(input.userId))
-        : and(eq(tags.userId, input.userId), activeNoteWhere(input.userId))
+      and(
+        eq(tags.userId, input.userId),
+        input.noteIds ? inArray(noteTags.noteId, input.noteIds) : undefined,
+        input.folderIds ? inArray(notes.folderId, input.folderIds) : undefined,
+        activeNoteWhere(input.userId)
+      )
     )
     .groupBy(tags.id)
-    .orderBy(asc(tags.name));
+    .orderBy(asc(tags.name), asc(tags.id));
   return rows satisfies SerializedTag[];
 }
 

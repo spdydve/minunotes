@@ -17,10 +17,12 @@ import {
   type DocumentEdit,
   type DocumentType,
   editDocument,
+  type LineSearchCursor,
   linkCanvasNodeToNote,
   listFolders,
   listNoteEvents,
   moveDocuments,
+  type NoteSearchCursor,
   readDocument,
   readDocumentLines,
   replaceCanvasDocument,
@@ -30,6 +32,15 @@ import {
   serializeCanvasDocument,
   unlinkCanvasNode,
 } from '../harness/commands';
+import {
+  compareTitleIdPositions,
+  decodeCursor,
+  InvalidCursorError,
+  isTitleIdPosition,
+  paginateItems,
+  paginationScope,
+  parsePageLimit,
+} from '../harness/pagination';
 import { findSection, parseSections } from '../harness/sections';
 import type { auth } from '../lib/auth';
 import {
@@ -39,7 +50,7 @@ import {
 } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
-import { listNoteTags, listUserTags, noteIdsForTag, setNoteTags } from '../notes/tags';
+import { listNoteTags, listUserTags, setNoteTags } from '../notes/tags';
 import { activeNoteWhere } from '../trash/policy';
 
 type Variables = {
@@ -68,8 +79,24 @@ function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType;
 }
 
 type HarnessNoteSummary = Pick<Note, 'id' | 'folderId' | 'title' | 'documentType' | 'type' | 'createdAt' | 'updatedAt'>;
+type HarnessFolderSummary = Pick<
+  typeof folders.$inferSelect,
+  'id' | 'parentFolderId' | 'title' | 'isPrivate' | 'isAgentReadOnly' | 'createdAt' | 'updatedAt'
+>;
 
 type SummarizableNote = HarnessNoteSummary & { content?: string; userId?: string };
+
+function summarizeHarnessFolder(folder: HarnessFolderSummary): HarnessFolderSummary {
+  return {
+    id: folder.id,
+    parentFolderId: folder.parentFolderId,
+    title: folder.title,
+    isPrivate: folder.isPrivate,
+    isAgentReadOnly: folder.isAgentReadOnly,
+    createdAt: folder.createdAt,
+    updatedAt: folder.updatedAt,
+  };
+}
 
 function summarizeHarnessNote(note: SummarizableNote): HarnessNoteSummary {
   return {
@@ -81,6 +108,40 @@ function summarizeHarnessNote(note: SummarizableNote): HarnessNoteSummary {
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
   };
+}
+
+function isValidCursorDate(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
+function isNoteSearchCursor(value: unknown): value is NoteSearchCursor {
+  if (!value || typeof value !== 'object') return false;
+  const cursor = value as Partial<NoteSearchCursor>;
+  return (
+    typeof cursor.rank === 'number' &&
+    Number.isInteger(cursor.rank) &&
+    cursor.rank >= 0 &&
+    cursor.rank <= 5 &&
+    isValidCursorDate(cursor.updatedAt) &&
+    typeof cursor.title === 'string' &&
+    typeof cursor.id === 'string'
+  );
+}
+
+function isLineSearchCursor(value: unknown): value is LineSearchCursor {
+  if (!value || typeof value !== 'object') return false;
+  const cursor = value as Partial<LineSearchCursor>;
+  return (
+    isValidCursorDate(cursor.noteUpdatedAt) &&
+    typeof cursor.title === 'string' &&
+    typeof cursor.noteId === 'string' &&
+    typeof cursor.line === 'number' &&
+    Number.isInteger(cursor.line) &&
+    cursor.line >= 1 &&
+    typeof cursor.column === 'number' &&
+    Number.isInteger(cursor.column) &&
+    cursor.column >= 1
+  );
 }
 
 function summarizeHarnessDocumentResult<T extends { note: SummarizableNote; contentHash: string }>(result: T) {
@@ -117,20 +178,46 @@ async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
   });
 }
 
+function paginateTags(c: Context<{ Variables: Variables }>, tags: Array<{ id: string; name: string }>, scope: string) {
+  const limit = parsePageLimit(c.req.query('limit'));
+  try {
+    const page = paginateItems(
+      tags,
+      limit,
+      c.req.query('cursor'),
+      scope,
+      (tag) => ({ title: tag.name, id: tag.id }),
+      compareTitleIdPositions,
+      isTitleIdPosition
+    );
+    return c.json({ tags: page.items, pageInfo: page.pageInfo });
+  } catch (error) {
+    if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
+}
+
 harnessRoutes.get('/tags', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const readableFolderIds = await getReadableFolderIds(c);
-  if (!readableFolderIds) return c.json({ tags: await listUserTags({ userId: user.id }) });
+  const scope = paginationScope('tags', user.id, readableFolderIds ? [...readableFolderIds].sort().join(',') : 'owner');
+  if (!readableFolderIds) {
+    const visibleTags = await listUserTags({ userId: user.id });
+    visibleTags.sort((left, right) =>
+      compareTitleIdPositions({ title: left.name, id: left.id }, { title: right.name, id: right.id })
+    );
+    return paginateTags(c, visibleTags, scope);
+  }
 
   const readableIds = [...readableFolderIds];
-  if (readableIds.length === 0) return c.json({ tags: [] });
-  const visibleNotes = await db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(activeNoteWhere(user.id, inArray(notes.folderId, readableIds)));
-  return c.json({ tags: await listUserTags({ userId: user.id, noteIds: visibleNotes.map((note) => note.id) }) });
+  if (readableIds.length === 0) return c.json({ tags: [], pageInfo: { hasMore: false, nextCursor: null } });
+  const visibleTags = await listUserTags({ userId: user.id, folderIds: readableIds });
+  visibleTags.sort((left, right) =>
+    compareTitleIdPositions({ title: left.name, id: left.id }, { title: right.name, id: right.id })
+  );
+  return paginateTags(c, visibleTags, scope);
 });
 
 harnessRoutes.get('/folders', async (c) => {
@@ -139,8 +226,29 @@ harnessRoutes.get('/folders', async (c) => {
 
   const result = await listFolders({ userId: user.id });
   const readableFolderIds = await getReadableFolderIds(c);
-  if (!readableFolderIds) return c.json(result.value);
-  return c.json({ folders: result.value.folders.filter((folder) => readableFolderIds.has(folder.id)) });
+  const foldersInScope = readableFolderIds
+    ? result.value.folders.filter((folder) => readableFolderIds.has(folder.id))
+    : result.value.folders;
+  foldersInScope.sort((left, right) =>
+    compareTitleIdPositions({ title: left.title, id: left.id }, { title: right.title, id: right.id })
+  );
+  const limit = parsePageLimit(c.req.query('limit'));
+  let page: { items: typeof foldersInScope; pageInfo: { hasMore: boolean; nextCursor: string | null } };
+  try {
+    page = paginateItems(
+      foldersInScope,
+      limit,
+      c.req.query('cursor'),
+      paginationScope('folders', user.id, readableFolderIds ? [...readableFolderIds].sort().join(',') : 'owner'),
+      (folder) => ({ title: folder.title, id: folder.id }),
+      compareTitleIdPositions,
+      isTitleIdPosition
+    );
+  } catch (error) {
+    if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
+  return c.json({ folders: page.items.map(summarizeHarnessFolder), pageInfo: page.pageInfo });
 });
 
 harnessRoutes.post('/folders', async (c) => {
@@ -198,7 +306,7 @@ harnessRoutes.post('/folders', async (c) => {
     });
   }
 
-  return c.json({ folder }, 201);
+  return c.json({ folder: summarizeHarnessFolder(folder) }, 201);
 });
 
 harnessRoutes.get('/notes/search', async (c) => {
@@ -206,16 +314,37 @@ harnessRoutes.get('/notes/search', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const q = c.req.query('q')?.trim();
-  if (!q) return c.json({ notes: [] });
+  if (!q) return c.json({ notes: [], pageInfo: { hasMore: false, nextCursor: null } });
 
-  const result = await searchDocuments({ userId: user.id, query: q, limit: 25 });
   const tag = c.req.query('tag')?.trim();
-  const taggedIds = tag ? new Set((await noteIdsForTag({ userId: user.id, tag })).map((row) => row.noteId)) : null;
   const readableFolderIds = await getReadableFolderIds(c);
-  const filtered = result.value.documents.filter(
-    (note) => (!taggedIds || taggedIds.has(note.id)) && (!readableFolderIds || readableFolderIds.has(note.folderId))
+  const scope = paginationScope(
+    'note-search',
+    user.id,
+    q,
+    tag ?? '',
+    readableFolderIds ? [...readableFolderIds].sort().join(',') : 'owner'
   );
-  return c.json({ notes: filtered });
+  let cursor: NoteSearchCursor | null;
+  try {
+    cursor = decodeCursor(c.req.query('cursor'), scope, isNoteSearchCursor);
+  } catch (error) {
+    if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
+  const result = await searchDocuments({
+    userId: user.id,
+    query: q,
+    limit: parsePageLimit(c.req.query('limit')),
+    tag,
+    folderIds: readableFolderIds,
+    cursor,
+    cursorScope: scope,
+  });
+  return c.json({
+    notes: result.value.documents.map(summarizeHarnessNote),
+    pageInfo: result.value.pageInfo,
+  });
 });
 
 harnessRoutes.get('/notes/search-lines', async (c) => {
@@ -223,22 +352,40 @@ harnessRoutes.get('/notes/search-lines', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const q = c.req.query('q')?.trim();
-  if (!q) return c.json({ query: '', matches: [] });
+  if (!q) return c.json({ query: '', matches: [], pageInfo: { hasMore: false, nextCursor: null } });
 
   const readableFolderIds = await getReadableFolderIds(c);
+  const folderId = c.req.query('folderId');
+  const context = Number.parseInt(c.req.query('context') ?? '', 10);
+  const caseSensitive = c.req.query('caseSensitive') === 'true';
+  const scope = paginationScope(
+    'line-search',
+    user.id,
+    q,
+    folderId ?? '',
+    String(Number.isFinite(context) ? context : ''),
+    String(caseSensitive),
+    readableFolderIds ? [...readableFolderIds].sort().join(',') : 'owner'
+  );
+  let cursor: LineSearchCursor | null;
+  try {
+    cursor = decodeCursor(c.req.query('cursor'), scope, isLineSearchCursor);
+  } catch (error) {
+    if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
   const result = await searchAllDocumentLines({
     userId: user.id,
     query: q,
-    folderId: c.req.query('folderId'),
-    context: Number.parseInt(c.req.query('context') ?? '', 10),
-    limit: Number.parseInt(c.req.query('limit') ?? '', 10),
-    caseSensitive: c.req.query('caseSensitive') === 'true',
+    folderId,
+    folderIds: readableFolderIds,
+    context,
+    limit: parsePageLimit(c.req.query('limit')),
+    caseSensitive,
+    cursor,
+    cursorScope: scope,
   });
-  if (!readableFolderIds) return c.json(result.value);
-  return c.json({
-    query: result.value.query,
-    matches: result.value.matches.filter((match) => readableFolderIds.has(match.folderId)),
-  });
+  return c.json(result.value);
 });
 
 harnessRoutes.post('/notes', async (c) => {
@@ -343,7 +490,30 @@ harnessRoutes.get('/notes/orphans', async (c) => {
 
   const rows = await listOrphanNotes({ userId: user.id });
   const readableFolderIds = await getReadableFolderIds(c);
-  return c.json({ notes: readableFolderIds ? rows.filter((note) => readableFolderIds.has(note.folderId)) : rows });
+  const visible = readableFolderIds ? rows.filter((note) => readableFolderIds.has(note.folderId)) : rows;
+  visible.sort((left, right) =>
+    compareTitleIdPositions({ title: left.title, id: left.id }, { title: right.title, id: right.id })
+  );
+  const scope = paginationScope(
+    'orphans',
+    user.id,
+    readableFolderIds ? [...readableFolderIds].sort().join(',') : 'owner'
+  );
+  try {
+    const page = paginateItems(
+      visible,
+      parsePageLimit(c.req.query('limit')),
+      c.req.query('cursor'),
+      scope,
+      (note) => ({ title: note.title, id: note.id }),
+      compareTitleIdPositions,
+      isTitleIdPosition
+    );
+    return c.json({ notes: page.items.map(summarizeHarnessNote), pageInfo: page.pageInfo });
+  } catch (error) {
+    if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
 });
 
 harnessRoutes.post('/notes/move', async (c) => {

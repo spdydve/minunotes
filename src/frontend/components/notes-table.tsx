@@ -2,20 +2,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
-import { api, type Note } from '../lib/api';
+import { api, type NoteListItem } from '../lib/api';
 import { MoveNotesDialog } from './move-notes-dialog';
 import { NoteActionsPopover } from './note-actions-popover';
 import { TrashNotesDialog } from './trash-notes-dialog';
 import { Button } from './ui/button';
 
-const columnHelper = createColumnHelper<Note>();
+const columnHelper = createColumnHelper<NoteListItem>();
 
 export function NotesTable({
   notes,
   queryKey,
   folderTitles,
 }: {
-  notes: Note[];
+  notes: NoteListItem[];
   queryKey?: unknown[];
   folderTitles?: Record<string, string>;
 }) {

@@ -79,6 +79,7 @@ describe('createNotesMcpServer', () => {
     expect(Object.keys(registered).filter((name) => /trash|restore|permanent.*delete/i.test(name))).toEqual([]);
     expect(registered.notes_list_folders.description).toContain('Trashed folder subtrees are excluded');
     expect(registered.notes_search.description).toContain('Trashed content is excluded');
+    expect(registered.notes_search.description).toContain('compact metadata without full note content');
     expect(registered.notes_get_note.description).toContain('Trashed content returns not found');
     expect(registered.notes_list_folders.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(registered.notes_create_folder.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
@@ -91,6 +92,29 @@ describe('createNotesMcpServer', () => {
       readOnlyHint: false,
       destructiveHint: true,
     });
+  });
+
+  it('passes cursor pagination inputs to discovery clients', async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_list_folders.handler({ limit: 10, cursor: 'folder-cursor' } as never);
+    await tools(server).notes_search.handler({
+      query: 'project',
+      tag: 'release',
+      limit: 5,
+      cursor: 'search-cursor',
+    } as never);
+    await tools(server).notes_list_tags.handler({ limit: 20, cursor: 'tag-cursor' } as never);
+
+    expect(client.folders.list).toHaveBeenCalledWith({ limit: 10, cursor: 'folder-cursor' });
+    expect(client.notes.search).toHaveBeenCalledWith({
+      query: 'project',
+      tag: 'release',
+      limit: 5,
+      cursor: 'search-cursor',
+    });
+    expect(client.tags.list).toHaveBeenCalledWith({ limit: 20, cursor: 'tag-cursor' });
   });
 
   it('calls harness client methods and returns structured content', async () => {
@@ -227,6 +251,7 @@ describe('createNotesMcpServer', () => {
       context: 1,
       limit: 5,
       caseSensitive: true,
+      cursor: 'line-cursor',
     } as never);
 
     expect(client.notes.searchLines).toHaveBeenCalledWith({
@@ -235,6 +260,7 @@ describe('createNotesMcpServer', () => {
       context: 1,
       limit: 5,
       caseSensitive: true,
+      cursor: 'line-cursor',
     });
   });
 

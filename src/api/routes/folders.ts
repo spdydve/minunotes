@@ -6,7 +6,9 @@ import { createDocument, listDocuments, listFolders } from '../harness/commands'
 import type { auth } from '../lib/auth';
 import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
+import { parsePageRequest } from '../lib/pagination';
 import { buildFolderShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
+import { compactNoteSelection } from '../notes/listing';
 import { trashFolder } from '../trash/operations';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 
@@ -218,9 +220,22 @@ folderRoutes.get('/:folderId/notes', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
+  const folderId = c.req.param('folderId');
   const type = c.req.query('type') === 'template' ? 'template' : 'note';
-  const result = await listDocuments({ userId: user.id, folderId: c.req.param('folderId'), type });
-  return c.json({ notes: result.value.documents });
+  const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
+  const result = await listDocuments({
+    userId: user.id,
+    folderId,
+    type,
+    offset: page.offset,
+    limit: page.limit,
+  });
+  return c.json({
+    notes: result.value.documents,
+    page: page.page,
+    limit: page.limit,
+    hasMore: result.value.hasMore,
+  });
 });
 
 folderRoutes.get('/:folderId/templates', async (c) => {
@@ -228,7 +243,7 @@ folderRoutes.get('/:folderId/templates', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const rows = await db
-    .select({ template: notes })
+    .select({ template: compactNoteSelection })
     .from(templateFolderAssignments)
     .innerJoin(notes, eq(templateFolderAssignments.templateId, notes.id))
     .innerJoin(folders, eq(templateFolderAssignments.folderId, folders.id))
@@ -238,7 +253,8 @@ folderRoutes.get('/:folderId/templates', async (c) => {
         activeFolderWhere(user.id, eq(folders.id, c.req.param('folderId'))),
         activeNoteWhere(user.id, eq(notes.type, 'template'))
       )
-    );
+    )
+    .orderBy(notes.title, notes.id);
   return c.json({ templates: rows.map((row) => row.template) });
 });
 

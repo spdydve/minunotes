@@ -37,6 +37,26 @@ describe('config', () => {
     );
   });
 
+  it('forwards cursor pagination query parameters', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createClient({ NOTES_API_URL: 'https://example.com', NOTES_API_KEY: 'key' });
+
+    await client.folders.list({ limit: 10, cursor: 'folder cursor' });
+    await client.notes.search({ query: 'project plan', tag: 'release', limit: 5, cursor: 'search cursor' });
+    await client.notes.searchLines({ query: 'todo', cursor: 'line cursor' });
+    await client.tags.list({ limit: 20, cursor: 'tag cursor' });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://example.com/v1/harness/folders?limit=10&cursor=folder+cursor',
+      'https://example.com/v1/harness/notes/search?q=project+plan&tag=release&limit=5&cursor=search+cursor',
+      'https://example.com/v1/harness/notes/search-lines?q=todo&cursor=line+cursor',
+      'https://example.com/v1/harness/tags?limit=20&cursor=tag+cursor',
+    ]);
+  });
+
   it('calls canvas lifecycle endpoints with matching payloads', async () => {
     const fetchMock = vi.fn(
       async () =>

@@ -34,7 +34,7 @@ Use JSON for request/response bodies.
 
 ## Trash boundary
 
-- Harness folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only.
+- Harness folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only. Folder lists and discovery searches return compact metadata rather than owner fields or full note content.
 - A trashed note, template, or folder subtree is unavailable through `/v1/harness/*` and normally returns `404` when addressed by ID.
 - The harness API cannot list Trash or trash, restore, or permanently delete content. Those owner-only operations require the authenticated MinuNotes web interface.
 - Do not interpret `404` as proof that content was permanently deleted; it may be outside the key's scope or recoverable in the owner's Trash.
@@ -67,8 +67,16 @@ AUTH=(-H "X-API-Key: $KEY" -H "Content-Type: application/json")
 List accessible folders:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/v1/harness/folders"
+curl -s "${AUTH[@]}" "$API/v1/harness/folders?limit=25"
 ```
+
+Folder, tag, note-search, orphan, and cross-note line-search responses include `pageInfo`. When `hasMore` is true, pass the opaque `nextCursor` to the same endpoint with the same query and filters:
+
+```bash
+curl -s "${AUTH[@]}" "$API/v1/harness/folders?limit=25&cursor=$NEXT_CURSOR"
+```
+
+Do not inspect or modify cursors, reuse them across endpoints, or continue every page unless the task requires broader coverage.
 
 Create a folder or subfolder:
 
@@ -81,8 +89,18 @@ curl -s "${AUTH[@]}" \
 Search notes by title/content/folder/tag text:
 
 ```bash
-curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project"
-curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project&tag=release-notes"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project&limit=25"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project&tag=release-notes&limit=25"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/search?q=project&limit=25&cursor=$NEXT_CURSOR"
+```
+
+Search results are compact metadata only: they include identity, folder, title, document type, type, and timestamps, but never full `content`, `userId`, or database folder-owner fields. Orphan results follow the same contract. After choosing a result, expand only what you need:
+
+```bash
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/outline"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/sections/section-id"
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/lines?from=1&to=80"
 ```
 
 Search lines across notes:
@@ -90,6 +108,17 @@ Search lines across notes:
 ```bash
 curl -s "${AUTH[@]}" "$API/v1/harness/notes/search-lines?q=todo&context=2&limit=10"
 ```
+
+Cross-note line matches retain the matching line and requested context plus note identity and location. They omit repeated hashes, byte sizes, and total line counts; read the selected note explicitly when you need its current `contentHash` before editing.
+
+### Recommended retrieval sequence
+
+1. Search note metadata first; do not expect `content` in search or orphan responses.
+2. Use `search-lines` when body text is the deciding signal, especially for long notes.
+3. Read only the selected note, line range, or section needed for the task.
+4. Before any edit, read the current note and use its returned `contentHash` as `baseHash`.
+
+Do not fetch every search result in full. Choose candidates using title, folder, document type, and matching context, then expand selectively.
 
 Create a note:
 
@@ -218,16 +247,16 @@ curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 
 ## Endpoint reference
 
-- `GET /v1/harness/folders`
+- `GET /v1/harness/folders?limit=25&cursor=...`
 - `POST /v1/harness/folders`
-- `GET /v1/harness/tags`
-- `GET /v1/harness/notes/search?q=...&tag=...`
-- `GET /v1/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false`
+- `GET /v1/harness/tags?limit=25&cursor=...`
+- `GET /v1/harness/notes/search?q=...&tag=...&limit=25&cursor=...`
+- `GET /v1/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false&cursor=...`
 - `POST /v1/harness/notes`
 - `POST /v1/harness/notes/move`
 - `POST /v1/harness/canvases`
 - `POST /v1/harness/canvases/from-syntax`
-- `GET /v1/harness/notes/orphans`
+- `GET /v1/harness/notes/orphans?limit=25&cursor=...`
 - `GET /v1/harness/notes/:noteId`
 - `GET /v1/harness/notes/:noteId/events?limit=25`
 - `GET /v1/harness/notes/:noteId/tags`

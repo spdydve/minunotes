@@ -239,6 +239,7 @@ export async function listOrphanNotes(input: { userId: string }) {
       id: notes.id,
       folderId: notes.folderId,
       title: notes.title,
+      documentType: notes.documentType,
       type: notes.type,
       createdAt: notes.createdAt,
       updatedAt: notes.updatedAt,

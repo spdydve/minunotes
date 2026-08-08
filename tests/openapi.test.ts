@@ -12,7 +12,10 @@ describe('harness OpenAPI spec', () => {
       paths: Record<string, unknown>;
       components: {
         securitySchemes: Record<string, unknown>;
-        schemas: Record<string, { properties?: Record<string, { enum?: string[] }> }>;
+        schemas: Record<
+          string,
+          { properties?: Record<string, { $ref?: string; enum?: string[]; items?: { $ref?: string } }> }
+        >;
       };
     };
 
@@ -26,6 +29,18 @@ describe('harness OpenAPI spec', () => {
     expect(spec.paths).toHaveProperty('/v1/harness/folders');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/edit');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/orphans');
+    expect(spec.components.schemas.SearchNotesResponse?.properties?.notes).toMatchObject({
+      items: { $ref: '#/components/schemas/CompactNote' },
+    });
+    expect(spec.components.schemas.SearchNotesResponse?.properties?.pageInfo).toMatchObject({
+      $ref: '#/components/schemas/PageInfo',
+    });
+    expect(spec.components.schemas.FoldersResponse?.properties?.pageInfo).toMatchObject({
+      $ref: '#/components/schemas/PageInfo',
+    });
+    expect(spec.components.schemas.PaginatedTagsResponse?.properties?.pageInfo).toMatchObject({
+      $ref: '#/components/schemas/PageInfo',
+    });
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/links');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/backlinks');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/tags');

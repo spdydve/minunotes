@@ -1,15 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createRoute, Link, useNavigate } from '@tanstack/react-router';
 import { ChevronDown, FileText, Folder as FolderIcon, GitBranch, Lock, Shapes } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FolderActionsPopover } from '../components/folder-actions-popover';
 import { MoveNotesDialog } from '../components/move-notes-dialog';
 import { NoteActionsPopover } from '../components/note-actions-popover';
+import { PaginationControls } from '../components/pagination-controls';
 import { TrashNotesDialog } from '../components/trash-notes-dialog';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
-import { ApiError, api, type Folder, type Note } from '../lib/api';
+import { ApiError, api, type Folder, type NoteListItem } from '../lib/api';
 import { rootRoute } from './__root';
 
 function folderDepth(folder: Folder, folders: Folder[]) {
@@ -61,7 +62,7 @@ function isEffectivelyAgentReadOnly(folder: Folder, folders: Folder[]) {
 }
 
 type FolderItem = { kind: 'folder'; folder: Folder };
-type NoteItem = { kind: 'note'; note: Note };
+type NoteItem = { kind: 'note'; note: NoteListItem };
 type ContentItem = FolderItem | NoteItem;
 
 function getContentItemUpdatedAt(item: ContentItem) {
@@ -74,7 +75,11 @@ function getContentItemTitle(item: ContentItem) {
 
 function compareContentItemsByUpdatedDesc(a: ContentItem, b: ContentItem) {
   const updatedDiff = new Date(getContentItemUpdatedAt(b)).getTime() - new Date(getContentItemUpdatedAt(a)).getTime();
-  return updatedDiff || getContentItemTitle(a).localeCompare(getContentItemTitle(b));
+  return (
+    updatedDiff ||
+    getContentItemTitle(a).localeCompare(getContentItemTitle(b)) ||
+    (a.kind === 'folder' ? a.folder.id : a.note.id).localeCompare(b.kind === 'folder' ? b.folder.id : b.note.id)
+  );
 }
 
 function FolderContentsTable({
@@ -86,7 +91,7 @@ function FolderContentsTable({
   items: ContentItem[];
   allFolders: Folder[];
   queryKey: unknown[];
-  onDeleteNote: (note: Note) => unknown | Promise<unknown>;
+  onDeleteNote: (note: NoteListItem) => unknown | Promise<unknown>;
 }) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   const visibleNotes = items.flatMap((item) => (item.kind === 'note' ? [item.note] : []));
@@ -336,9 +341,11 @@ function FolderView() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [folderId]);
   const { data, error, isLoading } = useQuery({
-    queryKey: ['notes', folderId],
-    queryFn: () => api.notes(folderId),
+    queryKey: ['notes', folderId, 'note', page],
+    queryFn: () => api.notes(folderId, 'note', page),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
   const { data: foldersData } = useQuery({
@@ -378,7 +385,7 @@ function FolderView() {
 
   const allFolders = foldersData?.folders ?? [];
   const folder = allFolders.find((item) => item.id === folderId);
-  const childFolders = allFolders.filter((item) => item.parentFolderId === folderId);
+  const childFolders = page === 1 ? allFolders.filter((item) => item.parentFolderId === folderId) : [];
   const notes = data?.notes ?? [];
   const items: ContentItem[] = [
     ...childFolders.map((child) => ({
@@ -473,6 +480,7 @@ function FolderView() {
       ) : (
         <EmptyState>No folders or notes yet.</EmptyState>
       )}
+      <PaginationControls page={data?.page ?? page} hasMore={data?.hasMore ?? false} onPageChange={setPage} />
     </section>
   );
 }
