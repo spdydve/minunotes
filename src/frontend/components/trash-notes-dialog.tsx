@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type Note } from '../lib/api';
+import { api, type NoteListItem } from '../lib/api';
 import { DeleteConfirmDialog } from './delete-confirm-dialog';
 
 export function TrashNotesDialog({
@@ -7,7 +7,7 @@ export function TrashNotesDialog({
   queryKey,
   onTrashed,
 }: {
-  notes: Note[];
+  notes: NoteListItem[];
   queryKey?: unknown[];
   onTrashed?: () => void;
 }) {

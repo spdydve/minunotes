@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { createRoute } from '@tanstack/react-router';
+import { useState } from 'react';
+import { PaginationControls } from '../components/pagination-controls';
 import { TrashTable } from '../components/trash-table';
 import { Button } from '../components/ui/button';
 import { api } from '../lib/api';
 import { rootRoute } from './__root';
 
 function TrashView() {
-  const trash = useQuery({ queryKey: ['trash'], queryFn: api.trash, retry: false });
+  const [page, setPage] = useState(1);
+  const trash = useQuery({ queryKey: ['trash', page], queryFn: () => api.trash(page), retry: false });
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
 
   if (trash.isLoading || folders.isLoading)
@@ -47,6 +50,11 @@ function TrashView() {
         notes={trash.data?.notes ?? []}
         folders={trash.data?.folders ?? []}
         activeFolders={folders.data?.folders ?? []}
+      />
+      <PaginationControls
+        page={trash.data?.page ?? page}
+        hasMore={trash.data?.hasMore ?? false}
+        onPageChange={setPage}
       />
     </section>
   );

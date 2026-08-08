@@ -5,18 +5,28 @@ import {
   createDefaultMindMapDocument,
   type JsonCanvasDocument,
 } from '@dpklabs/minucanvas';
-import { and, asc, desc, eq, gt, inArray, like, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, like, lt, or, sql } from 'drizzle-orm';
 import type { MinuNotesNodeExtra, MinuNotesNodeMetadata } from '../../shared/canvas-links';
 import { syncNoteAttachmentReferences } from '../attachments/references';
 import { db } from '../db/client';
 import { folders, type Note, noteEvents, notes, noteTags, noteVersions, tags } from '../db/schema';
 import { createId } from '../lib/id';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from '../notes/links';
+import { compactNoteSelection } from '../notes/listing';
+import { normalizeTagName } from '../notes/tags';
 import { createNoteVersion, maybeCreateUserCheckpoint } from '../notes/versions';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 import { applyDocumentEdits, type DocumentEdit } from './edits';
 import { hashMarkdown } from './hash';
 import { getLineRange, searchLines } from './line-search';
+import { encodeCursor, type PageInfo } from './pagination';
+
+export type NoteSearchCursor = {
+  rank: number;
+  updatedAt: string;
+  title: string;
+  id: string;
+};
 
 export type ActorType = 'user' | 'agent' | 'system';
 export type NoteEventType =
@@ -92,13 +102,30 @@ export function compileDiagramSyntax(input: { syntax: string; documentType?: Doc
   };
 }
 
-export async function listDocuments(input: { userId: string; folderId?: string; type?: NoteType }) {
+export async function listDocuments(input: {
+  userId: string;
+  folderId?: string;
+  type?: NoteType;
+  offset?: number;
+  limit?: number;
+}) {
   const type = input.type ?? 'note';
   const where = input.folderId
     ? activeNoteWhere(input.userId, eq(notes.folderId, input.folderId), eq(notes.type, type))
     : activeNoteWhere(input.userId, eq(notes.type, type));
-  const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title));
-  return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
+  const limit = Math.max(1, Math.min(input.limit ?? 50, 100));
+  const rows = await db
+    .select(compactNoteSelection)
+    .from(notes)
+    .where(where)
+    .orderBy(desc(notes.updatedAt), asc(notes.title), asc(notes.id))
+    .limit(limit + 1)
+    .offset(Math.max(0, input.offset ?? 0));
+  const hasMore = rows.length > limit;
+  return {
+    ok: true,
+    value: { documents: hasMore ? rows.slice(0, limit) : rows, hasMore },
+  } satisfies DocumentCommandResult<{ documents: typeof rows; hasMore: boolean }>;
 }
 
 export async function listNoteEvents(input: { documentId: string; userId: string; limit?: number }) {
@@ -175,20 +202,30 @@ export async function searchDocumentLines(input: {
   }>;
 }
 
+export type LineSearchCursor = {
+  noteUpdatedAt: string;
+  title: string;
+  noteId: string;
+  line: number;
+  column: number;
+};
+
 export async function searchAllDocumentLines(input: {
   userId: string;
   query: string;
   folderId?: string;
+  folderIds?: Set<string> | null;
   context?: number;
   limit?: number;
   caseSensitive?: boolean;
+  cursor?: LineSearchCursor | null;
+  cursorScope?: string;
 }) {
   const query = input.query.trim();
   if (!query)
-    return { ok: true, value: { query, matches: [] } } satisfies DocumentCommandResult<{
-      query: string;
-      matches: Array<never>;
-    }>;
+    return { ok: true, value: { query, matches: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
+  if (input.folderIds && input.folderIds.size === 0)
+    return { ok: true, value: { query, matches: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
 
   const pattern = `%${query}%`;
   const where = input.folderId
@@ -198,26 +235,54 @@ export async function searchAllDocumentLines(input: {
         or(like(notes.title, pattern), like(notes.content, pattern))
       )
     : activeNoteWhere(input.userId, or(like(notes.title, pattern), like(notes.content, pattern)));
-  const rows = await db.select().from(notes).where(where).orderBy(desc(notes.updatedAt), asc(notes.title)).limit(50);
+  const cursor = input.cursor;
+  const cursorDate = cursor ? new Date(cursor.noteUpdatedAt) : null;
+  const afterCursor =
+    cursor && cursorDate
+      ? or(
+          eq(notes.id, cursor.noteId),
+          lt(notes.updatedAt, cursorDate),
+          and(eq(notes.updatedAt, cursorDate), gt(notes.title, cursor.title)),
+          and(eq(notes.updatedAt, cursorDate), eq(notes.title, cursor.title), gt(notes.id, cursor.noteId))
+        )
+      : undefined;
+  const rows = await db
+    .select({
+      id: notes.id,
+      folderId: notes.folderId,
+      title: notes.title,
+      content: notes.content,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .where(and(where, input.folderIds ? inArray(notes.folderId, [...input.folderIds]) : undefined, afterCursor))
+    .orderBy(desc(notes.updatedAt), asc(notes.title), asc(notes.id));
   const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
   const matches: Array<
     ReturnType<typeof searchLines>['matches'][number] & {
       noteId: string;
       title: string;
       folderId: string;
-      contentHash: string;
-      noteSizeBytes: number;
-      lineCount: number;
+      noteUpdatedAt: string;
     }
   > = [];
 
   for (const note of rows) {
-    const contentHash = hashMarkdown(note.content);
+    const noteUpdatedAt = note.updatedAt.toISOString();
+    const sameNote = cursor && note.id === cursor.noteId;
+    const noteIsAfterCursor = cursor
+      ? note.updatedAt < new Date(cursor.noteUpdatedAt) ||
+        (noteUpdatedAt === cursor.noteUpdatedAt &&
+          (note.title > cursor.title || (note.title === cursor.title && note.id > cursor.noteId)))
+      : true;
+    if (cursor && !sameNote && !noteIsAfterCursor) continue;
+
     const result = searchLines(note.content, {
       query,
       context: input.context,
-      limit: limit - matches.length,
+      limit: limit + 1,
       caseSensitive: input.caseSensitive,
+      after: sameNote ? { line: cursor.line, column: cursor.column } : undefined,
     });
     matches.push(
       ...result.matches.map((match) => ({
@@ -225,83 +290,149 @@ export async function searchAllDocumentLines(input: {
         noteId: note.id,
         title: note.title,
         folderId: note.folderId,
-        contentHash,
-        noteSizeBytes: new TextEncoder().encode(note.content).length,
-        lineCount: result.lineCount,
+        noteUpdatedAt,
       }))
     );
-    if (matches.length >= limit) break;
+    if (matches.length >= limit + 1) break;
   }
 
-  return { ok: true, value: { query, matches } } satisfies DocumentCommandResult<{
-    query: string;
-    matches: typeof matches;
-  }>;
+  const hasMore = matches.length > limit;
+  const visibleMatches = hasMore ? matches.slice(0, limit) : matches;
+  const last = visibleMatches[visibleMatches.length - 1];
+  return {
+    ok: true,
+    value: {
+      query,
+      matches: visibleMatches.map(({ noteUpdatedAt: _noteUpdatedAt, ...match }) => match),
+      pageInfo: {
+        hasMore,
+        nextCursor:
+          hasMore && last && input.cursorScope
+            ? encodeCursor(input.cursorScope, {
+                noteUpdatedAt: last.noteUpdatedAt,
+                title: last.title,
+                noteId: last.noteId,
+                line: last.line,
+                column: last.column,
+              })
+            : null,
+      },
+    },
+  } as const;
 }
 
-export async function searchDocuments(input: { userId: string; query: string; limit?: number; type?: NoteType }) {
+export async function searchDocuments(input: {
+  userId: string;
+  query: string;
+  limit?: number;
+  type?: NoteType;
+  tag?: string;
+  folderIds?: Set<string> | null;
+  cursor?: NoteSearchCursor | null;
+  cursorScope?: string;
+  offset?: number;
+}) {
   const query = input.query.trim();
-  if (!query)
-    return { ok: true, value: { documents: [] } } satisfies DocumentCommandResult<{
-      documents: Array<{
-        id: string;
-        folderId: string;
-        userId: string;
-        title: string;
-        content: string;
-        createdAt: Date;
-        updatedAt: Date;
-        folderTitle: string;
-      }>;
-    }>;
+  if (!query) return { ok: true, value: { documents: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
+  if (input.folderIds && input.folderIds.size === 0)
+    return { ok: true, value: { documents: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
 
   const pattern = `%${query}%`;
   const prefixPattern = `${query}%`;
   const type = input.type ?? 'note';
+  const tagName = input.tag ? normalizeTagName(input.tag) : '';
+  if (input.tag && !tagName)
+    return { ok: true, value: { documents: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
+
+  const tagSearchMatch = sql<boolean>`exists (
+    select 1 from ${noteTags}
+    inner join ${tags} on ${tags.id} = ${noteTags.tagId}
+    where ${noteTags.noteId} = ${notes.id}
+      and ${noteTags.userId} = ${input.userId}
+      and lower(${tags.name}) like lower(${pattern})
+  )`;
+  const exactTagMatch = tagName
+    ? sql<boolean>`exists (
+        select 1 from ${noteTags}
+        inner join ${tags} on ${tags.id} = ${noteTags.tagId}
+        where ${noteTags.noteId} = ${notes.id}
+          and ${noteTags.userId} = ${input.userId}
+          and ${tags.normalizedName} = ${tagName}
+      )`
+    : undefined;
+  const searchRank = sql<number>`case
+    when lower(${notes.title}) = lower(${query}) then 0
+    when lower(${notes.title}) like lower(${prefixPattern}) then 1
+    when lower(${notes.title}) like lower(${pattern}) then 2
+    when ${tagSearchMatch} then 3
+    when lower(${folders.title}) like lower(${pattern}) then 4
+    else 5
+  end`;
+  const afterCursor = input.cursor
+    ? or(
+        gt(searchRank, input.cursor.rank),
+        and(eq(searchRank, input.cursor.rank), lt(notes.updatedAt, new Date(input.cursor.updatedAt))),
+        and(
+          eq(searchRank, input.cursor.rank),
+          eq(notes.updatedAt, new Date(input.cursor.updatedAt)),
+          gt(notes.title, input.cursor.title)
+        ),
+        and(
+          eq(searchRank, input.cursor.rank),
+          eq(notes.updatedAt, new Date(input.cursor.updatedAt)),
+          eq(notes.title, input.cursor.title),
+          gt(notes.id, input.cursor.id)
+        )
+      )
+    : undefined;
+  const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
   const rows = await db
     .select({
       id: notes.id,
       folderId: notes.folderId,
-      userId: notes.userId,
       title: notes.title,
-      content: notes.content,
+      documentType: notes.documentType,
       type: notes.type,
+      isApiEditable: notes.isApiEditable,
       createdAt: notes.createdAt,
       updatedAt: notes.updatedAt,
       folderTitle: folders.title,
+      searchRank,
     })
     .from(notes)
     .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
-    .leftJoin(noteTags, and(eq(noteTags.noteId, notes.id), eq(noteTags.userId, input.userId)))
-    .leftJoin(tags, and(eq(tags.id, noteTags.tagId), eq(tags.userId, input.userId)))
     .where(
       and(
         activeNoteWhere(input.userId),
         eq(notes.type, type),
-        or(
-          like(notes.title, pattern),
-          like(notes.content, pattern),
-          like(folders.title, pattern),
-          like(tags.name, pattern)
-        )
+        input.folderIds ? inArray(notes.folderId, [...input.folderIds]) : undefined,
+        exactTagMatch,
+        or(like(notes.title, pattern), like(notes.content, pattern), like(folders.title, pattern), tagSearchMatch),
+        afterCursor
       )
     )
-    .groupBy(notes.id)
-    .orderBy(
-      sql`case
-        when lower(${notes.title}) = lower(${query}) then 0
-        when lower(${notes.title}) like lower(${prefixPattern}) then 1
-        when lower(${notes.title}) like lower(${pattern}) then 2
-        when lower(${tags.name}) like lower(${pattern}) then 3
-        when lower(${folders.title}) like lower(${pattern}) then 4
-        else 5
-      end`,
-      desc(notes.updatedAt),
-      asc(notes.title)
-    )
-    .limit(input.limit ?? 25);
+    .orderBy(searchRank, desc(notes.updatedAt), asc(notes.title), asc(notes.id))
+    .limit(limit + 1)
+    .offset(Math.max(0, input.offset ?? 0));
 
-  return { ok: true, value: { documents: rows } } satisfies DocumentCommandResult<{ documents: typeof rows }>;
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const last = pageRows[pageRows.length - 1];
+  const documents = pageRows.map(({ searchRank: _searchRank, ...document }) => document);
+  const pageInfo: PageInfo = {
+    hasMore,
+    nextCursor:
+      hasMore && last && input.cursorScope
+        ? encodeCursor(input.cursorScope, {
+            rank: Number(last.searchRank),
+            updatedAt: last.updatedAt.toISOString(),
+            title: last.title,
+            id: last.id,
+          })
+        : null,
+  };
+
+  return { ok: true, value: { documents, pageInfo } } as const;
 }
 
 export function getUpdateEventType(

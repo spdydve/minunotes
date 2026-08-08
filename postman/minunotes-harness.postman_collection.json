@@ -1,0 +1,1426 @@
+{
+  "info": {
+    "name": "MinuNotes Harness API",
+    "_postman_id": "minunotes-harness-api",
+    "description": "Generated from the MinuNotes Harness OpenAPI document. Search and list responses are compact metadata; explicitly read a note, line range, or section when content is needed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.notes.dpklabs.com"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    },
+    {
+      "key": "folderId",
+      "value": "folder_xxx"
+    },
+    {
+      "key": "noteId",
+      "value": "note_xxx"
+    },
+    {
+      "key": "sectionId",
+      "value": "section-id"
+    },
+    {
+      "key": "nodeId",
+      "value": "node_a"
+    },
+    {
+      "key": "targetNoteId",
+      "value": "note_target"
+    },
+    {
+      "key": "baseHash",
+      "value": "hash_from_read"
+    },
+    {
+      "key": "shareToken",
+      "value": "share_xxx"
+    },
+    {
+      "key": "folderCursor",
+      "value": ""
+    },
+    {
+      "key": "tagCursor",
+      "value": ""
+    },
+    {
+      "key": "searchCursor",
+      "value": ""
+    },
+    {
+      "key": "orphanCursor",
+      "value": ""
+    },
+    {
+      "key": "lineSearchCursor",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Smoke flow",
+      "item": [
+        {
+          "name": "1. Search notes (compact)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Run this first. The test script stores the first result id in the noteId collection variable.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/search?q=project",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "project",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.notes?.[0]?.id) pm.collectionVariables.set('noteId', body.notes[0].id);",
+                  "const body = pm.response.json(); pm.collectionVariables.set('searchCursor', body.pageInfo?.nextCursor ?? '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Read selected note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Expands the selected compact search result and stores its contentHash for safe edits.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.note?.id) pm.collectionVariables.set('noteId', body.note.id);",
+                  "const body = pm.response.json(); if (body.contentHash) pm.collectionVariables.set('baseHash', body.contentHash);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tags",
+      "item": [
+        {
+          "name": "List tags",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Returns cursor-paginated tags visible in the authorized folder scope.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/tags?limit=10&cursor={{tagCursor}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "tags"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{tagCursor}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); pm.collectionVariables.set('tagCursor', body.pageInfo?.nextCursor ?? '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List note tags",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/tags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "tags"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace note tags",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tags\": [\n    \"evaluation\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/tags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "tags"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Folders",
+      "item": [
+        {
+          "name": "List accessible active folders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Returns compact active folder metadata only. Owner/database fields are omitted; trashed folders and descendants of trashed folders are excluded.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/folders?limit=10&cursor={{folderCursor}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "folders"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{folderCursor}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); pm.collectionVariables.set('folderCursor', body.pageInfo?.nextCursor ?? '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create a folder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Requires the API key to have folder-creation permission. Created folders are automatically scoped to the same key and returned as compact metadata.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Harness evaluation\",\n  \"parentFolderId\": \"{{folderId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/folders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "folders"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.folder?.id) pm.collectionVariables.set('folderId', body.folder.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Notes",
+      "item": [
+        {
+          "name": "Search active notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Searches active notes only. Returns compact metadata without note content; use the read-note, lines, or section endpoints to expand a selected note. Trashed notes and notes below trashed folders are excluded.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/search?q=project&tag=release-notes&limit=10&cursor={{searchCursor}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "project",
+                  "disabled": false
+                },
+                {
+                  "key": "tag",
+                  "value": "release-notes",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{searchCursor}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.notes?.[0]?.id) pm.collectionVariables.set('noteId', body.notes[0].id);",
+                  "const body = pm.response.json(); pm.collectionVariables.set('searchCursor', body.pageInfo?.nextCursor ?? '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List notes with no incoming links",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/orphans?limit=10&cursor={{orphanCursor}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "orphans"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{orphanCursor}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); pm.collectionVariables.set('orphanCursor', body.pageInfo?.nextCursor ?? '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search matching lines across notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Returns cursor-paginated matching lines and requested context. Cross-note matches omit repeated hashes and size metadata; use the note read endpoint for full content and the current hash.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/search-lines?q=project&folderId={{folderId}}&context=2&limit=10&cursor={{lineSearchCursor}}&caseSensitive=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "search-lines"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "project",
+                  "disabled": false
+                },
+                {
+                  "key": "folderId",
+                  "value": "{{folderId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "context",
+                  "value": "2",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{lineSearchCursor}}",
+                  "disabled": true
+                },
+                {
+                  "key": "caseSensitive",
+                  "value": "false",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); pm.collectionVariables.set('lineSearchCursor', body.pageInfo?.nextCursor ?? '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create a note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"folderId\": \"{{folderId}}\",\n  \"title\": \"Harness evaluation note\",\n  \"content\": \"# Harness evaluation note\\n\\nCreated through the Postman collection.\\n\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.note?.id) pm.collectionVariables.set('noteId', body.note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Move notes to a folder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Moves one or more notes to a target folder. Requires edit access to every source folder and create access to the target folder. The response is compact and does not include note content.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"noteIds\": [\n    \"{{noteId}}\"\n  ],\n  \"targetFolderId\": \"{{folderId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "move"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read an active note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Returns not found when the note or any folder ancestor is trashed.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.note?.id) pm.collectionVariables.set('noteId', body.note.id);",
+                  "const body = pm.response.json(); if (body.contentHash) pm.collectionVariables.set('baseHash', body.contentHash);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List note events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/events?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List outgoing note links",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Returns links from the note, including unresolved wikilinks where targetNoteId is null.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/links",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "links"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List backlinks to a note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Returns notes that link to the target note with wikilinks or internal note URLs. Results are filtered to source notes visible to the current API key.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/backlinks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "backlinks"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read numbered note lines",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/lines?from=1&to=80",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "lines"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "80",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search matching lines in one note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/search-lines?q=project&context=2&limit=10&caseSensitive=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "search-lines"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "project",
+                  "disabled": false
+                },
+                {
+                  "key": "context",
+                  "value": "2",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                },
+                {
+                  "key": "caseSensitive",
+                  "value": "false",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get note outline",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/outline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "outline"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read a note section",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/sections/{{sectionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "sections",
+                "{{sectionId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit a note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseHash\": \"{{baseHash}}\",\n  \"edits\": [\n    {\n      \"type\": \"append\",\n      \"text\": \"\\n- Checked by harness\\n\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/edit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "edit"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Canvases",
+      "item": [
+        {
+          "name": "Create a canvas note from JSON Canvas",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"folderId\": \"{{folderId}}\",\n  \"title\": \"Harness canvas\",\n  \"canvas\": {\n    \"nodes\": [],\n    \"edges\": []\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/canvases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "canvases"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.note?.id) pm.collectionVariables.set('noteId', body.note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create a canvas note from Minu diagram syntax",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"folderId\": \"{{folderId}}\",\n  \"title\": \"Harness diagram\",\n  \"syntax\": \"diagram \\\"Harness flow\\\" {\\n  Start > Finish\\n}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/canvases/from-syntax",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "canvases",
+                "from-syntax"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json(); if (body.note?.id) pm.collectionVariables.set('noteId', body.note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace a canvas note with JSON Canvas",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseHash\": \"{{baseHash}}\",\n  \"canvas\": {\n    \"nodes\": [],\n    \"edges\": []\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/canvas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "canvas"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Link a canvas node to a MinuNotes note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Adds MinuNotes internal-link metadata to one canvas node while preserving external URLs and other node metadata. Requires edit access to the canvas and read access to the target note.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetNoteId\": \"{{targetNoteId}}\",\n  \"baseHash\": \"{{baseHash}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/canvas/nodes/{{nodeId}}/link-note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "canvas",
+                "nodes",
+                "{{nodeId}}",
+                "link-note"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remove an internal note link from a canvas node",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "Removes only MinuNotes internal-link metadata. External node URLs and other metadata are preserved.",
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/canvas/nodes/{{nodeId}}/link?baseHash={{baseHash}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "canvas",
+                "nodes",
+                "{{nodeId}}",
+                "link"
+              ],
+              "query": [
+                {
+                  "key": "baseHash",
+                  "value": "{{baseHash}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replace a canvas note with compiled Minu diagram syntax",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseHash\": \"{{baseHash}}\",\n  \"syntax\": \"diagram \\\"Harness flow\\\" {\\n  Start > Finish\\n}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/harness/notes/{{noteId}}/canvas/from-syntax",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "harness",
+                "notes",
+                "{{noteId}}",
+                "canvas",
+                "from-syntax"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "item": [
+        {
+          "name": "Read a publicly shared note and its authored wikilink destinations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/internal/share/{{shareToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "share",
+                "{{shareToken}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read authored wikilink destinations for one note in a publicly shared folder",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "type": "text"
+              }
+            ],
+            "description": "The token must be active and the source note must belong to the shared folder subtree. The endpoint accepts no target list and returns no private note metadata.",
+            "url": {
+              "raw": "{{baseUrl}}/internal/share/folders/{{shareToken}}/notes/{{noteId}}/wikilinks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "internal",
+                "share",
+                "folders",
+                "{{shareToken}}",
+                "notes",
+                "{{noteId}}",
+                "wikilinks"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('returns a successful response', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

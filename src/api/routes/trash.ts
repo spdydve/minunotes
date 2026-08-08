@@ -1,5 +1,6 @@
 import { type Context, Hono } from 'hono';
 import type { auth } from '../lib/auth';
+import { pageRows, parsePageRequest } from '../lib/pagination';
 import {
   listTrashedFolderContents,
   listTrashedFolders,
@@ -24,11 +25,20 @@ function getUser(c: Context<{ Variables: Variables }>) {
 trashRoutes.get('/', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
-  const [notes, folders] = await Promise.all([
-    listTrashedNotes({ userId: user.id }),
-    listTrashedFolders({ userId: user.id }),
+  const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
+  const [noteRows, folderRows] = await Promise.all([
+    listTrashedNotes({ userId: user.id, offset: page.offset, limit: page.limit }),
+    listTrashedFolders({ userId: user.id, offset: page.offset, limit: page.limit }),
   ]);
-  return c.json({ notes, folders });
+  const notes = pageRows(noteRows, page);
+  const folders = pageRows(folderRows, page);
+  return c.json({
+    notes: notes.items,
+    folders: folders.items,
+    page: page.page,
+    limit: page.limit,
+    hasMore: notes.hasMore || folders.hasMore,
+  });
 });
 
 trashRoutes.get('/folders/:folderId/contents', async (c) => {

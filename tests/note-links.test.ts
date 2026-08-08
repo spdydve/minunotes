@@ -397,7 +397,37 @@ describe('note link indexing', () => {
 
     const orphansResponse = await app.request('/api/harness/notes/orphans');
     expect(orphansResponse.status).toBe(200);
-    await expect(orphansResponse.json()).resolves.toMatchObject({ notes: expect.any(Array) });
+    const orphanBody = (await orphansResponse.json()) as {
+      notes: Array<Record<string, unknown>>;
+    };
+    expect(orphanBody.notes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: source.id, documentType: 'markdown', type: 'note' })])
+    );
+    expect(orphanBody.notes.every((note) => note.content === undefined && note.userId === undefined)).toBe(true);
+
+    const foldersResponse = await app.request('/api/harness/folders');
+    const foldersBody = (await foldersResponse.json()) as { folders: Array<Record<string, unknown>> };
+    expect(foldersBody.folders[0]).not.toHaveProperty('userId');
+    expect(foldersBody.folders[0]).not.toHaveProperty('deletedAt');
+
+    const searchResponse = await app.request('/api/harness/notes/search?q=Source');
+    expect(searchResponse.status).toBe(200);
+    const searchBody = (await searchResponse.json()) as { notes: Array<Record<string, unknown>> };
+    expect(searchBody.notes).toEqual([
+      expect.objectContaining({ id: source.id, title: 'Source Note', documentType: 'markdown' }),
+    ]);
+    expect(searchBody.notes[0]).not.toHaveProperty('content');
+    expect(searchBody.notes[0]).not.toHaveProperty('userId');
+
+    const lineSearchResponse = await app.request('/api/harness/notes/search-lines?q=Target');
+    expect(lineSearchResponse.status).toBe(200);
+    const lineSearchBody = (await lineSearchResponse.json()) as {
+      matches: Array<Record<string, unknown>>;
+    };
+    expect(lineSearchBody.matches[0]).toMatchObject({ noteId: source.id, title: 'Source Note' });
+    expect(lineSearchBody.matches[0]).not.toHaveProperty('contentHash');
+    expect(lineSearchBody.matches[0]).not.toHaveProperty('noteSizeBytes');
+    expect(lineSearchBody.matches[0]).not.toHaveProperty('lineCount');
   });
 
   it('indexes unresolved links and resolves them when a matching note is created', async () => {

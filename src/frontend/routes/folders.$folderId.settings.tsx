@@ -15,7 +15,7 @@ function FolderSettingsView() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [renameOpen, setRenameOpen] = useState(false);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
-  const templates = useQuery({ queryKey: ['templates'], queryFn: api.templates });
+  const templates = useQuery({ queryKey: ['templates', 'all'], queryFn: api.allTemplates });
   const assigned = useQuery({ queryKey: ['folder-templates', folderId], queryFn: () => api.folderTemplates(folderId) });
   const folder = folders.data?.folders.find((item) => item.id === folderId);
 
@@ -81,7 +81,7 @@ function FolderSettingsView() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="notes-muted text-sm">Folder settings</p>
-          <h2 className="text-xl font-semibold">{folder.title}</h2>
+          <h2 className="font-semibold text-xl">{folder.title}</h2>
         </div>
         <Button variant="secondary" onClick={() => nav({ to: '/folders/$folderId', params: { folderId } })}>
           Back to folder
@@ -161,9 +161,7 @@ function FolderSettingsView() {
                 />
                 <span>
                   <span className="block font-medium">{template.title}</span>
-                  <span className="notes-muted mt-1 line-clamp-2 block text-xs">
-                    {template.content.trim() || 'Empty template'}
-                  </span>
+                  <span className="notes-muted mt-1 block text-xs">Reusable template</span>
                 </span>
               </label>
             ))}
@@ -184,14 +182,14 @@ function FolderSettingsView() {
             Save template settings
           </Button>
           {saveTemplates.isSuccess ? (
-            <span className="self-center text-sm text-[var(--notes-muted)]">Saved</span>
+            <span className="self-center text-[var(--notes-muted)] text-sm">Saved</span>
           ) : null}
         </div>
       </div>
 
       <div className="rounded-lg border border-[var(--notes-button-destructive-border)] bg-[var(--notes-button-destructive-bg)] p-4">
         <h3 className="font-semibold text-[var(--notes-button-destructive-text)]">Danger zone</h3>
-        <p className="mt-1 text-sm text-[var(--notes-button-destructive-text)]">
+        <p className="mt-1 text-[var(--notes-button-destructive-text)] text-sm">
           Move this folder, its subfolders, and their notes to Trash so they can be restored later.
         </p>
         <div className="mt-4">

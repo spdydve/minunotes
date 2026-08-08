@@ -10,7 +10,21 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 ## Tool usage patterns
 
 - Find/create location: `minunotes_list_folders` → `minunotes_create_folder` if needed.
-- Safe note edit: `minunotes_search_notes` or `minunotes_read_note` → capture `contentHash` → `minunotes_edit_note` with `baseHash`.
+- Discovery first: `minunotes_search_notes` and `minunotes_orphans` return compact metadata only; use `minunotes_read_note`, `minunotes_read_lines`, or outline/section tools to expand a selected note.
+- Safe note edit: search or `minunotes_read_note` → capture `contentHash` → `minunotes_edit_note` with `baseHash`.
+
+## Retrieval workflow
+
+Use the smallest tool result that supports the next decision:
+
+1. **Discover candidates** with `minunotes_search_notes` or `minunotes_orphans`. Treat each result as metadata, not note content.
+2. **Find relevant passages** with `minunotes_search_lines` when the query is about note body text or the notes may be large. Matches include the note id, location, matching text, and requested context.
+3. **Expand selectively** with `minunotes_read_note` for the complete source, or `minunotes_read_outline` followed by `minunotes_read_section` for one heading. Use `minunotes_read_lines` for a bounded range.
+4. **Edit only after reading** the current note and copying its `contentHash` into the edit request.
+
+Discovery tools are cursor-paginated. When a response has `pageInfo.hasMore: true`, pass `pageInfo.nextCursor` back to the same tool with the same query and filters. Do not reuse a cursor with another tool or changed search, and do not fetch every page unless the task requires broader coverage.
+
+Do not read every search result automatically. Rank candidates by title, folder, document type, and matched context, then expand only the notes needed to answer the task.
 - Section edit: `minunotes_read_outline` → `minunotes_read_section` → targeted `replace_text` or `replace_range`.
 - Canvas create/update: use Minu diagram syntax for generated layouts and JSON Canvas for exact IDs, positions, links, and metadata.
 - Canvas replacement: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
@@ -43,6 +57,8 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 - `minunotes_link_canvas_node_to_note`
 - `minunotes_unlink_canvas_node`
 
+`minunotes_search_lines` retains matching lines and requested context, but cross-note matches omit repeated hashes, byte sizes, and total line counts. A line match is retrieval context, not a replacement for the current note read when editing.
+
 ## Rich Markdown
 
 - GitHub-style callouts use `> [!NOTE]`, `TIP`, `IMPORTANT`, `WARNING`, or `CAUTION`.
@@ -51,7 +67,7 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 
 ## Trash boundary
 
-- Folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only.
+- Folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only. Folder, tag, search, line-search, and orphan discovery lists are cursor-paginated; compact folder/note discovery records omit owner fields and full note content.
 - A trashed note, template, or folder subtree is unavailable through harness tools and normally returns not found when addressed by ID.
 - Harness tools cannot list Trash or trash, restore, or permanently delete content. Those owner-only operations require the authenticated MinuNotes web interface.
 - Do not interpret a not-found response as proof that content was permanently deleted; it may be outside the connection's scope or recoverable in the owner's Trash.

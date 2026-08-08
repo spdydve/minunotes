@@ -64,12 +64,15 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
 
   return {
     folders: {
-      list: () => request('/harness/folders'),
+      list: (input = {}) => request(`/harness/folders${toQueryString(input)}`),
       create: ({ title, parentFolderId }) =>
         request('/harness/folders', { method: 'POST', body: JSON.stringify({ title, parentFolderId }) }),
     },
     notes: {
-      search: (query) => request(`/harness/notes/search?q=${encodeURIComponent(query)}`),
+      search: (input) =>
+        request(
+          `/harness/notes/search${toQueryString({ q: input.query, tag: input.tag, limit: input.limit, cursor: input.cursor })}`
+        ),
       get: (noteId) => request(`/harness/notes/${encodeURIComponent(noteId)}`),
       create: (folderId, input) =>
         request('/harness/notes', {
@@ -88,7 +91,7 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
         }),
       searchLines: (input) =>
         request(
-          `/harness/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`
+          `/harness/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive, cursor: input.cursor })}`
         ),
       lines: (noteId, input) => request(`/harness/notes/${encodeURIComponent(noteId)}/lines${toQueryString(input)}`),
       searchNoteLines: (noteId, input) =>
@@ -140,7 +143,7 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
         ),
     },
     tags: {
-      list: () => request('/harness/tags'),
+      list: (input = {}) => request(`/harness/tags${toQueryString(input)}`),
     },
   };
 }

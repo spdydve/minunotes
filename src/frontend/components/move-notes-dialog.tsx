@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type MoveNotesResponse, type Note } from '../lib/api';
+import { api, type MoveNotesResponse, type NoteListItem } from '../lib/api';
 import { FolderDestinationPicker } from './folder-destination-picker';
 import { Button } from './ui/button';
 
@@ -11,7 +11,7 @@ export function MoveNotesDialog({
   onOpenChange,
   onMoved,
 }: {
-  notes: Note[];
+  notes: NoteListItem[];
   trigger?: ReactNode;
   onOpenChange?: (open: boolean) => void;
   onMoved?: (response: MoveNotesResponse) => void;

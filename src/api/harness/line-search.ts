@@ -22,13 +22,19 @@ export function getLineRange(markdown: string, from: number, to: number) {
 
 export function searchLines(
   markdown: string,
-  input: { query: string; context?: number; limit?: number; caseSensitive?: boolean }
+  input: {
+    query: string;
+    context?: number;
+    limit?: number;
+    caseSensitive?: boolean;
+    after?: { line: number; column: number };
+  }
 ) {
   const query = input.query;
   if (!query) return { lineCount: splitNumberedLines(markdown).length, matches: [] as LineMatch[] };
 
-  const requestedContext = Number.isFinite(input.context) ? input.context! : 0;
-  const requestedLimit = Number.isFinite(input.limit) ? input.limit! : 25;
+  const requestedContext = typeof input.context === 'number' && Number.isFinite(input.context) ? input.context : 0;
+  const requestedLimit = typeof input.limit === 'number' && Number.isFinite(input.limit) ? input.limit : 25;
   const context = Math.max(0, Math.min(requestedContext, 5));
   const limit = Math.max(1, Math.min(requestedLimit, 100));
   const lines = splitNumberedLines(markdown);
@@ -40,10 +46,18 @@ export function searchLines(
     const haystack = input.caseSensitive ? line.text : line.text.toLocaleLowerCase();
     const columnIndex = haystack.indexOf(needle);
     if (columnIndex < 0) continue;
+    const lineNumber = line.line;
+    const column = columnIndex + 1;
+    if (
+      input.after &&
+      (lineNumber < input.after.line || (lineNumber === input.after.line && column <= input.after.column))
+    ) {
+      continue;
+    }
 
     matches.push({
-      line: line.line,
-      column: columnIndex + 1,
+      line: lineNumber,
+      column,
       text: line.text,
       before: lines.slice(Math.max(0, index - context), index),
       after: lines.slice(index + 1, Math.min(lines.length, index + 1 + context)),

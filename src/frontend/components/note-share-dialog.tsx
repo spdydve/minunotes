@@ -2,14 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Link2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type Note, type NoteShareLink } from '../lib/api';
+import { api, type NoteListItem, type NoteShareLink } from '../lib/api';
 
 export function NoteShareDialog({
   note,
   open,
   onOpenChange,
 }: {
-  note: Note;
+  note: NoteListItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {

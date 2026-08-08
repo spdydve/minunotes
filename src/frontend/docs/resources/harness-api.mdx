@@ -37,6 +37,16 @@ curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
 
 Move responses return compact note metadata and no content.
 
+## Discovery pagination
+
+Folder, tag, note-search, orphan, and cross-note line-search endpoints return compact arrays plus:
+
+```json
+{ "pageInfo": { "hasMore": true, "nextCursor": "opaque-cursor" } }
+```
+
+Pass `nextCursor` back as `cursor` to the same endpoint with the same query and filters. Cursors are scoped to the search and authorized folders, so changing either returns `400`. Continue only when the current page is insufficient; do not fetch every page or expand every note by default.
+
 ## Trash boundary
 
 The harness API exposes active content only. Trashed notes, templates, and folder subtrees are omitted from folder lists, search, line search, tags, graph results, and attachment access. Direct requests for trashed IDs return not found.

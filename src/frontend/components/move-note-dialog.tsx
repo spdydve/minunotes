@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type Note } from '../lib/api';
+import { api, type NoteListItem } from '../lib/api';
 import { FolderDestinationPicker } from './folder-destination-picker';
 import { Button } from './ui/button';
 
@@ -10,7 +10,7 @@ export function MoveNoteDialog({
   trigger,
   onOpenChange,
 }: {
-  note: Note;
+  note: NoteListItem;
   trigger?: ReactNode;
   onOpenChange?: (open: boolean) => void;
 }) {

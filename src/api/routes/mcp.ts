@@ -87,12 +87,15 @@ function createHostedMcpClient(authState: {
 
   return {
     folders: {
-      list: () => request('/folders'),
+      list: (input = {}) => request(`/folders${toQueryString(input)}`),
       create: ({ title, parentFolderId }) =>
         request('/folders', { method: 'POST', body: JSON.stringify({ title, parentFolderId }) }),
     },
     notes: {
-      search: (query) => request(`/notes/search?q=${encodeURIComponent(query)}`),
+      search: (input) =>
+        request(
+          `/notes/search${toQueryString({ q: input.query, tag: input.tag, limit: input.limit, cursor: input.cursor })}`
+        ),
       get: (noteId) => request(`/notes/${encodeURIComponent(noteId)}`),
       create: (folderId, input) =>
         request('/notes', {
@@ -111,7 +114,7 @@ function createHostedMcpClient(authState: {
         }),
       searchLines: (input) =>
         request(
-          `/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive })}`
+          `/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive, cursor: input.cursor })}`
         ),
       lines: (noteId, input) => request(`/notes/${encodeURIComponent(noteId)}/lines${toQueryString(input)}`),
       searchNoteLines: (noteId, input) =>
@@ -154,7 +157,7 @@ function createHostedMcpClient(authState: {
         ),
     },
     tags: {
-      list: () => request('/tags'),
+      list: (input = {}) => request(`/tags${toQueryString(input)}`),
     },
   };
 }

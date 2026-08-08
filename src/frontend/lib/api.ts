@@ -126,6 +126,8 @@ export type Note = {
   createdAt: string;
   updatedAt: string;
 };
+export type NoteListItem = Omit<Note, 'content'>;
+export type PageResponse = { page: number; limit: number; hasMore: boolean };
 export type NoteResponse = { note: Note; contentHash: string };
 export type MoveNotesResponse = { notes: NoteResponse[] };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
@@ -261,7 +263,7 @@ export type TrashedFolderContents = {
     }
   >;
 };
-export type TrashResponse = { notes: TrashedNote[]; folders: TrashedFolder[] };
+export type TrashResponse = PageResponse & { notes: TrashedNote[]; folders: TrashedFolder[] };
 export type NoteEventsResponse = { noteId: string; events: NoteEvent[] };
 export type NoteVersionsResponse = { noteId: string; versions: NoteVersionSummary[] };
 export type DocumentEdit =
@@ -282,7 +284,7 @@ export type SectionResponse = {
   contentHash: string;
   section: DocumentSection & { markdown: string; content: string };
 };
-export type SearchNote = Note & { folderTitle: string };
+export type SearchNote = NoteListItem & { folderTitle: string };
 
 async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { method: 'POST', body: formData, credentials: 'include' });
@@ -309,6 +311,19 @@ function logImageUpload(
     status: input.status,
     message: input.message,
   });
+}
+
+async function fetchAllTemplates() {
+  const templates: NoteListItem[] = [];
+  let page = 1;
+  while (true) {
+    const result = await request<PageResponse & { templates: NoteListItem[] }>(
+      `/notes/templates?page=${page}&limit=100`
+    );
+    templates.push(...result.templates);
+    if (!result.hasMore) return { templates };
+    page += 1;
+  }
 }
 
 export const api = {
@@ -396,17 +411,22 @@ export const api = {
     request<{ ok: true; deletedAt: string; folderCount: number; noteCount: number }>(`/folders/${folderId}`, {
       method: 'DELETE',
     }),
-  templates: () => request<{ templates: Note[] }>('/notes/templates'),
-  folderTemplates: (folderId: string) => request<{ templates: Note[] }>(`/folders/${folderId}/templates`),
+  templates: (page = 1, limit = 50) =>
+    request<PageResponse & { templates: NoteListItem[] }>(`/notes/templates?page=${page}&limit=${limit}`),
+  allTemplates: () => fetchAllTemplates(),
+  folderTemplates: (folderId: string) => request<{ templates: NoteListItem[] }>(`/folders/${folderId}/templates`),
   templateFolders: (templateId: string) => request<{ folders: Folder[] }>(`/notes/templates/${templateId}/folders`),
   updateTemplateFolders: (templateId: string, folderIds: string[]) =>
     request<{ ok: true }>(`/notes/templates/${templateId}/folders`, {
       method: 'PUT',
       body: JSON.stringify({ folderIds }),
     }),
-  notes: (folderId: string, type: NoteType = 'note') =>
-    request<{ notes: Note[] }>(`/folders/${folderId}/notes?type=${type}`),
-  recentNotes: (limit = 10) => request<{ notes: Note[] }>(`/notes/recent?limit=${limit}`),
+  notes: (folderId: string, type: NoteType = 'note', page = 1, limit = 50) =>
+    request<PageResponse & { notes: NoteListItem[] }>(
+      `/folders/${folderId}/notes?type=${type}&page=${page}&limit=${limit}`
+    ),
+  recentNotes: (limit = 10, page = 1) =>
+    request<PageResponse & { notes: NoteListItem[] }>(`/notes/recent?page=${page}&limit=${limit}`),
   createNote: (
     folderId: string,
     data?: { title?: string; content?: string; type?: NoteType; documentType?: DocumentType }
@@ -453,10 +473,12 @@ export const api = {
     request<{ tags: Tag[] }>(`/notes/${noteId}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }),
   links: (noteId: string) => request<LinksResponse>(`/notes/${noteId}/links`),
   backlinks: (noteId: string) => request<BacklinksResponse>(`/notes/${noteId}/backlinks`),
-  orphanNotes: () =>
-    request<{ notes: Array<Pick<Note, 'id' | 'folderId' | 'title' | 'type' | 'createdAt' | 'updatedAt'>> }>(
-      '/notes/orphans'
-    ),
+  orphanNotes: (page = 1, limit = 50) =>
+    request<
+      PageResponse & {
+        notes: Array<Pick<NoteListItem, 'id' | 'folderId' | 'title' | 'type' | 'createdAt' | 'updatedAt'>>;
+      }
+    >(`/notes/orphans?page=${page}&limit=${limit}`),
   noteOutline: (noteId: string) =>
     request<{ noteId: string; contentHash: string; sections: DocumentSection[] }>(`/notes/${noteId}/outline`),
   noteSection: (noteId: string, sectionId: string) =>
@@ -479,9 +501,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ noteIds }),
     }),
-  searchNotes: (q: string, type: NoteType = 'note', limit?: number, tag?: string) =>
-    request<{ notes: SearchNote[] }>(
-      `/notes/search?q=${encodeURIComponent(q)}&type=${type}${limit ? `&limit=${limit}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
+  searchNotes: (q: string, type: NoteType = 'note', limit = 50, tag?: string, page = 1) =>
+    request<PageResponse & { notes: SearchNote[] }>(
+      `/notes/search?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
     ),
   uploadNoteImage: async (noteId: string, file: File) => {
     let phase = 'requesting signed upload URL';
@@ -546,7 +568,7 @@ export const api = {
       }
     }
   },
-  trash: () => request<TrashResponse>('/trash'),
+  trash: (page = 1, limit = 50) => request<TrashResponse>(`/trash?page=${page}&limit=${limit}`),
   trashedFolderContents: (folderId: string) => request<TrashedFolderContents>(`/trash/folders/${folderId}/contents`),
   restoreTrashedNote: (noteId: string, folderId?: string) =>
     request<{ note: Note; restoredToOriginalFolder: boolean }>(`/trash/notes/${noteId}/restore`, {

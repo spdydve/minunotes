@@ -15,11 +15,17 @@ export const harnessOpenApiSpec = {
         tags: ['Tags'],
         operationId: 'listTags',
         summary: 'List tags',
+        description: 'Returns cursor-paginated tags visible in the authorized folder scope.',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
         responses: {
           '200': {
             description: 'Tags',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/TagsResponse' } } },
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/PaginatedTagsResponse' } } },
           },
+          '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
@@ -29,12 +35,18 @@ export const harnessOpenApiSpec = {
         tags: ['Folders'],
         operationId: 'listFolders',
         summary: 'List accessible active folders',
-        description: 'Returns active folders only. Trashed folders and descendants of trashed folders are excluded.',
+        description:
+          'Returns compact active folder metadata only. Owner/database fields are omitted; trashed folders and descendants of trashed folders are excluded.',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
         responses: {
           '200': {
             description: 'Folders visible to the API key',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/FoldersResponse' } } },
           },
+          '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
@@ -43,7 +55,7 @@ export const harnessOpenApiSpec = {
         operationId: 'createFolder',
         summary: 'Create a folder',
         description:
-          'Requires the API key to have folder-creation permission. Created folders are automatically scoped to the same key.',
+          'Requires the API key to have folder-creation permission. Created folders are automatically scoped to the same key and returned as compact metadata.',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateFolderRequest' } } },
@@ -64,16 +76,20 @@ export const harnessOpenApiSpec = {
         tags: ['Notes'],
         operationId: 'searchNotes',
         summary: 'Search active notes',
-        description: 'Searches active notes only. Trashed notes and notes below trashed folders are excluded.',
+        description:
+          'Searches active notes only. Returns compact metadata without note content; use the read-note, lines, or section endpoints to expand a selected note. Trashed notes and notes below trashed folders are excluded.',
         parameters: [
           { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
           { name: 'tag', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
         ],
         responses: {
           '200': {
             description: 'Matching notes',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/SearchNotesResponse' } } },
           },
+          '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
@@ -83,11 +99,16 @@ export const harnessOpenApiSpec = {
         tags: ['Notes'],
         operationId: 'listOrphanNotes',
         summary: 'List notes with no incoming links',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
         responses: {
           '200': {
-            description: 'Orphan notes',
+            description: 'Compact orphan note metadata without note content',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/SearchNotesResponse' } } },
           },
+          '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
@@ -97,11 +118,14 @@ export const harnessOpenApiSpec = {
         tags: ['Notes'],
         operationId: 'searchNoteLines',
         summary: 'Search matching lines across notes',
+        description:
+          'Returns cursor-paginated matching lines and requested context. Cross-note matches omit repeated hashes and size metadata; use the note read endpoint for full content and the current hash.',
         parameters: [
           { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
           { name: 'folderId', in: 'query', schema: { type: 'string' } },
-          { name: 'context', in: 'query', schema: { type: 'integer', minimum: 0 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          { name: 'context', in: 'query', schema: { type: 'integer', minimum: 0, maximum: 5 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
           { name: 'caseSensitive', in: 'query', schema: { type: 'boolean' } },
         ],
         responses: {
@@ -109,6 +133,7 @@ export const harnessOpenApiSpec = {
             description: 'Line matches',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/LineSearchResponse' } } },
           },
+          '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
@@ -653,10 +678,21 @@ export const harnessOpenApiSpec = {
           updatedAt: { type: 'string' },
         },
       },
+      PageInfo: {
+        type: 'object',
+        required: ['hasMore', 'nextCursor'],
+        properties: {
+          hasMore: { type: 'boolean' },
+          nextCursor: { type: ['string', 'null'] },
+        },
+      },
       FoldersResponse: {
         type: 'object',
-        required: ['folders'],
-        properties: { folders: { type: 'array', items: { $ref: '#/components/schemas/Folder' } } },
+        required: ['folders', 'pageInfo'],
+        properties: {
+          folders: { type: 'array', items: { $ref: '#/components/schemas/Folder' } },
+          pageInfo: { $ref: '#/components/schemas/PageInfo' },
+        },
       },
       FolderResponse: {
         type: 'object',
@@ -778,8 +814,13 @@ export const harnessOpenApiSpec = {
       },
       SearchNotesResponse: {
         type: 'object',
-        required: ['notes'],
-        properties: { notes: { type: 'array', items: { $ref: '#/components/schemas/Note' } } },
+        required: ['notes', 'pageInfo'],
+        description:
+          'Compact discovery response. Note content is available through the explicit read/lines/section endpoints.',
+        properties: {
+          notes: { type: 'array', items: { $ref: '#/components/schemas/CompactNote' } },
+          pageInfo: { $ref: '#/components/schemas/PageInfo' },
+        },
       },
       Tag: {
         type: 'object',
@@ -795,6 +836,14 @@ export const harnessOpenApiSpec = {
         type: 'object',
         required: ['tags'],
         properties: { tags: { type: 'array', items: { $ref: '#/components/schemas/Tag' } } },
+      },
+      PaginatedTagsResponse: {
+        type: 'object',
+        required: ['tags', 'pageInfo'],
+        properties: {
+          tags: { type: 'array', items: { $ref: '#/components/schemas/Tag' } },
+          pageInfo: { $ref: '#/components/schemas/PageInfo' },
+        },
       },
       UpdateTagsRequest: {
         type: 'object',
@@ -901,6 +950,13 @@ export const harnessOpenApiSpec = {
         required: ['query', 'matches'],
         properties: {
           query: { type: 'string' },
+          pageInfo: { $ref: '#/components/schemas/PageInfo' },
+          noteId: { type: 'string', description: 'Present for searches restricted to one note.' },
+          title: { type: 'string', description: 'Present for searches restricted to one note.' },
+          folderId: { type: 'string', description: 'Present for searches restricted to one note.' },
+          contentHash: { type: 'string', description: 'Present for searches restricted to one note.' },
+          noteSizeBytes: { type: 'integer', description: 'Present for searches restricted to one note.' },
+          lineCount: { type: 'integer', description: 'Present for searches restricted to one note.' },
           matches: { type: 'array', items: { $ref: '#/components/schemas/LineSearchMatch' } },
         },
       },
