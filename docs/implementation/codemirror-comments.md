@@ -13,7 +13,7 @@ MinuEditor           selection, highlights, gutter actions, local anchor mapping
 MinuNotes            persistence, actors, authorization, threads, and lifecycle
 ```
 
-P1 supports the authenticated note owner and authorized API-key/OAuth agents. Public-share visitors cannot access comments. Canvas comments, suggestions, mentions, notifications, reactions, and realtime collaboration are deferred.
+P1 supports the authenticated note owner and authorized API-key/OAuth agents. Public-share visitors cannot access comments. Canvas comments, suggestions, mentions, notifications, and realtime collaboration are deferred.
 
 ## Persistence
 
@@ -62,7 +62,11 @@ Editor-originated interactions stay close to their source:
 - narrow screens place the compact dialog at the bottom of the viewport; and
 - detached threads remain available without highlighting unrelated text.
 
-Users can reply, edit their own messages, resolve or reopen threads, and delete messages or complete threads. App-owned Review surfaces use MinuNotes theme tokens. MinuEditor comment accent/background variables and gutter buttons are mapped to neutral theme colors rather than the package's default amber treatment.
+Users can reply, edit each of their own messages through a message-level More menu, resolve or reopen threads, and delete messages or complete threads. Edited messages are labeled. A curated reaction picker (`👍`, `❤️`, `😂`, `🎉`, `👀`, `🚀`) groups per-message totals and lets each owner or authorized integration toggle its own reaction.
+
+The first submitted comment transitions the existing anchored composer directly into its returned thread by updating the TanStack Query cache. The dialog instance and geometry remain stable; there is no visible refetch or loading flash. Replies, edits, lifecycle actions, deletes, and reactions likewise update targeted cached thread/message state, with reaction rollback on persistence failure.
+
+App-owned Review surfaces use MinuNotes theme tokens. MinuEditor comment accent/background variables and gutter buttons are mapped to neutral theme colors rather than the package's default amber treatment.
 
 MinuEditor receives controlled root comment items with `showPanel: false`; MinuNotes owns the drawer, adjacent dialog, and threaded discussion UI. The host derives dialog coordinates from the existing CodeMirror `EditorView.coordsAtPos()` API, so no MinuEditor package patch is required.
 

@@ -60,7 +60,7 @@ export function NoteEditor({
   comments?: CommentsProp;
   reviewPanel?: ReactNode;
   reviewFocus?: { from: number; to: number; detached?: boolean; requestId: number } | null;
-  onCommentAnchorPosition?: (position: { top: number; left: number }) => void;
+  onCommentAnchorPosition?: (position: { top: number; left: number; placement: 'above' | 'below' }) => void;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -104,7 +104,7 @@ export function NoteEditor({
     };
   }, []);
 
-  const positionCommentDialog = (anchor: EditorCommentAnchor) => {
+  const positionCommentDialog = (anchor: EditorCommentAnchor, preferGutter = anchor.anchorType === 'line') => {
     const view = editorViewRef.current;
     if (!view || !onCommentAnchorPosition) return;
     const docLength = view.state.doc.length;
@@ -112,15 +112,33 @@ export function NoteEditor({
     const to = Math.max(from, Math.min(anchor.to, docLength));
     const start = view.coordsAtPos(from);
     const end = view.coordsAtPos(to);
-    const anchorLeft = start?.left ?? end?.left ?? 12;
-    const anchorRight = end?.right ?? start?.right ?? anchorLeft;
-    const anchorBottom = end?.bottom ?? start?.bottom ?? 12;
-    const dialogWidth = Math.min(352, window.innerWidth - 24);
-    let left = anchorRight + 12;
-    if (left + dialogWidth > window.innerWidth - 12) left = anchorLeft - dialogWidth - 12;
-    left = Math.max(12, Math.min(left, window.innerWidth - dialogWidth - 12));
-    const top = Math.max(12, Math.min(anchorBottom + 8, window.innerHeight - 420));
-    onCommentAnchorPosition({ top, left });
+    const anchorTop = Math.min(start?.top ?? end?.top ?? 12, end?.top ?? start?.top ?? 12);
+    const anchorBottom = Math.max(end?.bottom ?? start?.bottom ?? 12, start?.bottom ?? end?.bottom ?? 12);
+
+    const domAtAnchor = view.domAtPos(from).node;
+    const anchorElement = domAtAnchor instanceof Element ? domAtAnchor : domAtAnchor.parentElement;
+    const lineElement = anchorElement?.closest('.cm-line');
+    const gutterButton = preferGutter ? lineElement?.querySelector<HTMLElement>('.me-comment-gutter-badge') : undefined;
+    const gutterRect = gutterButton?.getBoundingClientRect();
+    const targetTop = gutterRect?.top ?? anchorTop;
+    const targetBottom = gutterRect?.bottom ?? anchorBottom;
+
+    const editorContainer = view.dom.closest<HTMLElement>('.notes-minu-editor') ?? view.dom;
+    const containerRect = editorContainer.getBoundingClientRect();
+    const containerLeft = Math.max(12, containerRect.left);
+    const containerRight = Math.min(window.innerWidth - 12, containerRect.right);
+    const containerWidth = Math.max(0, containerRight - containerLeft);
+    const dialogWidth = Math.min(352, containerWidth);
+    const left = containerLeft + (containerWidth - dialogWidth) / 2;
+
+    const margin = 12;
+    const gap = 8;
+    const minimumUsefulHeight = 280;
+    const spaceAbove = targetTop - margin - gap;
+    const spaceBelow = window.innerHeight - targetBottom - margin - gap;
+    const placement = spaceBelow < minimumUsefulHeight && spaceAbove > spaceBelow ? 'above' : 'below';
+    const top = placement === 'above' ? targetTop - gap : targetBottom + gap;
+    onCommentAnchorPosition({ top, left, placement });
   };
 
   const positionedComments = useMemo<CommentsProp>(() => {
@@ -137,7 +155,7 @@ export function NoteEditor({
       },
       onSelectGroup: (items) => {
         const first = items[0];
-        if (first) positionCommentDialog(first.anchor);
+        if (first) positionCommentDialog(first.anchor, true);
         comments.onSelectGroup?.(items);
       },
     };

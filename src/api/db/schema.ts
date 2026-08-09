@@ -451,6 +451,39 @@ export const noteCommentMessages = sqliteTable(
   ]
 );
 
+export const noteCommentMessageReactions = sqliteTable(
+  'note_comment_message_reactions',
+  {
+    id: text('id').primaryKey(),
+    messageId: text('message_id')
+      .notNull()
+      .references(() => noteCommentMessages.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => noteCommentThreads.id, { onDelete: 'cascade' }),
+    noteId: text('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    actorType: text('actor_type', { enum: ['user', 'agent'] }).notNull(),
+    actorId: text('actor_id'),
+    emoji: text('emoji').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('note_comment_reactions_message_actor_emoji_idx').on(
+      table.messageId,
+      table.actorType,
+      table.actorId,
+      table.emoji
+    ),
+    index('note_comment_reactions_thread_idx').on(table.threadId),
+    index('note_comment_reactions_user_note_idx').on(table.userId, table.noteId),
+  ]
+);
+
 export const noteShareLinks = sqliteTable(
   'note_share_links',
   {
@@ -615,6 +648,7 @@ export const userRelations = relations(user, ({ many }) => ({
   noteVersions: many(noteVersions),
   noteCommentThreads: many(noteCommentThreads),
   noteCommentMessages: many(noteCommentMessages),
+  noteCommentMessageReactions: many(noteCommentMessageReactions),
   noteShareLinks: many(noteShareLinks),
   folderShareLinks: many(folderShareLinks),
   noteLinks: many(noteLinks),
@@ -700,6 +734,7 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   versions: many(noteVersions),
   commentThreads: many(noteCommentThreads),
   commentMessages: many(noteCommentMessages),
+  commentMessageReactions: many(noteCommentMessageReactions),
   shareLinks: many(noteShareLinks),
   tags: many(noteTags),
   outgoingLinks: many(noteLinks, { relationName: 'sourceNoteLinks' }),
@@ -731,13 +766,27 @@ export const noteCommentThreadRelations = relations(noteCommentThreads, ({ many,
   messages: many(noteCommentMessages),
 }));
 
-export const noteCommentMessageRelations = relations(noteCommentMessages, ({ one }) => ({
+export const noteCommentMessageRelations = relations(noteCommentMessages, ({ many, one }) => ({
   thread: one(noteCommentThreads, {
     fields: [noteCommentMessages.threadId],
     references: [noteCommentThreads.id],
   }),
   note: one(notes, { fields: [noteCommentMessages.noteId], references: [notes.id] }),
   user: one(user, { fields: [noteCommentMessages.userId], references: [user.id] }),
+  reactions: many(noteCommentMessageReactions),
+}));
+
+export const noteCommentMessageReactionRelations = relations(noteCommentMessageReactions, ({ one }) => ({
+  message: one(noteCommentMessages, {
+    fields: [noteCommentMessageReactions.messageId],
+    references: [noteCommentMessages.id],
+  }),
+  thread: one(noteCommentThreads, {
+    fields: [noteCommentMessageReactions.threadId],
+    references: [noteCommentThreads.id],
+  }),
+  note: one(notes, { fields: [noteCommentMessageReactions.noteId], references: [notes.id] }),
+  user: one(user, { fields: [noteCommentMessageReactions.userId], references: [user.id] }),
 }));
 
 export const noteShareLinkRelations = relations(noteShareLinks, ({ one }) => ({
@@ -780,6 +829,7 @@ export type NoteEvent = typeof noteEvents.$inferSelect;
 export type NoteVersion = typeof noteVersions.$inferSelect;
 export type NoteCommentThread = typeof noteCommentThreads.$inferSelect;
 export type NoteCommentMessage = typeof noteCommentMessages.$inferSelect;
+export type NoteCommentMessageReaction = typeof noteCommentMessageReactions.$inferSelect;
 export type NoteShareLink = typeof noteShareLinks.$inferSelect;
 export type FolderShareLink = typeof folderShareLinks.$inferSelect;
 export type Tag = typeof tags.$inferSelect;

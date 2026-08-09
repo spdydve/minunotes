@@ -213,9 +213,14 @@ curl -s "${AUTH[@]}" \
 curl -s "${AUTH[@]}" \
   -X POST "$API/v1/harness/notes/note_xxx/comments/comment_thread_xxx/resolve" \
   -d '{}'
+
+# Toggle a reaction on one message (repeat to remove your reaction)
+curl -s "${AUTH[@]}" \
+  -X POST "$API/v1/harness/notes/note_xxx/comments/comment_thread_xxx/messages/comment_message_xxx/reactions" \
+  -d '{"emoji":"🎉"}'
 ```
 
-Every comment operation requires explicit Review comments permission plus read access. Note edit permission and `isApiEditable` are not required for comments. Existing and new credentials have Review comments disabled until the owner grants it. Message edits/deletes are author-only. Use the current document hash for creation and anchor updates; stale anchors return `409`. When a listed thread is `detached`, do not guess a replacement location. Comments are unavailable for canvases, templates, Trash, and public shares.
+Messages include grouped reaction counts and `reactedByCurrentActor`. Supported reactions are `👍`, `❤️`, `😂`, `🎉`, `👀`, and `🚀`. Every comment operation requires explicit Review comments permission plus read access. Note edit permission and `isApiEditable` are not required for comments. Existing and new credentials have Review comments disabled until the owner grants it. Message edits/deletes are author-only. Use the current document hash for creation and anchor updates; stale anchors return `409`. When a listed thread is `detached`, do not guess a replacement location. Comments are unavailable for canvases, templates, Trash, and public shares.
 
 Create canvases from JSON Canvas or Minu diagram syntax:
 

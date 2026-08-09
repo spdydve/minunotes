@@ -1,10 +1,10 @@
 import type { EditorCommentAnchor } from '@dpklabs/minueditor';
 import { Check, MessageSquare, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { CommentThread } from '../lib/api';
-import { formatCommentTime } from './note-comments-panel';
+import type { CommentReactionEmoji, CommentThread } from '../lib/api';
+import { NoteCommentDiscussion } from './note-comment-discussion';
 
-export type CommentDialogPosition = { top: number; left: number };
+export type CommentDialogPosition = { top: number; left: number; placement: 'above' | 'below' };
 
 export function NoteCommentDialog({
   open,
@@ -17,7 +17,10 @@ export function NoteCommentDialog({
   onCreate,
   onReply,
   onStatusChange,
+  onEditMessage,
+  onDeleteMessage,
   onDeleteThread,
+  onToggleReaction,
 }: {
   open: boolean;
   position: CommentDialogPosition | null;
@@ -29,7 +32,10 @@ export function NoteCommentDialog({
   onCreate: (body: string, anchor: EditorCommentAnchor) => Promise<void>;
   onReply: (threadId: string, body: string) => Promise<void>;
   onStatusChange: (thread: CommentThread) => Promise<void>;
+  onEditMessage: (threadId: string, messageId: string, body: string) => Promise<void>;
+  onDeleteMessage: (threadId: string, messageId: string) => Promise<void>;
   onDeleteThread: (threadId: string) => Promise<void>;
+  onToggleReaction: (threadId: string, messageId: string, emoji: CommentReactionEmoji) => Promise<void>;
 }) {
   const [body, setBody] = useState('');
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -58,7 +64,18 @@ export function NoteCommentDialog({
     setBody('');
   };
   const quote = draftAnchor?.quote ?? thread?.anchor.quote ?? '';
-  const anchoredStyle = position && typeof window !== 'undefined' && window.innerWidth >= 640 ? position : undefined;
+  const anchoredStyle =
+    position && typeof window !== 'undefined' && window.innerWidth >= 640
+      ? {
+          top: position.top,
+          left: position.left,
+          transform: position.placement === 'above' ? 'translateY(-100%)' : undefined,
+          maxHeight:
+            position.placement === 'above'
+              ? `min(70dvh, 34rem, ${Math.max(0, position.top - 12)}px)`
+              : `min(70dvh, 34rem, calc(100dvh - ${position.top + 12}px))`,
+        }
+      : undefined;
 
   return (
     <div
@@ -95,17 +112,13 @@ export function NoteCommentDialog({
         ) : null}
 
         {thread ? (
-          <div className="space-y-2">
-            {thread.messages.map((message) => (
-              <article key={message.id} className="rounded-md bg-[var(--notes-bg)] p-2.5">
-                <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-[var(--notes-muted)]">
-                  <span className="truncate font-medium text-[var(--notes-text)]">{message.author.name}</span>
-                  <span>{formatCommentTime(message.updatedAt)}</span>
-                </div>
-                <p className="whitespace-pre-wrap text-sm">{message.body}</p>
-              </article>
-            ))}
-          </div>
+          <NoteCommentDiscussion
+            thread={thread}
+            busy={busy}
+            onEditMessage={onEditMessage}
+            onDeleteMessage={onDeleteMessage}
+            onToggleReaction={onToggleReaction}
+          />
         ) : null}
 
         {error ? (

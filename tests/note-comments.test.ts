@@ -18,7 +18,7 @@ type ThreadResponse = {
 type MessageResponse = { message: { id: string } };
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+  for (let index = 0; index <= 26; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -209,6 +209,30 @@ describe('note comments', () => {
     expect(edited.status).toBe(200);
     await expect(edited.json()).resolves.toMatchObject({ message: { body: 'Updated follow-up.' } });
 
+    const reacted = await ownerApp.request(
+      `/internal/notes/${note.id}/comments/${threadId}/messages/${replyId}/reactions`,
+      jsonRequest('POST', { emoji: '🎉' })
+    );
+    expect(reacted.status).toBe(200);
+    await expect(reacted.json()).resolves.toEqual({
+      messageId: replyId,
+      reactions: [{ emoji: '🎉', count: 1, reactedByCurrentActor: true }],
+    });
+    const listedReaction = await ownerApp.request(`/internal/notes/${note.id}/comments`);
+    await expect(listedReaction.json()).resolves.toMatchObject({
+      threads: [{ messages: [{ reactions: [] }, { reactions: [{ emoji: '🎉', count: 1 }] }] }],
+    });
+    const removedReaction = await ownerApp.request(
+      `/internal/notes/${note.id}/comments/${threadId}/messages/${replyId}/reactions`,
+      jsonRequest('POST', { emoji: '🎉' })
+    );
+    await expect(removedReaction.json()).resolves.toEqual({ messageId: replyId, reactions: [] });
+    const unsupportedReaction = await ownerApp.request(
+      `/internal/notes/${note.id}/comments/${threadId}/messages/${replyId}/reactions`,
+      jsonRequest('POST', { emoji: '🔥' })
+    );
+    expect(unsupportedReaction.status).toBe(400);
+
     const resolved = await ownerApp.request(
       `/internal/notes/${note.id}/comments/${threadId}/resolve`,
       jsonRequest('POST', {})
@@ -377,6 +401,22 @@ describe('note comments', () => {
     );
     expect(commentOnlyReply.status).toBe(201);
 
+    const agentReaction = await harnessApp.request(
+      `/v1/harness/notes/${note.id}/comments/${ownerThreadId}/messages/${ownerMessageId}/reactions`,
+      jsonRequest('POST', { emoji: '👀' })
+    );
+    expect(agentReaction.status).toBe(200);
+    await expect(agentReaction.json()).resolves.toMatchObject({
+      reactions: [{ emoji: '👀', count: 1, reactedByCurrentActor: true }],
+    });
+    const ownerReactionView = await ownerApp.request(`/internal/notes/${note.id}/comments`);
+    const ownerReactionBody = (await ownerReactionView.json()) as {
+      threads: Array<{ id: string; messages: Array<{ reactions: unknown[] }> }>;
+    };
+    expect(ownerReactionBody.threads.find((thread) => thread.id === ownerThreadId)?.messages[0]?.reactions).toEqual([
+      { emoji: '👀', count: 1, reactedByCurrentActor: false },
+    ]);
+
     await db
       .update(schema.apiKeyFolderPermissions)
       .set({ canComment: false })
@@ -401,6 +441,11 @@ describe('note comments', () => {
       jsonRequest('POST', { body: 'Retain me', anchor: rangeAnchor(hashMarkdown(note.content)) })
     );
     expect(created.status).toBe(201);
+    const createdThread = (await created.json()) as ThreadResponse;
+    await ownerApp.request(
+      `/internal/notes/${note.id}/comments/${createdThread.thread.id}/messages/${createdThread.thread.messages[0].id}/reactions`,
+      jsonRequest('POST', { emoji: '👍' })
+    );
 
     const isolated = await harnessApp.request(`/v1/harness/notes/${otherNote.id}/comments`);
     expect(isolated.status).toBe(404);
@@ -417,5 +462,6 @@ describe('note comments', () => {
     await db.delete(schema.notes).where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, note.userId)));
     await expect(db.select().from(schema.noteCommentThreads)).resolves.toHaveLength(0);
     await expect(db.select().from(schema.noteCommentMessages)).resolves.toHaveLength(0);
+    await expect(db.select().from(schema.noteCommentMessageReactions)).resolves.toHaveLength(0);
   });
 });

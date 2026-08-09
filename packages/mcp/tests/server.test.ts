@@ -29,6 +29,7 @@ function mockClient() {
       updateAnchor: vi.fn(async () => ({ thread: { id: 'thread-1' } })),
       setStatus: vi.fn(async () => ({ thread: { id: 'thread-1' } })),
       updateMessage: vi.fn(async () => ({ message: { id: 'message-1' } })),
+      toggleReaction: vi.fn(async () => ({ messageId: 'message-1', reactions: [] })),
       deleteMessage: vi.fn(async () => ({ ok: true, deletedThread: false })),
       deleteThread: vi.fn(async () => ({ ok: true })),
     },
@@ -73,6 +74,7 @@ describe('createNotesMcpServer', () => {
       'notes_update_comment_anchor',
       'notes_set_comment_status',
       'notes_edit_comment_message',
+      'notes_toggle_comment_reaction',
       'notes_delete_comment_message',
       'notes_delete_comment_thread',
       'notes_create_note',
@@ -182,6 +184,12 @@ describe('createNotesMcpServer', () => {
       messageId: 'message-1',
       body: 'Updated',
     } as never);
+    await tools(server).notes_toggle_comment_reaction.handler({
+      noteId: 'note-1',
+      threadId: 'thread-1',
+      messageId: 'message-1',
+      emoji: '🎉',
+    } as never);
     await tools(server).notes_delete_comment_message.handler({
       noteId: 'note-1',
       threadId: 'thread-1',
@@ -195,6 +203,7 @@ describe('createNotesMcpServer', () => {
     expect(client.comments.updateAnchor).toHaveBeenCalledWith('note-1', 'thread-1', anchor);
     expect(client.comments.setStatus).toHaveBeenCalledWith('note-1', 'thread-1', 'resolved');
     expect(client.comments.updateMessage).toHaveBeenCalledWith('note-1', 'thread-1', 'message-1', 'Updated');
+    expect(client.comments.toggleReaction).toHaveBeenCalledWith('note-1', 'thread-1', 'message-1', '🎉');
     expect(client.comments.deleteMessage).toHaveBeenCalledWith('note-1', 'thread-1', 'message-2');
     expect(client.comments.deleteThread).toHaveBeenCalledWith('note-1', 'thread-1');
   });

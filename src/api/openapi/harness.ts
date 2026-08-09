@@ -432,6 +432,34 @@ export const harnessOpenApiSpec = {
         },
       },
     },
+    '/v1/harness/notes/{noteId}/comments/{threadId}/messages/{messageId}/reactions': {
+      post: {
+        tags: ['Review'],
+        operationId: 'toggleCommentReaction',
+        summary: 'Toggle a reaction on a comment message',
+        description:
+          'Adds the selected reaction for the current actor, or removes it when already present. Requires read and explicit Review comments permission.',
+        parameters: [
+          { $ref: '#/components/parameters/NoteId' },
+          { $ref: '#/components/parameters/ThreadId' },
+          { $ref: '#/components/parameters/MessageId' },
+        ],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentReactionRequest' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Current grouped reactions for the message',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentReactionsResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
     '/v1/harness/notes/{noteId}/tags': {
       get: {
         tags: ['Tags'],
@@ -829,9 +857,18 @@ export const harnessOpenApiSpec = {
           detached: { type: 'boolean' },
         },
       },
+      CommentReaction: {
+        type: 'object',
+        required: ['emoji', 'count', 'reactedByCurrentActor'],
+        properties: {
+          emoji: { type: 'string', enum: ['👍', '❤️', '😂', '🎉', '👀', '🚀'] },
+          count: { type: 'integer', minimum: 1 },
+          reactedByCurrentActor: { type: 'boolean' },
+        },
+      },
       CommentMessage: {
         type: 'object',
-        required: ['id', 'threadId', 'body', 'author', 'createdAt', 'updatedAt'],
+        required: ['id', 'threadId', 'body', 'author', 'createdAt', 'updatedAt', 'reactions'],
         properties: {
           id: { type: 'string' },
           threadId: { type: 'string' },
@@ -839,6 +876,7 @@ export const harnessOpenApiSpec = {
           author: { $ref: '#/components/schemas/CommentActor' },
           createdAt: { type: 'string' },
           updatedAt: { type: 'string' },
+          reactions: { type: 'array', items: { $ref: '#/components/schemas/CommentReaction' } },
         },
       },
       CommentThread: {
@@ -918,6 +956,19 @@ export const harnessOpenApiSpec = {
         type: 'object',
         required: ['body'],
         properties: { body: { type: 'string', maxLength: 10000 } },
+      },
+      CommentReactionRequest: {
+        type: 'object',
+        required: ['emoji'],
+        properties: { emoji: { type: 'string', enum: ['👍', '❤️', '😂', '🎉', '👀', '🚀'] } },
+      },
+      CommentReactionsResponse: {
+        type: 'object',
+        required: ['messageId', 'reactions'],
+        properties: {
+          messageId: { type: 'string' },
+          reactions: { type: 'array', items: { $ref: '#/components/schemas/CommentReaction' } },
+        },
       },
       DeleteCommentMessageResponse: {
         type: 'object',

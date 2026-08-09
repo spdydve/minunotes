@@ -146,6 +146,13 @@ export type CommentAnchor = {
   documentHash: string;
   detached: boolean;
 };
+export const COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
+export type CommentReactionEmoji = (typeof COMMENT_REACTIONS)[number];
+export type CommentReaction = {
+  emoji: CommentReactionEmoji;
+  count: number;
+  reactedByCurrentActor: boolean;
+};
 export type CommentMessage = {
   id: string;
   threadId: string;
@@ -153,6 +160,7 @@ export type CommentMessage = {
   author: CommentActor;
   createdAt: string;
   updatedAt: string;
+  reactions: CommentReaction[];
 };
 export type CommentThread = {
   id: string;
@@ -517,6 +525,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ body }),
     }),
+  toggleCommentReaction: (noteId: string, threadId: string, messageId: string, emoji: CommentReactionEmoji) =>
+    request<{ messageId: string; reactions: CommentReaction[] }>(
+      `/notes/${noteId}/comments/${threadId}/messages/${messageId}/reactions`,
+      { method: 'POST', body: JSON.stringify({ emoji }) }
+    ),
   deleteCommentMessage: (noteId: string, threadId: string, messageId: string) =>
     request<{ ok: true; deletedThread: boolean }>(`/notes/${noteId}/comments/${threadId}/messages/${messageId}`, {
       method: 'DELETE',

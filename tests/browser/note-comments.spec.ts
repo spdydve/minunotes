@@ -20,13 +20,31 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   const dialogBox = await createDialog.boundingBox();
   if (!editorBox || !dialogBox) throw new Error('Expected editor and comment dialog bounds');
   expect(dialogBox.y).toBeGreaterThanOrEqual(editorBox.y - 20);
+  await createDialog.evaluate((element) => {
+    element.dataset.dialogInstance = 'preserved';
+  });
   await createDialog.getByPlaceholder('Leave a comment…').fill('Please review this opening.');
   await createDialog.getByRole('button', { name: 'Comment', exact: true }).click();
 
   const commentAnchor = page.locator('.me-comment-anchor');
   await expect(commentAnchor).toContainText('Start here.');
   const threadDialog = page.getByRole('dialog', { name: 'Comment thread', exact: true });
+  await expect(threadDialog).toHaveAttribute('data-dialog-instance', 'preserved');
   await expect(threadDialog.getByText('Please review this opening.')).toBeVisible();
+  const stableDialogBox = await threadDialog.boundingBox();
+  expect(stableDialogBox?.x).toBeCloseTo(dialogBox.x, 0);
+  expect(stableDialogBox?.y).toBeCloseTo(dialogBox.y, 0);
+
+  await threadDialog.getByRole('button', { name: 'More comment actions' }).click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await threadDialog.getByRole('textbox', { name: 'Edit comment' }).fill('Please review this opening carefully.');
+  await threadDialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(threadDialog.getByText('Please review this opening carefully.')).toBeVisible();
+  await expect(threadDialog.getByText(/\(edited\)/)).toBeVisible();
+
+  await threadDialog.getByRole('button', { name: 'Add reaction' }).click();
+  await page.getByRole('button', { name: 'React with 🎉' }).click();
+  await expect(threadDialog.getByRole('button', { name: '🎉 reaction, 1' })).toHaveAttribute('aria-pressed', 'true');
   await threadDialog.getByRole('button', { name: 'Close comment' }).click();
 
   const reviewButton = page.getByRole('button', { name: 'Open Review' });
@@ -34,11 +52,17 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   await reviewButton.click();
   const drawer = page.getByRole('dialog', { name: 'Review' });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByText('Please review this opening.')).toBeVisible();
+  await expect(drawer.getByText('Please review this opening carefully.')).toBeVisible();
+  await expect(drawer.getByRole('button', { name: '🎉 reaction, 1' })).toBeVisible();
   await drawer.getByText('Browser Test User', { exact: true }).first().click();
   await drawer.getByPlaceholder('Reply…').fill('Owner follow-up.');
   await drawer.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(drawer.getByText('Owner follow-up.')).toBeVisible();
+  await drawer.getByRole('button', { name: 'More comment actions' }).last().click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  await drawer.getByRole('textbox', { name: 'Edit comment' }).fill('Edited owner follow-up.');
+  await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(drawer.getByText('Edited owner follow-up.')).toBeVisible();
   await drawer.getByRole('button', { name: 'Resolve comment' }).click();
   await expect(drawer.getByRole('button', { name: 'Reopen comment' })).toBeVisible();
   await drawer.getByRole('button', { name: 'Reopen comment' }).click();
@@ -86,9 +110,24 @@ test('creates a whole-line comment from a simple themed gutter icon', async ({ p
       return getComputedStyle(element).color === expected;
     });
   await expect.poll(usesThemeMutedColor).toBe(true);
+  const lineButtonBox = await lineButton.boundingBox();
+  const lineIconBox = await lineButton.locator('svg').boundingBox();
+  if (!lineButtonBox || !lineIconBox) throw new Error('Expected line comment icon bounds');
+  expect(Math.abs(lineIconBox.x + lineIconBox.width / 2 - (lineButtonBox.x + lineButtonBox.width / 2))).toBeLessThan(1);
+  expect(Math.abs(lineIconBox.y + lineIconBox.height / 2 - (lineButtonBox.y + lineButtonBox.height / 2))).toBeLessThan(
+    1
+  );
+
   await lineButton.click();
   const dialog = page.getByLabel('Add comment');
   await expect(dialog.getByText('Start here.')).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  const editorContainerBox = await page.locator('.notes-minu-editor').boundingBox();
+  if (!dialogBox || !editorContainerBox) throw new Error('Expected comment dialog and editor container bounds');
+  expect(
+    Math.abs(dialogBox.x + dialogBox.width / 2 - (editorContainerBox.x + editorContainerBox.width / 2))
+  ).toBeLessThan(2);
+  expect(dialogBox.y).toBeGreaterThanOrEqual(lineButtonBox.y + lineButtonBox.height + 6);
   await dialog.getByPlaceholder('Leave a comment…').fill('Review the complete line.');
   await dialog.getByRole('button', { name: 'Comment', exact: true }).click();
   await expect(page.locator('.me-comment-anchor')).toContainText('Start here.');
@@ -109,6 +148,26 @@ test('creates a whole-line comment from a simple themed gutter icon', async ({ p
       })
     )
     .toBe(true);
+});
+
+test('places a whole-line comment dialog above the icon near the viewport bottom', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+  await page.addStyleTag({ content: '.notes-minu-editor .cm-content { padding-top: 280px !important; }' });
+
+  const line = page.locator('.cm-line').filter({ hasText: 'Start here.' }).first();
+  await line.click();
+  const lineButton = page.getByRole('button', { name: 'Comment on line' });
+  const lineButtonBox = await lineButton.boundingBox();
+  if (!lineButtonBox) throw new Error('Expected line comment icon bounds');
+  await lineButton.click();
+
+  const dialog = page.getByLabel('Add comment');
+  await expect(dialog).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  if (!dialogBox) throw new Error('Expected comment dialog bounds');
+  expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(lineButtonBox.y - 6);
 });
 
 test('opens Review with the same responsive drawer geometry as Backlinks', async ({ page }) => {

@@ -18,6 +18,7 @@ type BrowserCommentMessage = {
   author: { type: 'user' | 'agent'; id: string; name: string };
   createdAt: string;
   updatedAt: string;
+  reactions: Array<{ emoji: '👍' | '❤️' | '😂' | '🎉' | '👀' | '🚀'; count: number; reactedByCurrentActor: boolean }>;
 };
 
 type BrowserCommentThread = {
@@ -587,6 +588,35 @@ export async function mockBrowserApi(
       );
     }
 
+    const commentReactionMatch = path.match(
+      /^\/notes\/(note_[a-zA-Z0-9]+)\/comments\/(comment_thread_[a-zA-Z0-9]+)\/messages\/(comment_message_[a-zA-Z0-9]+)\/reactions$/
+    );
+    if (commentReactionMatch && method === 'POST') {
+      const [, noteId, threadId, messageId] = commentReactionMatch;
+      const thread = (commentThreads.get(noteId) ?? []).find((candidate) => candidate.id === threadId);
+      const message = thread?.messages.find((candidate) => candidate.id === messageId);
+      if (!message) return json({ error: 'Comment message not found' }, 404);
+      const body = request.postDataJSON() as { emoji: BrowserCommentMessage['reactions'][number]['emoji'] };
+      commentRequests.push({ method, path, body });
+      const existing = message.reactions.find((reaction) => reaction.emoji === body.emoji);
+      message.reactions = existing
+        ? existing.reactedByCurrentActor
+          ? existing.count === 1
+            ? message.reactions.filter((reaction) => reaction.emoji !== body.emoji)
+            : message.reactions.map((reaction) =>
+                reaction.emoji === body.emoji
+                  ? { ...reaction, count: reaction.count - 1, reactedByCurrentActor: false }
+                  : reaction
+              )
+          : message.reactions.map((reaction) =>
+              reaction.emoji === body.emoji
+                ? { ...reaction, count: reaction.count + 1, reactedByCurrentActor: true }
+                : reaction
+            )
+        : [...message.reactions, { emoji: body.emoji, count: 1, reactedByCurrentActor: true }];
+      return json({ messageId, reactions: message.reactions });
+    }
+
     const commentMessagesMatch = path.match(
       /^\/notes\/(note_[a-zA-Z0-9]+)\/comments\/(comment_thread_[a-zA-Z0-9]+)\/messages\/(comment_message_[a-zA-Z0-9]+)$/
     );
@@ -599,7 +629,7 @@ export async function mockBrowserApi(
       if (method === 'PATCH') {
         const body = request.postDataJSON() as { body?: string };
         message.body = body.body ?? message.body;
-        message.updatedAt = now;
+        message.updatedAt = '2026-07-12T00:01:00.000Z';
         thread.updatedAt = now;
         return json({ message });
       }
@@ -626,6 +656,7 @@ export async function mockBrowserApi(
           author: { type: 'user', id: 'owner', name: 'Browser Test User' },
           createdAt: now,
           updatedAt: now,
+          reactions: [],
         };
         thread.messages.push(message);
         thread.updatedAt = now;
@@ -688,6 +719,7 @@ export async function mockBrowserApi(
               author: { type: 'user', id: 'owner', name: 'Browser Test User' },
               createdAt: now,
               updatedAt: now,
+              reactions: [],
             },
           ],
         };

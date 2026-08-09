@@ -24,6 +24,7 @@ import {
   deleteCommentThread,
   listCommentThreads,
   setCommentThreadStatus,
+  toggleCommentReaction,
   updateCommentAnchor,
   updateCommentMessage,
 } from '../notes/comments';
@@ -310,7 +311,11 @@ function commentErrorResponse(
 noteRoutes.get('/:noteId/comments', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
-  const result = await listCommentThreads({ noteId: c.req.param('noteId'), userId: user.id });
+  const result = await listCommentThreads({
+    noteId: c.req.param('noteId'),
+    userId: user.id,
+    actor: { type: 'user', id: user.id },
+  });
   if (!result.ok) return commentErrorResponse(c, result);
   return c.json(result.value);
 });
@@ -363,6 +368,7 @@ noteRoutes.patch('/:noteId/comments/:threadId/anchor', async (c) => {
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
     userId: user.id,
+    actor: { type: 'user', id: user.id },
     anchor: body.anchor,
   });
   if (!result.ok) return commentErrorResponse(c, result);
@@ -401,6 +407,24 @@ noteRoutes.patch('/:noteId/comments/:threadId/messages/:messageId', async (c) =>
     userId: user.id,
     actor: { type: 'user', id: user.id },
     body: body.body,
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value);
+});
+
+noteRoutes.post('/:noteId/comments/:threadId/messages/:messageId/reactions', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const body = (await c.req.json().catch(() => null)) as { emoji?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (typeof body.emoji !== 'string') return c.json({ error: 'Reaction emoji is required' }, 400);
+  const result = await toggleCommentReaction({
+    noteId: c.req.param('noteId'),
+    threadId: c.req.param('threadId'),
+    messageId: c.req.param('messageId'),
+    userId: user.id,
+    actor: { type: 'user', id: user.id },
+    emoji: body.emoji,
   });
   if (!result.ok) return commentErrorResponse(c, result);
   return c.json(result.value);

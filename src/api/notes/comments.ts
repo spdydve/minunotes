@@ -3,7 +3,9 @@ import { db } from '../db/client';
 import {
   apiKeys,
   type NoteCommentMessage,
+  type NoteCommentMessageReaction,
   type NoteCommentThread,
+  noteCommentMessageReactions,
   noteCommentMessages,
   noteCommentThreads,
   user,
@@ -13,6 +15,8 @@ import { createId } from '../lib/id';
 
 export const MAX_COMMENT_BODY_LENGTH = 10_000;
 export const MAX_COMMENT_QUOTE_LENGTH = 20_000;
+export const COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
+export type CommentReactionEmoji = (typeof COMMENT_REACTIONS)[number];
 
 export type CommentActor = {
   type: 'user' | 'agent';
@@ -36,6 +40,12 @@ export type SafeCommentActor = {
   name: string;
 };
 
+export type SerializedCommentReaction = {
+  emoji: CommentReactionEmoji;
+  count: number;
+  reactedByCurrentActor: boolean;
+};
+
 export type SerializedCommentMessage = {
   id: string;
   threadId: string;
@@ -43,6 +53,7 @@ export type SerializedCommentMessage = {
   author: SafeCommentActor;
   createdAt: Date;
   updatedAt: Date;
+  reactions: SerializedCommentReaction[];
 };
 
 export type SerializedCommentThread = {
@@ -203,10 +214,29 @@ async function createActorSerializer(userId: string, references: ActorReference[
   };
 }
 
+function serializeReactions(reactions: NoteCommentMessageReaction[], actor: CommentActor): SerializedCommentReaction[] {
+  const grouped = new Map<CommentReactionEmoji, { count: number; reactedByCurrentActor: boolean }>();
+  for (const reaction of reactions) {
+    if (!COMMENT_REACTIONS.includes(reaction.emoji as CommentReactionEmoji)) continue;
+    const emoji = reaction.emoji as CommentReactionEmoji;
+    const current = grouped.get(emoji) ?? { count: 0, reactedByCurrentActor: false };
+    current.count += 1;
+    if (sameActor({ actorType: reaction.actorType, actorId: reaction.actorId }, actor))
+      current.reactedByCurrentActor = true;
+    grouped.set(emoji, current);
+  }
+  return COMMENT_REACTIONS.flatMap((emoji) => {
+    const value = grouped.get(emoji);
+    return value ? [{ emoji, ...value }] : [];
+  });
+}
+
 async function serializeThreads(
   userId: string,
+  actor: CommentActor,
   threads: NoteCommentThread[],
-  messages: NoteCommentMessage[]
+  messages: NoteCommentMessage[],
+  reactions: NoteCommentMessageReaction[]
 ): Promise<SerializedCommentThread[]> {
   const references: ActorReference[] = [
     ...threads.map((thread) => ({
@@ -227,6 +257,12 @@ async function serializeThreads(
     const list = messagesByThread.get(message.threadId) ?? [];
     list.push(message);
     messagesByThread.set(message.threadId, list);
+  }
+  const reactionsByMessage = new Map<string, NoteCommentMessageReaction[]>();
+  for (const reaction of reactions) {
+    const list = reactionsByMessage.get(reaction.messageId) ?? [];
+    list.push(reaction);
+    reactionsByMessage.set(reaction.messageId, list);
   }
 
   return threads.map((thread) => ({
@@ -263,8 +299,17 @@ async function serializeThreads(
       author: serializeActor({ actorType: message.actorType, actorId: message.actorId }),
       createdAt: message.createdAt,
       updatedAt: message.updatedAt,
+      reactions: serializeReactions(reactionsByMessage.get(message.id) ?? [], actor),
     })),
   }));
+}
+
+async function serializeMessageReactions(messageId: string, actor: CommentActor) {
+  const reactions = await db
+    .select()
+    .from(noteCommentMessageReactions)
+    .where(eq(noteCommentMessageReactions.messageId, messageId));
+  return serializeReactions(reactions, actor);
 }
 
 function findAnchorPosition(thread: NoteCommentThread, content: string) {
@@ -319,7 +364,7 @@ async function reconcileThreadAnchors(threads: NoteCommentThread[], content: str
   }
 }
 
-async function loadSerializedThread(input: { noteId: string; threadId: string; userId: string }) {
+async function loadSerializedThread(input: { noteId: string; threadId: string; userId: string; actor: CommentActor }) {
   const [thread] = await db
     .select()
     .from(noteCommentThreads)
@@ -336,11 +381,17 @@ async function loadSerializedThread(input: { noteId: string; threadId: string; u
     .select()
     .from(noteCommentMessages)
     .where(and(eq(noteCommentMessages.threadId, thread.id), eq(noteCommentMessages.userId, input.userId)))
-    .orderBy(asc(noteCommentMessages.createdAt), asc(noteCommentMessages.id));
-  return (await serializeThreads(input.userId, [thread], messages))[0] ?? null;
+    .orderBy(desc(noteCommentMessages.isRoot), asc(noteCommentMessages.createdAt), asc(noteCommentMessages.id));
+  const reactions = await db
+    .select()
+    .from(noteCommentMessageReactions)
+    .where(
+      and(eq(noteCommentMessageReactions.threadId, thread.id), eq(noteCommentMessageReactions.userId, input.userId))
+    );
+  return (await serializeThreads(input.userId, input.actor, [thread], messages, reactions))[0] ?? null;
 }
 
-export async function listCommentThreads(input: { noteId: string; userId: string }) {
+export async function listCommentThreads(input: { noteId: string; userId: string; actor: CommentActor }) {
   const current = await readCommentableNote(input);
   if (!current.ok) return current;
   const threads = await db
@@ -355,14 +406,25 @@ export async function listCommentThreads(input: { noteId: string; userId: string
         .select()
         .from(noteCommentMessages)
         .where(and(eq(noteCommentMessages.userId, input.userId), inArray(noteCommentMessages.threadId, threadIds)))
-        .orderBy(asc(noteCommentMessages.createdAt), asc(noteCommentMessages.id))
+        .orderBy(desc(noteCommentMessages.isRoot), asc(noteCommentMessages.createdAt), asc(noteCommentMessages.id))
+    : [];
+  const reactions = threadIds.length
+    ? await db
+        .select()
+        .from(noteCommentMessageReactions)
+        .where(
+          and(
+            eq(noteCommentMessageReactions.userId, input.userId),
+            inArray(noteCommentMessageReactions.threadId, threadIds)
+          )
+        )
     : [];
   return {
     ok: true,
     value: {
       noteId: input.noteId,
       documentHash: current.value.contentHash,
-      threads: await serializeThreads(input.userId, threads, messages),
+      threads: await serializeThreads(input.userId, input.actor, threads, messages, reactions),
     },
   } satisfies CommentOperationResult<{
     noteId: string;
@@ -413,7 +475,12 @@ export async function createCommentThread(input: {
     });
   });
 
-  const thread = await loadSerializedThread({ noteId: input.noteId, threadId, userId: input.userId });
+  const thread = await loadSerializedThread({
+    noteId: input.noteId,
+    threadId,
+    userId: input.userId,
+    actor: input.actor,
+  });
   if (!thread)
     return { ok: false, status: 404, error: 'Comment thread not found' } satisfies CommentOperationResult<never>;
   return { ok: true, value: { thread } } satisfies CommentOperationResult<{ thread: SerializedCommentThread }>;
@@ -473,6 +540,7 @@ export async function addCommentReply(input: {
         author: serializeActor({ actorType: message.actorType, actorId: message.actorId }),
         createdAt: message.createdAt,
         updatedAt: message.updatedAt,
+        reactions: [],
       },
     },
   } satisfies CommentOperationResult<{ message: SerializedCommentMessage }>;
@@ -482,6 +550,7 @@ export async function updateCommentAnchor(input: {
   noteId: string;
   threadId: string;
   userId: string;
+  actor: CommentActor;
   anchor: CommentAnchorInput;
 }) {
   const current = await readCommentableNote(input);
@@ -613,6 +682,7 @@ export async function updateCommentMessage(input: {
         author: serializeActor({ actorType: updated.actorType, actorId: updated.actorId }),
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
+        reactions: await serializeMessageReactions(updated.id, input.actor),
       },
     },
   } satisfies CommentOperationResult<{ message: SerializedCommentMessage }>;
@@ -637,7 +707,7 @@ export async function deleteCommentMessage(input: {
         eq(noteCommentMessages.userId, input.userId)
       )
     )
-    .orderBy(asc(noteCommentMessages.createdAt), asc(noteCommentMessages.id));
+    .orderBy(desc(noteCommentMessages.isRoot), asc(noteCommentMessages.createdAt), asc(noteCommentMessages.id));
   const message = messages.find((candidate) => candidate.id === input.messageId);
   if (!message)
     return { ok: false, status: 404, error: 'Comment message not found' } satisfies CommentOperationResult<never>;
@@ -664,6 +734,70 @@ export async function deleteCommentMessage(input: {
   await db.delete(noteCommentMessages).where(eq(noteCommentMessages.id, message.id));
   await db.update(noteCommentThreads).set({ updatedAt: new Date() }).where(eq(noteCommentThreads.id, input.threadId));
   return { ok: true, value: { ok: true, deletedThread: false } } as const;
+}
+
+export async function toggleCommentReaction(input: {
+  noteId: string;
+  threadId: string;
+  messageId: string;
+  userId: string;
+  actor: CommentActor;
+  emoji: string;
+}) {
+  if (!COMMENT_REACTIONS.includes(input.emoji as CommentReactionEmoji))
+    return { ok: false, status: 400, error: 'Unsupported comment reaction' } satisfies CommentOperationResult<never>;
+  const current = await readCommentableNote(input);
+  if (!current.ok) return current;
+  const [message] = await db
+    .select({ id: noteCommentMessages.id })
+    .from(noteCommentMessages)
+    .where(
+      and(
+        eq(noteCommentMessages.id, input.messageId),
+        eq(noteCommentMessages.threadId, input.threadId),
+        eq(noteCommentMessages.noteId, input.noteId),
+        eq(noteCommentMessages.userId, input.userId)
+      )
+    )
+    .limit(1);
+  if (!message)
+    return { ok: false, status: 404, error: 'Comment message not found' } satisfies CommentOperationResult<never>;
+
+  const [existing] = await db
+    .select({ id: noteCommentMessageReactions.id })
+    .from(noteCommentMessageReactions)
+    .where(
+      and(
+        eq(noteCommentMessageReactions.messageId, input.messageId),
+        eq(noteCommentMessageReactions.actorType, input.actor.type),
+        eq(noteCommentMessageReactions.actorId, input.actor.id),
+        eq(noteCommentMessageReactions.emoji, input.emoji)
+      )
+    )
+    .limit(1);
+  if (existing) await db.delete(noteCommentMessageReactions).where(eq(noteCommentMessageReactions.id, existing.id));
+  else
+    await db
+      .insert(noteCommentMessageReactions)
+      .values({
+        id: createId('comment_reaction'),
+        messageId: input.messageId,
+        threadId: input.threadId,
+        noteId: input.noteId,
+        userId: input.userId,
+        actorType: input.actor.type,
+        actorId: input.actor.id,
+        emoji: input.emoji,
+      })
+      .onConflictDoNothing();
+
+  return {
+    ok: true,
+    value: {
+      messageId: input.messageId,
+      reactions: await serializeMessageReactions(input.messageId, input.actor),
+    },
+  } satisfies CommentOperationResult<{ messageId: string; reactions: SerializedCommentReaction[] }>;
 }
 
 export async function deleteCommentThread(input: {

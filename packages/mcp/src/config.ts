@@ -137,6 +137,11 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
           `/harness/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
           { method: 'PATCH', body: JSON.stringify({ body }) }
         ),
+      toggleReaction: (noteId, threadId, messageId, emoji) =>
+        request(
+          `/harness/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+          { method: 'POST', body: JSON.stringify({ emoji }) }
+        ),
       deleteMessage: (noteId, threadId, messageId) =>
         request(
           `/harness/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,

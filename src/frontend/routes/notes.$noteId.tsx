@@ -11,7 +11,15 @@ import { NoteCommentsPanel } from '../components/note-comments-panel';
 import { NoteEditor } from '../components/note-editor';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
-import { ApiError, api, type CommentAnchorInput, type CommentThread } from '../lib/api';
+import {
+  ApiError,
+  api,
+  type CommentAnchorInput,
+  type CommentMessage,
+  type CommentReactionEmoji,
+  type CommentThread,
+  type NoteCommentsResponse,
+} from '../lib/api';
 import { internalNoteLinkTarget } from '../lib/link-policy';
 import { rootRoute } from './__root';
 
@@ -163,7 +171,6 @@ function NoteView() {
   const isSaving = save.isPending;
   const commentMutation = useMutation({
     mutationFn: (operation: () => Promise<unknown>) => operation(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['note-comments', noteId] }),
     onError: (error) => setCommentError(error instanceof Error ? error.message : 'Comment action failed'),
   });
   const blocker = useBlocker({
@@ -250,9 +257,42 @@ function NoteView() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty, save.isPending]);
 
-  const runCommentAction = async (operation: () => Promise<unknown>) => {
+  const runCommentAction = async <T,>(operation: () => Promise<T>) => {
     setCommentError(null);
-    await commentMutation.mutateAsync(operation);
+    return (await commentMutation.mutateAsync(operation)) as T;
+  };
+
+  const updateCommentCache = (update: (current: NoteCommentsResponse) => NoteCommentsResponse) => {
+    qc.setQueryData<NoteCommentsResponse>(['note-comments', noteId], (current) =>
+      current ? update(current) : current
+    );
+  };
+  const cacheThread = (thread: CommentThread) => {
+    updateCommentCache((current) => {
+      const exists = current.threads.some((candidate) => candidate.id === thread.id);
+      return {
+        ...current,
+        threads: exists
+          ? current.threads.map((candidate) => (candidate.id === thread.id ? thread : candidate))
+          : [thread, ...current.threads],
+      };
+    });
+  };
+  const cacheMessage = (message: CommentMessage) => {
+    updateCommentCache((current) => ({
+      ...current,
+      threads: current.threads.map((thread) =>
+        thread.id === message.threadId
+          ? {
+              ...thread,
+              updatedAt: message.updatedAt,
+              messages: thread.messages.some((candidate) => candidate.id === message.id)
+                ? thread.messages.map((candidate) => (candidate.id === message.id ? message : candidate))
+                : [...thread.messages, message],
+            }
+          : thread
+      ),
+    }));
   };
 
   const focusCommentThread = (thread: CommentThread) => {
@@ -299,18 +339,18 @@ function NoteView() {
           api.updateCommentAnchor(noteId, threadId, toCommentAnchorInput(anchor, documentHash))
         )
       )
-        .then(() => {
+        .then((responses) => {
+          for (const response of responses) cacheThread(response.thread);
           setMappedAnchors((current) => {
             const next = { ...current };
             for (const [threadId, anchor] of pending) if (next[threadId] === anchor) delete next[threadId];
             return next;
           });
-          return qc.invalidateQueries({ queryKey: ['note-comments', noteId] });
         })
         .catch((error) => setCommentError(error instanceof Error ? error.message : 'Could not update comment anchor'));
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [data?.contentHash, isDirty, mappedAnchors, noteId, qc, save.isPending]);
+  }, [data?.contentHash, isDirty, mappedAnchors, noteId, save.isPending]);
 
   const editorComments = useMemo<EditorComment[]>(
     () =>
@@ -483,22 +523,98 @@ function NoteView() {
         body,
         anchor: toCommentAnchorInput(anchor, documentHash),
       });
+      cacheThread(created.thread);
       setDraftCommentAnchor(null);
       focusCommentThread(created.thread);
     });
   };
   const replyToComment = async (threadId: string, body: string) => {
-    await runCommentAction(() => api.addCommentReply(noteId, threadId, body));
+    const response = await runCommentAction(() => api.addCommentReply(noteId, threadId, body));
+    cacheMessage(response.message);
   };
   const changeCommentStatus = async (thread: CommentThread) => {
-    await runCommentAction(() =>
+    const response = await runCommentAction(() =>
       thread.status === 'resolved'
         ? api.reopenCommentThread(noteId, thread.id)
         : api.resolveCommentThread(noteId, thread.id)
     );
+    cacheThread(response.thread);
+  };
+  const editCommentMessage = async (threadId: string, messageId: string, body: string) => {
+    const response = await runCommentAction(() => api.updateCommentMessage(noteId, threadId, messageId, body));
+    cacheMessage(response.message);
+  };
+  const deleteCommentMessage = async (threadId: string, messageId: string) => {
+    const response = await runCommentAction(() => api.deleteCommentMessage(noteId, threadId, messageId));
+    updateCommentCache((current) => ({
+      ...current,
+      threads: response.deletedThread
+        ? current.threads.filter((thread) => thread.id !== threadId)
+        : current.threads.map((thread) =>
+            thread.id === threadId
+              ? { ...thread, messages: thread.messages.filter((message) => message.id !== messageId) }
+              : thread
+          ),
+    }));
+  };
+  const toggleCommentReaction = async (threadId: string, messageId: string, emoji: CommentReactionEmoji) => {
+    const previous = qc.getQueryData<NoteCommentsResponse>(['note-comments', noteId]);
+    updateCommentCache((current) => ({
+      ...current,
+      threads: current.threads.map((thread) =>
+        thread.id === threadId
+          ? {
+              ...thread,
+              messages: thread.messages.map((message) => {
+                if (message.id !== messageId) return message;
+                const existing = message.reactions.find((reaction) => reaction.emoji === emoji);
+                const reactions = existing
+                  ? existing.reactedByCurrentActor
+                    ? existing.count === 1
+                      ? message.reactions.filter((reaction) => reaction.emoji !== emoji)
+                      : message.reactions.map((reaction) =>
+                          reaction.emoji === emoji
+                            ? { ...reaction, count: reaction.count - 1, reactedByCurrentActor: false }
+                            : reaction
+                        )
+                    : message.reactions.map((reaction) =>
+                        reaction.emoji === emoji
+                          ? { ...reaction, count: reaction.count + 1, reactedByCurrentActor: true }
+                          : reaction
+                      )
+                  : [...message.reactions, { emoji, count: 1, reactedByCurrentActor: true }];
+                return { ...message, reactions };
+              }),
+            }
+          : thread
+      ),
+    }));
+    try {
+      const response = await runCommentAction(() => api.toggleCommentReaction(noteId, threadId, messageId, emoji));
+      updateCommentCache((current) => ({
+        ...current,
+        threads: current.threads.map((thread) =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                messages: thread.messages.map((message) =>
+                  message.id === messageId ? { ...message, reactions: response.reactions } : message
+                ),
+              }
+            : thread
+        ),
+      }));
+    } catch (error) {
+      if (previous) qc.setQueryData(['note-comments', noteId], previous);
+      throw error;
+    }
   };
   const deleteCommentThread = async (threadId: string) => {
     await runCommentAction(() => api.deleteCommentThread(noteId, threadId));
+    updateCommentCache((current) => ({
+      ...current,
+      threads: current.threads.filter((thread) => thread.id !== threadId),
+    }));
     if (selectedThreadId === threadId) {
       setSelectedThreadId(null);
       setCommentDialogOpen(false);
@@ -517,13 +633,10 @@ function NoteView() {
         onSelect={selectReviewThread}
         onReply={replyToComment}
         onStatusChange={changeCommentStatus}
-        onEditMessage={async (threadId, messageId, body) => {
-          await runCommentAction(() => api.updateCommentMessage(noteId, threadId, messageId, body));
-        }}
-        onDeleteMessage={async (threadId, messageId) => {
-          await runCommentAction(() => api.deleteCommentMessage(noteId, threadId, messageId));
-        }}
+        onEditMessage={editCommentMessage}
+        onDeleteMessage={deleteCommentMessage}
         onDeleteThread={deleteCommentThread}
+        onToggleReaction={toggleCommentReaction}
       />
       <NoteCommentDialog
         open={commentDialogOpen}
@@ -539,7 +652,10 @@ function NoteView() {
         onCreate={createComment}
         onReply={replyToComment}
         onStatusChange={changeCommentStatus}
+        onEditMessage={editCommentMessage}
+        onDeleteMessage={deleteCommentMessage}
         onDeleteThread={deleteCommentThread}
+        onToggleReaction={toggleCommentReaction}
       />
     </>
   );

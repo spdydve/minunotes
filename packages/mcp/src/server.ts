@@ -77,6 +77,7 @@ export type NotesMcpClient = {
     updateAnchor: (noteId: string, threadId: string, anchor: CommentAnchor) => Promise<unknown>;
     setStatus: (noteId: string, threadId: string, status: 'open' | 'resolved') => Promise<unknown>;
     updateMessage: (noteId: string, threadId: string, messageId: string, body: string) => Promise<unknown>;
+    toggleReaction: (noteId: string, threadId: string, messageId: string, emoji: string) => Promise<unknown>;
     deleteMessage: (noteId: string, threadId: string, messageId: string) => Promise<unknown>;
     deleteThread: (noteId: string, threadId: string) => Promise<unknown>;
   };
@@ -262,6 +263,24 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     },
     async ({ noteId, threadId, messageId, body }) =>
       toolResult(await client.comments.updateMessage(noteId, threadId, messageId, body))
+  );
+
+  server.registerTool(
+    'notes_toggle_comment_reaction',
+    {
+      title: 'Toggle comment reaction',
+      description: 'Add or remove your emoji reaction on a Review message.',
+      inputSchema: {
+        noteId: z.string(),
+        threadId: z.string(),
+        messageId: z.string(),
+        emoji: z.enum(['👍', '❤️', '😂', '🎉', '👀', '🚀']),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, messageId, emoji }) =>
+      toolResult(await client.comments.toggleReaction(noteId, threadId, messageId, emoji))
   );
 
   server.registerTool(

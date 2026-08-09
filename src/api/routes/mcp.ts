@@ -159,6 +159,11 @@ function createHostedMcpClient(authState: {
           `/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
           { method: 'PATCH', body: JSON.stringify({ body }) }
         ),
+      toggleReaction: (noteId, threadId, messageId, emoji) =>
+        request(
+          `/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+          { method: 'POST', body: JSON.stringify({ emoji }) }
+        ),
       deleteMessage: (noteId, threadId, messageId) =>
         request(
           `/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
