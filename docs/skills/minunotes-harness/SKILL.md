@@ -30,7 +30,7 @@ Do not read every search result automatically. Rank candidates by title, folder,
 - Canvas replacement: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
 - Canvas note link: `minunotes_read_note` → `minunotes_link_canvas_node_to_note` or `minunotes_unlink_canvas_node` with the latest `contentHash` as `baseHash`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
-- Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. List a thread before editing its messages; message edits/deletes are author-only.
+- Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. List a thread before editing its messages; message edits/deletes are author-only, and reactions are actor-specific toggles.
 
 ## Review workflow
 
@@ -73,6 +73,7 @@ Review tools require explicit Review comments permission plus read scope for eve
 - `minunotes_update_comment_anchor`
 - `minunotes_set_comment_status`
 - `minunotes_edit_comment_message`
+- `minunotes_toggle_comment_reaction`
 - `minunotes_delete_comment_message`
 - `minunotes_delete_comment_thread`
 
