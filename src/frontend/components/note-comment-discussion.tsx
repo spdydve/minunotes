@@ -7,6 +7,7 @@ import {
   QUICK_COMMENT_REACTIONS,
 } from '../lib/api';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
+import { QuickTooltip } from './ui/tooltip';
 
 const CommentEmojiPicker = lazy(() => import('./comment-emoji-picker'));
 
@@ -106,16 +107,17 @@ export function NoteCommentDiscussion({
                       if (!open) setFullPickerMessageId(null);
                     }}
                   >
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="rounded p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-                        aria-label="Add reaction"
-                        title="Add reaction"
-                      >
-                        <SmilePlus className="h-3.5 w-3.5" />
-                      </button>
-                    </PopoverTrigger>
+                    <QuickTooltip label="Add reaction">
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                          aria-label="Add reaction"
+                        >
+                          <SmilePlus className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                    </QuickTooltip>
                     <PopoverContent
                       align="end"
                       className={
@@ -151,37 +153,38 @@ export function NoteCommentDiscussion({
                                   void onToggleReaction(thread.id, message.id, emoji).catch(() => undefined)
                                 }
                                 aria-label={`React with ${emoji}`}
-                                title={`React with ${emoji}`}
                               >
                                 {emoji}
                               </button>
                             </PopoverClose>
                           ))}
-                          <button
-                            type="button"
-                            className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-                            onClick={() => setFullPickerMessageId(message.id)}
-                            aria-label="More reactions"
-                            title="More reactions"
-                          >
-                            <Search className="h-4 w-4" />
-                          </button>
+                          <QuickTooltip label="More reactions">
+                            <button
+                              type="button"
+                              className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                              onClick={() => setFullPickerMessageId(message.id)}
+                              aria-label="More reactions"
+                            >
+                              <Search className="h-4 w-4" />
+                            </button>
+                          </QuickTooltip>
                         </>
                       )}
                     </PopoverContent>
                   </Popover>
                   {editable ? (
                     <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="rounded p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-                          aria-label="More comment actions"
-                          title="More comment actions"
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
+                      <QuickTooltip label="More comment actions">
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="rounded p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                            aria-label="More comment actions"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                      </QuickTooltip>
                       <PopoverContent align="end" className="w-40">
                         <PopoverClose asChild>
                           <button

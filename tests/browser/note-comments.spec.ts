@@ -42,7 +42,8 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   await expect(threadDialog.getByText('Please review this opening carefully.')).toBeVisible();
   await expect(threadDialog.getByText(/\(edited\)/)).toBeVisible();
 
-  await expect(threadDialog.getByRole('button', { name: 'Add reaction' })).toHaveAttribute('title', 'Add reaction');
+  await threadDialog.getByRole('button', { name: 'Add reaction' }).hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Add reaction');
   await threadDialog.getByRole('button', { name: 'Add reaction' }).click();
   await page.getByRole('button', { name: 'React with 🎉' }).click();
   await expect(threadDialog.getByRole('button', { name: '🎉 reaction, 1' })).toHaveAttribute('aria-pressed', 'true');
@@ -70,9 +71,10 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   await drawer.getByRole('textbox', { name: 'Edit comment' }).fill('Edited owner follow-up.');
   await drawer.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(drawer.getByText('Edited owner follow-up.')).toBeVisible();
-  await expect(drawer.getByRole('button', { name: 'Resolve comment' })).toHaveAttribute('title', 'Resolve comment');
+  await drawer.getByRole('button', { name: 'Resolve comment' }).hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Resolve comment');
   await drawer.getByRole('button', { name: 'Resolve comment' }).click();
-  await expect(drawer.getByRole('button', { name: 'Reopen comment' })).toHaveAttribute('title', 'Reopen comment');
+  await expect(drawer.getByRole('button', { name: 'Reopen comment' })).toBeVisible();
   await drawer.getByRole('button', { name: 'Reopen comment' }).click();
   await drawer.getByRole('button', { name: 'Close Review' }).click();
 

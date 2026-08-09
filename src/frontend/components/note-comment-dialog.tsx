@@ -3,6 +3,7 @@ import { Check, MessageSquare, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentReactionEmoji, CommentThread } from '../lib/api';
 import { NoteCommentDiscussion } from './note-comment-discussion';
+import { QuickTooltip } from './ui/tooltip';
 
 export type CommentDialogPosition = { top: number; left: number; placement: 'above' | 'below' };
 
@@ -90,15 +91,16 @@ export function NoteCommentDialog({
           <MessageSquare className="h-4 w-4 shrink-0 text-[var(--notes-muted)]" />
           <p className="truncate font-semibold text-sm">{draftAnchor ? 'Add comment' : 'Comment'}</p>
         </div>
-        <button
-          type="button"
-          className="rounded-md p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-          onClick={onClose}
-          aria-label="Close comment"
-          title="Close comment"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <QuickTooltip label="Close comment">
+          <button
+            type="button"
+            className="rounded-md p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+            onClick={onClose}
+            aria-label="Close comment"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </QuickTooltip>
       </header>
 
       <div className="space-y-3 overflow-y-auto p-3">
@@ -145,28 +147,30 @@ export function NoteCommentDialog({
             <div className="mt-2 flex items-center justify-between gap-2">
               {thread ? (
                 <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-                    onClick={() => void onStatusChange(thread).catch(() => undefined)}
-                    aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
-                    title={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
-                  >
-                    {thread.status === 'resolved' ? (
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    ) : (
-                      <Check className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-button-destructive-soft-hover)] hover:text-[var(--notes-button-destructive-text)]"
-                    onClick={() => void onDeleteThread(thread.id).catch(() => undefined)}
-                    aria-label="Delete comment thread"
-                    title="Delete comment thread"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <QuickTooltip label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}>
+                    <button
+                      type="button"
+                      className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                      onClick={() => void onStatusChange(thread).catch(() => undefined)}
+                      aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
+                    >
+                      {thread.status === 'resolved' ? (
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </QuickTooltip>
+                  <QuickTooltip label="Delete comment thread">
+                    <button
+                      type="button"
+                      className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-button-destructive-soft-hover)] hover:text-[var(--notes-button-destructive-text)]"
+                      onClick={() => void onDeleteThread(thread.id).catch(() => undefined)}
+                      aria-label="Delete comment thread"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </QuickTooltip>
                 </div>
               ) : (
                 <span />

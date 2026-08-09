@@ -4,6 +4,7 @@ import type { CommentReactionEmoji, CommentThread } from '../lib/api';
 import { formatCommentTime, NoteCommentDiscussion } from './note-comment-discussion';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
+import { QuickTooltip } from './ui/tooltip';
 
 export { formatCommentTime } from './note-comment-discussion';
 
@@ -56,16 +57,17 @@ export function NoteCommentsPanel({
               {threads.length} comment thread{threads.length === 1 ? '' : 's'}
             </DialogDescription>
           </div>
-          <DialogClose asChild>
-            <button
-              type="button"
-              className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-              aria-label="Close Review"
-              title="Close Review"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </DialogClose>
+          <QuickTooltip label="Close Review">
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                aria-label="Close Review"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </DialogClose>
+          </QuickTooltip>
         </div>
 
         <div className="max-h-[calc(82dvh-4.5rem)] space-y-3 overflow-y-auto p-3 md:max-h-[calc(100dvh-4.5rem)]">
@@ -103,30 +105,32 @@ export function NoteCommentsPanel({
                     </span>
                   </button>
                   <div className="flex shrink-0 gap-0.5">
-                    <button
-                      type="button"
-                      className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
-                      onClick={() => void onStatusChange(thread).catch(() => undefined)}
-                      aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
-                      title={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
-                    >
-                      {thread.status === 'resolved' ? (
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      ) : (
-                        <Check className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                    <QuickTooltip label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}>
+                      <button
+                        type="button"
+                        className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
+                        onClick={() => void onStatusChange(thread).catch(() => undefined)}
+                        aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
+                      >
+                        {thread.status === 'resolved' ? (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </QuickTooltip>
                     <Popover>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
-                          aria-label="More discussion actions"
-                          title="More discussion actions"
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
+                      <QuickTooltip label="More discussion actions">
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
+                            aria-label="More discussion actions"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                      </QuickTooltip>
                       <PopoverContent align="end" className="w-44">
                         <PopoverClose asChild>
                           <button
