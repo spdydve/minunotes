@@ -861,7 +861,7 @@ export const harnessOpenApiSpec = {
         type: 'object',
         required: ['emoji', 'count', 'reactedByCurrentActor'],
         properties: {
-          emoji: { type: 'string', enum: ['👍', '❤️', '😂', '🎉', '👀', '🚀'] },
+          emoji: { type: 'string', maxLength: 64, description: 'One normalized standard Unicode emoji.' },
           count: { type: 'integer', minimum: 1 },
           reactedByCurrentActor: { type: 'boolean' },
         },
@@ -960,7 +960,9 @@ export const harnessOpenApiSpec = {
       CommentReactionRequest: {
         type: 'object',
         required: ['emoji'],
-        properties: { emoji: { type: 'string', enum: ['👍', '❤️', '😂', '🎉', '👀', '🚀'] } },
+        properties: {
+          emoji: { type: 'string', minLength: 1, maxLength: 64, description: 'One standard Unicode emoji.' },
+        },
       },
       CommentReactionsResponse: {
         type: 'object',

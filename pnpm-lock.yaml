@@ -92,6 +92,12 @@ importers:
       drizzle-orm:
         specifier: latest
         version: 0.45.2(@libsql/client@0.17.3)(kysely@0.28.17)
+      emoji-picker-react:
+        specifier: ^4.19.1
+        version: 4.19.1(react@19.2.6)
+      emoji-regex:
+        specifier: ^10.6.0
+        version: 10.6.0
       hono:
         specifier: latest
         version: 4.12.21
@@ -171,7 +177,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.2.0)
+        version: 4.1.7(@types/node@25.9.1)(vite@8.2.1)
 
 packages:
 
@@ -3813,7 +3819,7 @@ packages:
       magic-string: 0.30.21
       vite: 8.0.14(@types/node@25.9.1)(tsx@4.22.3)
 
-  /@vitest/mocker@4.1.7(vite@8.2.0):
+  /@vitest/mocker@4.1.7(vite@8.2.1):
     resolution: {integrity: sha512-vY7nuamKgfvpA1Koa3oYIw/k7D6kZnpGyNMZW8loow2bsBYla1TFdqTaXncWdRn4pgwNs+90RhnXhJScDwQeJA==}
     peerDependencies:
       msw: ^2.4.9
@@ -3827,7 +3833,7 @@ packages:
       '@vitest/spy': 4.1.7
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 8.2.0(@types/node@25.9.1)(tsx@4.22.3)
+      vite: 8.2.1(@types/node@25.9.1)(tsx@4.22.3)
     dev: true
 
   /@vitest/pretty-format@4.1.7:
@@ -4674,6 +4680,20 @@ packages:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
     dev: false
 
+  /emoji-picker-react@4.19.1(react@19.2.6):
+    resolution: {integrity: sha512-BmDdqInKFVYJpv7qS9WI6L9656cDAC+FkDvUjJds56nKHbaVTBNeDmLwKBytRnzu37zWHs9Isg7gt5PT43y6xA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>=16'
+    dependencies:
+      flairup: 1.0.0
+      react: 19.2.6
+    dev: false
+
+  /emoji-regex@10.6.0:
+    resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
+    dev: false
+
   /encodeurl@2.0.0:
     resolution: {integrity: sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==}
     engines: {node: '>= 0.8'}
@@ -5009,6 +5029,10 @@ packages:
       statuses: 2.0.2
     transitivePeerDependencies:
       - supports-color
+    dev: false
+
+  /flairup@1.0.0:
+    resolution: {integrity: sha512-IKlE+pNvL2R+kVL1kEhUYqRxVqeFnjiIvHWDMLFXNaqyUdFXQM2wte44EfMYJNHkW16X991t2Zg8apKkhv7OBA==}
     dev: false
 
   /forwarded@0.2.0:
@@ -7072,8 +7096,8 @@ packages:
     optionalDependencies:
       fsevents: 2.3.3
 
-  /vite@8.2.0(@types/node@25.9.1)(tsx@4.22.3):
-    resolution: {integrity: sha512-pn+CFpM0lwDeKwmOq1ZaBK/9sjorZcgqxki6MbY/jPEVd9vichIlmlD4HmQ5wdP5EgqQCFRaACBxMC7uEGc6lQ==}
+  /vite@8.2.1(@types/node@25.9.1)(tsx@4.22.3):
+    resolution: {integrity: sha512-EU/eS7BH3XROHh2YnBefjM6DBKA6ZeMZEYQbj7NLWg5wHYlhB8B/Mayd5XsgWq+NFYccDOTemRpdETWR6Ka/lw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -7191,7 +7215,7 @@ packages:
     transitivePeerDependencies:
       - msw
 
-  /vitest@4.1.7(@types/node@25.9.1)(vite@8.2.0):
+  /vitest@4.1.7(@types/node@25.9.1)(vite@8.2.1):
     resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
@@ -7234,7 +7258,7 @@ packages:
     dependencies:
       '@types/node': 25.9.1
       '@vitest/expect': 4.1.7
-      '@vitest/mocker': 4.1.7(vite@8.2.0)
+      '@vitest/mocker': 4.1.7(vite@8.2.1)
       '@vitest/pretty-format': 4.1.7
       '@vitest/runner': 4.1.7
       '@vitest/snapshot': 4.1.7
@@ -7251,7 +7275,7 @@ packages:
       tinyexec: 1.2.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.2.0(@types/node@25.9.1)(tsx@4.22.3)
+      vite: 8.2.1(@types/node@25.9.1)(tsx@4.22.3)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw
@@ -7323,7 +7347,6 @@ packages:
     id: github.com/spdydve/minucanvas/0fa625a968a586ef5b20220c6d20843777ec2020
     name: '@dpklabs/minucanvas'
     version: 0.7.1
-    prepare: true
     requiresBuild: true
     peerDependencies:
       react: '>=18.0.0'
@@ -7339,7 +7362,6 @@ packages:
     id: github.com/spdydve/minueditor/ab3af4ddc833b926782fe907688c40c0d6eb7055
     name: '@dpklabs/minueditor'
     version: 0.12.0
-    prepare: true
     requiresBuild: true
     peerDependencies:
       '@codemirror/autocomplete': ^6.20.0

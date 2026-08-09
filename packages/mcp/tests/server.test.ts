@@ -188,7 +188,7 @@ describe('createNotesMcpServer', () => {
       noteId: 'note-1',
       threadId: 'thread-1',
       messageId: 'message-1',
-      emoji: '🎉',
+      emoji: '🧑🏽‍💻',
     } as never);
     await tools(server).notes_delete_comment_message.handler({
       noteId: 'note-1',
@@ -203,7 +203,7 @@ describe('createNotesMcpServer', () => {
     expect(client.comments.updateAnchor).toHaveBeenCalledWith('note-1', 'thread-1', anchor);
     expect(client.comments.setStatus).toHaveBeenCalledWith('note-1', 'thread-1', 'resolved');
     expect(client.comments.updateMessage).toHaveBeenCalledWith('note-1', 'thread-1', 'message-1', 'Updated');
-    expect(client.comments.toggleReaction).toHaveBeenCalledWith('note-1', 'thread-1', 'message-1', '🎉');
+    expect(client.comments.toggleReaction).toHaveBeenCalledWith('note-1', 'thread-1', 'message-1', '🧑🏽‍💻');
     expect(client.comments.deleteMessage).toHaveBeenCalledWith('note-1', 'thread-1', 'message-2');
     expect(client.comments.deleteThread).toHaveBeenCalledWith('note-1', 'thread-1');
   });

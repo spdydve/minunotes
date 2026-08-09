@@ -1,7 +1,14 @@
-import { MoreHorizontal, Pencil, SmilePlus, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { COMMENT_REACTIONS, type CommentMessage, type CommentReactionEmoji, type CommentThread } from '../lib/api';
+import { MoreHorizontal, Pencil, Search, SmilePlus, Trash2 } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import {
+  type CommentMessage,
+  type CommentReactionEmoji,
+  type CommentThread,
+  QUICK_COMMENT_REACTIONS,
+} from '../lib/api';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
+
+const CommentEmojiPicker = lazy(() => import('./comment-emoji-picker'));
 
 export function formatCommentTime(value: string) {
   const date = new Date(value);
@@ -51,6 +58,8 @@ export function NoteCommentDiscussion({
 }) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState('');
+  const [reactionMenuMessageId, setReactionMenuMessageId] = useState<string | null>(null);
+  const [fullPickerMessageId, setFullPickerMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     if (editingMessageId && !thread.messages.some((message) => message.id === editingMessageId)) {
@@ -90,7 +99,13 @@ export function NoteCommentDiscussion({
                   </span>
                 </p>
                 <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
-                  <Popover>
+                  <Popover
+                    open={reactionMenuMessageId === message.id}
+                    onOpenChange={(open) => {
+                      setReactionMenuMessageId(open ? message.id : null);
+                      if (!open) setFullPickerMessageId(null);
+                    }}
+                  >
                     <PopoverTrigger asChild>
                       <button
                         type="button"
@@ -100,19 +115,56 @@ export function NoteCommentDiscussion({
                         <SmilePlus className="h-3.5 w-3.5" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent align="end" className="flex min-w-0 gap-0.5 p-1.5">
-                      {COMMENT_REACTIONS.map((emoji) => (
-                        <PopoverClose asChild key={emoji}>
+                    <PopoverContent
+                      align="end"
+                      className={
+                        fullPickerMessageId === message.id
+                          ? 'w-[min(22rem,calc(100vw-2rem))] overflow-hidden p-0'
+                          : 'flex min-w-0 items-center gap-0.5 p-1.5'
+                      }
+                    >
+                      {fullPickerMessageId === message.id ? (
+                        <Suspense
+                          fallback={
+                            <div className="grid h-48 place-items-center text-[var(--notes-muted)] text-xs">
+                              Loading emoji…
+                            </div>
+                          }
+                        >
+                          <CommentEmojiPicker
+                            onSelect={(emoji) => {
+                              void onToggleReaction(thread.id, message.id, emoji).catch(() => undefined);
+                              setReactionMenuMessageId(null);
+                              setFullPickerMessageId(null);
+                            }}
+                          />
+                        </Suspense>
+                      ) : (
+                        <>
+                          {QUICK_COMMENT_REACTIONS.map((emoji) => (
+                            <PopoverClose asChild key={emoji}>
+                              <button
+                                type="button"
+                                className="rounded p-1.5 text-base hover:bg-[var(--notes-hover)]"
+                                onClick={() =>
+                                  void onToggleReaction(thread.id, message.id, emoji).catch(() => undefined)
+                                }
+                                aria-label={`React with ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            </PopoverClose>
+                          ))}
                           <button
                             type="button"
-                            className="rounded p-1.5 text-base hover:bg-[var(--notes-hover)]"
-                            onClick={() => void onToggleReaction(thread.id, message.id, emoji).catch(() => undefined)}
-                            aria-label={`React with ${emoji}`}
+                            className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                            onClick={() => setFullPickerMessageId(message.id)}
+                            aria-label="More reactions"
                           >
-                            {emoji}
+                            <Search className="h-4 w-4" />
                           </button>
-                        </PopoverClose>
-                      ))}
+                        </>
+                      )}
                     </PopoverContent>
                   </Popover>
                   {editable ? (

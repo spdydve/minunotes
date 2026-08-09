@@ -62,7 +62,7 @@ Editor-originated interactions stay close to their source:
 - narrow screens place the compact dialog at the bottom of the viewport; and
 - detached threads remain available without highlighting unrelated text.
 
-Users can reply, edit each of their own messages through a message-level More menu, resolve or reopen threads, and delete messages or complete threads. Edited messages are labeled. A curated reaction picker (`👍`, `❤️`, `😂`, `🎉`, `👀`, `🚀`) groups per-message totals and lets each owner or authorized integration toggle its own reaction.
+Users can reply, edit each of their own messages through a message-level More menu, resolve or reopen threads, and delete messages or complete threads. Edited messages are labeled. Quick reactions (`👍`, `❤️`, `😂`, `🎉`, `👀`, `🚀`) plus a lazy-loaded searchable Unicode emoji picker group per-message totals and let each owner or authorized integration toggle its own reaction. Standard joined emoji and skin-tone variants are supported; custom uploaded emoji are deferred.
 
 The first submitted comment transitions the existing anchored composer directly into its returned thread by updating the TanStack Query cache. The dialog instance and geometry remain stable; there is no visible refetch or loading flash. Replies, edits, lifecycle actions, deletes, and reactions likewise update targeted cached thread/message state, with reaction rollback on persistence failure.
 

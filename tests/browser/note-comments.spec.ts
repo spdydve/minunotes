@@ -45,6 +45,12 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   await threadDialog.getByRole('button', { name: 'Add reaction' }).click();
   await page.getByRole('button', { name: 'React with 🎉' }).click();
   await expect(threadDialog.getByRole('button', { name: '🎉 reaction, 1' })).toHaveAttribute('aria-pressed', 'true');
+
+  await threadDialog.getByRole('button', { name: 'Add reaction' }).click();
+  await page.getByRole('button', { name: 'More reactions' }).click();
+  await page.getByRole('textbox', { name: 'Type to search for an emoji' }).fill('fire');
+  await page.getByRole('button', { name: 'flame', exact: true }).click();
+  await expect(threadDialog.getByRole('button', { name: '🔥 reaction, 1' })).toHaveAttribute('aria-pressed', 'true');
   await threadDialog.getByRole('button', { name: 'Close comment' }).click();
 
   const reviewButton = page.getByRole('button', { name: 'Open Review' });

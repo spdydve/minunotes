@@ -18,7 +18,7 @@ type BrowserCommentMessage = {
   author: { type: 'user' | 'agent'; id: string; name: string };
   createdAt: string;
   updatedAt: string;
-  reactions: Array<{ emoji: '👍' | '❤️' | '😂' | '🎉' | '👀' | '🚀'; count: number; reactedByCurrentActor: boolean }>;
+  reactions: Array<{ emoji: string; count: number; reactedByCurrentActor: boolean }>;
 };
 
 type BrowserCommentThread = {

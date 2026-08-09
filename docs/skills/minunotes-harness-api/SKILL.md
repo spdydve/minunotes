@@ -220,7 +220,7 @@ curl -s "${AUTH[@]}" \
   -d '{"emoji":"🎉"}'
 ```
 
-Messages include grouped reaction counts and `reactedByCurrentActor`. Supported reactions are `👍`, `❤️`, `😂`, `🎉`, `👀`, and `🚀`. Every comment operation requires explicit Review comments permission plus read access. Note edit permission and `isApiEditable` are not required for comments. Existing and new credentials have Review comments disabled until the owner grants it. Message edits/deletes are author-only. Use the current document hash for creation and anchor updates; stale anchors return `409`. When a listed thread is `detached`, do not guess a replacement location. Comments are unavailable for canvases, templates, Trash, and public shares.
+Messages include grouped reaction counts and `reactedByCurrentActor`. Reactions accept one standard Unicode emoji, including joined and skin-tone emoji; `👍`, `❤️`, `😂`, `🎉`, `👀`, and `🚀` are the human UI's quick defaults. Every comment operation requires explicit Review comments permission plus read access. Note edit permission and `isApiEditable` are not required for comments. Existing and new credentials have Review comments disabled until the owner grants it. Message edits/deletes are author-only. Use the current document hash for creation and anchor updates; stale anchors return `409`. When a listed thread is `detached`, do not guess a replacement location. Comments are unavailable for canvases, templates, Trash, and public shares.
 
 Create canvases from JSON Canvas or Minu diagram syntax:
 

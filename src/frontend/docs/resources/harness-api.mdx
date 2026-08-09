@@ -82,7 +82,7 @@ curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
   -d '{"body":"Please clarify this.","anchor":{"anchorType":"range","from":42,"to":61,"quote":"exact source text","documentHash":"hash_from_read"}}'
 ```
 
-Toggle a supported reaction on one message by posting `{"emoji":"🎉"}` to `/v1/harness/notes/{noteId}/comments/{threadId}/messages/{messageId}/reactions`. Posting the same reaction again removes it. Message responses group reaction counts and identify whether the current actor reacted. Supported reactions are `👍`, `❤️`, `😂`, `🎉`, `👀`, and `🚀`.
+Toggle a reaction on one message by posting `{"emoji":"🎉"}` to `/v1/harness/notes/{noteId}/comments/{threadId}/messages/{messageId}/reactions`. Posting the same reaction again removes it. Message responses group reaction counts and identify whether the current actor reacted. The API accepts one standard Unicode emoji, including joined and skin-tone emoji; `👍`, `❤️`, `😂`, `🎉`, `👀`, and `🚀` are quick defaults in the human UI.
 
 Every comment operation requires explicit **Review comments** permission plus folder read access. Review-only integrations do not need note edit permission, and `isApiEditable` applies to canonical note edits rather than comments. Existing and new credentials have Review comments disabled until the owner grants it. Message edits/deletes are author-only. Stale anchors return `409`; ambiguous anchors are returned as detached rather than moved speculatively. Canvas notes, templates, Trash, and public shares do not expose comments.
 

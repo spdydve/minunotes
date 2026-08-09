@@ -146,8 +146,8 @@ export type CommentAnchor = {
   documentHash: string;
   detached: boolean;
 };
-export const COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
-export type CommentReactionEmoji = (typeof COMMENT_REACTIONS)[number];
+export const QUICK_COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
+export type CommentReactionEmoji = string;
 export type CommentReaction = {
   emoji: CommentReactionEmoji;
   count: number;

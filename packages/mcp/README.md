@@ -130,7 +130,7 @@ Canvas replacement and node-link mutations require a current `baseHash`. Setting
 
 MCP tools expose active content only. Trashed notes, templates, and folder subtrees are omitted from lists and search and return not found on direct reads. Hosted and local MCP intentionally provide no tools to list Trash or trash, restore, or permanently delete content. Owners perform those operations through the authenticated MinuNotes web interface.
 
-Review comments are available only on active Markdown notes. Every comment operation requires explicit **Review comments** permission plus folder read access; note edit permission and API editability are not required. Existing and new credentials have Review comments disabled until explicitly granted. Message edits/deletes are author-only, reactions are actor-specific toggles from the supported emoji set, and anchor creation or remapping requires the current note content hash.
+Review comments are available only on active Markdown notes. Every comment operation requires explicit **Review comments** permission plus folder read access; note edit permission and API editability are not required. Existing and new credentials have Review comments disabled until explicitly granted. Message edits/deletes are author-only, reactions are actor-specific toggles accepting one standard Unicode emoji, and anchor creation or remapping requires the current note content hash.
 
 Tags are available because they already have user-facing Note Details behavior. Broader graph inspection—including outgoing links, backlinks, and orphan discovery—is intentionally not exposed through MCP yet; those product and UI semantics are deferred.
 

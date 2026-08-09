@@ -227,11 +227,21 @@ describe('note comments', () => {
       jsonRequest('POST', { emoji: '🎉' })
     );
     await expect(removedReaction.json()).resolves.toEqual({ messageId: replyId, reactions: [] });
-    const unsupportedReaction = await ownerApp.request(
+    const joinedReaction = await ownerApp.request(
       `/internal/notes/${note.id}/comments/${threadId}/messages/${replyId}/reactions`,
-      jsonRequest('POST', { emoji: '🔥' })
+      jsonRequest('POST', { emoji: '🧑🏽‍💻' })
     );
-    expect(unsupportedReaction.status).toBe(400);
+    expect(joinedReaction.status).toBe(200);
+    await expect(joinedReaction.json()).resolves.toMatchObject({
+      reactions: [{ emoji: '🧑🏽‍💻', count: 1, reactedByCurrentActor: true }],
+    });
+    for (const emoji of ['not emoji', '👍🎉']) {
+      const invalidReaction = await ownerApp.request(
+        `/internal/notes/${note.id}/comments/${threadId}/messages/${replyId}/reactions`,
+        jsonRequest('POST', { emoji })
+      );
+      expect(invalidReaction.status).toBe(400);
+    }
 
     const resolved = await ownerApp.request(
       `/internal/notes/${note.id}/comments/${threadId}/resolve`,

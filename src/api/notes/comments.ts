@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import emojiRegex from 'emoji-regex';
 import { db } from '../db/client';
 import {
   apiKeys,
@@ -15,8 +16,9 @@ import { createId } from '../lib/id';
 
 export const MAX_COMMENT_BODY_LENGTH = 10_000;
 export const MAX_COMMENT_QUOTE_LENGTH = 20_000;
-export const COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
-export type CommentReactionEmoji = (typeof COMMENT_REACTIONS)[number];
+export const QUICK_COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
+export const MAX_COMMENT_REACTION_LENGTH = 64;
+export type CommentReactionEmoji = string;
 
 export type CommentActor = {
   type: 'user' | 'agent';
@@ -97,6 +99,14 @@ function normalizeBody(body: string) {
       error: `Comment body cannot exceed ${MAX_COMMENT_BODY_LENGTH} characters`,
     };
   return { ok: true as const, value };
+}
+
+function normalizeReactionEmoji(input: string) {
+  const value = input.trim().normalize('NFC');
+  if (!value || value.length > MAX_COMMENT_REACTION_LENGTH) return null;
+  const match = emojiRegex().exec(value);
+  if (match?.index !== 0 || match[0] !== value) return null;
+  return value;
 }
 
 function sameActor(reference: ActorReference, actor: CommentActor) {
@@ -217,18 +227,23 @@ async function createActorSerializer(userId: string, references: ActorReference[
 function serializeReactions(reactions: NoteCommentMessageReaction[], actor: CommentActor): SerializedCommentReaction[] {
   const grouped = new Map<CommentReactionEmoji, { count: number; reactedByCurrentActor: boolean }>();
   for (const reaction of reactions) {
-    if (!COMMENT_REACTIONS.includes(reaction.emoji as CommentReactionEmoji)) continue;
-    const emoji = reaction.emoji as CommentReactionEmoji;
+    const emoji = normalizeReactionEmoji(reaction.emoji);
+    if (!emoji) continue;
     const current = grouped.get(emoji) ?? { count: 0, reactedByCurrentActor: false };
     current.count += 1;
     if (sameActor({ actorType: reaction.actorType, actorId: reaction.actorId }, actor))
       current.reactedByCurrentActor = true;
     grouped.set(emoji, current);
   }
-  return COMMENT_REACTIONS.flatMap((emoji) => {
-    const value = grouped.get(emoji);
-    return value ? [{ emoji, ...value }] : [];
-  });
+  const quickOrder = new Map<string, number>(QUICK_COMMENT_REACTIONS.map((emoji, index) => [emoji, index]));
+  return [...grouped.entries()]
+    .sort(([left], [right]) => {
+      const leftOrder = quickOrder.get(left) ?? Number.MAX_SAFE_INTEGER;
+      const rightOrder = quickOrder.get(right) ?? Number.MAX_SAFE_INTEGER;
+      if (leftOrder === rightOrder) return left.localeCompare(right);
+      return leftOrder - rightOrder;
+    })
+    .map(([emoji, value]) => ({ emoji, ...value }));
 }
 
 async function serializeThreads(
@@ -744,8 +759,13 @@ export async function toggleCommentReaction(input: {
   actor: CommentActor;
   emoji: string;
 }) {
-  if (!COMMENT_REACTIONS.includes(input.emoji as CommentReactionEmoji))
-    return { ok: false, status: 400, error: 'Unsupported comment reaction' } satisfies CommentOperationResult<never>;
+  const emoji = normalizeReactionEmoji(input.emoji);
+  if (!emoji)
+    return {
+      ok: false,
+      status: 400,
+      error: 'Reaction must be one standard Unicode emoji',
+    } satisfies CommentOperationResult<never>;
   const current = await readCommentableNote(input);
   if (!current.ok) return current;
   const [message] = await db
@@ -771,7 +791,7 @@ export async function toggleCommentReaction(input: {
         eq(noteCommentMessageReactions.messageId, input.messageId),
         eq(noteCommentMessageReactions.actorType, input.actor.type),
         eq(noteCommentMessageReactions.actorId, input.actor.id),
-        eq(noteCommentMessageReactions.emoji, input.emoji)
+        eq(noteCommentMessageReactions.emoji, emoji)
       )
     )
     .limit(1);
@@ -787,7 +807,7 @@ export async function toggleCommentReaction(input: {
         userId: input.userId,
         actorType: input.actor.type,
         actorId: input.actor.id,
-        emoji: input.emoji,
+        emoji,
       })
       .onConflictDoNothing();
 

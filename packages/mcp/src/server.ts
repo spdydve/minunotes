@@ -274,7 +274,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
         noteId: z.string(),
         threadId: z.string(),
         messageId: z.string(),
-        emoji: z.enum(['👍', '❤️', '😂', '🎉', '👀', '🚀']),
+        emoji: z.string().min(1).max(64).describe('One standard Unicode emoji'),
       },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
