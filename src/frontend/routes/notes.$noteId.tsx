@@ -78,7 +78,8 @@ function NoteView() {
   };
 
   const save = useMutation({
-    mutationFn: (next: { title: string; content: string }) => api.saveNote(noteId, next),
+    mutationFn: (next: { title: string; content: string }) =>
+      api.saveNote(noteId, { ...next, baseHash: lastKnownHash.current ?? undefined }),
     onSuccess: applySavedNote,
     onError: async (error, attempted) => {
       setSaveError(true);
@@ -156,10 +157,12 @@ function NoteView() {
   };
 
   const reloadLatest = async () => {
-    hydratedNoteId.current = null;
-    setIsStale(false);
-    setSaveError(false);
-    await refetch();
+    const latest = (await refetch()).data;
+    if (!latest?.note) return;
+    hydratedNoteId.current = noteId;
+    setTitle(latest.note.title);
+    setContent(latest.note.content);
+    applySavedNote(latest);
   };
 
   useEffect(() => {
@@ -189,7 +192,7 @@ function NoteView() {
     };
     const timer = window.setInterval(checkStatus, 20_000);
     return () => window.clearInterval(timer);
-  }, [noteId, save.isPending, isStale, isDirty]);
+  }, [noteId, data?.contentHash, save.isPending, isStale, isDirty]);
 
   useEffect(() => {
     if (blocker.status !== 'blocked') return;

@@ -117,6 +117,38 @@ describe('note versions', () => {
     expect(updateEvent?.afterHash).toBeTruthy();
   });
 
+  it('rejects a stale user save without overwriting the current note', async () => {
+    const { app, folder } = await setupApp();
+    const created = await createNote(app, folder.id);
+
+    const initial = await app.request(`/api/notes/${created.note.id}`);
+    expect(initial.status).toBe(200);
+    const initialBody = (await initial.json()) as { contentHash: string };
+
+    const current = await app.request(`/api/notes/${created.note.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'current content', baseHash: initialBody.contentHash }),
+    });
+    expect(current.status).toBe(200);
+    const currentBody = (await current.json()) as { contentHash: string };
+
+    const stale = await app.request(`/api/notes/${created.note.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'stale overwrite', baseHash: initialBody.contentHash }),
+    });
+    expect(stale.status).toBe(409);
+    await expect(stale.json()).resolves.toEqual({
+      error: 'Document has changed since it was read',
+      currentHash: currentBody.contentHash,
+    });
+
+    const afterConflict = await app.request(`/api/notes/${created.note.id}`);
+    expect(afterConflict.status).toBe(200);
+    await expect(afterConflict.json()).resolves.toMatchObject({ note: { content: 'current content' } });
+  });
+
   it('creates an initial version and restores a prior state', async () => {
     const { app, folder } = await setupApp();
     const created = await createNote(app, folder.id);
