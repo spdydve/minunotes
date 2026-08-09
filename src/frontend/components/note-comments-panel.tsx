@@ -61,6 +61,7 @@ export function NoteCommentsPanel({
               type="button"
               className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
               aria-label="Close Review"
+              title="Close Review"
             >
               <X className="h-4 w-4" />
             </button>
@@ -107,6 +108,7 @@ export function NoteCommentsPanel({
                       className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
                       onClick={() => void onStatusChange(thread).catch(() => undefined)}
                       aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
+                      title={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
                     >
                       {thread.status === 'resolved' ? (
                         <RotateCcw className="h-3.5 w-3.5" />
@@ -120,6 +122,7 @@ export function NoteCommentsPanel({
                           type="button"
                           className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
                           aria-label="More discussion actions"
+                          title="More discussion actions"
                         >
                           <MoreHorizontal className="h-3.5 w-3.5" />
                         </button>

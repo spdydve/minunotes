@@ -111,6 +111,7 @@ export function NoteCommentDiscussion({
                         type="button"
                         className="rounded p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
                         aria-label="Add reaction"
+                        title="Add reaction"
                       >
                         <SmilePlus className="h-3.5 w-3.5" />
                       </button>
@@ -150,6 +151,7 @@ export function NoteCommentDiscussion({
                                   void onToggleReaction(thread.id, message.id, emoji).catch(() => undefined)
                                 }
                                 aria-label={`React with ${emoji}`}
+                                title={`React with ${emoji}`}
                               >
                                 {emoji}
                               </button>
@@ -160,6 +162,7 @@ export function NoteCommentDiscussion({
                             className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
                             onClick={() => setFullPickerMessageId(message.id)}
                             aria-label="More reactions"
+                            title="More reactions"
                           >
                             <Search className="h-4 w-4" />
                           </button>
@@ -174,6 +177,7 @@ export function NoteCommentDiscussion({
                           type="button"
                           className="rounded p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
                           aria-label="More comment actions"
+                          title="More comment actions"
                         >
                           <MoreHorizontal className="h-3.5 w-3.5" />
                         </button>
