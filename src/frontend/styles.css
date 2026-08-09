@@ -344,6 +344,15 @@ select {
   color: var(--notes-muted);
 }
 
+.notes-minu-editor .me-comment-gutter-line--active .me-comment-gutter-badge--create {
+  opacity: 0;
+}
+
+.notes-minu-editor .cm-line:hover .me-comment-gutter-badge--create,
+.notes-minu-editor .me-comment-gutter-badge--create:focus-visible {
+  opacity: 1;
+}
+
 .notes-minu-editor .me-comment-gutter-badge:hover,
 .notes-minu-editor .me-comment-gutter-badge:focus-visible {
   background: var(--notes-hover);

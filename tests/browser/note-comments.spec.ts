@@ -103,8 +103,14 @@ test('creates a whole-line comment from a simple themed gutter icon', async ({ p
   await page.goto(`/notes/${browserFixture.source.id}`);
 
   const editor = page.locator('.cm-content');
-  await editor.click();
+  const line = page.locator('.cm-line').filter({ hasText: 'Start here.' }).first();
   const lineButton = page.getByRole('button', { name: 'Comment on line' });
+  await expect(lineButton).toHaveCSS('opacity', '0');
+  await editor.click();
+  await page.getByRole('textbox', { name: 'Untitled note' }).hover();
+  await expect(lineButton).toHaveCSS('opacity', '0');
+  await line.hover();
+  await expect(lineButton).toHaveCSS('opacity', '1');
   await expect(lineButton).toHaveCSS('border-top-width', '0px');
   const usesThemeMutedColor = () =>
     lineButton.evaluate((element) => {
