@@ -12,3 +12,10 @@ local.db
 .notes-attachments
 test-results
 playwright-report
+
+# Local planning and patch artifacts
+/plan.md
+/plans/
+/patches/
+*.patch
+*.diff
