@@ -2,6 +2,28 @@
 
 **Status:** Implemented and regression-tested.
 
+## What changed
+
+- Markdown and canvas saves send the editor’s latest known `contentHash` as `baseHash`.
+- Stale-status polling starts after asynchronous note hydration instead of silently remaining inactive.
+- A `409 Conflict` preserves the local draft and shows the stale-note warning.
+- Reload applies current server content directly instead of leaving the editor in a loading state.
+- API and browser tests cover clean external updates, dirty save races, reload, and canvas saves.
+
+## Why
+
+The initial stale-document implementation used hash-protected saves, but a later conflict-handling refactor stopped sending `baseHash`. The backend still supported conflict responses, yet normal editor saves could no longer trigger them. Polling also failed to register after an asynchronously loaded note, so clean external changes could go undetected.
+
+Together, those regressions allowed a local autosave to overwrite newer content written by an agent or another client without warning.
+
+## Impact
+
+- Prevents silent last-write-wins data loss when notes change elsewhere.
+- Keeps unsaved local work visible for the user to review before reloading.
+- Restores stale-change detection for clean open notes.
+- Protects both Markdown and canvas documents through their shared save path.
+- Does not change API contracts, database schema, polling frequency, or deployment infrastructure.
+
 ## Goal
 Detect when a note currently open in the editor has been changed elsewhere, such as by an external agent, another browser tab, or a future API integration.
 
