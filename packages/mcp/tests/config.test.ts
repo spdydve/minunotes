@@ -128,6 +128,40 @@ describe('config', () => {
     );
   });
 
+  it('calls Review comment lifecycle endpoints', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = createClient({ NOTES_API_URL: 'https://example.com', NOTES_API_KEY: 'key' });
+    const anchor = { anchorType: 'range' as const, from: 0, to: 4, quote: 'Body', documentHash: 'hash' };
+
+    await client.comments.list('note/1');
+    await client.comments.create('note/1', { body: 'Review', anchor });
+    await client.comments.reply('note/1', 'thread/1', 'Reply');
+    await client.comments.updateAnchor('note/1', 'thread/1', anchor);
+    await client.comments.setStatus('note/1', 'thread/1', 'resolved');
+    await client.comments.updateMessage('note/1', 'thread/1', 'message/1', 'Updated');
+    await client.comments.deleteMessage('note/1', 'thread/1', 'message/1');
+    await client.comments.deleteThread('note/1', 'thread/1');
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      'https://example.com/v1/harness/notes/note%2F1/comments',
+      'https://example.com/v1/harness/notes/note%2F1/comments',
+      'https://example.com/v1/harness/notes/note%2F1/comments/thread%2F1/replies',
+      'https://example.com/v1/harness/notes/note%2F1/comments/thread%2F1/anchor',
+      'https://example.com/v1/harness/notes/note%2F1/comments/thread%2F1/resolve',
+      'https://example.com/v1/harness/notes/note%2F1/comments/thread%2F1/messages/message%2F1',
+      'https://example.com/v1/harness/notes/note%2F1/comments/thread%2F1/messages/message%2F1',
+      'https://example.com/v1/harness/notes/note%2F1/comments/thread%2F1',
+    ]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://example.com/v1/harness/notes/note%2F1/comments',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ body: 'Review', anchor }) })
+    );
+  });
+
   it('calls outline, event, and tag endpoints', async () => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } })

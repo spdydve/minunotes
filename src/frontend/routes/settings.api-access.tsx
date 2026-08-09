@@ -207,6 +207,7 @@ function ApiAccessSettingsView() {
                   authorization.canRead ? 'Read' : null,
                   authorization.canCreate ? 'Create' : null,
                   authorization.canEdit ? 'Edit' : null,
+                  authorization.canComment ? 'Review comments' : null,
                   authorization.canCreateFolders ? 'Create folders' : null,
                 ]
                   .filter(Boolean)

@@ -281,6 +281,9 @@ select {
   --me-code-font-size: 1em;
   --me-content-padding: 12px 0 0;
   --me-text: var(--notes-text);
+  --me-bg: var(--notes-bg);
+  --me-surface: var(--notes-panel);
+  --me-border: var(--notes-border);
   --me-heading-color: var(--notes-text);
   --me-link-color: var(--notes-blue);
   --me-list-marker-color: var(--notes-muted);
@@ -291,6 +294,8 @@ select {
   --me-codeblock-border: var(--notes-border);
   --me-blockquote-border: var(--notes-blue);
   --me-blockquote-color: var(--notes-muted);
+  --me-comment-accent: var(--notes-muted);
+  --me-comment-bg: color-mix(in srgb, var(--notes-text) 8%, transparent);
   --me-callout-note: var(--notes-blue);
   --me-callout-note-bg: color-mix(in srgb, var(--notes-blue) 12%, transparent);
   --me-callout-tip: var(--notes-green);
@@ -325,6 +330,37 @@ select {
   --me-image-picker-accent-text: #ffffff;
   --me-image-picker-button-bg: var(--notes-bg);
   --me-image-picker-input-bg: var(--notes-bg);
+}
+
+.notes-minu-editor .me-comment-gutter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--notes-muted);
+}
+
+.notes-minu-editor .me-comment-gutter-line--active .me-comment-gutter-badge--create {
+  opacity: 0;
+}
+
+.notes-minu-editor .cm-line:hover .me-comment-gutter-badge--create,
+.notes-minu-editor .me-comment-gutter-badge--create:focus-visible {
+  opacity: 1;
+}
+
+.notes-minu-editor .me-comment-gutter-badge:hover,
+.notes-minu-editor .me-comment-gutter-badge:focus-visible {
+  background: var(--notes-hover);
+  color: var(--notes-text);
+}
+
+.notes-minu-editor .me-comment-anchor {
+  border-bottom: 1px solid var(--notes-muted);
 }
 
 .notes-minu-renderer .me-static-codeblock {

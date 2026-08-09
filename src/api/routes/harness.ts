@@ -49,6 +49,19 @@ import {
   validateFolderParent,
 } from '../lib/folder-access';
 import { createId } from '../lib/id';
+import {
+  addCommentReply,
+  type CommentActor,
+  type CommentAnchorInput,
+  createCommentThread,
+  deleteCommentMessage,
+  deleteCommentThread,
+  listCommentThreads,
+  setCommentThreadStatus,
+  toggleCommentReaction,
+  updateCommentAnchor,
+  updateCommentMessage,
+} from '../notes/comments';
 import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
 import { listNoteTags, listUserTags, setNoteTags } from '../notes/tags';
 import { activeNoteWhere } from '../trash/policy';
@@ -154,7 +167,7 @@ function summarizeHarnessDocumentResult<T extends { note: SummarizableNote; cont
 async function hasFolderPermission(
   c: Context<{ Variables: Variables }>,
   folderId: string,
-  permission: 'read' | 'create' | 'edit'
+  permission: 'read' | 'create' | 'edit' | 'comment'
 ) {
   const user = c.get('user');
   if (!user) return false;
@@ -165,6 +178,39 @@ async function hasFolderPermission(
     folderId,
     permission,
   });
+}
+
+function getCommentActor(c: Context<{ Variables: Variables }>): CommentActor {
+  const user = c.get('user');
+  const key = c.get('apiKey');
+  const oauthAuthorization = c.get('oauthAuthorization');
+  if (key) return { type: 'agent', id: key.id };
+  if (oauthAuthorization) return { type: 'agent', id: oauthAuthorization.id };
+  return { type: 'user', id: user?.id ?? 'owner' };
+}
+
+async function requireCommentAccess(c: Context<{ Variables: Variables }>, noteId: string, _operation: 'read' | 'edit') {
+  const user = c.get('user');
+  if (!user) return { ok: false as const, status: 401 as const, error: 'Unauthorized' };
+  const [note] = await db
+    .select({ id: notes.id, folderId: notes.folderId })
+    .from(notes)
+    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
+    .limit(1);
+  if (!note) return { ok: false as const, status: 404 as const, error: 'Note not found' };
+  if (!(await hasFolderPermission(c, note.folderId, 'comment')))
+    return { ok: false as const, status: 403 as const, error: 'Forbidden' };
+  return { ok: true as const, note };
+}
+
+function commentErrorResponse(
+  c: Context<{ Variables: Variables }>,
+  result: { status: 400 | 403 | 404 | 409; error: string; currentHash?: string }
+) {
+  return c.json(
+    { error: result.error, ...(result.currentHash ? { currentHash: result.currentHash } : {}) },
+    result.status
+  );
 }
 
 async function getReadableFolderIds(c: Context<{ Variables: Variables }>) {
@@ -289,6 +335,7 @@ harnessRoutes.post('/folders', async (c) => {
       canRead: key.canRead,
       canCreate: key.canCreate,
       canEdit: key.canEdit,
+      canComment: key.canComment,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -301,6 +348,7 @@ harnessRoutes.post('/folders', async (c) => {
       canRead: oauthAuthorization.canRead,
       canCreate: oauthAuthorization.canCreate,
       canEdit: oauthAuthorization.canEdit,
+      canComment: oauthAuthorization.canComment,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -592,6 +640,173 @@ harnessRoutes.get('/notes/:noteId', async (c) => {
   const result = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   if (!(await hasFolderPermission(c, result.value.note.folderId, 'read'))) return c.json({ error: 'Forbidden' }, 403);
+  return c.json(result.value);
+});
+
+harnessRoutes.get('/notes/:noteId/comments', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'read');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const result = await listCommentThreads({
+    noteId: access.note.id,
+    userId: user.id,
+    actor: getCommentActor(c),
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value);
+});
+
+harnessRoutes.post('/notes/:noteId/comments', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const body = (await c.req.json().catch(() => null)) as {
+    body?: string;
+    anchor?: CommentAnchorInput;
+  } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (typeof body.body !== 'string') return c.json({ error: 'Comment body is required' }, 400);
+  if (!body.anchor) return c.json({ error: 'Comment anchor is required' }, 400);
+  const result = await createCommentThread({
+    noteId: access.note.id,
+    userId: user.id,
+    actor: getCommentActor(c),
+    body: body.body,
+    anchor: body.anchor,
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value, 201);
+});
+
+harnessRoutes.post('/notes/:noteId/comments/:threadId/replies', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const body = (await c.req.json().catch(() => null)) as { body?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (typeof body.body !== 'string') return c.json({ error: 'Comment body is required' }, 400);
+  const result = await addCommentReply({
+    noteId: access.note.id,
+    threadId: c.req.param('threadId'),
+    userId: user.id,
+    actor: getCommentActor(c),
+    body: body.body,
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value, 201);
+});
+
+harnessRoutes.patch('/notes/:noteId/comments/:threadId/anchor', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const body = (await c.req.json().catch(() => null)) as { anchor?: CommentAnchorInput } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (!body.anchor) return c.json({ error: 'Comment anchor is required' }, 400);
+  const result = await updateCommentAnchor({
+    noteId: access.note.id,
+    threadId: c.req.param('threadId'),
+    userId: user.id,
+    actor: getCommentActor(c),
+    anchor: body.anchor,
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value);
+});
+
+for (const [path, status] of [
+  ['resolve', 'resolved'],
+  ['reopen', 'open'],
+] as const) {
+  harnessRoutes.post(`/notes/:noteId/comments/:threadId/${path}`, async (c) => {
+    const user = getUser(c);
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+    const result = await setCommentThreadStatus({
+      noteId: access.note.id,
+      threadId: c.req.param('threadId'),
+      userId: user.id,
+      actor: getCommentActor(c),
+      status,
+    });
+    if (!result.ok) return commentErrorResponse(c, result);
+    return c.json(result.value);
+  });
+}
+
+harnessRoutes.patch('/notes/:noteId/comments/:threadId/messages/:messageId', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const body = (await c.req.json().catch(() => null)) as { body?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (typeof body.body !== 'string') return c.json({ error: 'Comment body is required' }, 400);
+  const result = await updateCommentMessage({
+    noteId: access.note.id,
+    threadId: c.req.param('threadId'),
+    messageId: c.req.param('messageId'),
+    userId: user.id,
+    actor: getCommentActor(c),
+    body: body.body,
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value);
+});
+
+harnessRoutes.post('/notes/:noteId/comments/:threadId/messages/:messageId/reactions', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const body = (await c.req.json().catch(() => null)) as { emoji?: string } | null;
+  if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (typeof body.emoji !== 'string') return c.json({ error: 'Reaction emoji is required' }, 400);
+  const result = await toggleCommentReaction({
+    noteId: access.note.id,
+    threadId: c.req.param('threadId'),
+    messageId: c.req.param('messageId'),
+    userId: user.id,
+    actor: getCommentActor(c),
+    emoji: body.emoji,
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value);
+});
+
+harnessRoutes.delete('/notes/:noteId/comments/:threadId/messages/:messageId', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const result = await deleteCommentMessage({
+    noteId: access.note.id,
+    threadId: c.req.param('threadId'),
+    messageId: c.req.param('messageId'),
+    userId: user.id,
+    actor: getCommentActor(c),
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
+  return c.json(result.value);
+});
+
+harnessRoutes.delete('/notes/:noteId/comments/:threadId', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await requireCommentAccess(c, c.req.param('noteId'), 'edit');
+  if (!access.ok) return c.json({ error: access.error }, access.status);
+  const result = await deleteCommentThread({
+    noteId: access.note.id,
+    threadId: c.req.param('threadId'),
+    userId: user.id,
+    actor: getCommentActor(c),
+  });
+  if (!result.ok) return commentErrorResponse(c, result);
   return c.json(result.value);
 });
 

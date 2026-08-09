@@ -13,7 +13,13 @@ type Variables = {
   apiKey: ApiKey | null;
 };
 
-type PermissionInput = { folderId?: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean };
+type PermissionInput = {
+  folderId?: string;
+  canRead?: boolean;
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canComment?: boolean;
+};
 type AccessMode = 'all' | 'top_level' | 'specific';
 
 export const apiKeyRoutes = new Hono<{ Variables: Variables }>();
@@ -29,11 +35,14 @@ function parseAccessMode(value: unknown): AccessMode | undefined {
   return value === 'specific' || value === 'top_level' || value === 'all' ? value : undefined;
 }
 
-function permissionValue(body: { canRead?: boolean; canCreate?: boolean; canEdit?: boolean } | null | undefined) {
+function permissionValue(
+  body: { canRead?: boolean; canCreate?: boolean; canEdit?: boolean; canComment?: boolean } | null | undefined
+) {
   return {
     canRead: body?.canRead ?? true,
     canCreate: body?.canCreate ?? false,
     canEdit: body?.canEdit ?? false,
+    canComment: body?.canComment ?? false,
   };
 }
 
@@ -43,6 +52,7 @@ function permissionRowsFromFolders(input: {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
 }) {
   return input.permissions.flatMap((permission) =>
     permission.folderId
@@ -54,6 +64,7 @@ function permissionRowsFromFolders(input: {
             canRead: input.canRead,
             canCreate: input.canCreate,
             canEdit: input.canEdit,
+            canComment: input.canComment,
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -75,6 +86,7 @@ apiKeyRoutes.get('/', async (c) => {
       canRead: apiKeys.canRead,
       canCreate: apiKeys.canCreate,
       canEdit: apiKeys.canEdit,
+      canComment: apiKeys.canComment,
       accessMode: apiKeys.accessMode,
       createdAt: apiKeys.createdAt,
       lastUsedAt: apiKeys.lastUsedAt,
@@ -110,6 +122,7 @@ apiKeyRoutes.post('/', async (c) => {
     canRead?: boolean;
     canCreate?: boolean;
     canEdit?: boolean;
+    canComment?: boolean;
     permissions?: PermissionInput[];
   } | null;
   const name = body?.name?.trim();
@@ -117,6 +130,8 @@ apiKeyRoutes.post('/', async (c) => {
 
   const accessMode = parseAccessMode(body?.accessMode) ?? 'all';
   const keyPermissions = permissionValue(body);
+  if (keyPermissions.canComment && !keyPermissions.canRead)
+    return c.json({ error: 'Review comments permission requires read permission' }, 400);
   const { key, uid } = generateApiKey();
   const { hash, salt } = hashApiKey(key);
   const apiKey = {
@@ -179,6 +194,7 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     canRead?: boolean;
     canCreate?: boolean;
     canEdit?: boolean;
+    canComment?: boolean;
     permissions?: PermissionInput[];
   } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
@@ -199,14 +215,18 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     canRead: body.canRead ?? existing.canRead,
     canCreate: body.canCreate ?? existing.canCreate,
     canEdit: body.canEdit ?? existing.canEdit,
+    canComment: body.canComment ?? existing.canComment,
   };
+  if (nextPermissions.canComment && !nextPermissions.canRead)
+    return c.json({ error: 'Review comments permission requires read permission' }, 400);
   if (
     name !== undefined ||
     body.canCreateFolders !== undefined ||
     accessMode !== undefined ||
     body.canRead !== undefined ||
     body.canCreate !== undefined ||
-    body.canEdit !== undefined
+    body.canEdit !== undefined ||
+    body.canComment !== undefined
   ) {
     await db
       .update(apiKeys)
@@ -216,6 +236,7 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
         ...(body.canRead !== undefined ? { canRead: body.canRead } : {}),
         ...(body.canCreate !== undefined ? { canCreate: body.canCreate } : {}),
         ...(body.canEdit !== undefined ? { canEdit: body.canEdit } : {}),
+        ...(body.canComment !== undefined ? { canComment: body.canComment } : {}),
         ...(accessMode !== undefined ? { accessMode } : {}),
         updatedAt: new Date(),
       })
@@ -229,7 +250,8 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     accessMode === 'all' ||
     body.canRead !== undefined ||
     body.canCreate !== undefined ||
-    body.canEdit !== undefined
+    body.canEdit !== undefined ||
+    body.canComment !== undefined
   ) {
     const requestedPermissions =
       effectiveAccessMode !== 'all'
@@ -255,6 +277,7 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
       canRead: apiKeys.canRead,
       canCreate: apiKeys.canCreate,
       canEdit: apiKeys.canEdit,
+      canComment: apiKeys.canComment,
       accessMode: apiKeys.accessMode,
       createdAt: apiKeys.createdAt,
       lastUsedAt: apiKeys.lastUsedAt,

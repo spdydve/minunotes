@@ -1,4 +1,4 @@
-import { MarkdownEditor, type MarkdownEditorHandle } from '@dpklabs/minueditor';
+import { type EditorCommentAnchor, MarkdownEditor, type MarkdownEditorHandle } from '@dpklabs/minueditor';
 import {
   Heading1,
   Heading2,
@@ -23,6 +23,7 @@ import { getMermaidTheme, useNoteTheme } from '../lib/themes';
 type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>['onViewReady']>>[0];
 
 type WikiLinksProp = ComponentProps<typeof MarkdownEditor>['wikiLinks'];
+type CommentsProp = ComponentProps<typeof MarkdownEditor>['comments'];
 
 export function NoteEditor({
   title,
@@ -38,6 +39,10 @@ export function NoteEditor({
   updatedMeta,
   headerExtra,
   wikiLinks,
+  comments,
+  reviewPanel,
+  reviewFocus,
+  onCommentAnchorPosition,
 }: {
   title: string;
   content: string;
@@ -52,6 +57,10 @@ export function NoteEditor({
   updatedMeta?: ReactNode;
   headerExtra?: ReactNode;
   wikiLinks?: WikiLinksProp;
+  comments?: CommentsProp;
+  reviewPanel?: ReactNode;
+  reviewFocus?: { from: number; to: number; detached?: boolean; requestId: number } | null;
+  onCommentAnchorPosition?: (position: { top: number; left: number; placement: 'above' | 'below' }) => void;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -73,6 +82,11 @@ export function NoteEditor({
   useEffect(() => () => editorKeydownCleanupRef.current?.(), []);
 
   useEffect(() => {
+    if (!reviewFocus || reviewFocus.detached) return;
+    editorRef.current?.setSelection(reviewFocus.from, reviewFocus.to);
+  }, [reviewFocus]);
+
+  useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
 
@@ -89,6 +103,63 @@ export function NoteEditor({
       viewport.removeEventListener('scroll', updateKeyboardOffset);
     };
   }, []);
+
+  const positionCommentDialog = (anchor: EditorCommentAnchor, preferGutter = anchor.anchorType === 'line') => {
+    const view = editorViewRef.current;
+    if (!view || !onCommentAnchorPosition) return;
+    const docLength = view.state.doc.length;
+    const from = Math.max(0, Math.min(anchor.from, docLength));
+    const to = Math.max(from, Math.min(anchor.to, docLength));
+    const start = view.coordsAtPos(from);
+    const end = view.coordsAtPos(to);
+    const anchorTop = Math.min(start?.top ?? end?.top ?? 12, end?.top ?? start?.top ?? 12);
+    const anchorBottom = Math.max(end?.bottom ?? start?.bottom ?? 12, start?.bottom ?? end?.bottom ?? 12);
+
+    const domAtAnchor = view.domAtPos(from).node;
+    const anchorElement = domAtAnchor instanceof Element ? domAtAnchor : domAtAnchor.parentElement;
+    const lineElement = anchorElement?.closest('.cm-line');
+    const gutterButton = preferGutter ? lineElement?.querySelector<HTMLElement>('.me-comment-gutter-badge') : undefined;
+    const gutterRect = gutterButton?.getBoundingClientRect();
+    const targetTop = gutterRect?.top ?? anchorTop;
+    const targetBottom = gutterRect?.bottom ?? anchorBottom;
+
+    const editorContainer = view.dom.closest<HTMLElement>('.notes-minu-editor') ?? view.dom;
+    const containerRect = editorContainer.getBoundingClientRect();
+    const containerLeft = Math.max(12, containerRect.left);
+    const containerRight = Math.min(window.innerWidth - 12, containerRect.right);
+    const containerWidth = Math.max(0, containerRight - containerLeft);
+    const dialogWidth = Math.min(352, containerWidth);
+    const left = containerLeft + (containerWidth - dialogWidth) / 2;
+
+    const margin = 12;
+    const gap = 8;
+    const minimumUsefulHeight = 280;
+    const spaceAbove = targetTop - margin - gap;
+    const spaceBelow = window.innerHeight - targetBottom - margin - gap;
+    const placement = spaceBelow < minimumUsefulHeight && spaceAbove > spaceBelow ? 'above' : 'below';
+    const top = placement === 'above' ? targetTop - gap : targetBottom + gap;
+    onCommentAnchorPosition({ top, left, placement });
+  };
+
+  const positionedComments = useMemo<CommentsProp>(() => {
+    if (!comments) return undefined;
+    return {
+      ...comments,
+      onRequest: (anchor) => {
+        positionCommentDialog(anchor);
+        comments.onRequest?.(anchor);
+      },
+      onSelect: (comment) => {
+        if (comment) positionCommentDialog(comment.anchor);
+        comments.onSelect?.(comment);
+      },
+      onSelectGroup: (items) => {
+        const first = items[0];
+        if (first) positionCommentDialog(first.anchor, true);
+        comments.onSelectGroup?.(items);
+      },
+    };
+  }, [comments, onCommentAnchorPosition]);
 
   const saveLabel =
     saveState === 'saving'
@@ -173,116 +244,125 @@ export function NoteEditor({
         {headerExtra}
       </div>
       <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-        <MarkdownEditor
-          ref={editorRef}
-          value={content}
-          onChange={onContentChange}
-          mode={editorMode}
-          placeholder="Start typing..."
-          minHeight={520}
-          codeLanguages={editorCodeLanguages}
-          codeHighlighter={editorCodeHighlighter}
-          mermaid={mermaid}
-          spellCheck={true}
-          autoCorrect="on"
-          autoComplete="on"
-          autoCapitalize="sentences"
-          onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
-          wikiLinks={wikiLinks}
-          onImageUpload={
-            onImageUpload
-              ? async (file) => {
-                  setUploadingImage(true);
-                  try {
-                    return await onImageUpload(file);
-                  } finally {
-                    setUploadingImage(false);
+        <div>
+          <MarkdownEditor
+            ref={editorRef}
+            value={content}
+            onChange={onContentChange}
+            mode={editorMode}
+            placeholder="Start typing..."
+            minHeight={520}
+            codeLanguages={editorCodeLanguages}
+            codeHighlighter={editorCodeHighlighter}
+            mermaid={mermaid}
+            spellCheck={true}
+            autoCorrect="on"
+            autoComplete="on"
+            autoCapitalize="sentences"
+            onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
+            wikiLinks={wikiLinks}
+            comments={positionedComments}
+            onImageUpload={
+              onImageUpload
+                ? async (file) => {
+                    setUploadingImage(true);
+                    try {
+                      return await onImageUpload(file);
+                    } finally {
+                      setUploadingImage(false);
+                    }
                   }
+                : undefined
+            }
+            onViewReady={(view) => {
+              setEditorReady(true);
+              editorViewRef.current = view;
+              editorKeydownCleanupRef.current?.();
+              const handlePartialTaskEnter = (event: KeyboardEvent) => {
+                if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+
+                const selection = view.state.selection.main;
+                if (!selection.empty) return;
+
+                const line = view.state.doc.lineAt(selection.from);
+                if (selection.from !== line.to) return;
+
+                const taskMatch = line.text.match(/^(\s*)([-*+])\s+\[\/\](?:\s+(.*))?$/);
+                if (!taskMatch) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                const text = taskMatch[3] ?? '';
+                if (text.length === 0) {
+                  view.dispatch({
+                    changes: { from: line.from, to: line.to, insert: '' },
+                    selection: { anchor: line.from },
+                    scrollIntoView: true,
+                  });
+                  return;
                 }
-              : undefined
-          }
-          onViewReady={(view) => {
-            setEditorReady(true);
-            editorViewRef.current = view;
-            editorKeydownCleanupRef.current?.();
-            const handlePartialTaskEnter = (event: KeyboardEvent) => {
-              if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 
-              const selection = view.state.selection.main;
-              if (!selection.empty) return;
-
-              const line = view.state.doc.lineAt(selection.from);
-              if (selection.from !== line.to) return;
-
-              const taskMatch = line.text.match(/^(\s*)([-*+])\s+\[\/\](?:\s+(.*))?$/);
-              if (!taskMatch) return;
-
-              event.preventDefault();
-              event.stopPropagation();
-
-              const text = taskMatch[3] ?? '';
-              if (text.length === 0) {
+                const insert = `\n${taskMatch[1]}${taskMatch[2]} [ ] `;
                 view.dispatch({
-                  changes: { from: line.from, to: line.to, insert: '' },
-                  selection: { anchor: line.from },
+                  changes: { from: line.to, insert },
+                  selection: { anchor: line.to + insert.length },
                   scrollIntoView: true,
                 });
-                return;
-              }
+              };
+              const handleTaskCopy = (event: ClipboardEvent) => {
+                const ranges = view.state.selection.ranges.filter((range) => !range.empty);
+                if (ranges.length === 0) return;
 
-              const insert = `\n${taskMatch[1]}${taskMatch[2]} [ ] `;
-              view.dispatch({
-                changes: { from: line.to, insert },
-                selection: { anchor: line.to + insert.length },
-                scrollIntoView: true,
-              });
-            };
-            const handleTaskCopy = (event: ClipboardEvent) => {
-              const ranges = view.state.selection.ranges.filter((range) => !range.empty);
-              if (ranges.length === 0) return;
+                let expanded = false;
+                const text = ranges
+                  .map((range) => {
+                    let from = range.from;
+                    const to = range.to;
+                    const fromLine = view.state.doc.lineAt(from);
+                    const toLine = view.state.doc.lineAt(to);
+                    const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
 
-              let expanded = false;
-              const text = ranges
-                .map((range) => {
-                  let from = range.from;
-                  const to = range.to;
-                  const fromLine = view.state.doc.lineAt(from);
-                  const toLine = view.state.doc.lineAt(to);
-                  const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
+                    if (
+                      taskPrefix &&
+                      fromLine.number !== toLine.number &&
+                      from > fromLine.from &&
+                      from <= fromLine.to
+                    ) {
+                      from = fromLine.from;
+                      expanded = true;
+                    }
 
-                  if (taskPrefix && fromLine.number !== toLine.number && from > fromLine.from && from <= fromLine.to) {
-                    from = fromLine.from;
-                    expanded = true;
-                  }
+                    return view.state.doc.sliceString(from, to);
+                  })
+                  .join('\n');
 
-                  return view.state.doc.sliceString(from, to);
-                })
-                .join('\n');
-
-              if (!expanded) return;
-              event.preventDefault();
-              event.stopPropagation();
-              event.clipboardData?.setData('text/plain', text);
-            };
-            view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
-            view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
-            editorKeydownCleanupRef.current = () => {
-              view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
-              view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
-              if (editorViewRef.current === view) editorViewRef.current = null;
-            };
-            window.requestAnimationFrame(() => {
+                if (!expanded) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.clipboardData?.setData('text/plain', text);
+              };
+              view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
+              view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
+              editorKeydownCleanupRef.current = () => {
+                view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
+                view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
+                if (editorViewRef.current === view) editorViewRef.current = null;
+              };
               window.requestAnimationFrame(() => {
-                if (editorViewRef.current !== view) return;
-                view.requestMeasure();
-                view.dispatch({ selection: view.state.selection, scrollIntoView: false });
+                window.requestAnimationFrame(() => {
+                  if (editorViewRef.current !== view) return;
+                  view.requestMeasure();
+                  view.dispatch({ selection: view.state.selection, scrollIntoView: false });
+                });
               });
-            });
-            if (!initialEditing && view.hasFocus) view.contentDOM.blur();
-          }}
-          className={`notes-minu-editor ${editorMode === 'source' ? 'notes-minu-editor--source' : ''}`}
-        />
+              if (!initialEditing && view.hasFocus) view.contentDOM.blur();
+            }}
+            className={`notes-minu-editor ${editorMode === 'source' ? 'notes-minu-editor--source' : ''}`}
+          />
+        </div>
       </div>
+      {reviewPanel}
       {imagePickerOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-6">
           <div className="max-h-[min(82vh,42rem)] w-full max-w-lg overflow-hidden rounded-t-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:rounded-2xl">

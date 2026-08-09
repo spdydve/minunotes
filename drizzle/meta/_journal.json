@@ -176,6 +176,20 @@
       "when": 1785892278628,
       "tag": "0024_soft_starbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1786289273551,
+      "tag": "0025_zippy_warbound",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1786304088427,
+      "tag": "0026_black_hairball",
+      "breakpoints": true
     }
   ]
 }

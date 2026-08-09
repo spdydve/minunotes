@@ -63,6 +63,7 @@ function OAuthAuthorizeView() {
   const [canRead, setCanRead] = useState(true);
   const [canCreate, setCanCreate] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [canComment, setCanComment] = useState(false);
   const [canCreateFolders, setCanCreateFolders] = useState(false);
 
   const selectableFolders = useMemo(
@@ -85,6 +86,7 @@ function OAuthAuthorizeView() {
         canRead,
         canCreate,
         canEdit,
+        canComment,
         canCreateFolders,
         folderIds: [...selectedFolderIds],
       }),
@@ -118,7 +120,9 @@ function OAuthAuthorizeView() {
   const appName = preview.data?.client.name ?? 'This app';
   const selectedCount = selectedFolderIds.size;
   const canSubmit =
-    (canRead || canCreate || canEdit) && (accessMode === 'all' || selectedCount > 0) && !approve.isPending;
+    (canRead || canCreate || canEdit || canComment) &&
+    (accessMode === 'all' || selectedCount > 0) &&
+    !approve.isPending;
 
   return (
     <section className="mx-auto w-full max-w-3xl">
@@ -173,7 +177,14 @@ function OAuthAuthorizeView() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--notes-muted)]">Permissions</h2>
           <div className="mt-3 flex flex-wrap gap-3">
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={canRead} onChange={(e) => setCanRead(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={canRead}
+                onChange={(event) => {
+                  setCanRead(event.target.checked);
+                  if (!event.target.checked) setCanComment(false);
+                }}
+              />
               Read
             </label>
             <label className="flex items-center gap-2 text-sm">
@@ -183,6 +194,17 @@ function OAuthAuthorizeView() {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={canEdit} onChange={(e) => setCanEdit(e.target.checked)} />
               Edit notes
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={canComment}
+                onChange={(event) => {
+                  setCanComment(event.target.checked);
+                  if (event.target.checked) setCanRead(true);
+                }}
+              />
+              Review comments
             </label>
           </div>
           <label className="mt-3 flex items-start gap-2 text-sm">

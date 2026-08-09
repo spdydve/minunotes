@@ -1,13 +1,25 @@
+import type { EditorComment, EditorCommentAnchor, EditorCommentsConfig } from '@dpklabs/minueditor';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createRoute, useBlocker, useNavigate } from '@tanstack/react-router';
+import { MessageSquare } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BacklinksPanel } from '../components/backlinks-panel';
 import { NoteActionsPopover } from '../components/note-actions-popover';
 import { NoteCanvasEditor } from '../components/note-canvas-editor';
+import { type CommentDialogPosition, NoteCommentDialog } from '../components/note-comment-dialog';
+import { NoteCommentsPanel } from '../components/note-comments-panel';
 import { NoteEditor } from '../components/note-editor';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
-import { ApiError, api } from '../lib/api';
+import {
+  ApiError,
+  api,
+  type CommentAnchorInput,
+  type CommentMessage,
+  type CommentReactionEmoji,
+  type CommentThread,
+  type NoteCommentsResponse,
+} from '../lib/api';
 import { internalNoteLinkTarget } from '../lib/link-policy';
 import { rootRoute } from './__root';
 
@@ -25,15 +37,34 @@ function NoteView() {
     queryFn: () => api.backlinks(noteId),
     enabled: Boolean(data?.note && data.note.documentType === 'markdown'),
   });
+  const { data: commentsData } = useQuery({
+    queryKey: ['note-comments', noteId],
+    queryFn: () => api.noteComments(noteId),
+    enabled: Boolean(data?.note && data.note.documentType === 'markdown' && data.note.type === 'note'),
+  });
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [editorMode, setEditorMode] = useState<'live' | 'source'>('live');
   const [saveError, setSaveError] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [commentDialogPosition, setCommentDialogPosition] = useState<CommentDialogPosition | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [draftCommentAnchor, setDraftCommentAnchor] = useState<EditorCommentAnchor | null>(null);
+  const [reviewFocus, setReviewFocus] = useState<{
+    from: number;
+    to: number;
+    detached?: boolean;
+    requestId: number;
+  } | null>(null);
+  const [mappedAnchors, setMappedAnchors] = useState<Record<string, EditorCommentAnchor>>({});
+  const [commentError, setCommentError] = useState<string | null>(null);
   const hydratedNoteId = useRef<string | null>(null);
   const lastSaved = useRef({ title: '', content: '' });
   const lastKnownHash = useRef<string | null>(null);
+  const reviewFocusRequest = useRef(0);
 
   useEffect(() => {
     if (!data?.note) return;
@@ -56,6 +87,11 @@ function NoteView() {
     setSaveError(false);
     setImageUploadError(null);
     setIsStale(false);
+    setReviewOpen(false);
+    setCommentDialogOpen(false);
+    setCommentDialogPosition(null);
+    setSelectedThreadId(null);
+    setDraftCommentAnchor(null);
   }, [data, noteId]);
 
   const applySavedNote = ({ note, contentHash }: { note: NonNullable<typeof data>['note']; contentHash: string }) => {
@@ -120,7 +156,10 @@ function NoteView() {
     },
   });
   const toggleApiEditable = useMutation({
-    mutationFn: () => api.saveNote(noteId, { isApiEditable: !data!.note.isApiEditable }),
+    mutationFn: () => {
+      if (!data?.note) throw new Error('Note is not loaded');
+      return api.saveNote(noteId, { isApiEditable: !data.note.isApiEditable });
+    },
     onSuccess: ({ note, contentHash }) => {
       lastKnownHash.current = contentHash;
       qc.setQueryData(['note', noteId], { note, contentHash });
@@ -130,6 +169,10 @@ function NoteView() {
 
   const isDirty = title !== lastSaved.current.title || content !== lastSaved.current.content;
   const isSaving = save.isPending;
+  const commentMutation = useMutation({
+    mutationFn: (operation: () => Promise<unknown>) => operation(),
+    onError: (error) => setCommentError(error instanceof Error ? error.message : 'Comment action failed'),
+  });
   const blocker = useBlocker({
     shouldBlockFn: () => isDirty || isSaving,
     enableBeforeUnload: false,
@@ -213,6 +256,158 @@ function NoteView() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty, save.isPending]);
+
+  const runCommentAction = async <T,>(operation: () => Promise<T>) => {
+    setCommentError(null);
+    return (await commentMutation.mutateAsync(operation)) as T;
+  };
+
+  const updateCommentCache = (update: (current: NoteCommentsResponse) => NoteCommentsResponse) => {
+    qc.setQueryData<NoteCommentsResponse>(['note-comments', noteId], (current) =>
+      current ? update(current) : current
+    );
+  };
+  const cacheThread = (thread: CommentThread) => {
+    updateCommentCache((current) => {
+      const exists = current.threads.some((candidate) => candidate.id === thread.id);
+      return {
+        ...current,
+        threads: exists
+          ? current.threads.map((candidate) => (candidate.id === thread.id ? thread : candidate))
+          : [thread, ...current.threads],
+      };
+    });
+  };
+  const cacheMessage = (message: CommentMessage) => {
+    updateCommentCache((current) => ({
+      ...current,
+      threads: current.threads.map((thread) =>
+        thread.id === message.threadId
+          ? {
+              ...thread,
+              updatedAt: message.updatedAt,
+              messages: thread.messages.some((candidate) => candidate.id === message.id)
+                ? thread.messages.map((candidate) => (candidate.id === message.id ? message : candidate))
+                : [...thread.messages, message],
+            }
+          : thread
+      ),
+    }));
+  };
+
+  const focusCommentThread = (thread: CommentThread) => {
+    setSelectedThreadId(thread.id);
+    setDraftCommentAnchor(null);
+    setReviewFocus({
+      from: thread.anchor.from,
+      to: thread.anchor.to,
+      detached: thread.anchor.detached,
+      requestId: ++reviewFocusRequest.current,
+    });
+  };
+
+  const selectReviewThread = (thread: CommentThread) => {
+    focusCommentThread(thread);
+    setCommentDialogOpen(false);
+  };
+
+  const openCommentThreadDialog = (thread: CommentThread) => {
+    focusCommentThread(thread);
+    setReviewOpen(false);
+    setCommentDialogOpen(true);
+  };
+
+  const toCommentAnchorInput = (anchor: EditorCommentAnchor, documentHash: string): CommentAnchorInput => ({
+    anchorType: anchor.anchorType,
+    from: anchor.from,
+    to: anchor.to,
+    quote: anchor.quote,
+    ...(anchor.prefix !== undefined ? { prefix: anchor.prefix } : {}),
+    ...(anchor.suffix !== undefined ? { suffix: anchor.suffix } : {}),
+    documentHash,
+    ...(anchor.detached ? { detached: true } : {}),
+  });
+
+  useEffect(() => {
+    if (isDirty || save.isPending || !data?.contentHash) return;
+    const pending = Object.entries(mappedAnchors);
+    if (pending.length === 0) return;
+    const documentHash = data.contentHash;
+    const timer = window.setTimeout(() => {
+      void Promise.all(
+        pending.map(([threadId, anchor]) =>
+          api.updateCommentAnchor(noteId, threadId, toCommentAnchorInput(anchor, documentHash))
+        )
+      )
+        .then((responses) => {
+          for (const response of responses) cacheThread(response.thread);
+          setMappedAnchors((current) => {
+            const next = { ...current };
+            for (const [threadId, anchor] of pending) if (next[threadId] === anchor) delete next[threadId];
+            return next;
+          });
+        })
+        .catch((error) => setCommentError(error instanceof Error ? error.message : 'Could not update comment anchor'));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [data?.contentHash, isDirty, mappedAnchors, noteId, save.isPending]);
+
+  const editorComments = useMemo<EditorComment[]>(
+    () =>
+      (commentsData?.threads ?? []).map((thread) => {
+        const mapped = mappedAnchors[thread.id];
+        const anchor = mapped ?? {
+          anchorType: thread.anchor.anchorType,
+          from: thread.anchor.from,
+          to: thread.anchor.to,
+          quote: thread.anchor.quote,
+          prefix: thread.anchor.prefix,
+          suffix: thread.anchor.suffix,
+          documentVersion: thread.anchor.documentHash,
+          detached: thread.anchor.detached,
+        };
+        return {
+          id: thread.id,
+          body: thread.messages[0]?.body ?? 'Comment thread',
+          status: thread.status,
+          anchor,
+          author: thread.createdBy,
+          createdAt: thread.createdAt,
+          updatedAt: thread.updatedAt,
+        };
+      }),
+    [commentsData?.threads, mappedAnchors]
+  );
+
+  const commentsConfig = useMemo<EditorCommentsConfig>(
+    () => ({
+      items: editorComments,
+      documentVersion: data?.contentHash,
+      showPanel: false,
+      onRequest: (anchor) => {
+        setDraftCommentAnchor(anchor);
+        setSelectedThreadId(null);
+        setReviewOpen(false);
+        setCommentDialogOpen(true);
+        setCommentError(null);
+      },
+      onSelect: (comment) => {
+        if (!comment) return;
+        const thread = commentsData?.threads.find((candidate) => candidate.id === comment.id);
+        if (thread) openCommentThreadDialog(thread);
+      },
+      onSelectGroup: (comments) => {
+        const first = comments[0];
+        if (!first) return;
+        const thread = commentsData?.threads.find((candidate) => candidate.id === first.id);
+        if (thread) openCommentThreadDialog(thread);
+      },
+      onAnchorChange: (threadId, anchor) => {
+        setMappedAnchors((current) => ({ ...current, [threadId]: anchor }));
+      },
+    }),
+    [commentsData?.threads, data?.contentHash, editorComments]
+  );
 
   const wikiLinks = useMemo(() => {
     const noteIdPattern = /^note_[a-zA-Z0-9]+$/;
@@ -316,16 +511,182 @@ function NoteView() {
       ) : null}
     </>
   );
+  const createComment = async (body: string, anchor: EditorCommentAnchor) => {
+    await runCommentAction(async () => {
+      let documentHash = lastKnownHash.current;
+      if (isDirty) {
+        const saved = await save.mutateAsync({ title, content });
+        documentHash = saved.contentHash;
+      }
+      if (!documentHash) throw new Error('The note must finish loading before adding a comment');
+      const created = await api.createCommentThread(noteId, {
+        body,
+        anchor: toCommentAnchorInput(anchor, documentHash),
+      });
+      cacheThread(created.thread);
+      setDraftCommentAnchor(null);
+      focusCommentThread(created.thread);
+    });
+  };
+  const replyToComment = async (threadId: string, body: string) => {
+    const response = await runCommentAction(() => api.addCommentReply(noteId, threadId, body));
+    cacheMessage(response.message);
+  };
+  const changeCommentStatus = async (thread: CommentThread) => {
+    const response = await runCommentAction(() =>
+      thread.status === 'resolved'
+        ? api.reopenCommentThread(noteId, thread.id)
+        : api.resolveCommentThread(noteId, thread.id)
+    );
+    cacheThread(response.thread);
+  };
+  const editCommentMessage = async (threadId: string, messageId: string, body: string) => {
+    const response = await runCommentAction(() => api.updateCommentMessage(noteId, threadId, messageId, body));
+    cacheMessage(response.message);
+  };
+  const deleteCommentMessage = async (threadId: string, messageId: string) => {
+    const response = await runCommentAction(() => api.deleteCommentMessage(noteId, threadId, messageId));
+    updateCommentCache((current) => ({
+      ...current,
+      threads: response.deletedThread
+        ? current.threads.filter((thread) => thread.id !== threadId)
+        : current.threads.map((thread) =>
+            thread.id === threadId
+              ? { ...thread, messages: thread.messages.filter((message) => message.id !== messageId) }
+              : thread
+          ),
+    }));
+  };
+  const toggleCommentReaction = async (threadId: string, messageId: string, emoji: CommentReactionEmoji) => {
+    const previous = qc.getQueryData<NoteCommentsResponse>(['note-comments', noteId]);
+    updateCommentCache((current) => ({
+      ...current,
+      threads: current.threads.map((thread) =>
+        thread.id === threadId
+          ? {
+              ...thread,
+              messages: thread.messages.map((message) => {
+                if (message.id !== messageId) return message;
+                const existing = message.reactions.find((reaction) => reaction.emoji === emoji);
+                const reactions = existing
+                  ? existing.reactedByCurrentActor
+                    ? existing.count === 1
+                      ? message.reactions.filter((reaction) => reaction.emoji !== emoji)
+                      : message.reactions.map((reaction) =>
+                          reaction.emoji === emoji
+                            ? { ...reaction, count: reaction.count - 1, reactedByCurrentActor: false }
+                            : reaction
+                        )
+                    : message.reactions.map((reaction) =>
+                        reaction.emoji === emoji
+                          ? { ...reaction, count: reaction.count + 1, reactedByCurrentActor: true }
+                          : reaction
+                      )
+                  : [...message.reactions, { emoji, count: 1, reactedByCurrentActor: true }];
+                return { ...message, reactions };
+              }),
+            }
+          : thread
+      ),
+    }));
+    try {
+      const response = await runCommentAction(() => api.toggleCommentReaction(noteId, threadId, messageId, emoji));
+      updateCommentCache((current) => ({
+        ...current,
+        threads: current.threads.map((thread) =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                messages: thread.messages.map((message) =>
+                  message.id === messageId ? { ...message, reactions: response.reactions } : message
+                ),
+              }
+            : thread
+        ),
+      }));
+    } catch (error) {
+      if (previous) qc.setQueryData(['note-comments', noteId], previous);
+      throw error;
+    }
+  };
+  const deleteCommentThread = async (threadId: string) => {
+    await runCommentAction(() => api.deleteCommentThread(noteId, threadId));
+    updateCommentCache((current) => ({
+      ...current,
+      threads: current.threads.filter((thread) => thread.id !== threadId),
+    }));
+    if (selectedThreadId === threadId) {
+      setSelectedThreadId(null);
+      setCommentDialogOpen(false);
+    }
+  };
+  const selectedThread = commentsData?.threads.find((thread) => thread.id === selectedThreadId) ?? null;
+  const reviewPanel = (
+    <>
+      <NoteCommentsPanel
+        open={reviewOpen}
+        threads={commentsData?.threads ?? []}
+        selectedThreadId={selectedThreadId}
+        busy={commentMutation.isPending || save.isPending}
+        error={commentError}
+        onClose={() => setReviewOpen(false)}
+        onSelect={selectReviewThread}
+        onReply={replyToComment}
+        onStatusChange={changeCommentStatus}
+        onEditMessage={editCommentMessage}
+        onDeleteMessage={deleteCommentMessage}
+        onDeleteThread={deleteCommentThread}
+        onToggleReaction={toggleCommentReaction}
+      />
+      <NoteCommentDialog
+        open={commentDialogOpen}
+        position={commentDialogPosition}
+        thread={selectedThread}
+        draftAnchor={draftCommentAnchor}
+        busy={commentMutation.isPending || save.isPending}
+        error={commentError}
+        onClose={() => {
+          setCommentDialogOpen(false);
+          setDraftCommentAnchor(null);
+        }}
+        onCreate={createComment}
+        onReply={replyToComment}
+        onStatusChange={changeCommentStatus}
+        onEditMessage={editCommentMessage}
+        onDeleteMessage={deleteCommentMessage}
+        onDeleteThread={deleteCommentThread}
+        onToggleReaction={toggleCommentReaction}
+      />
+    </>
+  );
   const actions = (
-    <NoteActionsPopover
-      note={data.note}
-      icon="settings"
-      onDelete={() => remove.mutateAsync()}
-      onToggleApiEditable={() => toggleApiEditable.mutate()}
-      onNoteUpdated={applyDetailsUpdate}
-      editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}
-      onEditorModeChange={data.note.documentType === 'markdown' ? setEditorMode : undefined}
-    />
+    <>
+      {data.note.documentType === 'markdown' && data.note.type === 'note' ? (
+        <button
+          type="button"
+          className="rounded-md p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+          onClick={() => {
+            setCommentDialogOpen(false);
+            setDraftCommentAnchor(null);
+            setReviewOpen(true);
+          }}
+          aria-label="Open Review"
+          aria-expanded={reviewOpen}
+          title="Review comments"
+        >
+          <MessageSquare className="h-4 w-4" />
+        </button>
+      ) : null}
+      <NoteActionsPopover
+        note={data.note}
+        icon="settings"
+        onDelete={() => remove.mutateAsync()}
+        onToggleApiEditable={() => toggleApiEditable.mutate()}
+        onNoteUpdated={applyDetailsUpdate}
+        editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}
+        onEditorModeChange={data.note.documentType === 'markdown' ? setEditorMode : undefined}
+      />
+    </>
   );
 
   if (data.note.documentType.startsWith('canvas.')) {
@@ -361,6 +722,10 @@ function NoteView() {
       staleNotice={staleNotice}
       onImageUpload={uploadImage}
       wikiLinks={wikiLinks}
+      comments={data.note.type === 'note' ? commentsConfig : undefined}
+      reviewPanel={reviewPanel}
+      reviewFocus={reviewFocus}
+      onCommentAnchorPosition={setCommentDialogPosition}
       actions={actions}
     />
   );

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 24; index += 1) {
+  for (let index = 0; index <= 25; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -285,7 +285,7 @@ describe('oauth foundations', () => {
   });
 
   it('exchanges an authorization code with PKCE and revokes a token', async () => {
-    const { app } = await setupApp();
+    const { app, db, schema } = await setupApp();
     const verifier = 'a'.repeat(64);
     const authorizePath = `/api/oauth/authorize?response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent('https://client.example/callback')}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256&state=abc`;
     const authorize = await app.request(authorizePath);
@@ -312,11 +312,14 @@ describe('oauth foundations', () => {
         canRead: true,
         canCreate: false,
         canEdit: false,
+        canComment: true,
         canCreateFolders: false,
         folderIds: [],
       }),
     });
     expect(approve.status).toBe(200);
+    const [authorization] = await db.select().from(schema.oauthAuthorizations);
+    expect(authorization).toMatchObject({ canRead: true, canEdit: false, canComment: true });
     const { redirectUrl } = (await approve.json()) as { redirectUrl: string };
     const redirected = new URL(redirectUrl);
     expect(redirected.searchParams.get('state')).toBe('abc');

@@ -1,5 +1,39 @@
 import { expect, type Page } from '@playwright/test';
 
+type BrowserCommentAnchor = {
+  anchorType: 'range' | 'line';
+  from: number;
+  to: number;
+  quote: string;
+  prefix?: string;
+  suffix?: string;
+  documentHash: string;
+  detached: boolean;
+};
+
+type BrowserCommentMessage = {
+  id: string;
+  threadId: string;
+  body: string;
+  author: { type: 'user' | 'agent'; id: string; name: string };
+  createdAt: string;
+  updatedAt: string;
+  reactions: Array<{ emoji: string; count: number; reactedByCurrentActor: boolean }>;
+};
+
+type BrowserCommentThread = {
+  id: string;
+  noteId: string;
+  status: 'open' | 'resolved';
+  anchor: BrowserCommentAnchor;
+  createdBy: { type: 'user' | 'agent'; id: string; name: string };
+  resolvedBy: { type: 'user' | 'agent'; id: string; name: string } | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: BrowserCommentMessage[];
+};
+
 type Note = {
   id: string;
   folderId: string;
@@ -53,7 +87,7 @@ export const browserFixture = {
     folderId: 'folder_browser',
     title: 'Linked Note',
     content:
-      'See [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].\n\n```ts\nconst answer: number = 42;\n```\n\n```unknownlang\nfallback code\n```\n\n```\nplain code\n```',
+      '**Integration reference:** [[note_target|MinuNotes integration — MinuEditor v0.11.1]]\n\nSee [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].\n\n```ts\nconst answer: number = 42;\n```\n\n```unknownlang\nfallback code\n```\n\n```\nplain code\n```',
     documentType: 'markdown',
     type: 'note',
     isApiEditable: true,
@@ -244,6 +278,9 @@ export async function mockBrowserApi(
   ]);
   const saveRequests: Array<{ noteId: string; body: Record<string, unknown> }> = [];
   const statusRequests: string[] = [];
+  const commentThreads = new Map<string, BrowserCommentThread[]>();
+  const commentRequests: Array<{ method: string; path: string; body: unknown }> = [];
+  let commentId = 0;
   let hashVersion = 1;
   let folderShareLink: {
     id: string;
@@ -551,6 +588,146 @@ export async function mockBrowserApi(
       );
     }
 
+    const commentReactionMatch = path.match(
+      /^\/notes\/(note_[a-zA-Z0-9]+)\/comments\/(comment_thread_[a-zA-Z0-9]+)\/messages\/(comment_message_[a-zA-Z0-9]+)\/reactions$/
+    );
+    if (commentReactionMatch && method === 'POST') {
+      const [, noteId, threadId, messageId] = commentReactionMatch;
+      const thread = (commentThreads.get(noteId) ?? []).find((candidate) => candidate.id === threadId);
+      const message = thread?.messages.find((candidate) => candidate.id === messageId);
+      if (!message) return json({ error: 'Comment message not found' }, 404);
+      const body = request.postDataJSON() as { emoji: BrowserCommentMessage['reactions'][number]['emoji'] };
+      commentRequests.push({ method, path, body });
+      const existing = message.reactions.find((reaction) => reaction.emoji === body.emoji);
+      message.reactions = existing
+        ? existing.reactedByCurrentActor
+          ? existing.count === 1
+            ? message.reactions.filter((reaction) => reaction.emoji !== body.emoji)
+            : message.reactions.map((reaction) =>
+                reaction.emoji === body.emoji
+                  ? { ...reaction, count: reaction.count - 1, reactedByCurrentActor: false }
+                  : reaction
+              )
+          : message.reactions.map((reaction) =>
+              reaction.emoji === body.emoji
+                ? { ...reaction, count: reaction.count + 1, reactedByCurrentActor: true }
+                : reaction
+            )
+        : [...message.reactions, { emoji: body.emoji, count: 1, reactedByCurrentActor: true }];
+      return json({ messageId, reactions: message.reactions });
+    }
+
+    const commentMessagesMatch = path.match(
+      /^\/notes\/(note_[a-zA-Z0-9]+)\/comments\/(comment_thread_[a-zA-Z0-9]+)\/messages\/(comment_message_[a-zA-Z0-9]+)$/
+    );
+    if (commentMessagesMatch) {
+      const [, noteId, threadId, messageId] = commentMessagesMatch;
+      const thread = (commentThreads.get(noteId) ?? []).find((candidate) => candidate.id === threadId);
+      const message = thread?.messages.find((candidate) => candidate.id === messageId);
+      if (!thread || !message) return json({ error: 'Comment message not found' }, 404);
+      commentRequests.push({ method, path, body: method === 'PATCH' ? request.postDataJSON() : null });
+      if (method === 'PATCH') {
+        const body = request.postDataJSON() as { body?: string };
+        message.body = body.body ?? message.body;
+        message.updatedAt = '2026-07-12T00:01:00.000Z';
+        thread.updatedAt = now;
+        return json({ message });
+      }
+      if (method === 'DELETE') {
+        thread.messages = thread.messages.filter((candidate) => candidate.id !== messageId);
+        return json({ ok: true, deletedThread: false });
+      }
+    }
+
+    const commentActionMatch = path.match(
+      /^\/notes\/(note_[a-zA-Z0-9]+)\/comments\/(comment_thread_[a-zA-Z0-9]+)\/(replies|anchor|resolve|reopen)$/
+    );
+    if (commentActionMatch) {
+      const [, noteId, threadId, action] = commentActionMatch;
+      const thread = (commentThreads.get(noteId) ?? []).find((candidate) => candidate.id === threadId);
+      if (!thread) return json({ error: 'Comment thread not found' }, 404);
+      const body = action === 'resolve' || action === 'reopen' ? {} : request.postDataJSON();
+      commentRequests.push({ method, path, body });
+      if (action === 'replies' && method === 'POST') {
+        const message: BrowserCommentMessage = {
+          id: `comment_message_${++commentId}`,
+          threadId,
+          body: (body as { body?: string }).body ?? '',
+          author: { type: 'user', id: 'owner', name: 'Browser Test User' },
+          createdAt: now,
+          updatedAt: now,
+          reactions: [],
+        };
+        thread.messages.push(message);
+        thread.updatedAt = now;
+        return json({ message }, 201);
+      }
+      if (action === 'anchor' && method === 'PATCH') {
+        thread.anchor = { ...(body as { anchor: BrowserCommentAnchor }).anchor };
+        return json({ thread });
+      }
+      if (action === 'resolve' || action === 'reopen') {
+        thread.status = action === 'resolve' ? 'resolved' : 'open';
+        thread.resolvedBy = action === 'resolve' ? { type: 'user', id: 'owner', name: 'Browser Test User' } : null;
+        thread.resolvedAt = action === 'resolve' ? now : null;
+        return json({ thread });
+      }
+    }
+
+    const commentThreadMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/comments\/(comment_thread_[a-zA-Z0-9]+)$/);
+    if (commentThreadMatch && method === 'DELETE') {
+      const [, noteId, threadId] = commentThreadMatch;
+      commentRequests.push({ method, path, body: null });
+      commentThreads.set(
+        noteId,
+        (commentThreads.get(noteId) ?? []).filter((thread) => thread.id !== threadId)
+      );
+      return json({ ok: true });
+    }
+
+    const commentsMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/comments$/);
+    if (commentsMatch) {
+      const noteId = commentsMatch[1];
+      if (!notes.has(noteId)) return json({ error: 'Note not found' }, 404);
+      if (method === 'GET')
+        return json({ noteId, documentHash: `hash_${hashVersion}`, threads: commentThreads.get(noteId) ?? [] });
+      if (method === 'POST') {
+        const body = request.postDataJSON() as {
+          body: string;
+          anchor: Omit<BrowserCommentAnchor, 'detached'> & { detached?: boolean };
+        };
+        commentRequests.push({ method, path, body });
+        const currentHash = `hash_${hashVersion}`;
+        if (body.anchor.documentHash !== currentHash)
+          return json({ error: 'Document has changed since the comment anchor was created', currentHash }, 409);
+        const threadId = `comment_thread_${++commentId}`;
+        const thread: BrowserCommentThread = {
+          id: threadId,
+          noteId,
+          status: 'open',
+          anchor: { ...body.anchor, detached: body.anchor.detached ?? false },
+          createdBy: { type: 'user', id: 'owner', name: 'Browser Test User' },
+          resolvedBy: null,
+          resolvedAt: null,
+          createdAt: now,
+          updatedAt: now,
+          messages: [
+            {
+              id: `comment_message_${++commentId}`,
+              threadId,
+              body: body.body,
+              author: { type: 'user', id: 'owner', name: 'Browser Test User' },
+              createdAt: now,
+              updatedAt: now,
+              reactions: [],
+            },
+          ],
+        };
+        commentThreads.set(noteId, [thread, ...(commentThreads.get(noteId) ?? [])]);
+        return json({ thread }, 201);
+      }
+    }
+
     const noteEventsMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/events$/);
     if (noteEventsMatch && method === 'GET') return json({ noteId: noteEventsMatch[1], events: [] });
 
@@ -621,6 +798,8 @@ export async function mockBrowserApi(
     trashMutationRequests,
     saveRequests,
     statusRequests,
+    commentThreads,
+    commentRequests,
     externalUpdate(noteId: string, changes: Partial<Pick<Note, 'title' | 'content'>>) {
       const note = notes.get(noteId);
       if (!note) throw new Error(`Note not found: ${noteId}`);

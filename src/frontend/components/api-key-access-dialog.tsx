@@ -3,9 +3,14 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { type ApiKey, type ApiKeyAccessMode, api, type Folder } from '../lib/api';
 import { Button } from './ui/button';
 
-type PermissionValue = { canRead: boolean; canCreate: boolean; canEdit: boolean };
+type PermissionValue = { canRead: boolean; canCreate: boolean; canEdit: boolean; canComment: boolean };
 
-const defaultPermission: PermissionValue = { canRead: true, canCreate: false, canEdit: false };
+const defaultPermission: PermissionValue = {
+  canRead: true,
+  canCreate: false,
+  canEdit: false,
+  canComment: false,
+};
 
 function isEffectivelyPrivate(folder: Folder, folders: Folder[]) {
   const byId = new Map(folders.map((item) => [item.id, item]));
@@ -116,7 +121,14 @@ export function ApiKeyAccessDialog({
     setCanCreateFolders(apiKey?.canCreateFolders ?? false);
     setAccessMode(apiKey?.accessMode ?? 'all');
     setKeyPermission(
-      apiKey ? { canRead: apiKey.canRead, canCreate: apiKey.canCreate, canEdit: apiKey.canEdit } : defaultPermission
+      apiKey
+        ? {
+            canRead: apiKey.canRead,
+            canCreate: apiKey.canCreate,
+            canEdit: apiKey.canEdit,
+            canComment: apiKey.canComment,
+          }
+        : defaultPermission
     );
     setSelectedFolderIds(new Set((apiKey?.permissions ?? []).map((permission) => permission.folderId)));
   }, [apiKey, open]);
@@ -238,14 +250,28 @@ export function ApiKeyAccessDialog({
                 <div className="mt-4 rounded-md border border-slate-200 p-3 dark:border-slate-800">
                   <p className="text-sm font-medium">Permissions</p>
                   <div className="mt-3 flex flex-wrap gap-3">
-                    {(['canRead', 'canCreate', 'canEdit'] as const).map((key) => (
+                    {(['canRead', 'canCreate', 'canEdit', 'canComment'] as const).map((key) => (
                       <label key={key} className="flex items-center gap-1 text-xs text-slate-500">
                         <input
                           type="checkbox"
                           checked={keyPermission[key]}
-                          onChange={(e) => setKeyPermission((current) => ({ ...current, [key]: e.target.checked }))}
+                          onChange={(event) =>
+                            setKeyPermission((current) => {
+                              if (key === 'canComment' && event.target.checked)
+                                return { ...current, canRead: true, canComment: true };
+                              if (key === 'canRead' && !event.target.checked)
+                                return { ...current, canRead: false, canComment: false };
+                              return { ...current, [key]: event.target.checked };
+                            })
+                          }
                         />
-                        {key === 'canRead' ? 'Read' : key === 'canCreate' ? 'Create' : 'Edit'}
+                        {key === 'canRead'
+                          ? 'Read'
+                          : key === 'canCreate'
+                            ? 'Create'
+                            : key === 'canEdit'
+                              ? 'Edit'
+                              : 'Review comments'}
                       </label>
                     ))}
                   </div>
@@ -345,7 +371,12 @@ export function ApiKeyAccessDialog({
                       !name.trim() ||
                       saving ||
                       (accessMode !== 'all' && selectedFolderIds.size === 0) ||
-                      !(keyPermission.canRead || keyPermission.canCreate || keyPermission.canEdit)
+                      !(
+                        keyPermission.canRead ||
+                        keyPermission.canCreate ||
+                        keyPermission.canEdit ||
+                        keyPermission.canComment
+                      )
                     }
                     onClick={submit}
                   >

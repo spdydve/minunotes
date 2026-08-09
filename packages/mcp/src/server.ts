@@ -14,6 +14,18 @@ const canvasDocumentSchema = z
   })
   .passthrough();
 const canvasDocumentTypeSchema = z.enum(['canvas.default', 'canvas.mindmap']);
+const commentAnchorSchema = z.object({
+  anchorType: z.enum(['range', 'line']),
+  from: z.number().int().nonnegative(),
+  to: z.number().int().nonnegative(),
+  quote: z.string().max(20_000),
+  prefix: z.string().optional(),
+  suffix: z.string().optional(),
+  documentHash: z.string().min(1),
+  detached: z.boolean().optional(),
+});
+
+export type CommentAnchor = z.infer<typeof commentAnchorSchema>;
 
 export type CanvasDocument = {
   nodes: unknown[];
@@ -57,6 +69,17 @@ export type NotesMcpClient = {
     events: (noteId: string, limit?: number) => Promise<unknown>;
     tags: (noteId: string) => Promise<unknown>;
     replaceTags: (noteId: string, tags: string[]) => Promise<unknown>;
+  };
+  comments: {
+    list: (noteId: string) => Promise<unknown>;
+    create: (noteId: string, input: { body: string; anchor: CommentAnchor }) => Promise<unknown>;
+    reply: (noteId: string, threadId: string, body: string) => Promise<unknown>;
+    updateAnchor: (noteId: string, threadId: string, anchor: CommentAnchor) => Promise<unknown>;
+    setStatus: (noteId: string, threadId: string, status: 'open' | 'resolved') => Promise<unknown>;
+    updateMessage: (noteId: string, threadId: string, messageId: string, body: string) => Promise<unknown>;
+    toggleReaction: (noteId: string, threadId: string, messageId: string, emoji: string) => Promise<unknown>;
+    deleteMessage: (noteId: string, threadId: string, messageId: string) => Promise<unknown>;
+    deleteThread: (noteId: string, threadId: string) => Promise<unknown>;
   };
   canvases: {
     create: (input: {
@@ -161,6 +184,128 @@ export function createNotesMcpServer(client: NotesMcpClient) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ noteId }) => toolResult(await client.notes.get(noteId))
+  );
+
+  server.registerTool(
+    'notes_list_comments',
+    {
+      title: 'List note comments',
+      description: 'List anchored Review threads and ordered messages for an active markdown note.',
+      inputSchema: { noteId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ noteId }) => toolResult(await client.comments.list(noteId))
+  );
+
+  server.registerTool(
+    'notes_create_comment',
+    {
+      title: 'Create note comment',
+      description:
+        'Create an anchored Review thread and first message. Use the current contentHash and exact markdown offsets from notes_get_note.',
+      inputSchema: { noteId: z.string(), body: z.string().min(1).max(10_000), anchor: commentAnchorSchema },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, body, anchor }) => toolResult(await client.comments.create(noteId, { body, anchor }))
+  );
+
+  server.registerTool(
+    'notes_reply_to_comment',
+    {
+      title: 'Reply to note comment',
+      description: 'Add a message to an existing Review thread.',
+      inputSchema: { noteId: z.string(), threadId: z.string(), body: z.string().min(1).max(10_000) },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, body }) => toolResult(await client.comments.reply(noteId, threadId, body))
+  );
+
+  server.registerTool(
+    'notes_update_comment_anchor',
+    {
+      title: 'Update comment anchor',
+      description: 'Persist a mapped or detached comment anchor against the current note content hash.',
+      inputSchema: { noteId: z.string(), threadId: z.string(), anchor: commentAnchorSchema },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, anchor }) => toolResult(await client.comments.updateAnchor(noteId, threadId, anchor))
+  );
+
+  server.registerTool(
+    'notes_set_comment_status',
+    {
+      title: 'Resolve or reopen comment',
+      description: 'Resolve or reopen a Review thread authored by this connection.',
+      inputSchema: { noteId: z.string(), threadId: z.string(), status: z.enum(['open', 'resolved']) },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, status }) => toolResult(await client.comments.setStatus(noteId, threadId, status))
+  );
+
+  server.registerTool(
+    'notes_edit_comment_message',
+    {
+      title: 'Edit comment message',
+      description: 'Edit a Review message authored by this connection.',
+      inputSchema: {
+        noteId: z.string(),
+        threadId: z.string(),
+        messageId: z.string(),
+        body: z.string().min(1).max(10_000),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, messageId, body }) =>
+      toolResult(await client.comments.updateMessage(noteId, threadId, messageId, body))
+  );
+
+  server.registerTool(
+    'notes_toggle_comment_reaction',
+    {
+      title: 'Toggle comment reaction',
+      description: 'Add or remove your emoji reaction on a Review message.',
+      inputSchema: {
+        noteId: z.string(),
+        threadId: z.string(),
+        messageId: z.string(),
+        emoji: z.string().min(1).max(64).describe('One standard Unicode emoji'),
+      },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, messageId, emoji }) =>
+      toolResult(await client.comments.toggleReaction(noteId, threadId, messageId, emoji))
+  );
+
+  server.registerTool(
+    'notes_delete_comment_message',
+    {
+      title: 'Delete comment message',
+      description: 'Delete a Review message authored by this connection. Deleting a root message deletes its thread.',
+      inputSchema: { noteId: z.string(), threadId: z.string(), messageId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId, messageId }) =>
+      toolResult(await client.comments.deleteMessage(noteId, threadId, messageId))
+  );
+
+  server.registerTool(
+    'notes_delete_comment_thread',
+    {
+      title: 'Delete comment thread',
+      description: 'Delete a complete Review thread authored by this connection.',
+      inputSchema: { noteId: z.string(), threadId: z.string() },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId, threadId }) => toolResult(await client.comments.deleteThread(noteId, threadId))
   );
 
   server.registerTool(

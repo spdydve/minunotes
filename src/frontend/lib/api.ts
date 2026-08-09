@@ -41,6 +41,7 @@ export type ApiKeyPermission = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -53,6 +54,7 @@ export type ApiKey = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   accessMode: ApiKeyAccessMode;
   createdAt: string;
   lastUsedAt: string | null;
@@ -66,6 +68,7 @@ export type OAuthAuthorizationPermission = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,6 +93,7 @@ export type OAuthAuthorization = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   createdAt: string;
   updatedAt: string;
   revokedAt: string | null;
@@ -131,6 +135,47 @@ export type PageResponse = { page: number; limit: number; hasMore: boolean };
 export type NoteResponse = { note: Note; contentHash: string };
 export type MoveNotesResponse = { notes: NoteResponse[] };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
+export type CommentActor = { type: 'user' | 'agent'; id: string; name: string };
+export type CommentAnchor = {
+  anchorType: 'range' | 'line';
+  from: number;
+  to: number;
+  quote: string;
+  prefix?: string;
+  suffix?: string;
+  documentHash: string;
+  detached: boolean;
+};
+export const QUICK_COMMENT_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '🚀'] as const;
+export type CommentReactionEmoji = string;
+export type CommentReaction = {
+  emoji: CommentReactionEmoji;
+  count: number;
+  reactedByCurrentActor: boolean;
+};
+export type CommentMessage = {
+  id: string;
+  threadId: string;
+  body: string;
+  author: CommentActor;
+  createdAt: string;
+  updatedAt: string;
+  reactions: CommentReaction[];
+};
+export type CommentThread = {
+  id: string;
+  noteId: string;
+  status: 'open' | 'resolved';
+  anchor: CommentAnchor;
+  createdBy: CommentActor;
+  resolvedBy: CommentActor | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: CommentMessage[];
+};
+export type NoteCommentsResponse = { noteId: string; documentHash: string; threads: CommentThread[] };
+export type CommentAnchorInput = Omit<CommentAnchor, 'detached'> & { detached?: boolean };
 export type NoteShareLink = {
   id: string;
   noteId: string;
@@ -343,6 +388,7 @@ export const api = {
       canRead: boolean;
       canCreate: boolean;
       canEdit: boolean;
+      canComment: boolean;
       canCreateFolders: boolean;
       folderIds: string[];
     }
@@ -361,6 +407,7 @@ export const api = {
         canRead: data.canRead,
         canCreate: data.canCreate,
         canEdit: data.canEdit,
+        canComment: data.canComment,
         canCreateFolders: data.canCreateFolders,
         folderIds: data.folderIds,
       }),
@@ -372,7 +419,14 @@ export const api = {
     canRead?: boolean;
     canCreate?: boolean;
     canEdit?: boolean;
-    permissions: Array<{ folderId: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }>;
+    canComment?: boolean;
+    permissions: Array<{
+      folderId: string;
+      canRead?: boolean;
+      canCreate?: boolean;
+      canEdit?: boolean;
+      canComment?: boolean;
+    }>;
   }) => request<{ key: string; apiKey: ApiKey }>('/api-keys', { method: 'POST', body: JSON.stringify(data) }),
   updateApiKey: (
     keyId: string,
@@ -383,7 +437,14 @@ export const api = {
       canRead?: boolean;
       canCreate?: boolean;
       canEdit?: boolean;
-      permissions?: Array<{ folderId: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }>;
+      canComment?: boolean;
+      permissions?: Array<{
+        folderId: string;
+        canRead?: boolean;
+        canCreate?: boolean;
+        canEdit?: boolean;
+        canComment?: boolean;
+      }>;
     }
   ) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: 'DELETE' }),
@@ -433,6 +494,48 @@ export const api = {
   ) => request<{ note: Note }>(`/folders/${folderId}/notes`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
   note: (noteId: string) => request<NoteResponse>(`/notes/${noteId}`),
   noteStatus: (noteId: string) => request<NoteStatus>(`/notes/${noteId}/status`),
+  noteComments: (noteId: string) => request<NoteCommentsResponse>(`/notes/${noteId}/comments`),
+  createCommentThread: (noteId: string, data: { body: string; anchor: CommentAnchorInput }) =>
+    request<{ thread: CommentThread }>(`/notes/${noteId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  addCommentReply: (noteId: string, threadId: string, body: string) =>
+    request<{ message: CommentMessage }>(`/notes/${noteId}/comments/${threadId}/replies`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+  updateCommentAnchor: (noteId: string, threadId: string, anchor: CommentAnchorInput) =>
+    request<{ thread: CommentThread }>(`/notes/${noteId}/comments/${threadId}/anchor`, {
+      method: 'PATCH',
+      body: JSON.stringify({ anchor }),
+    }),
+  resolveCommentThread: (noteId: string, threadId: string) =>
+    request<{ thread: CommentThread }>(`/notes/${noteId}/comments/${threadId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  reopenCommentThread: (noteId: string, threadId: string) =>
+    request<{ thread: CommentThread }>(`/notes/${noteId}/comments/${threadId}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  updateCommentMessage: (noteId: string, threadId: string, messageId: string, body: string) =>
+    request<{ message: CommentMessage }>(`/notes/${noteId}/comments/${threadId}/messages/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    }),
+  toggleCommentReaction: (noteId: string, threadId: string, messageId: string, emoji: CommentReactionEmoji) =>
+    request<{ messageId: string; reactions: CommentReaction[] }>(
+      `/notes/${noteId}/comments/${threadId}/messages/${messageId}/reactions`,
+      { method: 'POST', body: JSON.stringify({ emoji }) }
+    ),
+  deleteCommentMessage: (noteId: string, threadId: string, messageId: string) =>
+    request<{ ok: true; deletedThread: boolean }>(`/notes/${noteId}/comments/${threadId}/messages/${messageId}`, {
+      method: 'DELETE',
+    }),
+  deleteCommentThread: (noteId: string, threadId: string) =>
+    request<{ ok: true }>(`/notes/${noteId}/comments/${threadId}`, { method: 'DELETE' }),
   noteShareLink: (noteId: string) => request<{ shareLink: NoteShareLink | null }>(`/notes/${noteId}/share-link`),
   createNoteShareLink: (noteId: string, regenerate = false) =>
     request<{ shareLink: NoteShareLink }>(`/notes/${noteId}/share-link`, {
