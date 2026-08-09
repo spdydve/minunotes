@@ -132,6 +132,43 @@ function createHostedMcpClient(authState: {
           body: JSON.stringify({ tags }),
         }),
     },
+    comments: {
+      list: (noteId) => request(`/notes/${encodeURIComponent(noteId)}/comments`),
+      create: (noteId, input) =>
+        request(`/notes/${encodeURIComponent(noteId)}/comments`, {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+      reply: (noteId, threadId, body) =>
+        request(`/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/replies`, {
+          method: 'POST',
+          body: JSON.stringify({ body }),
+        }),
+      updateAnchor: (noteId, threadId, anchor) =>
+        request(`/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/anchor`, {
+          method: 'PATCH',
+          body: JSON.stringify({ anchor }),
+        }),
+      setStatus: (noteId, threadId, status) =>
+        request(
+          `/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/${status === 'resolved' ? 'resolve' : 'reopen'}`,
+          { method: 'POST', body: JSON.stringify({}) }
+        ),
+      updateMessage: (noteId, threadId, messageId, body) =>
+        request(
+          `/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
+          { method: 'PATCH', body: JSON.stringify({ body }) }
+        ),
+      deleteMessage: (noteId, threadId, messageId) =>
+        request(
+          `/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}`,
+          { method: 'DELETE' }
+        ),
+      deleteThread: (noteId, threadId) =>
+        request(`/notes/${encodeURIComponent(noteId)}/comments/${encodeURIComponent(threadId)}`, {
+          method: 'DELETE',
+        }),
+    },
     canvases: {
       create: (input) => request('/canvases', { method: 'POST', body: JSON.stringify(input) }),
       createFromSyntax: (input) => request('/canvases/from-syntax', { method: 'POST', body: JSON.stringify(input) }),

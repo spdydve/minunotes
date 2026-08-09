@@ -63,6 +63,27 @@ Harness and API-key clients cannot list Trash or trash, restore, or permanently 
 
 Create and update responses return compact note metadata plus `contentHash`; they do not include full note `content`. Use the read-note endpoint when content is needed.
 
+## Review comments
+
+Anchored Review threads are available on active Markdown notes. Comments remain external metadata and never change canonical Markdown.
+
+List threads:
+
+```bash
+curl -s -H "X-API-Key: ntak_..." \
+  "$API/v1/harness/notes/note_xxx/comments"
+```
+
+Create a thread with zero-based offsets, the exact Markdown quote, and the current `contentHash`:
+
+```bash
+curl -s -H "X-API-Key: ntak_..." -H "Content-Type: application/json" \
+  -X POST "$API/v1/harness/notes/note_xxx/comments" \
+  -d '{"body":"Please clarify this.","anchor":{"anchorType":"range","from":42,"to":61,"quote":"exact source text","documentHash":"hash_from_read"}}'
+```
+
+Listing requires folder read access. Creating, replying, remapping, resolving, editing, and deleting require folder edit access and an API-editable note. Message edits/deletes are author-only. Stale anchors return `409`; ambiguous anchors are returned as detached rather than moved speculatively. Canvas notes, templates, Trash, and public shares do not expose comments.
+
 ## Canvas notes
 
 Canvas notes use `documentType: "canvas.default"` or `"canvas.mindmap"`. Their `content` is serialized JSON Canvas, not markdown. Markdown patch edits are rejected for canvas notes.

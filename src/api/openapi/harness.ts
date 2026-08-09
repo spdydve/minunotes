@@ -8,7 +8,14 @@ export const harnessOpenApiSpec = {
   },
   servers: [{ url: '/' }],
   security: [{ ApiKeyAuth: [] }],
-  tags: [{ name: 'Folders' }, { name: 'Notes' }, { name: 'Canvases' }, { name: 'Tags' }, { name: 'Shared' }],
+  tags: [
+    { name: 'Folders' },
+    { name: 'Notes' },
+    { name: 'Review' },
+    { name: 'Canvases' },
+    { name: 'Tags' },
+    { name: 'Shared' },
+  ],
   paths: {
     '/v1/harness/tags': {
       get: {
@@ -234,6 +241,189 @@ export const harnessOpenApiSpec = {
           '200': {
             description: 'Note',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/NoteResponse' } } },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments': {
+      get: {
+        tags: ['Review'],
+        operationId: 'listCommentThreads',
+        summary: 'List anchored comment threads',
+        description: 'Lists Review threads on an active markdown note. Read access to the note folder is required.',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }],
+        responses: {
+          '200': {
+            description: 'Comment threads and ordered messages',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentThreadsResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+      post: {
+        tags: ['Review'],
+        operationId: 'createCommentThread',
+        summary: 'Create an anchored comment thread',
+        description:
+          'Creates a thread and first message. Edit access, API editability, a current document hash, and an exact markdown anchor are required.',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateCommentThreadRequest' } } },
+        },
+        responses: {
+          '201': {
+            description: 'Created thread',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentThreadResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments/{threadId}': {
+      delete: {
+        tags: ['Review'],
+        operationId: 'deleteCommentThread',
+        summary: 'Delete a comment thread',
+        description: 'The note owner or thread author may delete the complete thread.',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }, { $ref: '#/components/parameters/ThreadId' }],
+        responses: {
+          '200': { $ref: '#/components/responses/Deleted' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments/{threadId}/replies': {
+      post: {
+        tags: ['Review'],
+        operationId: 'addCommentReply',
+        summary: 'Reply to a comment thread',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }, { $ref: '#/components/parameters/ThreadId' }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentBodyRequest' } } },
+        },
+        responses: {
+          '201': {
+            description: 'Created reply',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentMessageResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments/{threadId}/anchor': {
+      patch: {
+        tags: ['Review'],
+        operationId: 'updateCommentAnchor',
+        summary: 'Update a locally mapped comment anchor',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }, { $ref: '#/components/parameters/ThreadId' }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/UpdateCommentAnchorRequest' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated thread',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentThreadResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments/{threadId}/resolve': {
+      post: {
+        tags: ['Review'],
+        operationId: 'resolveCommentThread',
+        summary: 'Resolve a comment thread',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }, { $ref: '#/components/parameters/ThreadId' }],
+        responses: {
+          '200': {
+            description: 'Resolved thread',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentThreadResponse' } } },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments/{threadId}/reopen': {
+      post: {
+        tags: ['Review'],
+        operationId: 'reopenCommentThread',
+        summary: 'Reopen a resolved comment thread',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }, { $ref: '#/components/parameters/ThreadId' }],
+        responses: {
+          '200': {
+            description: 'Reopened thread',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentThreadResponse' } } },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/comments/{threadId}/messages/{messageId}': {
+      patch: {
+        tags: ['Review'],
+        operationId: 'updateCommentMessage',
+        summary: 'Edit an authored comment message',
+        description: 'Only the original message author may edit it.',
+        parameters: [
+          { $ref: '#/components/parameters/NoteId' },
+          { $ref: '#/components/parameters/ThreadId' },
+          { $ref: '#/components/parameters/MessageId' },
+        ],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentBodyRequest' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Updated message',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/CommentMessageResponse' } } },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+      delete: {
+        tags: ['Review'],
+        operationId: 'deleteCommentMessage',
+        summary: 'Delete an authored comment message',
+        description: 'Only the original author may delete a message. Deleting the root message deletes its thread.',
+        parameters: [
+          { $ref: '#/components/parameters/NoteId' },
+          { $ref: '#/components/parameters/ThreadId' },
+          { $ref: '#/components/parameters/MessageId' },
+        ],
+        responses: {
+          '200': {
+            description: 'Deletion result',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/DeleteCommentMessageResponse' } } },
           },
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
@@ -581,6 +771,8 @@ export const harnessOpenApiSpec = {
     securitySchemes: { ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
     parameters: {
       NoteId: { name: 'noteId', in: 'path', required: true, schema: { type: 'string' } },
+      ThreadId: { name: 'threadId', in: 'path', required: true, schema: { type: 'string' } },
+      MessageId: { name: 'messageId', in: 'path', required: true, schema: { type: 'string' } },
       ShareToken: { name: 'token', in: 'path', required: true, schema: { type: 'string' } },
     },
     responses: {
@@ -604,9 +796,133 @@ export const harnessOpenApiSpec = {
         description: 'Stale base hash or edit conflict',
         content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
       },
+      Deleted: {
+        description: 'Deleted',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/DeleteResponse' } } },
+      },
     },
     schemas: {
       ErrorResponse: { type: 'object', required: ['error'], properties: { error: { type: 'string' } } },
+      DeleteResponse: { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean', const: true } } },
+      CommentActor: {
+        type: 'object',
+        required: ['type', 'id', 'name'],
+        description: 'Safe actor identity. Internal user, API-key, and OAuth database ids are not exposed.',
+        properties: {
+          type: { type: 'string', enum: ['user', 'agent'] },
+          id: { type: 'string', description: 'owner, a public API-key UID, or integration.' },
+          name: { type: 'string' },
+        },
+      },
+      CommentAnchor: {
+        type: 'object',
+        required: ['anchorType', 'from', 'to', 'quote', 'documentHash', 'detached'],
+        properties: {
+          anchorType: { type: 'string', enum: ['range', 'line'] },
+          from: { type: 'integer', minimum: 0 },
+          to: { type: 'integer', minimum: 0 },
+          quote: { type: 'string', maxLength: 20000 },
+          prefix: { type: 'string' },
+          suffix: { type: 'string' },
+          documentHash: { type: 'string' },
+          detached: { type: 'boolean' },
+        },
+      },
+      CommentMessage: {
+        type: 'object',
+        required: ['id', 'threadId', 'body', 'author', 'createdAt', 'updatedAt'],
+        properties: {
+          id: { type: 'string' },
+          threadId: { type: 'string' },
+          body: { type: 'string', maxLength: 10000 },
+          author: { $ref: '#/components/schemas/CommentActor' },
+          createdAt: { type: 'string' },
+          updatedAt: { type: 'string' },
+        },
+      },
+      CommentThread: {
+        type: 'object',
+        required: [
+          'id',
+          'noteId',
+          'status',
+          'anchor',
+          'createdBy',
+          'resolvedBy',
+          'resolvedAt',
+          'createdAt',
+          'updatedAt',
+          'messages',
+        ],
+        properties: {
+          id: { type: 'string' },
+          noteId: { type: 'string' },
+          status: { type: 'string', enum: ['open', 'resolved'] },
+          anchor: { $ref: '#/components/schemas/CommentAnchor' },
+          createdBy: { $ref: '#/components/schemas/CommentActor' },
+          resolvedBy: { oneOf: [{ $ref: '#/components/schemas/CommentActor' }, { type: 'null' }] },
+          resolvedAt: { type: ['string', 'null'] },
+          createdAt: { type: 'string' },
+          updatedAt: { type: 'string' },
+          messages: { type: 'array', items: { $ref: '#/components/schemas/CommentMessage' } },
+        },
+      },
+      CommentThreadsResponse: {
+        type: 'object',
+        required: ['noteId', 'documentHash', 'threads'],
+        properties: {
+          noteId: { type: 'string' },
+          documentHash: { type: 'string' },
+          threads: { type: 'array', items: { $ref: '#/components/schemas/CommentThread' } },
+        },
+      },
+      CommentThreadResponse: {
+        type: 'object',
+        required: ['thread'],
+        properties: { thread: { $ref: '#/components/schemas/CommentThread' } },
+      },
+      CommentMessageResponse: {
+        type: 'object',
+        required: ['message'],
+        properties: { message: { $ref: '#/components/schemas/CommentMessage' } },
+      },
+      CommentAnchorInput: {
+        type: 'object',
+        required: ['anchorType', 'from', 'to', 'quote', 'documentHash'],
+        properties: {
+          anchorType: { type: 'string', enum: ['range', 'line'] },
+          from: { type: 'integer', minimum: 0 },
+          to: { type: 'integer', minimum: 0 },
+          quote: { type: 'string', maxLength: 20000 },
+          prefix: { type: 'string' },
+          suffix: { type: 'string' },
+          documentHash: { type: 'string' },
+          detached: { type: 'boolean' },
+        },
+      },
+      CreateCommentThreadRequest: {
+        type: 'object',
+        required: ['body', 'anchor'],
+        properties: {
+          body: { type: 'string', maxLength: 10000 },
+          anchor: { $ref: '#/components/schemas/CommentAnchorInput' },
+        },
+      },
+      UpdateCommentAnchorRequest: {
+        type: 'object',
+        required: ['anchor'],
+        properties: { anchor: { $ref: '#/components/schemas/CommentAnchorInput' } },
+      },
+      CommentBodyRequest: {
+        type: 'object',
+        required: ['body'],
+        properties: { body: { type: 'string', maxLength: 10000 } },
+      },
+      DeleteCommentMessageResponse: {
+        type: 'object',
+        required: ['ok', 'deletedThread'],
+        properties: { ok: { type: 'boolean', const: true }, deletedThread: { type: 'boolean' } },
+      },
       SharedWikilinkResolution: {
         type: 'object',
         required: ['target', 'href'],

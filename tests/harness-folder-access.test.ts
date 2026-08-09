@@ -310,6 +310,29 @@ describe('agent-created folder access', () => {
     expect(createNoteResponse.status).toBe(201);
   });
 
+  it('honors per-folder permission flags for specific access', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'specific' });
+    await db.insert(schema.folders).values(folderRow('folder_specific_readonly', 'Specific read only'));
+    await db.insert(schema.apiKeyFolderPermissions).values(
+      permissionRow(apiKey.id, 'folder_specific_readonly', {
+        canRead: true,
+        canCreate: false,
+        canEdit: false,
+      })
+    );
+    await db.insert(schema.notes).values(noteRow('note_specific_readonly', 'folder_specific_readonly', 'Read only'));
+
+    const read = await app.request('/api/harness/notes/note_specific_readonly');
+    expect(read.status).toBe(200);
+
+    const edit = await app.request('/api/harness/notes/note_specific_readonly/tags', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tags: ['blocked'] }),
+    });
+    expect(edit.status).toBe(403);
+  });
+
   it('treats specific folder permissions as exact non-private folder access', async () => {
     const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'specific' });
 

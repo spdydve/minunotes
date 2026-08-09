@@ -23,6 +23,7 @@ import { getMermaidTheme, useNoteTheme } from '../lib/themes';
 type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>['onViewReady']>>[0];
 
 type WikiLinksProp = ComponentProps<typeof MarkdownEditor>['wikiLinks'];
+type CommentsProp = ComponentProps<typeof MarkdownEditor>['comments'];
 
 export function NoteEditor({
   title,
@@ -38,6 +39,9 @@ export function NoteEditor({
   updatedMeta,
   headerExtra,
   wikiLinks,
+  comments,
+  reviewPanel,
+  reviewFocus,
 }: {
   title: string;
   content: string;
@@ -52,6 +56,9 @@ export function NoteEditor({
   updatedMeta?: ReactNode;
   headerExtra?: ReactNode;
   wikiLinks?: WikiLinksProp;
+  comments?: CommentsProp;
+  reviewPanel?: ReactNode;
+  reviewFocus?: { from: number; to: number; detached?: boolean; requestId: number } | null;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -71,6 +78,11 @@ export function NoteEditor({
   const titleValue = title === 'Untitled note' || title === 'Untitled template' ? '' : title;
 
   useEffect(() => () => editorKeydownCleanupRef.current?.(), []);
+
+  useEffect(() => {
+    if (!reviewFocus || reviewFocus.detached) return;
+    editorRef.current?.setSelection(reviewFocus.from, reviewFocus.to);
+  }, [reviewFocus]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -152,7 +164,7 @@ export function NoteEditor({
   };
 
   return (
-    <section className="mx-auto w-full max-w-6xl">
+    <section className={`mx-auto w-full ${reviewPanel ? 'max-w-[96rem]' : 'max-w-6xl'}`}>
       <div className="border-b border-[var(--notes-border)] bg-[var(--notes-bg)] pb-4 md:sticky md:-top-6 md:z-20 md:-mt-6 md:pt-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <p className="notes-muted min-w-0 text-xs">{uploadingImage ? 'Uploading image...' : saveLabel}</p>
@@ -173,115 +185,124 @@ export function NoteEditor({
         {headerExtra}
       </div>
       <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-        <MarkdownEditor
-          ref={editorRef}
-          value={content}
-          onChange={onContentChange}
-          mode={editorMode}
-          placeholder="Start typing..."
-          minHeight={520}
-          codeLanguages={editorCodeLanguages}
-          codeHighlighter={editorCodeHighlighter}
-          mermaid={mermaid}
-          spellCheck={true}
-          autoCorrect="on"
-          autoComplete="on"
-          autoCapitalize="sentences"
-          onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
-          wikiLinks={wikiLinks}
-          onImageUpload={
-            onImageUpload
-              ? async (file) => {
-                  setUploadingImage(true);
-                  try {
-                    return await onImageUpload(file);
-                  } finally {
-                    setUploadingImage(false);
+        <div className={reviewPanel ? 'grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]' : undefined}>
+          <MarkdownEditor
+            ref={editorRef}
+            value={content}
+            onChange={onContentChange}
+            mode={editorMode}
+            placeholder="Start typing..."
+            minHeight={520}
+            codeLanguages={editorCodeLanguages}
+            codeHighlighter={editorCodeHighlighter}
+            mermaid={mermaid}
+            spellCheck={true}
+            autoCorrect="on"
+            autoComplete="on"
+            autoCapitalize="sentences"
+            onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
+            wikiLinks={wikiLinks}
+            comments={comments}
+            onImageUpload={
+              onImageUpload
+                ? async (file) => {
+                    setUploadingImage(true);
+                    try {
+                      return await onImageUpload(file);
+                    } finally {
+                      setUploadingImage(false);
+                    }
                   }
+                : undefined
+            }
+            onViewReady={(view) => {
+              setEditorReady(true);
+              editorViewRef.current = view;
+              editorKeydownCleanupRef.current?.();
+              const handlePartialTaskEnter = (event: KeyboardEvent) => {
+                if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+
+                const selection = view.state.selection.main;
+                if (!selection.empty) return;
+
+                const line = view.state.doc.lineAt(selection.from);
+                if (selection.from !== line.to) return;
+
+                const taskMatch = line.text.match(/^(\s*)([-*+])\s+\[\/\](?:\s+(.*))?$/);
+                if (!taskMatch) return;
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                const text = taskMatch[3] ?? '';
+                if (text.length === 0) {
+                  view.dispatch({
+                    changes: { from: line.from, to: line.to, insert: '' },
+                    selection: { anchor: line.from },
+                    scrollIntoView: true,
+                  });
+                  return;
                 }
-              : undefined
-          }
-          onViewReady={(view) => {
-            setEditorReady(true);
-            editorViewRef.current = view;
-            editorKeydownCleanupRef.current?.();
-            const handlePartialTaskEnter = (event: KeyboardEvent) => {
-              if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 
-              const selection = view.state.selection.main;
-              if (!selection.empty) return;
-
-              const line = view.state.doc.lineAt(selection.from);
-              if (selection.from !== line.to) return;
-
-              const taskMatch = line.text.match(/^(\s*)([-*+])\s+\[\/\](?:\s+(.*))?$/);
-              if (!taskMatch) return;
-
-              event.preventDefault();
-              event.stopPropagation();
-
-              const text = taskMatch[3] ?? '';
-              if (text.length === 0) {
+                const insert = `\n${taskMatch[1]}${taskMatch[2]} [ ] `;
                 view.dispatch({
-                  changes: { from: line.from, to: line.to, insert: '' },
-                  selection: { anchor: line.from },
+                  changes: { from: line.to, insert },
+                  selection: { anchor: line.to + insert.length },
                   scrollIntoView: true,
                 });
-                return;
-              }
+              };
+              const handleTaskCopy = (event: ClipboardEvent) => {
+                const ranges = view.state.selection.ranges.filter((range) => !range.empty);
+                if (ranges.length === 0) return;
 
-              const insert = `\n${taskMatch[1]}${taskMatch[2]} [ ] `;
-              view.dispatch({
-                changes: { from: line.to, insert },
-                selection: { anchor: line.to + insert.length },
-                scrollIntoView: true,
-              });
-            };
-            const handleTaskCopy = (event: ClipboardEvent) => {
-              const ranges = view.state.selection.ranges.filter((range) => !range.empty);
-              if (ranges.length === 0) return;
+                let expanded = false;
+                const text = ranges
+                  .map((range) => {
+                    let from = range.from;
+                    const to = range.to;
+                    const fromLine = view.state.doc.lineAt(from);
+                    const toLine = view.state.doc.lineAt(to);
+                    const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
 
-              let expanded = false;
-              const text = ranges
-                .map((range) => {
-                  let from = range.from;
-                  const to = range.to;
-                  const fromLine = view.state.doc.lineAt(from);
-                  const toLine = view.state.doc.lineAt(to);
-                  const taskPrefix = fromLine.text.match(/^(\s*[-*+]\s+\[[ xX/]\]\s+)/)?.[1];
+                    if (
+                      taskPrefix &&
+                      fromLine.number !== toLine.number &&
+                      from > fromLine.from &&
+                      from <= fromLine.to
+                    ) {
+                      from = fromLine.from;
+                      expanded = true;
+                    }
 
-                  if (taskPrefix && fromLine.number !== toLine.number && from > fromLine.from && from <= fromLine.to) {
-                    from = fromLine.from;
-                    expanded = true;
-                  }
+                    return view.state.doc.sliceString(from, to);
+                  })
+                  .join('\n');
 
-                  return view.state.doc.sliceString(from, to);
-                })
-                .join('\n');
-
-              if (!expanded) return;
-              event.preventDefault();
-              event.stopPropagation();
-              event.clipboardData?.setData('text/plain', text);
-            };
-            view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
-            view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
-            editorKeydownCleanupRef.current = () => {
-              view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
-              view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
-              if (editorViewRef.current === view) editorViewRef.current = null;
-            };
-            window.requestAnimationFrame(() => {
+                if (!expanded) return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.clipboardData?.setData('text/plain', text);
+              };
+              view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
+              view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
+              editorKeydownCleanupRef.current = () => {
+                view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
+                view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
+                if (editorViewRef.current === view) editorViewRef.current = null;
+              };
               window.requestAnimationFrame(() => {
-                if (editorViewRef.current !== view) return;
-                view.requestMeasure();
-                view.dispatch({ selection: view.state.selection, scrollIntoView: false });
+                window.requestAnimationFrame(() => {
+                  if (editorViewRef.current !== view) return;
+                  view.requestMeasure();
+                  view.dispatch({ selection: view.state.selection, scrollIntoView: false });
+                });
               });
-            });
-            if (!initialEditing && view.hasFocus) view.contentDOM.blur();
-          }}
-          className={`notes-minu-editor ${editorMode === 'source' ? 'notes-minu-editor--source' : ''}`}
-        />
+              if (!initialEditing && view.hasFocus) view.contentDOM.blur();
+            }}
+            className={`notes-minu-editor ${editorMode === 'source' ? 'notes-minu-editor--source' : ''}`}
+          />
+          {reviewPanel}
+        </div>
       </div>
       {imagePickerOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-6">

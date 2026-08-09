@@ -1,6 +1,6 @@
 ---
 name: minunotes-harness
-description: Tool-first MinuNotes skill for agents with registered minunotes_* tools. Use to read, search, create, edit, tag, inspect links, and work with canvas notes through MinuNotes tools.
+description: Tool-first MinuNotes skill for agents with registered minunotes_* tools. Use to read, search, create, edit, review, tag, inspect links, and work with canvas notes through MinuNotes tools.
 ---
 
 # MinuNotes Harness Tool Skill
@@ -30,6 +30,17 @@ Do not read every search result automatically. Rank candidates by title, folder,
 - Canvas replacement: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
 - Canvas note link: `minunotes_read_note` → `minunotes_link_canvas_node_to_note` or `minunotes_unlink_canvas_node` with the latest `contentHash` as `baseHash`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
+- Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. List a thread before editing its messages; message edits/deletes are author-only.
+
+## Review workflow
+
+1. Read the active Markdown note and capture `contentHash`.
+2. Compute an exact range or whole-line anchor in the returned Markdown.
+3. Create a thread with the quote, offsets, context, and current hash.
+4. Use replies for discussion and resolve/reopen for lifecycle state.
+5. If the note changes, list comments again and respect `detached: true`; never move an ambiguous anchor speculatively.
+
+Review tools require read scope for listing and edit scope plus API editability for mutations. Comments are unavailable on canvases, templates, Trash, and public shares.
 
 ## Available tools
 
@@ -56,6 +67,14 @@ Do not read every search result automatically. Rank candidates by title, folder,
 - `minunotes_replace_canvas_from_syntax`
 - `minunotes_link_canvas_node_to_note`
 - `minunotes_unlink_canvas_node`
+- `minunotes_list_comments`
+- `minunotes_create_comment`
+- `minunotes_reply_to_comment`
+- `minunotes_update_comment_anchor`
+- `minunotes_set_comment_status`
+- `minunotes_edit_comment_message`
+- `minunotes_delete_comment_message`
+- `minunotes_delete_comment_thread`
 
 `minunotes_search_lines` retains matching lines and requested context, but cross-note matches omit repeated hashes, byte sizes, and total line counts. A line match is retrieval context, not a replacement for the current note read when editing.
 

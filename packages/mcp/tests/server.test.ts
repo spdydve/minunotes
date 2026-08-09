@@ -22,6 +22,16 @@ function mockClient() {
       tags: vi.fn(async () => ({ tags: [{ id: 'tag-1', name: 'release' }] })),
       replaceTags: vi.fn(async () => ({ tags: [{ id: 'tag-1', name: 'release' }] })),
     },
+    comments: {
+      list: vi.fn(async () => ({ noteId: 'note-1', threads: [] })),
+      create: vi.fn(async () => ({ thread: { id: 'thread-1' } })),
+      reply: vi.fn(async () => ({ message: { id: 'message-2' } })),
+      updateAnchor: vi.fn(async () => ({ thread: { id: 'thread-1' } })),
+      setStatus: vi.fn(async () => ({ thread: { id: 'thread-1' } })),
+      updateMessage: vi.fn(async () => ({ message: { id: 'message-1' } })),
+      deleteMessage: vi.fn(async () => ({ ok: true, deletedThread: false })),
+      deleteThread: vi.fn(async () => ({ ok: true })),
+    },
     canvases: {
       create: vi.fn(async () => ({ note: { id: 'canvas-1' }, contentHash: 'hash' })),
       createFromSyntax: vi.fn(async () => ({ note: { id: 'canvas-2' }, contentHash: 'hash', diagnostics: [] })),
@@ -57,6 +67,14 @@ describe('createNotesMcpServer', () => {
       'notes_create_folder',
       'notes_search',
       'notes_get_note',
+      'notes_list_comments',
+      'notes_create_comment',
+      'notes_reply_to_comment',
+      'notes_update_comment_anchor',
+      'notes_set_comment_status',
+      'notes_edit_comment_message',
+      'notes_delete_comment_message',
+      'notes_delete_comment_thread',
       'notes_create_note',
       'notes_create_canvas',
       'notes_create_canvas_from_syntax',
@@ -128,6 +146,57 @@ describe('createNotesMcpServer', () => {
       structuredContent: { result: { folder: { id: 'folder-2' } } },
       content: [{ type: 'text', text: expect.stringContaining('folder-2') }],
     });
+  });
+
+  it('manages anchored Review comments', async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+    const anchor = {
+      anchorType: 'range' as const,
+      from: 0,
+      to: 4,
+      quote: 'Body',
+      documentHash: 'hash',
+    };
+
+    await tools(server).notes_list_comments.handler({ noteId: 'note-1' } as never);
+    await tools(server).notes_create_comment.handler({ noteId: 'note-1', body: 'Review', anchor } as never);
+    await tools(server).notes_reply_to_comment.handler({
+      noteId: 'note-1',
+      threadId: 'thread-1',
+      body: 'Reply',
+    } as never);
+    await tools(server).notes_update_comment_anchor.handler({
+      noteId: 'note-1',
+      threadId: 'thread-1',
+      anchor,
+    } as never);
+    await tools(server).notes_set_comment_status.handler({
+      noteId: 'note-1',
+      threadId: 'thread-1',
+      status: 'resolved',
+    } as never);
+    await tools(server).notes_edit_comment_message.handler({
+      noteId: 'note-1',
+      threadId: 'thread-1',
+      messageId: 'message-1',
+      body: 'Updated',
+    } as never);
+    await tools(server).notes_delete_comment_message.handler({
+      noteId: 'note-1',
+      threadId: 'thread-1',
+      messageId: 'message-2',
+    } as never);
+    await tools(server).notes_delete_comment_thread.handler({ noteId: 'note-1', threadId: 'thread-1' } as never);
+
+    expect(client.comments.list).toHaveBeenCalledWith('note-1');
+    expect(client.comments.create).toHaveBeenCalledWith('note-1', { body: 'Review', anchor });
+    expect(client.comments.reply).toHaveBeenCalledWith('note-1', 'thread-1', 'Reply');
+    expect(client.comments.updateAnchor).toHaveBeenCalledWith('note-1', 'thread-1', anchor);
+    expect(client.comments.setStatus).toHaveBeenCalledWith('note-1', 'thread-1', 'resolved');
+    expect(client.comments.updateMessage).toHaveBeenCalledWith('note-1', 'thread-1', 'message-1', 'Updated');
+    expect(client.comments.deleteMessage).toHaveBeenCalledWith('note-1', 'thread-1', 'message-2');
+    expect(client.comments.deleteThread).toHaveBeenCalledWith('note-1', 'thread-1');
   });
 
   it('creates notes', async () => {

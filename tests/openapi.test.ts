@@ -44,6 +44,16 @@ describe('harness OpenAPI spec', () => {
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/links');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/backlinks');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/tags');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments/{threadId}/replies');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments/{threadId}/anchor');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments/{threadId}/resolve');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments/{threadId}/reopen');
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments/{threadId}/messages/{messageId}');
+    expect(spec.components.schemas).toHaveProperty('CommentThread');
+    expect(spec.components.schemas).toHaveProperty('CommentMessage');
+    expect(spec.components.schemas.CommentActor?.properties).not.toHaveProperty('userId');
+    expect(spec.components.schemas.CommentActor?.properties).not.toHaveProperty('actorId');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/sections/{sectionId}');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link-note');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link');

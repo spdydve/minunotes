@@ -386,6 +386,67 @@ export const noteVersions = sqliteTable(
   ]
 );
 
+export const noteCommentThreads = sqliteTable(
+  'note_comment_threads',
+  {
+    id: text('id').primaryKey(),
+    noteId: text('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    status: text('status', { enum: ['open', 'resolved'] })
+      .notNull()
+      .default('open'),
+    anchorType: text('anchor_type', { enum: ['range', 'line'] }).notNull(),
+    anchorFrom: integer('anchor_from').notNull(),
+    anchorTo: integer('anchor_to').notNull(),
+    quote: text('quote').notNull(),
+    prefix: text('prefix'),
+    suffix: text('suffix'),
+    documentHash: text('document_hash').notNull(),
+    detached: integer('detached', { mode: 'boolean' }).notNull().default(false),
+    createdByActorType: text('created_by_actor_type', { enum: ['user', 'agent'] }).notNull(),
+    createdByActorId: text('created_by_actor_id'),
+    resolvedByActorType: text('resolved_by_actor_type', { enum: ['user', 'agent'] }),
+    resolvedByActorId: text('resolved_by_actor_id'),
+    resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index('note_comment_threads_user_note_updated_at_idx').on(table.userId, table.noteId, table.updatedAt),
+    index('note_comment_threads_note_status_idx').on(table.noteId, table.status),
+  ]
+);
+
+export const noteCommentMessages = sqliteTable(
+  'note_comment_messages',
+  {
+    id: text('id').primaryKey(),
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => noteCommentThreads.id, { onDelete: 'cascade' }),
+    noteId: text('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    actorType: text('actor_type', { enum: ['user', 'agent'] }).notNull(),
+    actorId: text('actor_id'),
+    body: text('body').notNull(),
+    isRoot: integer('is_root', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index('note_comment_messages_thread_created_at_idx').on(table.threadId, table.createdAt),
+    index('note_comment_messages_user_note_idx').on(table.userId, table.noteId),
+  ]
+);
+
 export const noteShareLinks = sqliteTable(
   'note_share_links',
   {
@@ -548,6 +609,8 @@ export const userRelations = relations(user, ({ many }) => ({
   notes: many(notes),
   noteEvents: many(noteEvents),
   noteVersions: many(noteVersions),
+  noteCommentThreads: many(noteCommentThreads),
+  noteCommentMessages: many(noteCommentMessages),
   noteShareLinks: many(noteShareLinks),
   folderShareLinks: many(folderShareLinks),
   noteLinks: many(noteLinks),
@@ -631,6 +694,8 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   folder: one(folders, { fields: [notes.folderId], references: [folders.id] }),
   events: many(noteEvents),
   versions: many(noteVersions),
+  commentThreads: many(noteCommentThreads),
+  commentMessages: many(noteCommentMessages),
   shareLinks: many(noteShareLinks),
   tags: many(noteTags),
   outgoingLinks: many(noteLinks, { relationName: 'sourceNoteLinks' }),
@@ -654,6 +719,21 @@ export const noteVersionRelations = relations(noteVersions, ({ one }) => ({
   note: one(notes, { fields: [noteVersions.noteId], references: [notes.id] }),
   user: one(user, { fields: [noteVersions.userId], references: [user.id] }),
   folder: one(folders, { fields: [noteVersions.folderId], references: [folders.id] }),
+}));
+
+export const noteCommentThreadRelations = relations(noteCommentThreads, ({ many, one }) => ({
+  note: one(notes, { fields: [noteCommentThreads.noteId], references: [notes.id] }),
+  user: one(user, { fields: [noteCommentThreads.userId], references: [user.id] }),
+  messages: many(noteCommentMessages),
+}));
+
+export const noteCommentMessageRelations = relations(noteCommentMessages, ({ one }) => ({
+  thread: one(noteCommentThreads, {
+    fields: [noteCommentMessages.threadId],
+    references: [noteCommentThreads.id],
+  }),
+  note: one(notes, { fields: [noteCommentMessages.noteId], references: [notes.id] }),
+  user: one(user, { fields: [noteCommentMessages.userId], references: [user.id] }),
 }));
 
 export const noteShareLinkRelations = relations(noteShareLinks, ({ one }) => ({
@@ -694,6 +774,8 @@ export type Note = typeof notes.$inferSelect;
 export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
 export type NoteVersion = typeof noteVersions.$inferSelect;
+export type NoteCommentThread = typeof noteCommentThreads.$inferSelect;
+export type NoteCommentMessage = typeof noteCommentMessages.$inferSelect;
 export type NoteShareLink = typeof noteShareLinks.$inferSelect;
 export type FolderShareLink = typeof folderShareLinks.$inferSelect;
 export type Tag = typeof tags.$inferSelect;

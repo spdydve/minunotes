@@ -1,6 +1,6 @@
 ---
 name: minunotes-harness-api
-description: Curl/API-only MinuNotes harness skill for agents without registered MinuNotes tools. Use to read, search, create, edit, and inspect notes through /v1/harness with MINUNOTES_API_URL and MINUNOTES_API_KEY.
+description: Curl/API-only MinuNotes harness skill for agents without registered MinuNotes tools. Use to read, search, create, edit, review, and inspect notes through /v1/harness with MINUNOTES_API_URL and MINUNOTES_API_KEY.
 ---
 
 # MinuNotes Harness API Skill
@@ -194,6 +194,29 @@ curl -s "${AUTH[@]}" \
   }'
 ```
 
+Review comments on Markdown notes:
+
+```bash
+# List threads and ordered messages
+curl -s "${AUTH[@]}" "$API/v1/harness/notes/note_xxx/comments"
+
+# Create a range thread using zero-based Markdown offsets and the current contentHash
+curl -s "${AUTH[@]}" \
+  -X POST "$API/v1/harness/notes/note_xxx/comments" \
+  -d '{"body":"Please clarify this.","anchor":{"anchorType":"range","from":42,"to":61,"quote":"exact source text","prefix":"nearby text before","suffix":"nearby text after","documentHash":"hash_from_read"}}'
+
+# Reply and resolve
+curl -s "${AUTH[@]}" \
+  -X POST "$API/v1/harness/notes/note_xxx/comments/comment_thread_xxx/replies" \
+  -d '{"body":"Follow-up review."}'
+
+curl -s "${AUTH[@]}" \
+  -X POST "$API/v1/harness/notes/note_xxx/comments/comment_thread_xxx/resolve" \
+  -d '{}'
+```
+
+Comment listing requires read access. Mutations require edit access and `isApiEditable: true`. Message edits/deletes are author-only. Use the current document hash for creation and anchor updates; stale anchors return `409`. When a listed thread is `detached`, do not guess a replacement location. Comments are unavailable for canvases, templates, Trash, and public shares.
+
 Create canvases from JSON Canvas or Minu diagram syntax:
 
 ```bash
@@ -259,6 +282,15 @@ curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 - `GET /v1/harness/notes/orphans?limit=25&cursor=...`
 - `GET /v1/harness/notes/:noteId`
 - `GET /v1/harness/notes/:noteId/events?limit=25`
+- `GET /v1/harness/notes/:noteId/comments`
+- `POST /v1/harness/notes/:noteId/comments`
+- `POST /v1/harness/notes/:noteId/comments/:threadId/replies`
+- `PATCH /v1/harness/notes/:noteId/comments/:threadId/anchor`
+- `POST /v1/harness/notes/:noteId/comments/:threadId/resolve`
+- `POST /v1/harness/notes/:noteId/comments/:threadId/reopen`
+- `PATCH /v1/harness/notes/:noteId/comments/:threadId/messages/:messageId`
+- `DELETE /v1/harness/notes/:noteId/comments/:threadId/messages/:messageId`
+- `DELETE /v1/harness/notes/:noteId/comments/:threadId`
 - `GET /v1/harness/notes/:noteId/tags`
 - `PUT /v1/harness/notes/:noteId/tags`
 - `GET /v1/harness/notes/:noteId/backlinks`
@@ -291,5 +323,5 @@ For canvases, prefer Minu diagram syntax for generated diagrams/mind maps and JS
 - `401`: missing/invalid API key.
 - `403`: API key lacks folder permission.
 - `404`: note/folder/section not found.
-- `409`: stale `baseHash`; reread the note and retry with the new hash.
+- `409`: stale note edit or comment-anchor hash; reread the note and retry only after recomputing the edit or anchor.
 - `500`: server error; report endpoint and response body.

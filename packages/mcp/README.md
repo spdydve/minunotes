@@ -62,6 +62,17 @@ Folders and notes:
 - `notes_edit_note`
 - `notes_move_notes` (all-or-nothing, up to 100 notes)
 
+Review comments:
+
+- `notes_list_comments`
+- `notes_create_comment`
+- `notes_reply_to_comment`
+- `notes_update_comment_anchor`
+- `notes_set_comment_status`
+- `notes_edit_comment_message`
+- `notes_delete_comment_message`
+- `notes_delete_comment_thread`
+
 Structured reads:
 
 - `notes_search_lines`
@@ -117,6 +128,8 @@ Canvas replacement and node-link mutations require a current `baseHash`. Setting
 ## Tool boundaries
 
 MCP tools expose active content only. Trashed notes, templates, and folder subtrees are omitted from lists and search and return not found on direct reads. Hosted and local MCP intentionally provide no tools to list Trash or trash, restore, or permanently delete content. Owners perform those operations through the authenticated MinuNotes web interface.
+
+Review comments are available only on active Markdown notes. Listing requires read scope; mutation requires edit scope and an API-editable note. Message edits/deletes are author-only, and anchor creation or remapping requires the current note content hash.
 
 Tags are available because they already have user-facing Note Details behavior. Broader graph inspection—including outgoing links, backlinks, and orphan discovery—is intentionally not exposed through MCP yet; those product and UI semantics are deferred.
 

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   type ApiKey,
+  type ApiKeyFolderPermission,
   apiKeyFolderPermissions,
   type Folder,
   folders,
@@ -180,9 +181,18 @@ function isWritePermission(permission: FolderPermissionKind) {
   return permission === 'create' || permission === 'edit';
 }
 
+function permissionRowAllows(
+  row: Pick<ApiKeyFolderPermission, 'canRead' | 'canCreate' | 'canEdit'>,
+  permission: FolderPermissionKind
+) {
+  if (permission === 'read') return row.canRead;
+  if (permission === 'create') return row.canCreate;
+  return row.canEdit;
+}
+
 async function canScopedActorAccessFolder(input: {
   actor: Pick<ApiKey | OAuthAuthorization, 'id' | 'accessMode' | 'canRead' | 'canCreate' | 'canEdit'>;
-  permissionRows: Array<{ folderId: string }>;
+  permissionRows: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }>;
   userId: string;
   folderId: string;
   permission: FolderPermissionKind;
@@ -200,7 +210,10 @@ async function canScopedActorAccessFolder(input: {
 
   if (input.actor.accessMode === 'top_level') {
     const matchesRoot = input.permissionRows.some(
-      (row) => !tree.privateFolderIds.has(row.folderId) && isDescendantOrSelf(input.folderId, row.folderId, tree.byId)
+      (row) =>
+        permissionRowAllows(row, input.permission) &&
+        !tree.privateFolderIds.has(row.folderId) &&
+        isDescendantOrSelf(input.folderId, row.folderId, tree.byId)
     );
     if (!matchesRoot) return false;
     if (isWritePermission(input.permission) && tree.agentReadOnlyFolderIds.has(input.folderId)) return false;
@@ -208,13 +221,16 @@ async function canScopedActorAccessFolder(input: {
   }
 
   return input.permissionRows.some(
-    (row) => row.folderId === input.folderId && !tree.privateFolderIds.has(row.folderId)
+    (row) =>
+      permissionRowAllows(row, input.permission) &&
+      row.folderId === input.folderId &&
+      !tree.privateFolderIds.has(row.folderId)
   );
 }
 
 async function getScopedActorAccessibleFolderIds(input: {
   actor: Pick<ApiKey | OAuthAuthorization, 'id' | 'accessMode' | 'canRead' | 'canCreate' | 'canEdit'>;
-  permissionRows: Array<{ folderId: string }>;
+  permissionRows: Array<{ folderId: string; canRead: boolean; canCreate: boolean; canEdit: boolean }>;
   userId: string;
   permission: FolderPermissionKind;
 }) {
@@ -239,7 +255,9 @@ async function getScopedActorAccessibleFolderIds(input: {
             folderAllowedForPermission(folder) &&
             input.permissionRows.some(
               (row) =>
-                !tree.privateFolderIds.has(row.folderId) && isDescendantOrSelf(folder.id, row.folderId, tree.byId)
+                permissionRowAllows(row, input.permission) &&
+                !tree.privateFolderIds.has(row.folderId) &&
+                isDescendantOrSelf(folder.id, row.folderId, tree.byId)
             )
         )
         .map((folder) => folder.id)
@@ -248,7 +266,9 @@ async function getScopedActorAccessibleFolderIds(input: {
 
   const nonPrivateFolderIds = new Set(nonPrivateFolders.map((folder) => folder.id));
   return new Set(
-    input.permissionRows.filter((row) => nonPrivateFolderIds.has(row.folderId)).map((row) => row.folderId)
+    input.permissionRows
+      .filter((row) => permissionRowAllows(row, input.permission) && nonPrivateFolderIds.has(row.folderId))
+      .map((row) => row.folderId)
   );
 }
 
