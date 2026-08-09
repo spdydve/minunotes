@@ -13,8 +13,56 @@ test('autosaves editor content and preserves it after reload', async ({ page }) 
   await page.keyboard.type(' Updated.');
 
   await api.expectSavedContent('Start here. Updated.');
+  expect(api.saveRequests.at(-1)).toMatchObject({
+    noteId: browserFixture.source.id,
+    body: { baseHash: 'hash_1' },
+  });
   await page.reload();
   await expect(page.locator('.cm-content')).toContainText('Start here. Updated.');
+});
+
+test('detects a clean note changed externally and reloads the latest content', async ({ page }) => {
+  await page.clock.install();
+  const api = await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const editor = page.locator('.cm-content');
+  await expect(editor).toContainText('Start here.');
+  api.externalUpdate(browserFixture.source.id, { content: 'Updated remotely.' });
+  await page.clock.runFor(20_000);
+  await page.clock.resume();
+
+  expect(api.statusRequests).toContain(browserFixture.source.id);
+  await expect(page.getByText('This note was updated elsewhere. Reload to view the latest version.')).toBeVisible();
+  await expect(editor).toContainText('Start here.');
+  await page.getByRole('button', { name: 'Reload' }).click();
+  await expect(editor).toContainText('Updated remotely.');
+});
+
+test('preserves a dirty local draft when an external update wins the save race', async ({ page }) => {
+  await page.clock.install();
+  const api = await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const editor = page.locator('.cm-content');
+  await expect(editor).toBeVisible();
+  await editor.click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Local draft.');
+  api.externalUpdate(browserFixture.source.id, { content: 'Updated remotely.' });
+  await page.clock.runFor(800);
+  await page.clock.resume();
+
+  await expect(page.getByText('This note was updated elsewhere. Reload to view the latest version.')).toBeVisible();
+  await expect(editor).toContainText('Start here. Local draft.');
+  expect(api.notes.get(browserFixture.source.id)?.content).toBe('Updated remotely.');
+  expect(api.saveRequests.at(-1)).toMatchObject({
+    noteId: browserFixture.source.id,
+    body: { content: 'Start here. Local draft.', baseHash: 'hash_1' },
+  });
+
+  await page.getByRole('button', { name: 'Reload' }).click();
+  await expect(editor).toContainText('Updated remotely.');
 });
 
 test('switches between live and source editing and autosaves raw markdown changes', async ({ page }) => {
@@ -155,6 +203,9 @@ test('persists a canvas edit through reload', async ({ page }) => {
   await page.getByLabel('Canvas editor').click({ position: { x: 400, y: 300 } });
 
   await expect.poll(() => api.notes.get(browserFixture.canvas.id)?.content).toContain('rectangle');
+  expect(api.saveRequests.find((request) => request.noteId === browserFixture.canvas.id)).toMatchObject({
+    body: { baseHash: 'hash_1' },
+  });
   await page.reload();
   await expect(page.locator('.notes-minu-canvas')).toBeVisible();
   await expect(page.locator('[data-minucanvas-node-id]')).toHaveCount(1);

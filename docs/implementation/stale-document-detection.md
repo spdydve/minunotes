@@ -1,5 +1,7 @@
 # Stale Document Detection
 
+**Status:** Implemented and regression-tested.
+
 ## Goal
 Detect when a note currently open in the editor has been changed elsewhere, such as by an external agent, another browser tab, or a future API integration.
 
@@ -79,11 +81,10 @@ Possible UI message:
 This note was updated elsewhere. Reload to view the latest version.
 ```
 
-Buttons:
+Action:
 
 ```txt
 Reload
-Dismiss
 ```
 
 Files likely modified:
@@ -132,17 +133,29 @@ Frontend behavior:
 
 ## MVP Checklist
 
-- [ ] Add `GET /notes/:noteId/status`.
-- [ ] Add `api.noteStatus(noteId)` client helper.
-- [ ] Track `lastKnownContentHash` in note editor route.
-- [ ] Update `lastKnownContentHash` after successful save.
-- [ ] Send `baseHash` with note save requests.
-- [ ] Poll status every 15–30 seconds while note is open and tab is visible.
-- [ ] Detect external hash mismatch.
-- [ ] Show stale document banner.
-- [ ] Pause/prevent autosave while stale.
-- [ ] Add reload action.
-- [ ] Verify agent/harness edit behind the scenes triggers the banner.
+- [x] Add `GET /notes/:noteId/status`.
+- [x] Add `api.noteStatus(noteId)` client helper.
+- [x] Track `lastKnownContentHash` in note editor route.
+- [x] Update `lastKnownContentHash` after successful save.
+- [x] Send `baseHash` with note save requests.
+- [x] Poll status every 20 seconds while the note is open and the tab is visible.
+- [x] Detect external hash mismatch.
+- [x] Show stale document banner.
+- [x] Pause/prevent autosave while stale.
+- [x] Add reload action.
+- [x] Verify an external update triggers the banner and cannot overwrite a dirty local draft.
+
+## Regression hardening
+
+The original implementation sent `baseHash`, but a later conflict-handling refactor stopped including it in normal editor saves. Polling also failed to start after asynchronous note hydration because the polling effect did not depend on loaded note state.
+
+The hardened behavior now:
+
+- sends the latest known content hash with Markdown and canvas saves;
+- starts polling after the note content hash is loaded;
+- preserves a dirty local draft when an external update wins the race;
+- reloads current server content without leaving the route stuck in a loading state; and
+- has API and browser regression coverage for stale conflicts, clean-note polling, dirty drafts, reload, and canvas saves.
 
 ## Verification
 

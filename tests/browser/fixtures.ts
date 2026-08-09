@@ -243,6 +243,7 @@ export async function mockBrowserApi(
     [`note_share_${browserFixture.target.id}`, browserFixture.target.id],
   ]);
   const saveRequests: Array<{ noteId: string; body: Record<string, unknown> }> = [];
+  const statusRequests: string[] = [];
   let hashVersion = 1;
   let folderShareLink: {
     id: string;
@@ -564,16 +565,26 @@ export async function mockBrowserApi(
         return json({ ok: true, deletedAt: now });
       }
       if (method === 'PATCH') {
-        const body = request.postDataJSON() as Partial<Pick<Note, 'title' | 'content'>>;
-        Object.assign(note, body, { updatedAt: now });
-        hashVersion += 1;
+        const body = request.postDataJSON() as Partial<
+          Pick<Note, 'title' | 'content' | 'folderId' | 'isApiEditable' | 'createdAt'>
+        > & { baseHash?: string };
+        const currentHash = `hash_${hashVersion}`;
         saveRequests.push({ noteId: note.id, body });
+        if (body.baseHash && body.baseHash !== currentHash)
+          return json({ error: 'Document has changed since it was read', currentHash }, 409);
+        const changes = { ...body };
+        delete changes.baseHash;
+        Object.assign(note, changes, { updatedAt: now });
+        hashVersion += 1;
         return json({ note, contentHash: `hash_${hashVersion}` });
       }
     }
 
     const statusMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/status$/);
-    if (statusMatch) return json({ noteId: statusMatch[1], contentHash: `hash_${hashVersion}`, updatedAt: now });
+    if (statusMatch) {
+      statusRequests.push(statusMatch[1]);
+      return json({ noteId: statusMatch[1], contentHash: `hash_${hashVersion}`, updatedAt: now });
+    }
 
     const backlinksMatch = path.match(/^\/notes\/(note_[a-zA-Z0-9]+)\/backlinks$/);
     if (backlinksMatch) {
@@ -609,6 +620,18 @@ export async function mockBrowserApi(
     trashFolders,
     trashMutationRequests,
     saveRequests,
+    statusRequests,
+    externalUpdate(noteId: string, changes: Partial<Pick<Note, 'title' | 'content'>>) {
+      const note = notes.get(noteId);
+      if (!note) throw new Error(`Note not found: ${noteId}`);
+      Object.assign(note, changes, {
+        updatedByActorType: 'agent',
+        updatedByActorId: 'agent_browser',
+        updatedAt: now,
+      });
+      hashVersion += 1;
+      return `hash_${hashVersion}`;
+    },
     async expectSavedContent(content: string) {
       await expect.poll(() => saveRequests.at(-1)?.body.content).toBe(content);
     },
