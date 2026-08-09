@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BacklinksPanel } from '../components/backlinks-panel';
 import { NoteActionsPopover } from '../components/note-actions-popover';
 import { NoteCanvasEditor } from '../components/note-canvas-editor';
+import { type CommentDialogPosition, NoteCommentDialog } from '../components/note-comment-dialog';
 import { NoteCommentsPanel } from '../components/note-comments-panel';
 import { NoteEditor } from '../components/note-editor';
 import { Button } from '../components/ui/button';
@@ -40,6 +41,8 @@ function NoteView() {
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [commentDialogPosition, setCommentDialogPosition] = useState<CommentDialogPosition | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draftCommentAnchor, setDraftCommentAnchor] = useState<EditorCommentAnchor | null>(null);
   const [reviewFocus, setReviewFocus] = useState<{
@@ -76,6 +79,11 @@ function NoteView() {
     setSaveError(false);
     setImageUploadError(null);
     setIsStale(false);
+    setReviewOpen(false);
+    setCommentDialogOpen(false);
+    setCommentDialogPosition(null);
+    setSelectedThreadId(null);
+    setDraftCommentAnchor(null);
   }, [data, noteId]);
 
   const applySavedNote = ({ note, contentHash }: { note: NonNullable<typeof data>['note']; contentHash: string }) => {
@@ -247,16 +255,26 @@ function NoteView() {
     await commentMutation.mutateAsync(operation);
   };
 
-  const selectCommentThread = (thread: CommentThread) => {
+  const focusCommentThread = (thread: CommentThread) => {
     setSelectedThreadId(thread.id);
     setDraftCommentAnchor(null);
-    setReviewOpen(true);
     setReviewFocus({
       from: thread.anchor.from,
       to: thread.anchor.to,
       detached: thread.anchor.detached,
       requestId: ++reviewFocusRequest.current,
     });
+  };
+
+  const selectReviewThread = (thread: CommentThread) => {
+    focusCommentThread(thread);
+    setCommentDialogOpen(false);
+  };
+
+  const openCommentThreadDialog = (thread: CommentThread) => {
+    focusCommentThread(thread);
+    setReviewOpen(false);
+    setCommentDialogOpen(true);
   };
 
   const toCommentAnchorInput = (anchor: EditorCommentAnchor, documentHash: string): CommentAnchorInput => ({
@@ -329,19 +347,20 @@ function NoteView() {
       onRequest: (anchor) => {
         setDraftCommentAnchor(anchor);
         setSelectedThreadId(null);
-        setReviewOpen(true);
+        setReviewOpen(false);
+        setCommentDialogOpen(true);
         setCommentError(null);
       },
       onSelect: (comment) => {
         if (!comment) return;
         const thread = commentsData?.threads.find((candidate) => candidate.id === comment.id);
-        if (thread) selectCommentThread(thread);
+        if (thread) openCommentThreadDialog(thread);
       },
       onSelectGroup: (comments) => {
         const first = comments[0];
         if (!first) return;
         const thread = commentsData?.threads.find((candidate) => candidate.id === first.id);
-        if (thread) selectCommentThread(thread);
+        if (thread) openCommentThreadDialog(thread);
       },
       onAnchorChange: (threadId, anchor) => {
         setMappedAnchors((current) => ({ ...current, [threadId]: anchor }));
@@ -452,71 +471,94 @@ function NoteView() {
       ) : null}
     </>
   );
-  const reviewPanel = reviewOpen ? (
-    <NoteCommentsPanel
-      open={reviewOpen}
-      threads={commentsData?.threads ?? []}
-      selectedThreadId={selectedThreadId}
-      draftAnchor={draftCommentAnchor}
-      busy={commentMutation.isPending || save.isPending}
-      error={commentError}
-      onClose={() => setReviewOpen(false)}
-      onSelect={selectCommentThread}
-      onCancelDraft={() => setDraftCommentAnchor(null)}
-      onCreate={async (body, anchor) => {
-        await runCommentAction(async () => {
-          let documentHash = lastKnownHash.current;
-          if (isDirty) {
-            const saved = await save.mutateAsync({ title, content });
-            documentHash = saved.contentHash;
-          }
-          if (!documentHash) throw new Error('The note must finish loading before adding a comment');
-          const created = await api.createCommentThread(noteId, {
-            body,
-            anchor: toCommentAnchorInput(anchor, documentHash),
-          });
+  const createComment = async (body: string, anchor: EditorCommentAnchor) => {
+    await runCommentAction(async () => {
+      let documentHash = lastKnownHash.current;
+      if (isDirty) {
+        const saved = await save.mutateAsync({ title, content });
+        documentHash = saved.contentHash;
+      }
+      if (!documentHash) throw new Error('The note must finish loading before adding a comment');
+      const created = await api.createCommentThread(noteId, {
+        body,
+        anchor: toCommentAnchorInput(anchor, documentHash),
+      });
+      setDraftCommentAnchor(null);
+      focusCommentThread(created.thread);
+    });
+  };
+  const replyToComment = async (threadId: string, body: string) => {
+    await runCommentAction(() => api.addCommentReply(noteId, threadId, body));
+  };
+  const changeCommentStatus = async (thread: CommentThread) => {
+    await runCommentAction(() =>
+      thread.status === 'resolved'
+        ? api.reopenCommentThread(noteId, thread.id)
+        : api.resolveCommentThread(noteId, thread.id)
+    );
+  };
+  const deleteCommentThread = async (threadId: string) => {
+    await runCommentAction(() => api.deleteCommentThread(noteId, threadId));
+    if (selectedThreadId === threadId) {
+      setSelectedThreadId(null);
+      setCommentDialogOpen(false);
+    }
+  };
+  const selectedThread = commentsData?.threads.find((thread) => thread.id === selectedThreadId) ?? null;
+  const reviewPanel = (
+    <>
+      <NoteCommentsPanel
+        open={reviewOpen}
+        threads={commentsData?.threads ?? []}
+        selectedThreadId={selectedThreadId}
+        busy={commentMutation.isPending || save.isPending}
+        error={commentError}
+        onClose={() => setReviewOpen(false)}
+        onSelect={selectReviewThread}
+        onReply={replyToComment}
+        onStatusChange={changeCommentStatus}
+        onEditMessage={async (threadId, messageId, body) => {
+          await runCommentAction(() => api.updateCommentMessage(noteId, threadId, messageId, body));
+        }}
+        onDeleteMessage={async (threadId, messageId) => {
+          await runCommentAction(() => api.deleteCommentMessage(noteId, threadId, messageId));
+        }}
+        onDeleteThread={deleteCommentThread}
+      />
+      <NoteCommentDialog
+        open={commentDialogOpen}
+        position={commentDialogPosition}
+        thread={selectedThread}
+        draftAnchor={draftCommentAnchor}
+        busy={commentMutation.isPending || save.isPending}
+        error={commentError}
+        onClose={() => {
+          setCommentDialogOpen(false);
           setDraftCommentAnchor(null);
-          selectCommentThread(created.thread);
-        });
-      }}
-      onReply={async (threadId, body) => {
-        await runCommentAction(() => api.addCommentReply(noteId, threadId, body));
-      }}
-      onStatusChange={async (thread) => {
-        await runCommentAction(() =>
-          thread.status === 'resolved'
-            ? api.reopenCommentThread(noteId, thread.id)
-            : api.resolveCommentThread(noteId, thread.id)
-        );
-      }}
-      onEditMessage={async (threadId, messageId, body) => {
-        await runCommentAction(() => api.updateCommentMessage(noteId, threadId, messageId, body));
-      }}
-      onDeleteMessage={async (threadId, messageId) => {
-        await runCommentAction(() => api.deleteCommentMessage(noteId, threadId, messageId));
-      }}
-      onDeleteThread={async (threadId) => {
-        await runCommentAction(() => api.deleteCommentThread(noteId, threadId));
-        if (selectedThreadId === threadId) setSelectedThreadId(null);
-      }}
-    />
-  ) : undefined;
+        }}
+        onCreate={createComment}
+        onReply={replyToComment}
+        onStatusChange={changeCommentStatus}
+        onDeleteThread={deleteCommentThread}
+      />
+    </>
+  );
   const actions = (
     <>
       {data.note.documentType === 'markdown' && data.note.type === 'note' ? (
         <button
           type="button"
-          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 font-medium text-xs hover:bg-[var(--notes-hover)] ${
-            reviewOpen
-              ? 'border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200'
-              : 'border-[var(--notes-border)] text-[var(--notes-muted)]'
-          }`}
-          onClick={() => setReviewOpen((open) => !open)}
+          className="rounded-md p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+          onClick={() => {
+            setCommentDialogOpen(false);
+            setDraftCommentAnchor(null);
+            setReviewOpen(true);
+          }}
           aria-label="Open Review"
+          aria-expanded={reviewOpen}
+          title="Review comments"
         >
-          <MessageSquare className="h-3.5 w-3.5" />
-          Review
-          {commentsData?.threads.length ? <span>{commentsData.threads.length}</span> : null}
+          <MessageSquare className="h-4 w-4" />
         </button>
       ) : null}
       <NoteActionsPopover
@@ -567,6 +609,7 @@ function NoteView() {
       comments={data.note.type === 'note' ? commentsConfig : undefined}
       reviewPanel={reviewPanel}
       reviewFocus={reviewFocus}
+      onCommentAnchorPosition={setCommentDialogPosition}
       actions={actions}
     />
   );

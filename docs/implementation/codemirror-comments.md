@@ -52,16 +52,19 @@ MinuEditor maps anchors through local edits. MinuNotes persists those mapped anc
 
 ## Application UI
 
-The note editor exposes **Review** as a secondary right-side panel on wide screens and a bottom panel on narrow screens. Users can:
+The note header exposes Review as a simple comment icon. The full thread list follows the same responsive Dialog pattern as Backlinks: a right-side drawer on desktop and a bottom drawer on narrow screens.
 
-- comment on selected text or a whole source line;
-- open a thread from its highlight or gutter action;
-- reply and edit their own messages;
-- resolve or reopen threads;
-- delete messages or complete threads; and
-- review detached comments without highlighting unrelated text.
+Editor-originated interactions stay close to their source:
 
-MinuEditor receives controlled root comment items with `showPanel: false`; the MinuNotes panel owns threaded discussion UI.
+- selecting text or using the line comment icon opens a compact dialog beside that anchor;
+- clicking an existing highlight or gutter icon opens the same adjacent thread dialog;
+- selecting a thread inside the Review drawer keeps discussion in the drawer and focuses its source text;
+- narrow screens place the compact dialog at the bottom of the viewport; and
+- detached threads remain available without highlighting unrelated text.
+
+Users can reply, edit their own messages, resolve or reopen threads, and delete messages or complete threads. App-owned Review surfaces use MinuNotes theme tokens. MinuEditor comment accent/background variables and gutter buttons are mapped to neutral theme colors rather than the package's default amber treatment.
+
+MinuEditor receives controlled root comment items with `showPanel: false`; MinuNotes owns the drawer, adjacent dialog, and threaded discussion UI. The host derives dialog coordinates from the existing CodeMirror `EditorView.coordsAtPos()` API, so no MinuEditor package patch is required.
 
 ## API surfaces
 

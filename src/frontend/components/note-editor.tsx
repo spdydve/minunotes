@@ -1,4 +1,4 @@
-import { MarkdownEditor, type MarkdownEditorHandle } from '@dpklabs/minueditor';
+import { type EditorCommentAnchor, MarkdownEditor, type MarkdownEditorHandle } from '@dpklabs/minueditor';
 import {
   Heading1,
   Heading2,
@@ -42,6 +42,7 @@ export function NoteEditor({
   comments,
   reviewPanel,
   reviewFocus,
+  onCommentAnchorPosition,
 }: {
   title: string;
   content: string;
@@ -59,6 +60,7 @@ export function NoteEditor({
   comments?: CommentsProp;
   reviewPanel?: ReactNode;
   reviewFocus?: { from: number; to: number; detached?: boolean; requestId: number } | null;
+  onCommentAnchorPosition?: (position: { top: number; left: number }) => void;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -101,6 +103,45 @@ export function NoteEditor({
       viewport.removeEventListener('scroll', updateKeyboardOffset);
     };
   }, []);
+
+  const positionCommentDialog = (anchor: EditorCommentAnchor) => {
+    const view = editorViewRef.current;
+    if (!view || !onCommentAnchorPosition) return;
+    const docLength = view.state.doc.length;
+    const from = Math.max(0, Math.min(anchor.from, docLength));
+    const to = Math.max(from, Math.min(anchor.to, docLength));
+    const start = view.coordsAtPos(from);
+    const end = view.coordsAtPos(to);
+    const anchorLeft = start?.left ?? end?.left ?? 12;
+    const anchorRight = end?.right ?? start?.right ?? anchorLeft;
+    const anchorBottom = end?.bottom ?? start?.bottom ?? 12;
+    const dialogWidth = Math.min(352, window.innerWidth - 24);
+    let left = anchorRight + 12;
+    if (left + dialogWidth > window.innerWidth - 12) left = anchorLeft - dialogWidth - 12;
+    left = Math.max(12, Math.min(left, window.innerWidth - dialogWidth - 12));
+    const top = Math.max(12, Math.min(anchorBottom + 8, window.innerHeight - 420));
+    onCommentAnchorPosition({ top, left });
+  };
+
+  const positionedComments = useMemo<CommentsProp>(() => {
+    if (!comments) return undefined;
+    return {
+      ...comments,
+      onRequest: (anchor) => {
+        positionCommentDialog(anchor);
+        comments.onRequest?.(anchor);
+      },
+      onSelect: (comment) => {
+        if (comment) positionCommentDialog(comment.anchor);
+        comments.onSelect?.(comment);
+      },
+      onSelectGroup: (items) => {
+        const first = items[0];
+        if (first) positionCommentDialog(first.anchor);
+        comments.onSelectGroup?.(items);
+      },
+    };
+  }, [comments, onCommentAnchorPosition]);
 
   const saveLabel =
     saveState === 'saving'
@@ -164,7 +205,7 @@ export function NoteEditor({
   };
 
   return (
-    <section className={`mx-auto w-full ${reviewPanel ? 'max-w-[96rem]' : 'max-w-6xl'}`}>
+    <section className="mx-auto w-full max-w-6xl">
       <div className="border-b border-[var(--notes-border)] bg-[var(--notes-bg)] pb-4 md:sticky md:-top-6 md:z-20 md:-mt-6 md:pt-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <p className="notes-muted min-w-0 text-xs">{uploadingImage ? 'Uploading image...' : saveLabel}</p>
@@ -185,7 +226,7 @@ export function NoteEditor({
         {headerExtra}
       </div>
       <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-        <div className={reviewPanel ? 'grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]' : undefined}>
+        <div>
           <MarkdownEditor
             ref={editorRef}
             value={content}
@@ -202,7 +243,7 @@ export function NoteEditor({
             autoCapitalize="sentences"
             onRequestImage={onImageUpload ? () => openImagePicker() : undefined}
             wikiLinks={wikiLinks}
-            comments={comments}
+            comments={positionedComments}
             onImageUpload={
               onImageUpload
                 ? async (file) => {
@@ -301,9 +342,9 @@ export function NoteEditor({
             }}
             className={`notes-minu-editor ${editorMode === 'source' ? 'notes-minu-editor--source' : ''}`}
           />
-          {reviewPanel}
         </div>
       </div>
+      {reviewPanel}
       {imagePickerOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-6">
           <div className="max-h-[min(82vh,42rem)] w-full max-w-lg overflow-hidden rounded-t-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:rounded-2xl">
