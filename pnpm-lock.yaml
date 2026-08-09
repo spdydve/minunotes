@@ -56,6 +56,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.3
         version: 2.0.3(hono@4.12.21)
+      '@lezer/markdown':
+        specifier: ^1.7.2
+        version: 1.7.2
       '@libsql/client':
         specifier: latest
         version: 0.17.3
@@ -1058,7 +1061,7 @@ packages:
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.43.0
       '@lezer/common': 1.5.2
-      '@lezer/markdown': 1.6.3
+      '@lezer/markdown': 1.7.2
     dev: false
 
   /@codemirror/lang-python@6.2.1:
@@ -1911,8 +1914,8 @@ packages:
       '@lezer/common': 1.5.2
     dev: false
 
-  /@lezer/markdown@1.6.3:
-    resolution: {integrity: sha512-jpGm5Ps+XErS+xA4urw7ogEGkeZOahVQF21Z6oECF0sj+2liwZopd2+I8uH5I/vZsRuuze3OxBREIANLf6KKUw==}
+  /@lezer/markdown@1.7.2:
+    resolution: {integrity: sha512-iTkYvoVcKt3WkeL7qUDyXHONZEwLio4wj8KTNi2dnjQEXBZKMV63BpQrPqfsM+OkvuRbiSTAcycYAsQzLhRNoQ==}
     dependencies:
       '@lezer/common': 1.5.2
       '@lezer/highlight': 1.2.3

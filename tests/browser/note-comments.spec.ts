@@ -166,6 +166,21 @@ test('creates a whole-line comment from a simple themed gutter icon', async ({ p
     .toBe(true);
 });
 
+test('shows semantic Markdown in quoted comment context', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.linked.id}`);
+
+  const line = page.locator('.cm-line').filter({ hasText: 'Integration reference:' }).first();
+  await line.hover();
+  await line.getByRole('button', { name: 'Comment on line' }).click();
+
+  const quote = page.getByLabel('Add comment').locator('blockquote');
+  await expect(quote).toHaveText('Integration reference: MinuNotes integration — MinuEditor v0.11.1');
+  await expect(quote.locator('strong')).toHaveText('Integration reference:');
+  await expect(quote).not.toContainText('[[');
+  await expect(quote).not.toContainText('**');
+});
+
 test('places a whole-line comment dialog above the icon near the viewport bottom', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 640 });
   await mockBrowserApi(page);

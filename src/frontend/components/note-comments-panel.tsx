@@ -1,6 +1,7 @@
 import { Check, MessageSquare, MoreHorizontal, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CommentReactionEmoji, CommentThread } from '../lib/api';
+import { CommentMarkdownPreview } from './comment-markdown-preview';
 import { formatCommentTime, NoteCommentDiscussion } from './note-comment-discussion';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -152,8 +153,8 @@ export function NoteCommentsPanel({
                     The commented text changed and could not be reattached.
                   </p>
                 ) : (
-                  <blockquote className="mb-3 line-clamp-3 border-[var(--notes-border)] border-l-2 pl-2 text-[var(--notes-muted)] text-xs">
-                    {thread.anchor.quote}
+                  <blockquote className="mb-3 line-clamp-3 whitespace-pre-line border-[var(--notes-border)] border-l-2 pl-2 text-[var(--notes-muted)] text-xs">
+                    <CommentMarkdownPreview value={thread.anchor.quote} />
                   </blockquote>
                 )}
 

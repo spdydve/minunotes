@@ -87,7 +87,7 @@ export const browserFixture = {
     folderId: 'folder_browser',
     title: 'Linked Note',
     content:
-      'See [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].\n\n```ts\nconst answer: number = 42;\n```\n\n```unknownlang\nfallback code\n```\n\n```\nplain code\n```',
+      '**Integration reference:** [[note_target|MinuNotes integration — MinuEditor v0.11.1]]\n\nSee [[Target Note]], [[note_target|Target by ID]], and [[Missing Note]].\n\n```ts\nconst answer: number = 42;\n```\n\n```unknownlang\nfallback code\n```\n\n```\nplain code\n```',
     documentType: 'markdown',
     type: 'note',
     isApiEditable: true,

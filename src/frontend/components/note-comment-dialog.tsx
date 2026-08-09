@@ -2,6 +2,7 @@ import type { EditorCommentAnchor } from '@dpklabs/minueditor';
 import { Check, MessageSquare, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { CommentReactionEmoji, CommentThread } from '../lib/api';
+import { CommentMarkdownPreview } from './comment-markdown-preview';
 import { NoteCommentDiscussion } from './note-comment-discussion';
 import { QuickTooltip } from './ui/tooltip';
 
@@ -104,8 +105,8 @@ export function NoteCommentDialog({
       </header>
 
       <div className="space-y-3 overflow-y-auto p-3">
-        <blockquote className="line-clamp-3 border-[var(--notes-border)] border-l-2 pl-2 text-[var(--notes-muted)] text-xs">
-          {quote}
+        <blockquote className="line-clamp-3 whitespace-pre-line border-[var(--notes-border)] border-l-2 pl-2 text-[var(--notes-muted)] text-xs">
+          <CommentMarkdownPreview value={quote} />
         </blockquote>
 
         {thread?.anchor.detached ? (
