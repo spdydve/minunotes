@@ -253,7 +253,8 @@ export const harnessOpenApiSpec = {
         tags: ['Review'],
         operationId: 'listCommentThreads',
         summary: 'List anchored comment threads',
-        description: 'Lists Review threads on an active markdown note. Read access to the note folder is required.',
+        description:
+          'Lists Review threads on an active markdown note. Explicit Review comments permission and read access to the note folder are required.',
         parameters: [{ $ref: '#/components/parameters/NoteId' }],
         responses: {
           '200': {
@@ -271,7 +272,7 @@ export const harnessOpenApiSpec = {
         operationId: 'createCommentThread',
         summary: 'Create an anchored comment thread',
         description:
-          'Creates a thread and first message. Edit access, API editability, a current document hash, and an exact markdown anchor are required.',
+          'Creates a thread and first message. Explicit Review comments permission, read access, a current document hash, and an exact markdown anchor are required. Note edit permission is not required.',
         parameters: [{ $ref: '#/components/parameters/NoteId' }],
         requestBody: {
           required: true,

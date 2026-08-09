@@ -41,6 +41,7 @@ export type ApiKeyPermission = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -53,6 +54,7 @@ export type ApiKey = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   accessMode: ApiKeyAccessMode;
   createdAt: string;
   lastUsedAt: string | null;
@@ -66,6 +68,7 @@ export type OAuthAuthorizationPermission = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,6 +93,7 @@ export type OAuthAuthorization = {
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
+  canComment: boolean;
   createdAt: string;
   updatedAt: string;
   revokedAt: string | null;
@@ -376,6 +380,7 @@ export const api = {
       canRead: boolean;
       canCreate: boolean;
       canEdit: boolean;
+      canComment: boolean;
       canCreateFolders: boolean;
       folderIds: string[];
     }
@@ -394,6 +399,7 @@ export const api = {
         canRead: data.canRead,
         canCreate: data.canCreate,
         canEdit: data.canEdit,
+        canComment: data.canComment,
         canCreateFolders: data.canCreateFolders,
         folderIds: data.folderIds,
       }),
@@ -405,7 +411,14 @@ export const api = {
     canRead?: boolean;
     canCreate?: boolean;
     canEdit?: boolean;
-    permissions: Array<{ folderId: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }>;
+    canComment?: boolean;
+    permissions: Array<{
+      folderId: string;
+      canRead?: boolean;
+      canCreate?: boolean;
+      canEdit?: boolean;
+      canComment?: boolean;
+    }>;
   }) => request<{ key: string; apiKey: ApiKey }>('/api-keys', { method: 'POST', body: JSON.stringify(data) }),
   updateApiKey: (
     keyId: string,
@@ -416,7 +429,14 @@ export const api = {
       canRead?: boolean;
       canCreate?: boolean;
       canEdit?: boolean;
-      permissions?: Array<{ folderId: string; canRead?: boolean; canCreate?: boolean; canEdit?: boolean }>;
+      canComment?: boolean;
+      permissions?: Array<{
+        folderId: string;
+        canRead?: boolean;
+        canCreate?: boolean;
+        canEdit?: boolean;
+        canComment?: boolean;
+      }>;
     }
   ) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: 'DELETE' }),

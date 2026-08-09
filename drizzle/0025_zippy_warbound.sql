@@ -41,4 +41,8 @@ CREATE TABLE `note_comment_threads` (
 );
 --> statement-breakpoint
 CREATE INDEX `note_comment_threads_user_note_updated_at_idx` ON `note_comment_threads` (`user_id`,`note_id`,`updated_at`);--> statement-breakpoint
-CREATE INDEX `note_comment_threads_note_status_idx` ON `note_comment_threads` (`note_id`,`status`);
+CREATE INDEX `note_comment_threads_note_status_idx` ON `note_comment_threads` (`note_id`,`status`);--> statement-breakpoint
+ALTER TABLE `api_key_folder_permissions` ADD `can_comment` integer DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE `api_keys` ADD `can_comment` integer DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE `oauth_authorization_folder_permissions` ADD `can_comment` integer DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE `oauth_authorizations` ADD `can_comment` integer DEFAULT false NOT NULL;

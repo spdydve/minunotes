@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 24; index += 1) {
+  for (let index = 0; index <= 25; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -17,7 +17,11 @@ async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise
   }
 }
 
-async function setupHarnessApp(input: { canCreateFolders: boolean; accessMode?: 'all' | 'top_level' | 'specific' }) {
+async function setupHarnessApp(input: {
+  canCreateFolders: boolean;
+  canComment?: boolean;
+  accessMode?: 'all' | 'top_level' | 'specific';
+}) {
   vi.resetModules();
   const dir = await mkdtemp(path.join(tmpdir(), 'notes-harness-folders-'));
   tempDirs.push(dir);
@@ -51,6 +55,7 @@ async function setupHarnessApp(input: { canCreateFolders: boolean; accessMode?: 
     canRead: true,
     canCreate: true,
     canEdit: true,
+    canComment: input.canComment ?? false,
     accessMode: input.accessMode ?? ('specific' as const),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -123,6 +128,35 @@ function permissionRow(apiKeyId: string, folderId: string, extras = {}) {
 }
 
 describe('agent-created folder access', () => {
+  it('does not let edit permission imply Review comments permission', async () => {
+    const { app, db, schema } = await setupHarnessApp({
+      canCreateFolders: false,
+      canComment: false,
+      accessMode: 'all',
+    });
+    await db.insert(schema.folders).values(folderRow('folder_review_denied', 'Review denied'));
+    await db.insert(schema.notes).values(noteRow('note_review_denied', 'folder_review_denied', 'Review denied'));
+
+    const response = await app.request('/api/harness/notes/note_review_denied/comments');
+    expect(response.status).toBe(403);
+  });
+
+  it('allows explicit Review comments permission without relying on editability', async () => {
+    const { app, db, schema } = await setupHarnessApp({
+      canCreateFolders: false,
+      canComment: true,
+      accessMode: 'all',
+    });
+    await db.insert(schema.folders).values(folderRow('folder_review_allowed', 'Review allowed'));
+    await db
+      .insert(schema.notes)
+      .values(noteRow('note_review_allowed', 'folder_review_allowed', 'Review allowed', { isApiEditable: false }));
+
+    const response = await app.request('/api/harness/notes/note_review_allowed/comments');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ noteId: 'note_review_allowed', threads: [] });
+  });
+
   it('rejects API keys without folder creation permission', async () => {
     const { app } = await setupHarnessApp({ canCreateFolders: false });
 

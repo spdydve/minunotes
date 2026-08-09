@@ -102,7 +102,8 @@ async function setupApp() {
     canCreateFolders: false,
     canRead: true,
     canCreate: true,
-    canEdit: true,
+    canEdit: false,
+    canComment: true,
     accessMode: 'specific' as const,
     createdAt: now,
     updatedAt: now,
@@ -120,7 +121,8 @@ async function setupApp() {
     folderId: folder.id,
     canRead: true,
     canCreate: true,
-    canEdit: true,
+    canEdit: false,
+    canComment: true,
     createdAt: now,
     updatedAt: now,
   });
@@ -324,7 +326,7 @@ describe('note comments', () => {
     });
   });
 
-  it('attributes API-key agents safely and enforces scope, editability, and authorship', async () => {
+  it('supports explicit comment-only API keys while enforcing scope and authorship', async () => {
     const { ownerApp, harnessApp, note, db, schema, apiKey, hashMarkdown } = await setupApp();
     const currentHash = hashMarkdown(note.content);
 
@@ -369,22 +371,27 @@ describe('note comments', () => {
     await db.update(schema.notes).set({ isApiEditable: false }).where(eq(schema.notes.id, note.id));
     const readable = await harnessApp.request(`/v1/harness/notes/${note.id}/comments`);
     expect(readable.status).toBe(200);
-    const blockedReply = await harnessApp.request(
+    const commentOnlyReply = await harnessApp.request(
       `/v1/harness/notes/${note.id}/comments/${agentBody.thread.id}/replies`,
-      jsonRequest('POST', { body: 'Blocked' })
+      jsonRequest('POST', { body: 'Comment-only reply' })
     );
-    expect(blockedReply.status).toBe(403);
+    expect(commentOnlyReply.status).toBe(201);
 
-    await db.update(schema.notes).set({ isApiEditable: true }).where(eq(schema.notes.id, note.id));
     await db
       .update(schema.apiKeyFolderPermissions)
-      .set({ canEdit: false })
+      .set({ canComment: false })
       .where(eq(schema.apiKeyFolderPermissions.apiKeyId, apiKey.id));
-    const readOnlyBlocked = await harnessApp.request(
-      `/v1/harness/notes/${note.id}/comments/${agentBody.thread.id}/replies`,
-      jsonRequest('POST', { body: 'Still blocked' })
-    );
-    expect(readOnlyBlocked.status).toBe(403);
+    const folderBlocked = await harnessApp.request(`/v1/harness/notes/${note.id}/comments`);
+    expect(folderBlocked.status).toBe(403);
+
+    await db
+      .update(schema.apiKeyFolderPermissions)
+      .set({ canComment: true })
+      .where(eq(schema.apiKeyFolderPermissions.apiKeyId, apiKey.id));
+    apiKey.canEdit = true;
+    apiKey.canComment = false;
+    const keyBlocked = await harnessApp.request(`/v1/harness/notes/${note.id}/comments`);
+    expect(keyBlocked.status).toBe(403);
   });
 
   it('hides comments while trashed, retains them on restore, isolates users, and cascades permanent deletion', async () => {

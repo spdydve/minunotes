@@ -114,6 +114,7 @@ export const apiKeys = sqliteTable(
     canRead: integer('can_read', { mode: 'boolean' }).notNull().default(true),
     canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(true),
     canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(true),
+    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
     accessMode: text('access_mode', { enum: ['all', 'top_level', 'specific'] })
       .notNull()
       .default('all'),
@@ -138,6 +139,7 @@ export const apiKeyFolderPermissions = sqliteTable(
     canRead: integer('can_read', { mode: 'boolean' }).notNull().default(false),
     canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
     canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -183,6 +185,7 @@ export const oauthAuthorizations = sqliteTable(
     canRead: integer('can_read', { mode: 'boolean' }).notNull().default(true),
     canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
     canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
     canCreateFolders: integer('can_create_folders', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -208,6 +211,7 @@ export const oauthAuthorizationFolderPermissions = sqliteTable(
     canRead: integer('can_read', { mode: 'boolean' }).notNull().default(false),
     canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
     canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },

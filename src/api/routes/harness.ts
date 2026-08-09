@@ -166,7 +166,7 @@ function summarizeHarnessDocumentResult<T extends { note: SummarizableNote; cont
 async function hasFolderPermission(
   c: Context<{ Variables: Variables }>,
   folderId: string,
-  permission: 'read' | 'create' | 'edit'
+  permission: 'read' | 'create' | 'edit' | 'comment'
 ) {
   const user = c.get('user');
   if (!user) return false;
@@ -188,19 +188,17 @@ function getCommentActor(c: Context<{ Variables: Variables }>): CommentActor {
   return { type: 'user', id: user?.id ?? 'owner' };
 }
 
-async function requireCommentAccess(c: Context<{ Variables: Variables }>, noteId: string, permission: 'read' | 'edit') {
+async function requireCommentAccess(c: Context<{ Variables: Variables }>, noteId: string, _operation: 'read' | 'edit') {
   const user = c.get('user');
   if (!user) return { ok: false as const, status: 401 as const, error: 'Unauthorized' };
   const [note] = await db
-    .select({ id: notes.id, folderId: notes.folderId, isApiEditable: notes.isApiEditable })
+    .select({ id: notes.id, folderId: notes.folderId })
     .from(notes)
     .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
     .limit(1);
   if (!note) return { ok: false as const, status: 404 as const, error: 'Note not found' };
-  if (!(await hasFolderPermission(c, note.folderId, permission)))
+  if (!(await hasFolderPermission(c, note.folderId, 'comment')))
     return { ok: false as const, status: 403 as const, error: 'Forbidden' };
-  if (permission === 'edit' && !note.isApiEditable)
-    return { ok: false as const, status: 403 as const, error: 'Document is not editable through the API' };
   return { ok: true as const, note };
 }
 
@@ -336,6 +334,7 @@ harnessRoutes.post('/folders', async (c) => {
       canRead: key.canRead,
       canCreate: key.canCreate,
       canEdit: key.canEdit,
+      canComment: key.canComment,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -348,6 +347,7 @@ harnessRoutes.post('/folders', async (c) => {
       canRead: oauthAuthorization.canRead,
       canCreate: oauthAuthorization.canCreate,
       canEdit: oauthAuthorization.canEdit,
+      canComment: oauthAuthorization.canComment,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

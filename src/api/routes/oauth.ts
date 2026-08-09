@@ -370,6 +370,7 @@ oauthRoutes.post('/authorize/approve', async (c) => {
     canRead?: boolean;
     canCreate?: boolean;
     canEdit?: boolean;
+    canComment?: boolean;
     canCreateFolders?: boolean;
     folderIds?: string[];
   } | null;
@@ -390,7 +391,10 @@ oauthRoutes.post('/authorize/approve', async (c) => {
   const canRead = body.canRead ?? true;
   const canCreate = body.canCreate ?? false;
   const canEdit = body.canEdit ?? false;
-  if (!canRead && !canCreate && !canEdit) return c.json({ error: 'At least one permission is required' }, 400);
+  const canComment = body.canComment ?? false;
+  if (!canRead && !canCreate && !canEdit && !canComment)
+    return c.json({ error: 'At least one permission is required' }, 400);
+  if (canComment && !canRead) return c.json({ error: 'Review comments permission requires read permission' }, 400);
   const folderIds = [...new Set(body.folderIds ?? [])];
   if (accessMode !== 'all' && folderIds.length === 0) return c.json({ error: 'At least one folder is required' }, 400);
   const selectedPermissions =
@@ -399,7 +403,7 @@ oauthRoutes.post('/authorize/approve', async (c) => {
       : await filterSelectablePermissionRows({
           userId: user.id,
           accessMode,
-          permissions: folderIds.map((folderId) => ({ folderId, canRead, canCreate, canEdit })),
+          permissions: folderIds.map((folderId) => ({ folderId, canRead, canCreate, canEdit, canComment })),
         });
   if (accessMode !== 'all' && selectedPermissions.length !== folderIds.length)
     return c.json({ error: 'One or more folders cannot be selected' }, 400);
@@ -416,6 +420,7 @@ oauthRoutes.post('/authorize/approve', async (c) => {
       canRead,
       canCreate,
       canEdit,
+      canComment,
       canCreateFolders: body.canCreateFolders ?? false,
       createdAt: now,
       updatedAt: now,
@@ -434,6 +439,7 @@ oauthRoutes.post('/authorize/approve', async (c) => {
                 canRead,
                 canCreate,
                 canEdit,
+                canComment,
                 createdAt: now,
                 updatedAt: now,
               },

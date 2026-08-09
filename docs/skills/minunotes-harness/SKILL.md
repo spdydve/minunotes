@@ -40,7 +40,7 @@ Do not read every search result automatically. Rank candidates by title, folder,
 4. Use replies for discussion and resolve/reopen for lifecycle state.
 5. If the note changes, list comments again and respect `detached: true`; never move an ambiguous anchor speculatively.
 
-Review tools require read scope for listing and edit scope plus API editability for mutations. Comments are unavailable on canvases, templates, Trash, and public shares.
+Review tools require explicit Review comments permission plus read scope for every operation. Note edit permission and API editability are not required. Comments are unavailable on canvases, templates, Trash, and public shares.
 
 ## Available tools
 

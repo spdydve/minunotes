@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e71eee96-b560-4879-a386-d0c80145f4b3",
+  "id": "6a77ebba-4282-4331-ad71-84531fb6f667",
   "prevId": "8d440ae2-8967-4b0b-885c-33155818a0a0",
   "tables": {
     "account": {
@@ -176,6 +176,14 @@
           "autoincrement": false,
           "default": false
         },
+        "can_comment": {
+          "name": "can_comment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -317,6 +325,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": true
+        },
+        "can_comment": {
+          "name": "can_comment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "access_mode": {
           "name": "access_mode",
@@ -2258,6 +2274,14 @@
           "autoincrement": false,
           "default": false
         },
+        "can_comment": {
+          "name": "can_comment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -2381,6 +2405,14 @@
         },
         "can_edit": {
           "name": "can_edit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "can_comment": {
+          "name": "can_comment",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
