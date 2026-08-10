@@ -4,9 +4,9 @@ MinuNotes is a note-first markdown/canvas workspace with external agent integrat
 
 ## Production endpoints
 
-- Web app: `https://notes.dpklabs.com`
-- API origin: `https://api.notes.dpklabs.com`
-- Health check: `https://api.notes.dpklabs.com/health`
+- Web app: `https://notes.minusculelabs.com`
+- API origin: `https://api.notes.minusculelabs.com`
+- Health check: `https://api.notes.minusculelabs.com/health`
 
 ## API surfaces
 
@@ -27,16 +27,16 @@ Legacy `/api/*` routes have been removed from production.
 Full production URLs:
 
 ```txt
-https://api.notes.dpklabs.com/.well-known/oauth-authorization-server
-https://api.notes.dpklabs.com/.well-known/oauth-protected-resource
-https://api.notes.dpklabs.com/mcp/.well-known/oauth-protected-resource
+https://api.notes.minusculelabs.com/.well-known/oauth-authorization-server
+https://api.notes.minusculelabs.com/.well-known/oauth-protected-resource
+https://api.notes.minusculelabs.com/mcp/.well-known/oauth-protected-resource
 ```
 
 ## Agent integrations
 
-- Harness/OpenAPI clients should use `https://api.notes.dpklabs.com/v1/harness/*`.
-- MCP clients should use `https://api.notes.dpklabs.com/mcp`.
-- OAuth-capable clients should discover metadata from `https://api.notes.dpklabs.com/.well-known/oauth-authorization-server`.
+- Harness/OpenAPI clients should use `https://api.notes.minusculelabs.com/v1/harness/*`.
+- MCP clients should use `https://api.notes.minusculelabs.com/mcp`.
+- OAuth-capable clients should discover metadata from `https://api.notes.minusculelabs.com/.well-known/oauth-authorization-server`.
 - API-key based local/private agents should send `X-API-Key` to `/v1/harness/*`.
 
 ## Docs

@@ -16,8 +16,8 @@ const urls = {
     web: 'https://dev-notes.dpklabs.com',
   },
   production: {
-    api: 'https://api.notes.dpklabs.com',
-    web: 'https://notes.dpklabs.com',
+    api: 'https://api.notes.minusculelabs.com',
+    web: 'https://notes.minusculelabs.com',
   },
 } as const;
 

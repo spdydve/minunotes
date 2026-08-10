@@ -17,6 +17,12 @@ export default $config({
   },
   async run() {
     const { getStageUrls, parseAllowedOrigins } = await import('./src/api/lib/env');
+    const {
+      getLegacyWebRedirectInjection,
+      getProductionDomainMigrationConfig,
+      parseDomainMigrationPhase,
+      productionDomains,
+    } = await import('./src/infra/domain-migration');
     const { existsSync, readFileSync } = await import('node:fs');
 
     const loadEnvFile = (path: string) => {
@@ -55,23 +61,22 @@ export default $config({
     const isProduction = stage === 'production';
     const isDev = stage === 'dev';
     const isLocal = !isProduction && !isDev;
+    const productionMigration = isProduction
+      ? getProductionDomainMigrationConfig(parseDomainMigrationPhase(env.DOMAIN_MIGRATION_PHASE))
+      : undefined;
 
-    const domains = {
-      dev: {
-        web: 'dev-notes.dpklabs.com',
-        api: 'api-dev-notes.dpklabs.com',
-        cookieDomain: 'dpklabs.com',
-        cookiePrefix: 'minunotes-dev',
-      },
-      production: {
-        web: 'notes.dpklabs.com',
-        api: 'api.notes.dpklabs.com',
-        cookieDomain: 'notes.dpklabs.com',
-        cookiePrefix: 'minunotes-v2',
-      },
+    const devDomains = {
+      web: 'dev-notes.dpklabs.com',
+      api: 'api-dev-notes.dpklabs.com',
+      cookieDomain: 'dpklabs.com',
+      cookiePrefix: 'minunotes-dev',
     };
-
-    const stageDomains = isLocal ? undefined : domains[stage as keyof typeof domains];
+    const stageDomains = isDev
+      ? devDomains
+      : productionMigration
+        ? { ...productionMigration.canonical, cookiePrefix: 'minunotes-v2' }
+        : undefined;
+    const hasManagedApiDomain = isDev || Boolean(productionMigration?.keepLegacyApiDomain);
 
     const { frontendUrl, apiUrl, betterAuthUrl } = getStageUrls($app.stage, {
       ...env,
@@ -79,7 +84,10 @@ export default $config({
       API_URL: env.API_URL ?? (stageDomains ? `https://${stageDomains.api}` : undefined),
       BETTER_AUTH_URL: env.BETTER_AUTH_URL ?? (stageDomains ? `https://${stageDomains.api}/internal/auth` : undefined),
     });
-    const allowOrigins = parseAllowedOrigins(env.API_ALLOWED_ORIGINS, frontendUrl);
+    const migrationAllowedOrigins = productionMigration?.allowedWebOrigins
+      .map((domain) => `https://${domain}`)
+      .join(',');
+    const allowOrigins = parseAllowedOrigins(env.API_ALLOWED_ORIGINS ?? migrationAllowedOrigins, frontendUrl);
 
     const attachmentStorageDriver = env.ATTACHMENT_STORAGE_DRIVER ?? (isLocal ? 'filesystem' : 's3');
     const attachmentsBucket = new sst.aws.Bucket('Attachments', {
@@ -93,10 +101,15 @@ export default $config({
     });
 
     const apiGateway = new sst.aws.ApiGatewayV2('ApiGateway', {
-      domain:
-        !isLocal && stageDomains
+      domain: isDev
+        ? {
+            name: devDomains.api,
+            dns: false,
+            cert: requireCustomDomainCert('API_CERT_ARN', env.API_CERT_ARN),
+          }
+        : productionMigration?.keepLegacyApiDomain
           ? {
-              name: stageDomains.api,
+              name: productionDomains.legacy.api,
               dns: false,
               cert: requireCustomDomainCert('API_CERT_ARN', env.API_CERT_ARN),
             }
@@ -153,6 +166,29 @@ export default $config({
     apiGateway.route('ANY /', api.arn);
     apiGateway.route('ANY /{proxy+}', api.arn);
 
+    const targetApiDomain = isProduction
+      ? new aws.apigatewayv2.DomainName('TargetApiDomain', {
+          domainName: productionDomains.target.api,
+          domainNameConfiguration: {
+            certificateArn: requireCustomDomainCert('API_CERT_ARN', env.API_CERT_ARN),
+            endpointType: 'REGIONAL',
+            securityPolicy: 'TLS_1_2',
+          },
+        })
+      : undefined;
+
+    if (targetApiDomain) {
+      new aws.apigatewayv2.ApiMapping(
+        'TargetApiMapping',
+        {
+          apiId: apiGateway.nodes.api.id,
+          domainName: targetApiDomain.id,
+          stage: '$default',
+        },
+        { dependsOn: [apiGateway] }
+      );
+    }
+
     if (!isLocal) {
       new sst.aws.Cron('AttachmentCleanup', {
         schedule: (env.ATTACHMENT_CLEANUP_SCHEDULE ?? 'rate(1 day)') as `rate(${string})` | `cron(${string})`,
@@ -179,14 +215,27 @@ export default $config({
 
     const web = new sst.aws.StaticSite('Web', {
       path: '.',
-      domain:
-        !isLocal && stageDomains
+      domain: isDev
+        ? {
+            name: devDomains.web,
+            dns: false,
+            cert: requireCustomDomainCert('WEB_CERT_ARN', env.WEB_CERT_ARN),
+          }
+        : productionMigration
           ? {
-              name: stageDomains.web,
+              name: productionMigration.web.name,
+              aliases: productionMigration.web.aliases,
               dns: false,
               cert: requireCustomDomainCert('WEB_CERT_ARN', env.WEB_CERT_ARN),
             }
           : undefined,
+      edge: productionMigration?.web.redirectLegacy
+        ? {
+            viewerRequest: {
+              injection: getLegacyWebRedirectInjection(),
+            },
+          }
+        : undefined,
       dev: {
         command: 'pnpm dev:web',
         url: 'http://localhost:5173',
@@ -202,13 +251,20 @@ export default $config({
       },
     });
 
+    const managedApiDnsName = hasManagedApiDomain
+      ? apiGateway.nodes.domainName.domainNameConfiguration.apply((configuration) => configuration.targetDomainName)
+      : '';
+    const targetApiDnsName = targetApiDomain
+      ? targetApiDomain.domainNameConfiguration.apply((configuration) => configuration.targetDomainName)
+      : '';
+
     return {
       webUrl: web.url,
-      webDnsName: stageDomains ? web.nodes.cdn!.nodes.distribution.domainName : '',
-      apiUrl: apiGateway.url,
-      apiDnsName: stageDomains
-        ? apiGateway.nodes.domainName.domainNameConfiguration.apply((configuration) => configuration.targetDomainName)
-        : '',
+      webDnsName: stageDomains ? web.nodes.cdn?.nodes.distribution.domainName : '',
+      apiUrl: isProduction ? `https://${productionDomains.target.api}` : apiGateway.url,
+      apiDnsName: isProduction ? targetApiDnsName : managedApiDnsName,
+      legacyApiDnsName: productionMigration?.keepLegacyApiDomain ? managedApiDnsName : '',
+      domainMigrationPhase: productionMigration?.phase ?? '',
     };
   },
 });

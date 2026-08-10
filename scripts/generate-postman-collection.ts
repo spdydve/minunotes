@@ -44,7 +44,7 @@ const collection = {
     schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
   },
   variable: [
-    { key: 'baseUrl', value: 'https://api.notes.dpklabs.com' },
+    { key: 'baseUrl', value: 'https://api.notes.minusculelabs.com' },
     { key: 'apiKey', value: '' },
     { key: 'folderId', value: 'folder_xxx' },
     { key: 'noteId', value: 'note_xxx' },

@@ -25,6 +25,34 @@ describe('parseAllowedOrigins', () => {
 });
 
 describe('getStageUrls', () => {
+  it('uses the Minuscule Labs origins as production defaults', () => {
+    expect(
+      getStageUrls('production', {
+        FRONTEND_URL: undefined,
+        API_URL: undefined,
+        BETTER_AUTH_URL: undefined,
+      })
+    ).toEqual({
+      frontendUrl: 'https://notes.minusculelabs.com',
+      apiUrl: 'https://api.notes.minusculelabs.com',
+      betterAuthUrl: 'https://api.notes.minusculelabs.com/internal/auth',
+    });
+  });
+
+  it('keeps local defaults on the local origin', () => {
+    expect(
+      getStageUrls('local', {
+        FRONTEND_URL: undefined,
+        API_URL: undefined,
+        BETTER_AUTH_URL: undefined,
+      })
+    ).toEqual({
+      frontendUrl: defaults.localFrontendUrl,
+      apiUrl: defaults.localFrontendUrl,
+      betterAuthUrl: `${defaults.localFrontendUrl}/internal/auth`,
+    });
+  });
+
   it('uses explicit env values when present', () => {
     expect(
       getStageUrls('production', {

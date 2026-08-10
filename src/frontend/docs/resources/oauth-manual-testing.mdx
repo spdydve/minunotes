@@ -7,7 +7,7 @@ Use these checks when validating API keys, hosted MCP, local MCP, and OAuth conn
 Create an API key in **Settings → API Access → API keys**. Then call the harness directly:
 
 ```sh
-curl "$MINUNOTES_BASE_URL/v1/harness/folders" \
+curl "$MINUNOTES_API_URL/v1/harness/folders" \
   -H "X-API-Key: ntak_..."
 ```
 
@@ -18,7 +18,7 @@ Expected result: a JSON list of folders allowed by that key. Private folders sho
 Use hosted MCP for remote MCP-capable clients:
 
 ```txt
-https://notes.dpklabs.com/mcp
+https://api.notes.minusculelabs.com/mcp
 ```
 
 Authenticate with:
@@ -30,7 +30,7 @@ X-API-Key: ntak_...
 A local curl check can confirm the endpoint is reachable:
 
 ```sh
-curl "$MINUNOTES_BASE_URL/mcp" \
+curl "$MINUNOTES_API_URL/mcp" \
   -H "X-API-Key: ntak_..."
 ```
 
@@ -41,7 +41,7 @@ Your MCP client will handle protocol requests such as tool discovery and tool ca
 Use local stdio MCP for desktop clients that launch a process:
 
 ```sh
-export NOTES_API_URL="https://notes.dpklabs.com"
+export NOTES_API_URL="https://api.notes.minusculelabs.com"
 export NOTES_API_KEY="ntak_..."
 notes-mcp
 ```
@@ -67,18 +67,20 @@ https://example.com/minunotes-oauth-callback
 ```
 
 4. Copy the generated client ID.
-5. Run the smoke script:
+5. Run the smoke script with separate web and API origins:
 
 ```sh
-MINUNOTES_BASE_URL="http://localhost:5173" \
+MINUNOTES_WEB_URL="http://localhost:5173" \
+MINUNOTES_API_URL="<api-origin-printed-by-sst>" \
 MINUNOTES_OAUTH_CLIENT_ID="<client_id>" \
 pnpm oauth:smoke
 ```
 
-For production or dev, change `MINUNOTES_BASE_URL`:
+For production:
 
 ```sh
-MINUNOTES_BASE_URL="https://notes.dpklabs.com" \
+MINUNOTES_WEB_URL="https://notes.minusculelabs.com" \
+MINUNOTES_API_URL="https://api.notes.minusculelabs.com" \
 MINUNOTES_OAUTH_CLIENT_ID="<client_id>" \
 pnpm oauth:smoke
 ```
@@ -102,7 +104,7 @@ Authorization: Bearer mnoac_...
 OAuth-capable MCP clients should start with the MCP endpoint:
 
 ```txt
-https://notes.dpklabs.com/mcp
+https://api.notes.minusculelabs.com/mcp
 ```
 
 The server advertises OAuth discovery metadata and Dynamic Client Registration (DCR):
@@ -118,7 +120,7 @@ DCR lets clients such as ChatGPT register their callback URL and receive a publi
 Example DCR smoke request:
 
 ```sh
-curl -s "$MINUNOTES_BASE_URL/oauth/register" \
+curl -s "$MINUNOTES_API_URL/oauth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "client_name": "ChatGPT Connector",

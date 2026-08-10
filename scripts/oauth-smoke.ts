@@ -2,7 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 
-const baseUrl = (process.env.MINUNOTES_BASE_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+const webUrl = (process.env.MINUNOTES_WEB_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+const apiUrl = process.env.MINUNOTES_API_URL?.replace(/\/$/, '');
 const clientId = process.env.MINUNOTES_OAUTH_CLIENT_ID;
 const redirectUri = process.env.MINUNOTES_OAUTH_REDIRECT_URI ?? 'https://example.com/minunotes-oauth-callback';
 const scope = process.env.MINUNOTES_OAUTH_SCOPE ?? 'notes';
@@ -21,15 +22,18 @@ async function readLine(prompt: string) {
 }
 
 async function main() {
-  if (!clientId) {
-    console.error('Missing MINUNOTES_OAUTH_CLIENT_ID.');
+  if (!clientId || !apiUrl) {
+    if (!clientId) console.error('Missing MINUNOTES_OAUTH_CLIENT_ID.');
+    if (!apiUrl) console.error('Missing MINUNOTES_API_URL.');
     console.error('Create an app in Settings → API Access → Apps, then run:');
-    console.error('MINUNOTES_OAUTH_CLIENT_ID=<client_id> pnpm oauth:smoke');
+    console.error(
+      'MINUNOTES_WEB_URL=<web-origin> MINUNOTES_API_URL=<api-origin> MINUNOTES_OAUTH_CLIENT_ID=<client_id> pnpm oauth:smoke'
+    );
     process.exit(1);
   }
 
   const verifier = randomBytes(48).toString('base64url');
-  const authorizeUrl = new URL(`${baseUrl}/api/oauth/authorize`);
+  const authorizeUrl = new URL(`${webUrl}/oauth/authorize`);
   authorizeUrl.searchParams.set('response_type', 'code');
   authorizeUrl.searchParams.set('client_id', clientId);
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);
@@ -48,7 +52,7 @@ async function main() {
   const code = new URL(callbackUrl).searchParams.get('code');
   if (!code) throw new Error('No code parameter found in callback URL');
 
-  const tokenResponse = await fetch(`${baseUrl}/api/oauth/token`, {
+  const tokenResponse = await fetch(`${apiUrl}/oauth/token`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -70,7 +74,7 @@ async function main() {
   }
 
   console.log(`\nToken exchange OK (${tokenBody.token_type ?? 'Bearer'}). Calling harness...`);
-  const foldersResponse = await fetch(`${baseUrl}/api/harness/folders`, {
+  const foldersResponse = await fetch(`${apiUrl}/v1/harness/folders`, {
     headers: { authorization: `Bearer ${tokenBody.access_token}` },
   });
   const foldersBody = (await foldersResponse.json()) as {

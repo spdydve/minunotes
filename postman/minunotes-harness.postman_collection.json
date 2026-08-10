@@ -8,7 +8,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "https://api.notes.dpklabs.com"
+      "value": "https://api.notes.minusculelabs.com"
     },
     {
       "key": "apiKey",

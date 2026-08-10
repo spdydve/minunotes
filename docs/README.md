@@ -2,8 +2,8 @@
 
 ## Important endpoints
 
-- Web app: `https://notes.dpklabs.com`
-- API origin: `https://api.notes.dpklabs.com`
+- Web app: `https://notes.minusculelabs.com`
+- API origin: `https://api.notes.minusculelabs.com`
 - Health: `/health`
 - Internal app API: `/internal/*`
 - External harness API: `/v1/harness/*`

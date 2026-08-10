@@ -40,8 +40,8 @@
 - Integration commit(s): `<optional>`
 - Branch: `main`
 - Repository state: committed, pushed, deployed, smoke-tested, and tagged.
-- API: `https://api.notes.dpklabs.com`
-- Web: `https://notes.dpklabs.com`
+- API: `https://api.notes.minusculelabs.com`
+- Web: `https://notes.minusculelabs.com`
 
 ## Related
 

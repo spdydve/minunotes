@@ -36,9 +36,9 @@ export function parseAllowedOrigins(value?: string, fallback = LOCAL_FRONTEND_UR
 export function getStageUrls(stage: StageName, env = process.env): StageUrls {
   const normalizedStage = stage ?? 'local';
   const isLocal = normalizedStage === 'local' || normalizedStage === 'davidkennedy';
-  const defaultFrontendUrl = isLocal ? LOCAL_FRONTEND_URL : 'https://notes.dpklabs.com';
+  const defaultFrontendUrl = isLocal ? LOCAL_FRONTEND_URL : 'https://notes.minusculelabs.com';
   const frontendUrl = ensureUrl(env.FRONTEND_URL ?? defaultFrontendUrl, 'FRONTEND_URL');
-  const apiUrl = ensureUrl(env.API_URL ?? (isLocal ? frontendUrl : 'https://api.notes.dpklabs.com'), 'API_URL');
+  const apiUrl = ensureUrl(env.API_URL ?? (isLocal ? frontendUrl : 'https://api.notes.minusculelabs.com'), 'API_URL');
   const betterAuthUrl = ensureUrl(env.BETTER_AUTH_URL ?? `${apiUrl}/internal/auth`, 'BETTER_AUTH_URL');
 
   return { frontendUrl, apiUrl, betterAuthUrl };

@@ -147,11 +147,18 @@ describe('note link parser', () => {
     ]);
   });
 
-  it('parses scheme-less and root-relative internal note URLs', () => {
+  it('parses legacy scheme-less and root-relative internal note URLs', () => {
     const raw = 'notes.dpklabs.com/notes/note_abc123';
     const markdown = '[Note B](/notes/note_def456)';
     expect(parseInternalNoteUrls(`${raw}\n${markdown}`)).toMatchObject([
       { targetNoteId: 'note_def456', label: 'Note B', linkType: 'markdown-internal-url' },
+      { targetNoteId: 'note_abc123', label: null, linkType: 'internal-url' },
+    ]);
+  });
+
+  it('parses Minuscule Labs production note URLs', () => {
+    const raw = 'https://notes.minusculelabs.com/notes/note_abc123';
+    expect(parseInternalNoteUrls(raw)).toMatchObject([
       { targetNoteId: 'note_abc123', label: null, linkType: 'internal-url' },
     ]);
   });
