@@ -24,11 +24,15 @@ async function setupShareApp() {
   vi.stubEnv('TURSO_DB_URL', `file:${path.join(dir, 'test.db')}`);
   vi.stubEnv('FRONTEND_URL', 'https://notes.example.test');
 
-  const [{ db, libsql }, schema, { noteRoutes }, { shareRoutes }] = await Promise.all([
+  vi.stubEnv('ATTACHMENT_STORAGE_DRIVER', 'filesystem');
+  vi.stubEnv('ATTACHMENT_STORAGE_PATH', path.join(dir, 'attachments'));
+
+  const [{ db, libsql }, schema, { noteRoutes }, { shareRoutes }, storage] = await Promise.all([
     import('../src/api/db/client'),
     import('../src/api/db/schema'),
     import('../src/api/routes/notes'),
     import('../src/api/routes/share'),
+    import('../src/api/storage'),
   ]);
 
   await runMigrations(libsql);
@@ -89,7 +93,7 @@ async function setupShareApp() {
   app.route('/api/notes', noteRoutes);
   app.route('/api/share', shareRoutes);
 
-  return { app, db, schema };
+  return { app, db, schema, storage };
 }
 
 function tokenFromUrl(url: string) {
@@ -99,6 +103,8 @@ function tokenFromUrl(url: string) {
 }
 
 afterEach(async () => {
+  const storage = await import('../src/api/storage');
+  storage.resetObjectStorageForTests();
   vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -132,6 +138,89 @@ describe('note share links', () => {
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe('read');
     expect(body.resolutions).toEqual([]);
+  });
+
+  it('serves only ready attachments owned by the shared note', async () => {
+    const { app, db, schema, storage } = await setupShareApp();
+    const objectStorage = storage.getObjectStorage();
+    await objectStorage.putObject({
+      key: 'users/user_a/notes/note_a/attachments/att_shared-image.png',
+      body: new TextEncoder().encode('shared-image'),
+      contentType: 'image/png',
+    });
+    await db.insert(schema.attachments).values([
+      {
+        id: 'att_shared',
+        userId: 'user_a',
+        noteId: 'note_a',
+        folderId: 'folder_a',
+        provider: 'filesystem',
+        filename: 'image.png',
+        mimeType: 'image/png',
+        size: 12,
+        contentHash: 'shared',
+        storageKey: 'users/user_a/notes/note_a/attachments/att_shared-image.png',
+        status: 'ready',
+      },
+      {
+        id: 'att_pending',
+        userId: 'user_a',
+        noteId: 'note_a',
+        folderId: 'folder_a',
+        provider: 'filesystem',
+        filename: 'pending.png',
+        mimeType: 'image/png',
+        size: 1,
+        contentHash: '',
+        storageKey: 'pending',
+        status: 'pending',
+      },
+    ]);
+    await db.insert(schema.notes).values({
+      id: 'note_other',
+      folderId: 'folder_a',
+      userId: 'user_a',
+      title: 'Other',
+      content: '',
+      type: 'note',
+      isApiEditable: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(schema.attachments).values({
+      id: 'att_other',
+      userId: 'user_a',
+      noteId: 'note_other',
+      folderId: 'folder_a',
+      provider: 'filesystem',
+      filename: 'other.png',
+      mimeType: 'image/png',
+      size: 1,
+      contentHash: 'other',
+      storageKey: 'other',
+      status: 'ready',
+    });
+
+    const create = await app.request('/api/notes/note_a/share-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const token = tokenFromUrl(((await create.json()) as { shareLink: { url: string } }).shareLink.url);
+
+    const content = await app.request(`/api/share/${token}/attachments/att_shared/content`);
+    expect(content.status).toBe(200);
+    expect(await content.text()).toBe('shared-image');
+    expect(content.headers.get('cache-control')).toBe('no-store');
+    expect(content.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(content.headers.get('content-security-policy')).toContain('sandbox');
+
+    expect((await app.request(`/api/share/${token}/attachments/att_other/content`)).status).toBe(404);
+    expect((await app.request(`/api/share/${token}/attachments/att_pending/content`)).status).toBe(404);
+    expect((await app.request(`/api/share/${token}/attachments/att_missing/content`)).status).toBe(404);
+
+    await app.request('/api/notes/note_a/share-link', { method: 'DELETE' });
+    expect((await app.request(`/api/share/${token}/attachments/att_shared/content`)).status).toBe(404);
   });
 
   it('returns fresh source-bound wikilink destinations with the shared note', async () => {

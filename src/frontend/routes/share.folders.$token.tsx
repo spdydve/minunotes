@@ -184,6 +184,7 @@ function SharedFolderView() {
           {selectedNote ? (
             <SharedFolderNoteView
               note={selectedNote}
+              token={token}
               resolutions={wikilinkData?.resolutions ?? EMPTY_WIKILINK_RESOLUTIONS}
               onBack={() => {
                 setSelectedFolderId(selectedNote.folderId);
@@ -338,10 +339,12 @@ function SharedFolderContents({
 
 function SharedFolderNoteView({
   note,
+  token,
   resolutions,
   onBack,
 }: {
   note: SharedFolderNote;
+  token: string;
   resolutions: SharedWikilinkResolution[];
   onBack: () => void;
 }) {
@@ -370,7 +373,12 @@ function SharedFolderNoteView({
         <SharedFolderCanvas content={note.content} documentType={note.documentType} />
       ) : (
         <div className="overflow-x-hidden bg-[var(--notes-bg)] pb-20 sm:pb-24">
-          <SharedMarkdownRenderer value={note.content} className="notes-minu-renderer" resolutions={resolutions} />
+          <SharedMarkdownRenderer
+            value={note.content}
+            className="notes-minu-renderer"
+            resolutions={resolutions}
+            resourceContext={{ kind: 'folder', token, noteId: note.id }}
+          />
         </div>
       )}
     </article>

@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { canonicalizeWikilinkTarget } from '../../shared/wikilinks';
 import type { SharedWikilinkResolution } from '../lib/api';
+import { createSharedResourceUrlResolver, type SharedResourceContext } from '../lib/resource-urls';
 import { NotesMarkdownRenderer } from './notes-markdown-renderer';
 
 const WIKILINK_PATTERN = /\[\[([^[\]\n|]+)(?:\|([^[\]\n]+))?\]\]/g;
@@ -87,12 +88,33 @@ export function SharedMarkdownRenderer({
   value,
   className,
   resolutions = EMPTY_RESOLUTIONS,
+  resourceContext,
 }: {
   value: string;
   className?: string;
   resolutions?: SharedWikilinkResolution[];
+  resourceContext: SharedResourceContext;
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const contextKind = resourceContext.kind;
+  const contextToken = resourceContext.token;
+  const contextNoteId = resourceContext.kind === 'folder' ? resourceContext.noteId : null;
+  const resourceUrlResolver = useMemo(
+    () =>
+      createSharedResourceUrlResolver({
+        apiUrl: import.meta.env.VITE_API_URL ?? '/internal',
+        browserOrigin: window.location.origin,
+        legacyApiOrigins: String(import.meta.env.VITE_LEGACY_ATTACHMENT_ORIGINS ?? '')
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean),
+        context:
+          contextKind === 'note'
+            ? { kind: 'note', token: contextToken }
+            : { kind: 'folder', token: contextToken, noteId: contextNoteId ?? '' },
+      }),
+    [contextKind, contextNoteId, contextToken]
+  );
 
   useEffect(() => {
     const rendered = wrapperRef.current?.firstElementChild;
@@ -101,5 +123,12 @@ export function SharedMarkdownRenderer({
     applyResolutions(rendered as HTMLElement, resolutions);
   }, [value, resolutions]);
 
-  return <NotesMarkdownRenderer ref={wrapperRef} value={value} className={className} />;
+  return (
+    <NotesMarkdownRenderer
+      ref={wrapperRef}
+      value={value}
+      className={className}
+      resourceUrlResolver={resourceUrlResolver}
+    />
+  );
 }

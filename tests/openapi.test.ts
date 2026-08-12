@@ -87,6 +87,15 @@ describe('harness OpenAPI spec', () => {
       '#/components/schemas/PublicSharedNoteResponse'
     );
 
+    const sharedAttachment = spec.paths['/internal/share/{token}/attachments/{attachmentId}/content']?.get;
+    expect(sharedAttachment?.operationId).toBe('readSharedNoteAttachment');
+    expect(sharedAttachment?.security).toEqual([]);
+
+    const sharedFolderAttachment =
+      spec.paths['/internal/share/folders/{token}/notes/{noteId}/attachments/{attachmentId}/content']?.get;
+    expect(sharedFolderAttachment?.operationId).toBe('readSharedFolderNoteAttachment');
+    expect(sharedFolderAttachment?.security).toEqual([]);
+
     const folderNote = spec.paths['/internal/share/folders/{token}/notes/{noteId}/wikilinks']?.get;
     expect(folderNote?.operationId).toBe('readSharedFolderNoteWikilinks');
     expect(folderNote?.security).toEqual([]);

@@ -24,6 +24,7 @@ export default $config({
       productionDomains,
     } = await import('./src/infra/domain-migration');
     const { existsSync, readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
 
     const loadEnvFile = (path: string) => {
       if (!existsSync(path)) return {} as Record<string, string>;
@@ -90,6 +91,9 @@ export default $config({
     const allowOrigins = parseAllowedOrigins(env.API_ALLOWED_ORIGINS ?? migrationAllowedOrigins, frontendUrl);
 
     const attachmentStorageDriver = env.ATTACHMENT_STORAGE_DRIVER ?? (isLocal ? 'filesystem' : 's3');
+    const attachmentStoragePath = isLocal
+      ? resolve(env.ATTACHMENT_STORAGE_PATH ?? '.notes-attachments')
+      : (env.ATTACHMENT_STORAGE_PATH ?? '.notes-attachments');
     const attachmentsBucket = new sst.aws.Bucket('Attachments', {
       cors: {
         allowOrigins,
@@ -154,7 +158,7 @@ export default $config({
         SES_FROM_EMAIL: env.SES_FROM_EMAIL ?? '',
         SES_REGION: env.SES_REGION ?? env.AWS_REGION ?? 'us-east-1',
         ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
-        ATTACHMENT_STORAGE_PATH: env.ATTACHMENT_STORAGE_PATH ?? '.notes-attachments',
+        ATTACHMENT_STORAGE_PATH: attachmentStoragePath,
         ATTACHMENT_PUBLIC_BASE_URL: env.ATTACHMENT_PUBLIC_BASE_URL ?? '',
         ATTACHMENT_BUCKET: env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
         ATTACHMENT_REGION: env.ATTACHMENT_REGION ?? env.AWS_REGION ?? '',
@@ -202,7 +206,7 @@ export default $config({
             TURSO_DB_URL: env.TURSO_DB_URL ?? env.LIBSQL_URL ?? 'file:local.db',
             TURSO_AUTH_TOKEN: env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? '',
             ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
-            ATTACHMENT_STORAGE_PATH: env.ATTACHMENT_STORAGE_PATH ?? '.notes-attachments',
+            ATTACHMENT_STORAGE_PATH: attachmentStoragePath,
             ATTACHMENT_BUCKET: env.ATTACHMENT_BUCKET ?? attachmentsBucket.name,
             ATTACHMENT_REGION: env.ATTACHMENT_REGION ?? env.AWS_REGION ?? '',
             ATTACHMENT_ENDPOINT: env.ATTACHMENT_ENDPOINT ?? '',

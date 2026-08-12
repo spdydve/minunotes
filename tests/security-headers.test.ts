@@ -16,6 +16,15 @@ describe('security headers', () => {
     expect(response.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
   });
 
+  it.each([
+    '/internal/share/token/attachments/att_123/content',
+    '/internal/share/folders/token/notes/note_123/attachments/att_123/content',
+  ])('allows share-scoped attachment content across origins: %s', async (path) => {
+    const response = await createApp().request(path);
+
+    expect(response.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+  });
+
   it('keeps other responses same-origin', async () => {
     const response = await createApp().request('/internal/notes/note_123');
 

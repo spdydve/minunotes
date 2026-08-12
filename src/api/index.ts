@@ -45,6 +45,7 @@ const authRateLimit = createRateLimitMiddleware({
 });
 const apiKeyRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 30, keyPrefix: 'api-keys' });
 const harnessRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 120, keyPrefix: 'harness' });
+const publicShareRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 300, keyPrefix: 'public-share' });
 const writeBodyLimit = createRequestSizeLimitMiddleware({ maxBytes: 256 * 1024 });
 const uploadBodyLimit = createRequestSizeLimitMiddleware({ maxBytes: 12 * 1024 * 1024 });
 
@@ -133,6 +134,9 @@ app.use('/internal/oauth/token', authRateLimit);
 app.use('/internal/oauth/revoke', authRateLimit);
 
 app.route('/internal/auth', authRoutes);
+
+app.use('/internal/share', publicShareRateLimit);
+app.use('/internal/share/*', publicShareRateLimit);
 
 app.use('/internal/oauth/authorize/preview', async (c, next) => {
   console.info('[OAUTH PREVIEW REQUEST]', {

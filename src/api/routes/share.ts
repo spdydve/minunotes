@@ -1,16 +1,48 @@
 import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
+import { attachments, folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
 import { hashShareToken } from '../lib/share-tokens';
 import {
   databaseSharedWikilinkRepository,
   resolveSourceWikilinks,
   type SharedWikilinkRepository,
 } from '../shared/wikilink-resolver';
+import { getObjectStorage } from '../storage';
 import { activeNoteWhere, filterActiveFolderHierarchy } from '../trash/policy';
+import { attachmentContentResponse } from './attachments';
 
 export const shareRoutes = new Hono();
+
+async function loadActiveNoteShare(token: string) {
+  const tokenHash = hashShareToken(token);
+  const now = new Date();
+  const [row] = await db
+    .select({
+      note: notes,
+      share: {
+        id: noteShareLinks.id,
+        permission: noteShareLinks.permission,
+        createdAt: noteShareLinks.createdAt,
+      },
+    })
+    .from(noteShareLinks)
+    .innerJoin(notes, eq(noteShareLinks.noteId, notes.id))
+    .innerJoin(folders, eq(notes.folderId, folders.id))
+    .where(
+      and(
+        eq(noteShareLinks.tokenHash, tokenHash),
+        isNull(notes.deletedAt),
+        isNull(folders.deletedAt),
+        isNull(noteShareLinks.revokedAt),
+        or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
+      )
+    )
+    .limit(1);
+  if (!row) return null;
+  const activeFolders = await loadUserFolders(row.note.userId);
+  return activeFolders.some((folder) => folder.id === row.note.folderId) ? row : null;
+}
 
 async function loadActiveFolderShare(token: string) {
   const tokenHash = hashShareToken(token);
@@ -68,6 +100,72 @@ function collectFolderTreeIds(rootFolderId: string, userFolders: Array<{ id: str
   }
   return folderIds;
 }
+
+async function loadSharedAttachment(input: { userId: string; noteId: string; attachmentId: string }) {
+  const [attachment] = await db
+    .select()
+    .from(attachments)
+    .where(
+      and(
+        eq(attachments.id, input.attachmentId),
+        eq(attachments.userId, input.userId),
+        eq(attachments.noteId, input.noteId),
+        isNull(attachments.deletedAt),
+        eq(attachments.status, 'ready')
+      )
+    )
+    .limit(1);
+  if (!attachment) return null;
+  const object = await getObjectStorage().getObject({ key: attachment.storageKey });
+  return object ? { attachment, object } : null;
+}
+
+function sharedAttachmentResponse(result: NonNullable<Awaited<ReturnType<typeof loadSharedAttachment>>>) {
+  return attachmentContentResponse({
+    body: result.object.body,
+    contentType: result.object.contentType ?? result.attachment.mimeType,
+    cacheControl: 'no-store',
+    sandbox: true,
+  });
+}
+
+shareRoutes.get('/folders/:token/notes/:noteId/attachments/:attachmentId/content', async (c) => {
+  const token = c.req.param('token').trim();
+  if (!token) return c.json({ error: 'Shared attachment not found' }, 404);
+
+  const row = await loadActiveFolderShare(token);
+  if (!row) return c.json({ error: 'Shared attachment not found' }, 404);
+  const userFolders = await loadUserFolders(row.folder.userId);
+  const folderIds = collectFolderTreeIds(row.folder.id, userFolders);
+  const noteId = c.req.param('noteId');
+  const [source] = await db
+    .select({ id: notes.id, folderId: notes.folderId })
+    .from(notes)
+    .where(activeNoteWhere(row.folder.userId, eq(notes.id, noteId), eq(notes.type, 'note')))
+    .limit(1);
+  if (!source || !folderIds.has(source.folderId)) return c.json({ error: 'Shared attachment not found' }, 404);
+
+  const result = await loadSharedAttachment({
+    userId: row.folder.userId,
+    noteId: source.id,
+    attachmentId: c.req.param('attachmentId'),
+  });
+  return result ? sharedAttachmentResponse(result) : c.json({ error: 'Shared attachment not found' }, 404);
+});
+
+shareRoutes.get('/:token/attachments/:attachmentId/content', async (c) => {
+  const token = c.req.param('token').trim();
+  if (!token) return c.json({ error: 'Shared attachment not found' }, 404);
+
+  const row = await loadActiveNoteShare(token);
+  if (!row) return c.json({ error: 'Shared attachment not found' }, 404);
+  const result = await loadSharedAttachment({
+    userId: row.note.userId,
+    noteId: row.note.id,
+    attachmentId: c.req.param('attachmentId'),
+  });
+  return result ? sharedAttachmentResponse(result) : c.json({ error: 'Shared attachment not found' }, 404);
+});
 
 shareRoutes.get('/folders/:token/notes/:noteId/wikilinks', async (c) => {
   const token = c.req.param('token').trim();
@@ -132,35 +230,8 @@ shareRoutes.get('/:token', async (c) => {
   const token = c.req.param('token').trim();
   if (!token) return c.json({ error: 'Shared note not found' }, 404);
 
-  const tokenHash = hashShareToken(token);
-  const now = new Date();
-  const [row] = await db
-    .select({
-      note: notes,
-      share: {
-        id: noteShareLinks.id,
-        permission: noteShareLinks.permission,
-        createdAt: noteShareLinks.createdAt,
-      },
-    })
-    .from(noteShareLinks)
-    .innerJoin(notes, eq(noteShareLinks.noteId, notes.id))
-    .innerJoin(folders, eq(notes.folderId, folders.id))
-    .where(
-      and(
-        eq(noteShareLinks.tokenHash, tokenHash),
-        isNull(notes.deletedAt),
-        isNull(folders.deletedAt),
-        isNull(noteShareLinks.revokedAt),
-        or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
-      )
-    )
-    .limit(1);
-
+  const row = await loadActiveNoteShare(token);
   if (!row) return c.json({ error: 'Shared note not found' }, 404);
-  const activeFolders = await loadUserFolders(row.note.userId);
-  if (!activeFolders.some((folder) => folder.id === row.note.folderId))
-    return c.json({ error: 'Shared note not found' }, 404);
   const resolutions = await resolveSourceWikilinks({ kind: 'note', token, source: row.note });
   return c.json({
     note: {

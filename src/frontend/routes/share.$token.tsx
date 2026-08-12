@@ -120,6 +120,7 @@ function SharedNoteView() {
               value={data.note.content}
               className="notes-minu-renderer"
               resolutions={data.resolutions}
+              resourceContext={{ kind: 'note', token }}
             />
           </div>
         )}

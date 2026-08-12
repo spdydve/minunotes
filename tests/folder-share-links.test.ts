@@ -24,11 +24,15 @@ async function setupFolderShareApp() {
   vi.stubEnv('TURSO_DB_URL', `file:${path.join(dir, 'test.db')}`);
   vi.stubEnv('FRONTEND_URL', 'https://notes.example.test');
 
-  const [{ db, libsql }, schema, { folderRoutes }, { shareRoutes }] = await Promise.all([
+  vi.stubEnv('ATTACHMENT_STORAGE_DRIVER', 'filesystem');
+  vi.stubEnv('ATTACHMENT_STORAGE_PATH', path.join(dir, 'attachments'));
+
+  const [{ db, libsql }, schema, { folderRoutes }, { shareRoutes }, storage] = await Promise.all([
     import('../src/api/db/client'),
     import('../src/api/db/schema'),
     import('../src/api/routes/folders'),
     import('../src/api/routes/share'),
+    import('../src/api/storage'),
   ]);
 
   await runMigrations(libsql);
@@ -139,7 +143,7 @@ async function setupFolderShareApp() {
   app.route('/api/folders', folderRoutes);
   app.route('/api/share', shareRoutes);
 
-  return { app, db, schema };
+  return { app, db, schema, storage };
 }
 
 function tokenFromUrl(url: string) {
@@ -149,6 +153,8 @@ function tokenFromUrl(url: string) {
 }
 
 afterEach(async () => {
+  const storage = await import('../src/api/storage');
+  storage.resetObjectStorageForTests();
   vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -185,6 +191,52 @@ describe('folder share links', () => {
     expect(body.notes.map((note) => note.title)).not.toContain('Template');
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe('read');
+  });
+
+  it('serves attachments only through their owning note in the shared subtree', async () => {
+    const { app, db, schema, storage } = await setupFolderShareApp();
+    await storage.getObjectStorage().putObject({
+      key: 'users/user_a/notes/note_child/attachments/att_child-image.png',
+      body: new TextEncoder().encode('child-image'),
+      contentType: 'image/png',
+    });
+    await db.insert(schema.attachments).values({
+      id: 'att_child',
+      userId: 'user_a',
+      noteId: 'note_child',
+      folderId: 'folder_child',
+      provider: 'filesystem',
+      filename: 'child.png',
+      mimeType: 'image/png',
+      size: 11,
+      contentHash: 'child',
+      storageKey: 'users/user_a/notes/note_child/attachments/att_child-image.png',
+      status: 'ready',
+    });
+
+    const create = await app.request('/api/folders/folder_a/share-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const token = tokenFromUrl(((await create.json()) as { shareLink: { url: string } }).shareLink.url);
+
+    const content = await app.request(`/api/share/folders/${token}/notes/note_child/attachments/att_child/content`);
+    expect(content.status).toBe(200);
+    expect(await content.text()).toBe('child-image');
+    expect(content.headers.get('cache-control')).toBe('no-store');
+
+    expect((await app.request(`/api/share/folders/${token}/notes/note_a/attachments/att_child/content`)).status).toBe(
+      404
+    );
+    expect(
+      (await app.request(`/api/share/folders/${token}/notes/note_outside/attachments/att_child/content`)).status
+    ).toBe(404);
+
+    await app.request('/api/folders/folder_a/share-link', { method: 'DELETE' });
+    expect(
+      (await app.request(`/api/share/folders/${token}/notes/note_child/attachments/att_child/content`)).status
+    ).toBe(404);
   });
 
   it('resolves only authored links for a selected note inside the shared subtree', async () => {

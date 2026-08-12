@@ -45,9 +45,29 @@ test('resolves portable attachment destinations in static Markdown', async ({ pa
   });
   await page.goto(`/share/note_share_${browserFixture.linked.id}`);
 
-  const expectedImageUrl = new URL('/internal/attachments/att_browser/content', page.url()).toString();
+  const expectedImageUrl = new URL(
+    '/internal/share/note_share_note_linked/attachments/att_browser/content',
+    page.url()
+  ).toString();
   await expect(page.locator('.notes-minu-renderer img')).toHaveAttribute('src', expectedImageUrl);
   await expect(page.getByRole('link', { name: 'Download' })).toHaveAttribute('href', `${expectedImageUrl}?download=1`);
+});
+
+test('scopes portable attachments to the selected note in a shared folder', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  api.notes.set(browserFixture.linked.id, {
+    ...browserFixture.linked,
+    content: '![Browser image](/internal/attachments/att_browser/content)',
+  });
+  await page.goto(`/share/folders/folder_share_token?note=${browserFixture.linked.id}`);
+
+  await expect(page.locator('.notes-minu-renderer img')).toHaveAttribute(
+    'src',
+    new URL(
+      `/internal/share/folders/folder_share_token/notes/${browserFixture.linked.id}/attachments/att_browser/content`,
+      page.url()
+    ).toString()
+  );
 });
 
 test('renders callouts and Mermaid diagrams in a shared note', async ({ page }) => {

@@ -573,7 +573,13 @@ export async function mockBrowserApi(
       });
     }
 
-    if (path === '/attachments/att_browser/content' && method === 'GET') {
+    if (
+      (path === '/attachments/att_browser/content' ||
+        path === '/share/note_share_note_linked/attachments/att_browser/content' ||
+        path ===
+          `/share/folders/folder_share_token/notes/${browserFixture.linked.id}/attachments/att_browser/content`) &&
+      method === 'GET'
+    ) {
       return route.fulfill({
         status: 200,
         contentType: 'image/png',

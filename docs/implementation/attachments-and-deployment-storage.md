@@ -169,6 +169,8 @@ A note write can insert markdown references such as:
 
 An explicit `ATTACHMENT_PUBLIC_BASE_URL` may still produce absolute URLs for deployments that require them, but the portable default is relative. Markdown source, agent reads, saves, and copies retain the canonical path; MinuEditor's runtime resource resolver changes only rendered `src`/`href` destinations.
 
+Authenticated views resolve canonical attachment paths to the private attachment endpoint. Public note and folder shares instead resolve them to share-scoped bearer routes. Those routes require an active share and an attachment owned by the exact source note, return generic `404` responses for all authorization failures, and use `Cache-Control: no-store` so revocation is not undermined by caching. Referencing another note's attachment path does not make that attachment public.
+
 Models may also insert external URLs when referencing images from the web. The harness should preserve markdown as the source of truth and avoid leaking backend-specific storage details like S3 bucket URLs into note content for app-owned uploads.
 
 ## MVP implementation order

@@ -206,6 +206,26 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
   );
 });
 
+export function attachmentContentResponse(input: {
+  body: Uint8Array;
+  contentType: string;
+  cacheControl: string;
+  sandbox?: boolean;
+}) {
+  const body = input.body.buffer.slice(
+    input.body.byteOffset,
+    input.body.byteOffset + input.body.byteLength
+  ) as ArrayBuffer;
+  const headers: Record<string, string> = {
+    'content-type': input.contentType,
+    'content-length': String(input.body.byteLength),
+    'cache-control': input.cacheControl,
+    'x-content-type-options': 'nosniff',
+  };
+  if (input.sandbox) headers['content-security-policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'";
+  return new Response(body, { headers });
+}
+
 attachmentRoutes.get('/:attachmentId/content', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
@@ -221,16 +241,9 @@ attachmentRoutes.get('/:attachmentId/content', async (c) => {
   const object = await getObjectStorage().getObject({ key: attachment.storageKey });
   if (!object) return c.json({ error: 'Attachment content not found' }, 404);
 
-  const body = object.body.buffer.slice(
-    object.body.byteOffset,
-    object.body.byteOffset + object.body.byteLength
-  ) as ArrayBuffer;
-  return new Response(body, {
-    headers: {
-      'content-type': object.contentType ?? attachment.mimeType,
-      'content-length': String(object.body.byteLength),
-      'cache-control': 'private, max-age=3600',
-      'x-content-type-options': 'nosniff',
-    },
+  return attachmentContentResponse({
+    body: object.body,
+    contentType: object.contentType ?? attachment.mimeType,
+    cacheControl: 'private, max-age=3600',
   });
 });

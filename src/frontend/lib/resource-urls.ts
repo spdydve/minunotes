@@ -9,6 +9,8 @@ export type MinuNotesResourceUrlOptions = {
   legacyApiOrigins?: string[];
 };
 
+export type SharedResourceContext = { kind: 'note'; token: string } | { kind: 'folder'; token: string; noteId: string };
+
 function normalizeOrigin(value: string) {
   return new URL(value).origin;
 }
@@ -29,6 +31,10 @@ function parseAppAttachmentPath(source: string, allowedAbsoluteOrigins: Set<stri
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
+function attachmentRuntimeUrl(apiOrigin: string, path: string) {
+  return new URL(path, apiOrigin).toString();
+}
+
 export function createMinuNotesResourceUrlResolver({
   apiUrl,
   browserOrigin = DEFAULT_BROWSER_ORIGIN,
@@ -42,7 +48,30 @@ export function createMinuNotesResourceUrlResolver({
 
   return (source) => {
     const attachmentPath = parseAppAttachmentPath(source, allowedAbsoluteOrigins);
-    return attachmentPath ? new URL(attachmentPath, configuredApiUrl.origin).toString() : source;
+    return attachmentPath ? attachmentRuntimeUrl(configuredApiUrl.origin, attachmentPath) : source;
+  };
+}
+
+export function createSharedResourceUrlResolver(
+  options: MinuNotesResourceUrlOptions & { context: SharedResourceContext }
+): ResourceUrlResolver {
+  const { context } = options;
+  const configuredApiUrl = new URL(options.apiUrl, options.browserOrigin ?? DEFAULT_BROWSER_ORIGIN);
+  const allowedAbsoluteOrigins = new Set([
+    configuredApiUrl.origin,
+    ...(options.legacyApiOrigins ?? []).map((origin) => normalizeOrigin(origin)),
+  ]);
+
+  return (source) => {
+    const attachmentPath = parseAppAttachmentPath(source, allowedAbsoluteOrigins);
+    if (!attachmentPath) return source;
+    const parsed = new URL(attachmentPath, DEFAULT_BROWSER_ORIGIN);
+    const attachmentId = parsed.pathname.split('/')[3];
+    const sharePath =
+      context.kind === 'note'
+        ? `/internal/share/${encodeURIComponent(context.token)}/attachments/${encodeURIComponent(attachmentId)}/content`
+        : `/internal/share/folders/${encodeURIComponent(context.token)}/notes/${encodeURIComponent(context.noteId)}/attachments/${encodeURIComponent(attachmentId)}/content`;
+    return attachmentRuntimeUrl(configuredApiUrl.origin, `${sharePath}${parsed.search}${parsed.hash}`);
   };
 }
 

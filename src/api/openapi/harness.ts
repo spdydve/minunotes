@@ -775,6 +775,44 @@ export const harnessOpenApiSpec = {
         },
       },
     },
+    '/internal/share/{token}/attachments/{attachmentId}/content': {
+      get: {
+        tags: ['Shared'],
+        operationId: 'readSharedNoteAttachment',
+        summary: 'Read an attachment owned by a publicly shared note',
+        security: [],
+        parameters: [{ $ref: '#/components/parameters/ShareToken' }, { $ref: '#/components/parameters/AttachmentId' }],
+        responses: {
+          '200': {
+            description: 'Share-authorized attachment bytes',
+            content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } },
+          },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+        },
+      },
+    },
+    '/internal/share/folders/{token}/notes/{noteId}/attachments/{attachmentId}/content': {
+      get: {
+        tags: ['Shared'],
+        operationId: 'readSharedFolderNoteAttachment',
+        summary: 'Read an attachment owned by one note in a publicly shared folder',
+        security: [],
+        parameters: [
+          { $ref: '#/components/parameters/ShareToken' },
+          { $ref: '#/components/parameters/NoteId' },
+          { $ref: '#/components/parameters/AttachmentId' },
+        ],
+        responses: {
+          '200': {
+            description: 'Share-authorized attachment bytes',
+            content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } },
+          },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+        },
+      },
+    },
     '/internal/share/folders/{token}/notes/{noteId}/wikilinks': {
       get: {
         tags: ['Shared'],
@@ -803,6 +841,7 @@ export const harnessOpenApiSpec = {
       ThreadId: { name: 'threadId', in: 'path', required: true, schema: { type: 'string' } },
       MessageId: { name: 'messageId', in: 'path', required: true, schema: { type: 'string' } },
       ShareToken: { name: 'token', in: 'path', required: true, schema: { type: 'string' } },
+      AttachmentId: { name: 'attachmentId', in: 'path', required: true, schema: { type: 'string' } },
     },
     responses: {
       BadRequest: {
@@ -819,6 +858,10 @@ export const harnessOpenApiSpec = {
       },
       NotFound: {
         description: 'Resource not found',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+      },
+      RateLimited: {
+        description: 'Rate limit exceeded',
         content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
       },
       Conflict: {

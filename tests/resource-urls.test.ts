@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { createMinuNotesResourceUrlResolver } from '../src/frontend/lib/resource-urls';
+import { createMinuNotesResourceUrlResolver, createSharedResourceUrlResolver } from '../src/frontend/lib/resource-urls';
 
 const resolver = createMinuNotesResourceUrlResolver({
   apiUrl: 'https://api.notes.minusculelabs.com/internal',
   browserOrigin: 'https://notes.minusculelabs.com',
   legacyApiOrigins: ['https://api.notes.dpklabs.com'],
+});
+
+const sharedOptions = {
+  apiUrl: 'https://api.notes.minusculelabs.com/internal',
+  browserOrigin: 'https://notes.minusculelabs.com',
+  legacyApiOrigins: ['https://api.notes.dpklabs.com'],
+};
+
+const noteShareResolver = createSharedResourceUrlResolver({
+  ...sharedOptions,
+  context: { kind: 'note', token: 'note token' },
+});
+
+const folderShareResolver = createSharedResourceUrlResolver({
+  ...sharedOptions,
+  context: { kind: 'folder', token: 'folder token', noteId: 'note_123' },
 });
 
 describe('MinuNotes resource URL resolver', () => {
@@ -51,5 +67,34 @@ describe('MinuNotes resource URL resolver', () => {
     expect(localResolver('/internal/attachments/att_local/content', { kind: 'image' })).toBe(
       'http://localhost:5173/internal/attachments/att_local/content'
     );
+  });
+});
+
+describe('shared resource URL resolver', () => {
+  it('resolves note-share attachment paths with encoded bearer tokens', () => {
+    expect(noteShareResolver('/internal/attachments/att_123/content?download=1#preview', { kind: 'image' })).toBe(
+      'https://api.notes.minusculelabs.com/internal/share/note%20token/attachments/att_123/content?download=1#preview'
+    );
+  });
+
+  it('binds folder-share attachment paths to the selected source note', () => {
+    expect(folderShareResolver('/internal/attachments/att_123/content', { kind: 'link' })).toBe(
+      'https://api.notes.minusculelabs.com/internal/share/folders/folder%20token/notes/note_123/attachments/att_123/content'
+    );
+  });
+
+  it('moves approved legacy attachment URLs onto share-scoped routes', () => {
+    expect(
+      noteShareResolver('https://api.notes.dpklabs.com/internal/attachments/att_legacy/content', { kind: 'image' })
+    ).toBe('https://api.notes.minusculelabs.com/internal/share/note%20token/attachments/att_legacy/content');
+  });
+
+  it.each([
+    'https://example.com/internal/attachments/att_external/content',
+    '//api.notes.dpklabs.com/internal/attachments/att_protocol_relative/content',
+    '/internal/attachments/not-an-attachment/content',
+    '/notes/note_123',
+  ])('leaves unrelated shared resources unchanged: %s', (source) => {
+    expect(noteShareResolver(source, { kind: 'link' })).toBe(source);
   });
 });
