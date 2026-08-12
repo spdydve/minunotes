@@ -119,6 +119,47 @@ test('renders callouts and Mermaid diagrams in live mode', async ({ page }) => {
   await expect.poll(nodeFill).not.toBe(darkNodeFill);
 });
 
+test('pastes an internal note URL as a canonical wikilink with a runtime title', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const editor = page.locator('.cm-content');
+  await editor.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+  await editor.evaluate(
+    (element, targetUrl) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData('text/plain', targetUrl);
+      element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+    },
+    `${new URL(page.url()).origin}/notes/${browserFixture.target.id}`
+  );
+
+  await api.expectSavedContent(`[[${browserFixture.target.id}]]`);
+  await expect(editor).toContainText(browserFixture.target.title);
+
+  await page.getByLabel('Open note actions').click();
+  await page.getByRole('button', { name: 'Source mode', exact: true }).click();
+  await expect(editor).toContainText(`[[${browserFixture.target.id}]]`);
+});
+
+test('keeps external URL paste as a standard Markdown link', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const editor = page.locator('.cm-content');
+  await editor.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await editor.evaluate((element) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', 'https://example.com/article');
+    element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+  });
+
+  await api.expectSavedContent('[Start here.](https://example.com/article)');
+});
+
 test('converts rich HTML paste into portable Markdown', async ({ page }) => {
   const api = await mockBrowserApi(page);
   await page.goto(`/notes/${browserFixture.source.id}`);

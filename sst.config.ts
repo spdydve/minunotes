@@ -253,6 +253,11 @@ export default $config({
         VITE_API_PROXY_TARGET: apiGateway.url,
         VITE_LEGACY_ATTACHMENT_ORIGINS:
           env.VITE_LEGACY_ATTACHMENT_ORIGINS ?? (isProduction ? `https://${productionDomains.legacy.api}` : ''),
+        VITE_INTERNAL_NOTE_ORIGINS:
+          env.VITE_INTERNAL_NOTE_ORIGINS ??
+          (productionMigration
+            ? productionMigration.allowedWebOrigins.map((domain) => `https://${domain}`).join(',')
+            : ''),
         VITE_IMAGE_UPLOAD_DEBUG: isDev ? 'true' : 'false',
       },
     });

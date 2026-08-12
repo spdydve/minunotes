@@ -21,10 +21,12 @@ import {
   type NoteCommentsResponse,
 } from '../lib/api';
 import { internalNoteLinkTarget } from '../lib/link-policy';
+import { createConfiguredInternalNoteUrlPasteResolver } from '../lib/note-urls';
 import { rootRoute } from './__root';
 
 function NoteView() {
   const { noteId } = noteRoute.useParams();
+  const internalNoteUrlPasteResolver = useMemo(createConfiguredInternalNoteUrlPasteResolver, []);
   const nav = useNavigate();
   const qc = useQueryClient();
   const { data, error, isLoading, refetch } = useQuery({
@@ -427,6 +429,7 @@ function NoteView() {
       enabled: true,
       openOnClick: true,
       labelBehavior: 'title' as const,
+      resolvePastedUrl: internalNoteUrlPasteResolver,
       suggest: async (query: string, context?: { link?: { target: string; label?: string } }) => {
         const trimmed = query.trim();
         const searchTerm = noteIdPattern.test(trimmed) && context?.link?.label ? context.link.label.trim() : trimmed;

@@ -54,7 +54,7 @@
     "@codemirror/language": "^6.12.3",
     "@codemirror/legacy-modes": "^6.5.3",
     "@dpklabs/minucanvas": "github:spdydve/minucanvas#v0.7.1",
-    "@dpklabs/minueditor": "github:spdydve/minueditor#v0.13.0",
+    "@dpklabs/minueditor": "github:spdydve/minueditor#v0.13.1",
     "@hono/node-server": "^2.0.3",
     "@lezer/markdown": "^1.7.2",
     "@libsql/client": "latest",
