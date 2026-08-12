@@ -67,11 +67,15 @@ test('preserves a dirty local draft when an external update wins the save race',
 
 test('switches between live and source editing and autosaves raw markdown changes', async ({ page }) => {
   const api = await mockBrowserApi(page);
-  const markdown = '![Browser image](https://example.com/source-mode.png)';
+  const markdown = '![Browser image](/internal/attachments/att_browser/content)';
   api.notes.set(browserFixture.source.id, { ...browserFixture.source, content: markdown });
   await page.goto(`/notes/${browserFixture.source.id}`);
 
   await expect(page.locator('.me-image-wrapper')).toBeVisible();
+  await expect(page.locator('img.me-image')).toHaveAttribute(
+    'src',
+    new URL('/internal/attachments/att_browser/content', page.url()).toString()
+  );
   await page.getByLabel('Open note actions').click();
   await page.getByRole('button', { name: 'Source mode', exact: true }).click();
 
@@ -176,7 +180,7 @@ test('uploads an app-owned image and saves its stable attachment URL', async ({ 
 
   await expect
     .poll(() => api.notes.get(browserFixture.source.id)?.content)
-    .toContain('/internal/attachments/attachment_browser/content');
+    .toContain('/internal/attachments/att_browser/content');
 });
 
 test('keeps the editor open and reports an app-owned image upload failure', async ({ page }) => {

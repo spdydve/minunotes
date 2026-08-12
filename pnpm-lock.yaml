@@ -51,8 +51,8 @@ importers:
         specifier: github:spdydve/minucanvas#v0.7.1
         version: github.com/spdydve/minucanvas/0fa625a968a586ef5b20220c6d20843777ec2020(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
-        specifier: github:spdydve/minueditor#v0.12.0
-        version: github.com/spdydve/minueditor/ab3af4ddc833b926782fe907688c40c0d6eb7055(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
+        specifier: github:spdydve/minueditor#v0.13.0
+        version: github.com/spdydve/minueditor/fdd13d63617794dc8ed45af4a49a374bf8abaf98(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
       '@hono/node-server':
         specifier: ^2.0.3
         version: 2.0.3(hono@4.12.21)
@@ -5045,6 +5045,11 @@ packages:
       tapable: 2.3.3
     dev: true
 
+  /entities@6.0.1:
+    resolution: {integrity: sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g==}
+    engines: {node: '>=0.12'}
+    dev: false
+
   /es-define-property@1.0.1:
     resolution: {integrity: sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g==}
     engines: {node: '>= 0.4'}
@@ -7695,11 +7700,12 @@ packages:
       react-dom: 19.2.6(react@19.2.6)
     dev: false
 
-  github.com/spdydve/minueditor/ab3af4ddc833b926782fe907688c40c0d6eb7055(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/ab3af4ddc833b926782fe907688c40c0d6eb7055}
-    id: github.com/spdydve/minueditor/ab3af4ddc833b926782fe907688c40c0d6eb7055
+  github.com/spdydve/minueditor/fdd13d63617794dc8ed45af4a49a374bf8abaf98(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/fdd13d63617794dc8ed45af4a49a374bf8abaf98}
+    id: github.com/spdydve/minueditor/fdd13d63617794dc8ed45af4a49a374bf8abaf98
     name: '@dpklabs/minueditor'
-    version: 0.12.0
+    version: 0.13.0
+    prepare: true
     requiresBuild: true
     peerDependencies:
       '@codemirror/autocomplete': ^6.20.0
@@ -7717,6 +7723,7 @@ packages:
       '@codemirror/language': 6.12.3
       '@codemirror/state': 6.6.0
       '@codemirror/view': 6.43.0
+      entities: 6.0.1
       marked: 15.0.12
       mermaid: 11.16.0
       react: 19.2.6

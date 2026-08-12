@@ -5,10 +5,11 @@
 
 /// <reference types="vite/client" />
 interface ImportMetaEnv {
-  readonly VITE_API_URL: string
-  readonly VITE_API_PROXY_TARGET: string
-  readonly VITE_IMAGE_UPLOAD_DEBUG: string
+  readonly VITE_API_URL: string;
+  readonly VITE_API_PROXY_TARGET: string;
+  readonly VITE_LEGACY_ATTACHMENT_ORIGINS: string;
+  readonly VITE_IMAGE_UPLOAD_DEBUG: string;
 }
 interface ImportMeta {
-  readonly env: ImportMetaEnv
+  readonly env: ImportMetaEnv;
 }

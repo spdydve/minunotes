@@ -153,7 +153,7 @@ Attachment access should flow from note/folder permissions.
 
 ## API and harness behavior
 
-Agents and external tools should work with normal markdown image URLs, not inline binary data.
+Agents and external tools should work with normal markdown image URLs, not inline binary data. MinuNotes stores app-owned attachment references as canonical root-relative paths. The frontend resolves those paths against its configured API origin at display or navigation time; external URLs remain unchanged.
 
 A note read can expose:
 
@@ -164,8 +164,10 @@ A note read can expose:
 A note write can insert markdown references such as:
 
 ```md
-![Screenshot](/api/attachments/att_abc/content)
+![Screenshot](/internal/attachments/att_abc/content)
 ```
+
+An explicit `ATTACHMENT_PUBLIC_BASE_URL` may still produce absolute URLs for deployments that require them, but the portable default is relative. Markdown source, agent reads, saves, and copies retain the canonical path; MinuEditor's runtime resource resolver changes only rendered `src`/`href` destinations.
 
 Models may also insert external URLs when referencing images from the web. The harness should preserve markdown as the source of truth and avoid leaking backend-specific storage details like S3 bucket URLs into note content for app-owned uploads.
 

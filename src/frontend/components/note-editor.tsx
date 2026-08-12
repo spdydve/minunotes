@@ -18,6 +18,7 @@ import {
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { editorCodeHighlighter } from '../lib/code-highlighter';
 import { editorCodeLanguages } from '../lib/editor-languages';
+import { minuNotesResourceUrlResolver } from '../lib/resource-urls';
 import { getMermaidTheme, useNoteTheme } from '../lib/themes';
 
 type EditorViewLike = Parameters<NonNullable<ComponentProps<typeof MarkdownEditor>['onViewReady']>>[0];
@@ -255,6 +256,7 @@ export function NoteEditor({
             codeLanguages={editorCodeLanguages}
             codeHighlighter={editorCodeHighlighter}
             mermaid={mermaid}
+            resourceUrlResolver={minuNotesResourceUrlResolver}
             spellCheck={true}
             autoCorrect="on"
             autoComplete="on"

@@ -6,7 +6,7 @@ test('renders source-bound resolved and unresolved links in a shared note', asyn
   await page.goto(`/share/note_share_${browserFixture.linked.id}`);
 
   const byTitle = page.locator(`a.me-wikilink[data-wikilink-target="Target Note"]`);
-  const byId = page.locator(`a.me-wikilink[data-wikilink-target="${browserFixture.target.id}"]`);
+  const byId = page.getByRole('link', { name: 'Target by ID' });
   const missing = page.locator(`a.me-wikilink[data-wikilink-target="Missing Note"]`);
 
   await expect(byTitle).toHaveClass(/me-wikilink--resolved/);
@@ -34,6 +34,20 @@ test('renders source-bound resolved and unresolved links in a shared note', asyn
   await byTitle.click();
   await expect(page).toHaveURL(`/share/note_share_${browserFixture.target.id}`);
   await expect(page.getByRole('heading', { name: browserFixture.target.title })).toBeVisible();
+});
+
+test('resolves portable attachment destinations in static Markdown', async ({ page }) => {
+  const api = await mockBrowserApi(page);
+  api.notes.set(browserFixture.linked.id, {
+    ...browserFixture.linked,
+    content:
+      '![Browser image](/internal/attachments/att_browser/content)\n\n[Download](/internal/attachments/att_browser/content?download=1)',
+  });
+  await page.goto(`/share/note_share_${browserFixture.linked.id}`);
+
+  const expectedImageUrl = new URL('/internal/attachments/att_browser/content', page.url()).toString();
+  await expect(page.locator('.notes-minu-renderer img')).toHaveAttribute('src', expectedImageUrl);
+  await expect(page.getByRole('link', { name: 'Download' })).toHaveAttribute('href', `${expectedImageUrl}?download=1`);
 });
 
 test('renders callouts and Mermaid diagrams in a shared note', async ({ page }) => {

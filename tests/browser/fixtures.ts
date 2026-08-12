@@ -573,6 +573,17 @@ export async function mockBrowserApi(
       });
     }
 
+    if (path === '/attachments/att_browser/content' && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',
+          'base64'
+        ),
+      });
+    }
+
     if (path === `/attachments/notes/${browserFixture.source.id}/image-uploads` && method === 'POST')
       return json({ error: 'Signed uploads are not supported by the configured storage driver' }, 400);
 
@@ -580,9 +591,9 @@ export async function mockBrowserApi(
       if (options.uploadFails) return json({ error: 'Attachment storage unavailable' }, 500);
       return json(
         {
-          attachment: { id: 'attachment_browser', filename: 'browser.png' },
-          markdownUrl: '/internal/attachments/attachment_browser/content',
-          markdown: '![browser.png](/internal/attachments/attachment_browser/content)',
+          attachment: { id: 'att_browser', filename: 'browser.png' },
+          markdownUrl: '/internal/attachments/att_browser/content',
+          markdown: '![browser.png](/internal/attachments/att_browser/content)',
         },
         201
       );
