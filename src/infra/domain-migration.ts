@@ -78,12 +78,15 @@ export function getLegacyWebRedirectInjection() {
 if (event.request.headers.host && event.request.headers.host.value === '${productionDomains.legacy.web}') {
   var request = event.request;
   var queryParts = [];
+  var decodeQueryPart = function(value) {
+    try { return decodeURIComponent(value); } catch (error) { return value; }
+  };
   for (var key in request.querystring) {
     if (!Object.prototype.hasOwnProperty.call(request.querystring, key)) continue;
     var parameter = request.querystring[key];
     var values = parameter.multiValue || [parameter];
     for (var index = 0; index < values.length; index++) {
-      queryParts.push(encodeURIComponent(key) + '=' + encodeURIComponent(values[index].value || ''));
+      queryParts.push(encodeURIComponent(decodeQueryPart(key)) + '=' + encodeURIComponent(decodeQueryPart(values[index].value || '')));
     }
   }
   var location = 'https://${productionDomains.target.web}' + request.uri;

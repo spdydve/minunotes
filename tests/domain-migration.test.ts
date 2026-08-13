@@ -68,7 +68,7 @@ describe('production domain migration', () => {
           headers: { host: { value: productionDomains.legacy.web } },
           querystring: {
             review: { value: 'open' },
-            tag: { multiValue: [{ value: 'one' }, { value: 'two words' }] },
+            tag: { multiValue: [{ value: 'one' }, { value: 'two%20words' }] },
           },
         },
       })
