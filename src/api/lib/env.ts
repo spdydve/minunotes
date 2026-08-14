@@ -21,6 +21,19 @@ function normalizeCookieDomain(value?: string) {
   return normalized || undefined;
 }
 
+function parsePositiveInteger(value: string | undefined, fallback: number, name: string) {
+  if (!value?.trim()) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`Invalid ${name}: expected a positive integer`);
+  return parsed;
+}
+
+function parseEmailProtectionMode(value?: string): 'off' | 'observe' | 'enforce' {
+  const mode = value?.trim() || 'off';
+  if (mode === 'off' || mode === 'observe' || mode === 'enforce') return mode;
+  throw new Error(`Invalid EMAIL_PROTECTION_MODE: ${value}`);
+}
+
 export function parseAllowedOrigins(value?: string, fallback = LOCAL_FRONTEND_URL) {
   const raw = value?.trim() ? value : fallback;
   const origins = raw
@@ -72,6 +85,17 @@ export function getApiRuntimeConfig(env = process.env) {
     ses: {
       fromEmail: env.SES_FROM_EMAIL?.trim() || undefined,
       region: env.SES_REGION?.trim() || env.AWS_REGION?.trim() || 'us-east-1',
+    },
+    emailProtection: {
+      mode: parseEmailProtectionMode(env.EMAIL_PROTECTION_MODE),
+      hashSecret: env.EMAIL_PROTECTION_HASH_SECRET?.trim() || env.BETTER_AUTH_SECRET?.trim() || '',
+      bypassEmails: (env.EMAIL_PROTECTION_BYPASS_EMAILS ?? '')
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+      sesTimeoutMs: parsePositiveInteger(env.EMAIL_PROTECTION_SES_TIMEOUT_MS, 2_000, 'EMAIL_PROTECTION_SES_TIMEOUT_MS'),
+      emailRateMax: parsePositiveInteger(env.EMAIL_PROTECTION_EMAIL_RATE_MAX, 3, 'EMAIL_PROTECTION_EMAIL_RATE_MAX'),
+      clientRateMax: parsePositiveInteger(env.EMAIL_PROTECTION_CLIENT_RATE_MAX, 10, 'EMAIL_PROTECTION_CLIENT_RATE_MAX'),
     },
     attachmentStorage: {
       driver: parseAttachmentStorageDriver(env.ATTACHMENT_STORAGE_DRIVER),

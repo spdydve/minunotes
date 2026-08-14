@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import { getTrustedClientAddress } from './client-identity';
 
 export type RateLimitOptions = {
   windowMs: number;
@@ -14,10 +15,11 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
-export function getClientAddress(headers: Headers) {
-  const forwarded = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  const realIp = headers.get('x-real-ip')?.trim();
-  return forwarded || realIp || 'anonymous';
+export function getClientAddress(
+  headers: Headers,
+  requestContext?: { http?: { sourceIp?: string }; identity?: { sourceIp?: string } }
+) {
+  return getTrustedClientAddress({ headers, requestContext });
 }
 
 export function consumeRateLimit(
@@ -53,7 +55,15 @@ export function createRateLimitMiddleware({ windowMs, max, keyPrefix = 'global',
       return;
     }
 
-    const client = getClientAddress(c.req.raw.headers);
+    const client = getClientAddress(
+      c.req.raw.headers,
+      (c.env as { requestContext?: { http?: { sourceIp?: string }; identity?: { sourceIp?: string } } }).requestContext
+    );
+    if (!client) {
+      await next();
+      return;
+    }
+
     const key = `${keyPrefix}:${client}`;
     const result = consumeRateLimit(key, { windowMs, max });
     const resetInSeconds = Math.max(0, Math.ceil((result.resetAt - Date.now()) / 1000));

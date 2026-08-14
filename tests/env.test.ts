@@ -116,6 +116,14 @@ describe('getApiRuntimeConfig', () => {
         fromEmail: 'MinuNotes <notes@example.com>',
         region: 'us-west-2',
       },
+      emailProtection: {
+        mode: 'off',
+        hashSecret: '',
+        bypassEmails: [],
+        sesTimeoutMs: 2_000,
+        emailRateMax: 3,
+        clientRateMax: 10,
+      },
       attachmentStorage: {
         driver: 'filesystem',
         filesystemPath: '/data/attachments',
@@ -126,6 +134,15 @@ describe('getApiRuntimeConfig', () => {
         forcePathStyle: true,
       },
     });
+  });
+
+  it('rejects invalid email protection configuration', () => {
+    expect(() => getApiRuntimeConfig({ ...process.env, EMAIL_PROTECTION_MODE: 'invalid' })).toThrow(
+      'Invalid EMAIL_PROTECTION_MODE'
+    );
+    expect(() => getApiRuntimeConfig({ ...process.env, EMAIL_PROTECTION_EMAIL_RATE_MAX: '0' })).toThrow(
+      'Invalid EMAIL_PROTECTION_EMAIL_RATE_MAX'
+    );
   });
 
   it('rejects unknown attachment storage drivers', () => {

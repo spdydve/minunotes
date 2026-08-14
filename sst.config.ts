@@ -140,7 +140,7 @@ export default $config({
       link: [attachmentsBucket],
       permissions: [
         {
-          actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+          actions: ['ses:SendEmail', 'ses:SendRawEmail', 'ses:GetEmailAddressInsights'],
           resources: ['*'],
         },
       ],
@@ -157,6 +157,12 @@ export default $config({
         ALLOWED_LOGIN_EMAILS: env.ALLOWED_LOGIN_EMAILS ?? '',
         SES_FROM_EMAIL: env.SES_FROM_EMAIL ?? '',
         SES_REGION: env.SES_REGION ?? env.AWS_REGION ?? 'us-east-1',
+        EMAIL_PROTECTION_MODE: env.EMAIL_PROTECTION_MODE ?? (isLocal ? 'off' : isDev ? 'observe' : 'enforce'),
+        EMAIL_PROTECTION_HASH_SECRET: env.EMAIL_PROTECTION_HASH_SECRET ?? env.BETTER_AUTH_SECRET ?? '',
+        EMAIL_PROTECTION_BYPASS_EMAILS: env.EMAIL_PROTECTION_BYPASS_EMAILS ?? '',
+        EMAIL_PROTECTION_SES_TIMEOUT_MS: env.EMAIL_PROTECTION_SES_TIMEOUT_MS ?? '2000',
+        EMAIL_PROTECTION_EMAIL_RATE_MAX: env.EMAIL_PROTECTION_EMAIL_RATE_MAX ?? '3',
+        EMAIL_PROTECTION_CLIENT_RATE_MAX: env.EMAIL_PROTECTION_CLIENT_RATE_MAX ?? '10',
         ATTACHMENT_STORAGE_DRIVER: attachmentStorageDriver,
         ATTACHMENT_STORAGE_PATH: attachmentStoragePath,
         ATTACHMENT_PUBLIC_BASE_URL: env.ATTACHMENT_PUBLIC_BASE_URL ?? '',

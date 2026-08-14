@@ -74,9 +74,10 @@ describe('API key header extraction', () => {
 describe('rate limiting', () => {
   beforeEach(() => resetRateLimitStore());
 
-  it('uses forwarded client address when present', () => {
-    const headers = new Headers({ 'x-forwarded-for': '203.0.113.1, 10.0.0.2' });
-    expect(getClientAddress(headers)).toBe('203.0.113.1');
+  it('uses trusted API Gateway client address instead of forwarding headers', () => {
+    const headers = new Headers({ 'x-forwarded-for': '198.51.100.1, 10.0.0.2' });
+    expect(getClientAddress(headers, { http: { sourceIp: '203.0.113.1' } })).toBe('203.0.113.1');
+    expect(getClientAddress(headers)).toBeUndefined();
   });
 
   it('allows requests until the limit is exceeded', () => {
