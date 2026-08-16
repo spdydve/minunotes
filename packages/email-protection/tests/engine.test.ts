@@ -127,4 +127,22 @@ describe('email protection engine', () => {
     await engine.evaluate(request);
     expect(await engine.evaluate(request)).toMatchObject({ outcome: 'rate_limited', reason: 'email_rate_limited' });
   });
+
+  it('blocks a client after confirmed-invalid violations across distinct emails', async () => {
+    const { engine, verify } = setup({ outcome: 'invalid' });
+    const clientAddress = '203.0.113.10';
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      expect(await engine.evaluate({ email: `invalid-${attempt}@example.com`, clientAddress })).toMatchObject({
+        outcome: 'reject',
+        reason: 'provider_invalid',
+      });
+    }
+
+    expect(await engine.evaluate({ email: 'different@example.com', clientAddress })).toMatchObject({
+      outcome: 'rate_limited',
+      reason: 'client_banned',
+      retryAfterMs: 24 * 60 * 60 * 1000,
+    });
+    expect(verify).toHaveBeenCalledTimes(5);
+  });
 });

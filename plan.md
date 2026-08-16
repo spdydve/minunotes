@@ -92,3 +92,34 @@
 - [x] Logs/tables contain no OTPs or raw email/IP identifiers.
 - [x] AWS SDK uses role credentials with least-privilege SES permissions.
 - [x] Core package imports no MinuNotes application code.
+
+## Code review follow-up — Approved
+
+### Integration hardening
+
+- [x] Add a real Better Auth handler test for the OTP send route and disposable-email rejection.
+- [x] Prove a blocked request never invokes the OTP sender.
+- [x] Add an engine-level client-ban contract test.
+- [x] Run package tests, root tests, TypeScript, Biome, and diff checks.
+
+### Expired-state cleanup and rollout documentation
+
+- [ ] Extend cleanup to remove stale unbanned reputation rows after the violation window.
+- [ ] Return redacted cleanup counts for operational logging.
+- [ ] Add a dedicated email-protection cleanup function and scheduled SST handler.
+- [ ] Test expired deletion and preservation of active protection state.
+- [ ] Document that observe mode accumulates state and define the observe-to-enforce reset option.
+- [ ] Run package tests, root tests, TypeScript, build, Biome, and diff checks.
+
+### Files
+
+- [ ] `packages/email-protection/src/types.ts`
+- [ ] `packages/email-protection/src/stores/sqlite.ts`
+- [x] `packages/email-protection/tests/engine.test.ts`
+- [ ] `packages/email-protection/tests/sqlite.test.ts`
+- [x] `packages/email-protection/tests/better-auth-integration.test.ts`
+- [ ] `src/api/email-protection/cleanup.ts`
+- [ ] `src/api/email-protection/cleanup-handler.ts`
+- [ ] `tests/email-protection-cleanup.test.ts` if application-level behavior needs separate coverage
+- [ ] `sst.config.ts`
+- [ ] `docs/email-bot-protection.md`
