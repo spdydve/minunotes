@@ -50,6 +50,22 @@ https://<your-minunotes-host>/mcp
 
 Hosted MCP uses OAuth bearer authentication for connected apps. Direct harness API access uses API keys with `/v1/harness/*`. Local MCP clients can still run the `notes-mcp` stdio binary with an owner-managed API key in the local process environment.
 
+## Authorization model
+
+API keys and OAuth connected apps share the same authorization model. Global capabilities are a maximum ceiling; folder rules can only restrict that ceiling. For `all` access, folders without a rule inherit the global capabilities. For `top_level` and `specific` access, a matching rule is required. Rules apply to either one exact folder or a subtree, and the nearest applicable rule wins.
+
+Effective access also applies OAuth scope when present and always enforces folder safety policy. Private and trashed folders are unavailable. Agent-read-only folders continue to deny writes regardless of the credential's edit capability.
+
+Hosted OAuth supports these scopes:
+
+- `notes.read`
+- `notes.create`
+- `notes.edit`
+- `comments.write`
+- `folders.create`
+
+OAuth access is the intersection of the token scope, connected-app scope, current global capabilities, nearest folder rule, and folder safety policy. Clients should retry a token request that returns HTTP `503` with OAuth error `temporarily_unavailable`; they should not discard the grant as invalid for that response.
+
 Recommended helper shape:
 
 ```ts

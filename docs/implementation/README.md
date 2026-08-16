@@ -6,6 +6,7 @@ Reusable implementation notes for editor and harness features.
 
 ## Documents
 
+- [Integration Authorization Release Runbook](./integration-authorization-release-runbook.md)
 - [Trash and Recovery](./trash-and-recovery.md)
 - [In-app Navigation](./in-app-navigation.md)
 - [External Agent Helpers Roadmap](./external-agent-helpers-roadmap.md)

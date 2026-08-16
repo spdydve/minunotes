@@ -7,6 +7,10 @@ description: Tool-first MinuNotes skill for agents with registered minunotes_* t
 
 Use this skill when registered MinuNotes tools are available. Prefer tools over shell commands.
 
+## Permission boundary
+
+Global integration capabilities are a maximum ceiling. Folder rules may restrict them but cannot grant more access. For all-folder access, folders without a rule inherit the ceiling; restricted access modes require a matching rule. The nearest exact or subtree rule wins. Private and trashed folders remain unavailable, and agent-read-only folders deny writes. Report permission errors rather than retrying against unrelated content.
+
 ## Tool usage patterns
 
 - Find/create location: `minunotes_list_folders` → `minunotes_create_folder` if needed.

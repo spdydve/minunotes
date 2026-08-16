@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+  for (let index = 0; index <= 34; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -94,13 +94,9 @@ async function setupObjectAccessApp() {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  const apiKeyA = {
+  const authorizationA = {
     id: 'agent_key_a',
     userId: userA.id,
-    name: 'A key',
-    uid: 'AAAAAAAA',
-    hash: 'hash',
-    salt: 'salt',
     canCreateFolders: true,
     canRead: true,
     canCreate: true,
@@ -110,6 +106,14 @@ async function setupObjectAccessApp() {
     updatedAt: new Date(),
     lastUsedAt: null,
     revokedAt: null,
+  };
+  const apiKeyA = {
+    ...authorizationA,
+    authorizationId: authorizationA.id,
+    name: 'A key',
+    uid: 'AAAAAAAA',
+    hash: 'hash',
+    salt: 'salt',
   };
   const attachmentB = {
     id: 'att_b',
@@ -133,6 +137,7 @@ async function setupObjectAccessApp() {
   await db.insert(schema.user).values([userA, userB]);
   await db.insert(schema.folders).values([folderA, folderB]);
   await db.insert(schema.notes).values([noteA, noteB]);
+  await db.insert(schema.integrationAuthorizations).values(authorizationA);
   await db.insert(schema.apiKeys).values(apiKeyA);
   await db.insert(schema.attachments).values(attachmentB);
 

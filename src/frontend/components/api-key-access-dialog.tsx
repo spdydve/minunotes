@@ -80,6 +80,7 @@ export function ApiKeyAccessDialog({
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(new Set());
+  const [folderPermissions, setFolderPermissions] = useState<Map<string, PermissionValue>>(new Map());
   const [accessMode, setAccessMode] = useState<ApiKeyAccessMode>('all');
   const [keyPermission, setKeyPermission] = useState<PermissionValue>(defaultPermission);
   const [canCreateFolders, setCanCreateFolders] = useState(false);
@@ -131,11 +132,25 @@ export function ApiKeyAccessDialog({
         : defaultPermission
     );
     setSelectedFolderIds(new Set((apiKey?.permissions ?? []).map((permission) => permission.folderId)));
+    setFolderPermissions(
+      new Map(
+        (apiKey?.permissions ?? []).map((permission) => [
+          permission.folderId,
+          {
+            canRead: permission.canRead,
+            canCreate: permission.canCreate,
+            canEdit: permission.canEdit,
+            canComment: permission.canComment,
+          },
+        ])
+      )
+    );
   }, [apiKey, open]);
 
   const close = () => setOpen(false);
   const addFolder = (folder: Folder) => {
     setSelectedFolderIds((current) => new Set(current).add(folder.id));
+    setFolderPermissions((current) => new Map(current).set(folder.id, { ...keyPermission }));
     setQuery('');
   };
   const removeFolder = (folderId: string) =>
@@ -144,7 +159,30 @@ export function ApiKeyAccessDialog({
       next.delete(folderId);
       return next;
     });
-  const selectedPermissions = () => [...selectedFolderIds].map((folderId) => ({ folderId, ...keyPermission }));
+  const removeFolderRule = (folderId: string) => {
+    removeFolder(folderId);
+    setFolderPermissions((current) => {
+      const next = new Map(current);
+      next.delete(folderId);
+      return next;
+    });
+  };
+  const updateFolderPermission = (folderId: string, permission: keyof PermissionValue, enabled: boolean) =>
+    setFolderPermissions((current) => {
+      const next = new Map(current);
+      const value = next.get(folderId) ?? { ...keyPermission };
+      if (permission === 'canComment' && enabled) next.set(folderId, { ...value, canRead: true, canComment: true });
+      else if (permission === 'canRead' && !enabled)
+        next.set(folderId, { ...value, canRead: false, canComment: false });
+      else next.set(folderId, { ...value, [permission]: enabled });
+      return next;
+    });
+  const selectedPermissions = () =>
+    [...selectedFolderIds].map((folderId) => ({
+      folderId,
+      ...(folderPermissions.get(folderId) ?? keyPermission),
+      appliesTo: accessMode === 'top_level' ? ('subtree' as const) : ('exact' as const),
+    }));
 
   const submit = async () => {
     setSaving(true);
@@ -154,7 +192,7 @@ export function ApiKeyAccessDialog({
         accessMode,
         canCreateFolders,
         ...keyPermission,
-        permissions: accessMode === 'all' ? [] : selectedPermissions(),
+        permissions: selectedPermissions(),
       };
       if (apiKey) {
         await api.updateApiKey(apiKey.id, payload);
@@ -229,6 +267,7 @@ export function ApiKeyAccessDialog({
                           onChange={() => {
                             setAccessMode(mode);
                             setSelectedFolderIds(new Set());
+                            setFolderPermissions(new Map());
                             setQuery('');
                           }}
                         />
@@ -248,7 +287,10 @@ export function ApiKeyAccessDialog({
                 </div>
 
                 <div className="mt-4 rounded-md border border-slate-200 p-3 dark:border-slate-800">
-                  <p className="text-sm font-medium">Permissions</p>
+                  <p className="text-sm font-medium">Global maximum permissions</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Folder rules can restrict these permissions but can never exceed them.
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-3">
                     {(['canRead', 'canCreate', 'canEdit', 'canComment'] as const).map((key) => (
                       <label key={key} className="flex items-center gap-1 text-xs text-slate-500">
@@ -291,48 +333,32 @@ export function ApiKeyAccessDialog({
                   </label>
                 </div>
 
-                {accessMode !== 'all' ? (
-                  <div className="mt-4 rounded-md border border-slate-200 p-3 dark:border-slate-800">
-                    <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                      {accessMode === 'top_level' ? 'Project roots' : 'Specific folders'}
-                    </label>
-                    <input
-                      className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800"
-                      placeholder={accessMode === 'top_level' ? 'Search top-level folders...' : 'Search folders...'}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                    {folderOptions.length > 0 ? (
-                      <div className="mt-2 overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
-                        {folderOptions.map((folder) => (
-                          <button
-                            key={folder.id}
-                            className="flex w-full items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900"
-                            onClick={() => addFolder(folder)}
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate font-medium">
-                                {folder.title}
-                                {isEffectivelyAgentReadOnly(folder, folders) ? (
-                                  <span className="ml-2 text-xs text-amber-600">Read-only</span>
-                                ) : null}
-                              </span>
-                              <span className="block truncate text-xs text-slate-500">
-                                {folderPath(folder, folders)}
-                              </span>
-                            </span>
-                            <Plus className="h-4 w-4 shrink-0 text-slate-500" />
-                          </button>
-                        ))}
-                      </div>
-                    ) : query.trim() ? (
-                      <p className="mt-2 text-xs text-slate-500">No matching folders.</p>
-                    ) : null}
-                    <div className="mt-3 space-y-2">
-                      {selectedFolders.map((folder) => (
-                        <div
+                <div className="mt-4 rounded-md border border-slate-200 p-3 dark:border-slate-800">
+                  <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    {accessMode === 'all'
+                      ? 'Folder restrictions (optional)'
+                      : accessMode === 'top_level'
+                        ? 'Project roots'
+                        : 'Specific folders'}
+                  </label>
+                  {accessMode === 'all' ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Folders without a rule use the global maximum permissions above.
+                    </p>
+                  ) : null}
+                  <input
+                    className="mt-2 w-full rounded-md border bg-transparent px-3 py-2 text-sm dark:border-slate-800"
+                    placeholder={accessMode === 'top_level' ? 'Search top-level folders...' : 'Search folders...'}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  {folderOptions.length > 0 ? (
+                    <div className="mt-2 overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
+                      {folderOptions.map((folder) => (
+                        <button
                           key={folder.id}
-                          className="flex items-start justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800"
+                          className="flex w-full items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-100 dark:border-slate-800 dark:hover:bg-slate-900"
+                          onClick={() => addFolder(folder)}
                         >
                           <span className="min-w-0">
                             <span className="block truncate font-medium">
@@ -341,29 +367,76 @@ export function ApiKeyAccessDialog({
                                 <span className="ml-2 text-xs text-amber-600">Read-only</span>
                               ) : null}
                             </span>
-                            <span className="block truncate text-xs text-slate-500">
-                              {accessMode === 'top_level'
-                                ? 'Includes non-private subfolders'
-                                : folderPath(folder, folders)}
-                            </span>
+                            <span className="block truncate text-xs text-slate-500">{folderPath(folder, folders)}</span>
                           </span>
-                          <button
-                            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-900"
-                            onClick={() => removeFolder(folder.id)}
-                            aria-label={`Remove ${folder.title}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
+                          <Plus className="h-4 w-4 shrink-0 text-slate-500" />
+                        </button>
                       ))}
-                      {selectedFolders.length === 0 ? (
-                        <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-800">
-                          No folders selected.
-                        </p>
-                      ) : null}
                     </div>
+                  ) : query.trim() ? (
+                    <p className="mt-2 text-xs text-slate-500">No matching folders.</p>
+                  ) : null}
+                  <div className="mt-3 space-y-2">
+                    {selectedFolders.map((folder) => {
+                      const value = folderPermissions.get(folder.id) ?? keyPermission;
+                      return (
+                        <div
+                          key={folder.id}
+                          className="rounded-md border border-slate-200 px-3 py-2 text-sm dark:border-slate-800"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">
+                                {folder.title}
+                                {isEffectivelyAgentReadOnly(folder, folders) ? (
+                                  <span className="ml-2 text-xs text-amber-600">Read-only</span>
+                                ) : null}
+                              </span>
+                              <span className="block truncate text-xs text-slate-500">
+                                {accessMode === 'top_level'
+                                  ? 'Rule includes non-private subfolders'
+                                  : folderPath(folder, folders)}
+                              </span>
+                            </span>
+                            <button
+                              className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-900"
+                              onClick={() => removeFolderRule(folder.id)}
+                              aria-label={`Remove ${folder.title}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-3 border-slate-200 border-t pt-2 dark:border-slate-800">
+                            {(['canRead', 'canCreate', 'canEdit', 'canComment'] as const).map((permission) => (
+                              <label key={permission} className="flex items-center gap-1 text-xs text-slate-500">
+                                <input
+                                  type="checkbox"
+                                  checked={value[permission] && keyPermission[permission]}
+                                  disabled={!keyPermission[permission]}
+                                  onChange={(event) =>
+                                    updateFolderPermission(folder.id, permission, event.target.checked)
+                                  }
+                                />
+                                {permission === 'canRead'
+                                  ? 'Read'
+                                  : permission === 'canCreate'
+                                    ? 'Create'
+                                    : permission === 'canEdit'
+                                      ? 'Edit'
+                                      : 'Review comments'}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {selectedFolders.length === 0 ? (
+                      <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-800">
+                        {accessMode === 'all' ? 'No folder restrictions.' : 'No folders selected.'}
+                      </p>
+                    ) : null}
                   </div>
-                ) : null}
+                </div>
 
                 <div className="mt-4 flex justify-end">
                   <Button

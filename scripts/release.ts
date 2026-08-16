@@ -4,9 +4,13 @@ import { createInterface } from 'node:readline/promises';
 
 const target = process.argv[2];
 const allowedTargets = new Set(['dev', 'production']);
+const throughIndex = process.argv.indexOf('--through');
+const throughMigration =
+  process.argv.find((argument) => argument.startsWith('--through='))?.slice('--through='.length) ??
+  (throughIndex >= 0 ? process.argv[throughIndex + 1] : undefined);
 
-if (!target || !allowedTargets.has(target)) {
-  console.error('Usage: tsx scripts/release.ts <dev|production>');
+if (!target || !allowedTargets.has(target) || (throughIndex >= 0 && !throughMigration)) {
+  console.error('Usage: tsx scripts/release.ts <dev|production> [--through <migration>]');
   process.exit(1);
 }
 
@@ -82,7 +86,7 @@ async function main() {
   run('pnpm', ['typecheck']);
   run('pnpm', ['test']);
   run('pnpm', ['build']);
-  run('pnpm', [`db:migrate:${target}`]);
+  run('pnpm', [`db:migrate:${target}`, ...(throughMigration ? ['--', '--through', throughMigration] : [])]);
   run('pnpm', [`deploy:${target}`]);
 
   await smoke(`${urls[target as keyof typeof urls].api}/health`, 'API health');

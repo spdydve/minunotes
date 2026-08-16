@@ -1,15 +1,15 @@
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import { db } from '../db/client';
-import { apiKeys, oauthAuthorizations, oauthTokens, user } from '../db/schema';
+import { apiKeys, integrationAuthorizations, oauthAuthorizations, oauthTokens, user } from '../db/schema';
 import { getApiKeyFromHeaders, parseApiKey, verifyApiKey } from '../lib/api-keys';
 import { auth } from '../lib/auth';
-import { hashOAuthToken } from '../lib/oauth';
+import { hashOAuthToken, intersectOAuthCapabilities, parseOAuthScope } from '../lib/oauth';
 
 type SessionUser = typeof auth.$Infer.Session.user;
 type Session = typeof auth.$Infer.Session.session;
-type ApiKeyRow = typeof apiKeys.$inferSelect;
-type OAuthAuthorizationRow = typeof oauthAuthorizations.$inferSelect;
+type ApiKeyRow = typeof apiKeys.$inferSelect & typeof integrationAuthorizations.$inferSelect;
+type OAuthAuthorizationRow = typeof oauthAuthorizations.$inferSelect & typeof integrationAuthorizations.$inferSelect;
 
 export type AuthContext =
   | { type: 'anonymous' }
@@ -55,7 +55,7 @@ function setAuthState(
     authContext: AuthContext;
   }
 ) {
-  const context = c as any;
+  const context = c as unknown as { set: (key: string, value: unknown) => void };
   context.set('user', input.user);
   context.set('session', input.session);
   context.set('apiKey', input.apiKey);
@@ -90,29 +90,52 @@ async function authenticateApiKey(rawKey: string) {
   if (!parsed) return null;
 
   const [row] = await db
-    .select({ apiKey: apiKeys, user })
+    .select({ apiKey: apiKeys, authorization: integrationAuthorizations, user })
     .from(apiKeys)
-    .innerJoin(user, eq(apiKeys.userId, user.id))
-    .where(and(eq(apiKeys.uid, parsed.uid), isNull(apiKeys.revokedAt)))
+    .innerJoin(integrationAuthorizations, eq(apiKeys.authorizationId, integrationAuthorizations.id))
+    .innerJoin(user, eq(integrationAuthorizations.userId, user.id))
+    .where(and(eq(apiKeys.uid, parsed.uid), isNull(integrationAuthorizations.revokedAt)))
     .limit(1);
 
   if (!row || !verifyApiKey(rawKey, row.apiKey.hash, row.apiKey.salt)) return null;
 
-  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, row.apiKey.id));
-  return row;
+  await db
+    .update(integrationAuthorizations)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(integrationAuthorizations.id, row.authorization.id));
+  return {
+    user: row.user,
+    apiKey: {
+      ...row.apiKey,
+      accessMode: row.authorization.accessMode,
+      canRead: row.authorization.canRead,
+      canCreate: row.authorization.canCreate,
+      canEdit: row.authorization.canEdit,
+      canComment: row.authorization.canComment,
+      canCreateFolders: row.authorization.canCreateFolders,
+      createdAt: row.authorization.createdAt,
+      updatedAt: row.authorization.updatedAt,
+      lastUsedAt: row.authorization.lastUsedAt,
+      revokedAt: row.authorization.revokedAt,
+    },
+  };
 }
 
 async function authenticateOAuthBearer(bearer: string) {
   const [row] = await db
-    .select({ token: oauthTokens, authorization: oauthAuthorizations, user })
+    .select({ token: oauthTokens, connection: oauthAuthorizations, authorization: integrationAuthorizations, user })
     .from(oauthTokens)
     .innerJoin(oauthAuthorizations, eq(oauthTokens.authorizationId, oauthAuthorizations.id))
-    .innerJoin(user, eq(oauthAuthorizations.userId, user.id))
+    .innerJoin(
+      integrationAuthorizations,
+      eq(oauthAuthorizations.integrationAuthorizationId, integrationAuthorizations.id)
+    )
+    .innerJoin(user, eq(integrationAuthorizations.userId, user.id))
     .where(
       and(
         eq(oauthTokens.accessTokenHash, hashOAuthToken(bearer)),
         isNull(oauthTokens.revokedAt),
-        isNull(oauthAuthorizations.revokedAt),
+        isNull(integrationAuthorizations.revokedAt),
         gt(oauthTokens.accessTokenExpiresAt, new Date())
       )
     )
@@ -120,11 +143,30 @@ async function authenticateOAuthBearer(bearer: string) {
 
   if (!row) return null;
 
+  const tokenScope = parseOAuthScope(row.token.scope);
+  const authorizationScope = parseOAuthScope(row.connection.scope);
+  if (!tokenScope.ok || !authorizationScope.ok) return null;
+  const effectiveScopes = new Set([...tokenScope.scopes].filter((scope) => authorizationScope.scopes.has(scope)));
+  const effectiveCapabilities = intersectOAuthCapabilities(row.authorization, effectiveScopes);
+  const effectiveAuthorization = {
+    ...row.connection,
+    accessMode: row.authorization.accessMode,
+    canRead: effectiveCapabilities.canRead,
+    canCreate: effectiveCapabilities.canCreate,
+    canEdit: effectiveCapabilities.canEdit,
+    canComment: effectiveCapabilities.canComment,
+    canCreateFolders: effectiveCapabilities.canCreateFolders,
+    createdAt: row.authorization.createdAt,
+    updatedAt: row.authorization.updatedAt,
+    lastUsedAt: row.authorization.lastUsedAt,
+    revokedAt: row.authorization.revokedAt,
+  };
+
   await db
-    .update(oauthAuthorizations)
+    .update(integrationAuthorizations)
     .set({ lastUsedAt: new Date() })
-    .where(eq(oauthAuthorizations.id, row.authorization.id));
-  return row;
+    .where(eq(integrationAuthorizations.id, row.authorization.id));
+  return { token: row.token, user: row.user, authorization: effectiveAuthorization };
 }
 
 function logIntegrationAuth(c: Parameters<Parameters<typeof createMiddleware>[0]>[0], authContext: AuthContext) {

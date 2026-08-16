@@ -2,13 +2,14 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createClient } from '@libsql/client';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 
-async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, through = 34, from = 0) {
+  for (let index = from; index <= through; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -32,7 +33,7 @@ async function setupApp() {
     schema,
     { oauthRoutes },
     { harnessRoutes },
-    { harnessApiKeyAuthenticationMiddleware },
+    { harnessApiKeyAuthenticationMiddleware, mcpOAuthAuthenticationMiddleware },
     { hashOAuthToken },
   ] = await Promise.all([
     import('../src/api/db/client'),
@@ -79,7 +80,11 @@ async function setupApp() {
   authApp.use('/api/harness/*', harnessApiKeyAuthenticationMiddleware);
   authApp.route('/api/harness', harnessRoutes);
 
-  return { app, authApp, db, schema, user, hashOAuthToken };
+  const bearerApp = new Hono();
+  bearerApp.use('*', mcpOAuthAuthenticationMiddleware);
+  bearerApp.get('/', (c) => c.json({ authorization: c.get('oauthAuthorization') }));
+
+  return { app, authApp, bearerApp, db, libsql, schema, user, hashOAuthToken };
 }
 
 afterEach(async () => {
@@ -88,6 +93,68 @@ afterEach(async () => {
 });
 
 describe('oauth foundations', () => {
+  it('normalizes legacy OAuth scopes and project-root rule inheritance', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'notes-oauth-migration-'));
+    tempDirs.push(dir);
+    const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
+    await runMigrations(client, 27);
+    const now = Math.floor(Date.now() / 1000);
+    await client.executeMultiple(`
+      INSERT INTO user (id, name, email, email_verified, created_at, updated_at)
+      VALUES ('user_legacy', 'Legacy', 'legacy@example.com', 1, ${now}, ${now});
+      INSERT INTO oauth_clients (id, name, redirect_uris, client_type, created_at, updated_at)
+      VALUES ('client_legacy', 'Legacy client', '["https://client.example/callback"]', 'public', ${now}, ${now});
+      INSERT INTO oauth_authorizations (
+        id, user_id, client_id, scope, access_mode, can_read, can_create, can_edit,
+        can_comment, can_create_folders, created_at, updated_at
+      ) VALUES (
+        'oauth_auth_legacy', 'user_legacy', 'client_legacy', 'notes', 'all', 1, 0, 1, 1, 1, ${now}, ${now}
+      );
+      INSERT INTO oauth_authorization_codes (
+        id, code_hash, client_id, user_id, redirect_uri, scope, code_challenge,
+        code_challenge_method, authorization_id, expires_at, created_at
+      ) VALUES (
+        'oauth_code_legacy', 'code_hash_legacy', 'client_legacy', 'user_legacy',
+        'https://client.example/callback', 'notes', 'challenge', 'S256',
+        'oauth_auth_legacy', ${now + 600}, ${now}
+      );
+      INSERT INTO oauth_tokens (
+        id, authorization_id, access_token_hash, refresh_token_hash, scope,
+        access_token_expires_at, refresh_token_expires_at, created_at, updated_at
+      ) VALUES (
+        'oauth_token_legacy', 'oauth_auth_legacy', 'access_hash_legacy', 'refresh_hash_legacy',
+        'notes', ${now + 3600}, ${now + 7200}, ${now}, ${now}
+      );
+    `);
+    await runMigrations(client, 28, 28);
+
+    const expected = 'notes.read notes.edit comments.write folders.create';
+    const authorization = await client.execute("SELECT scope FROM oauth_authorizations WHERE id = 'oauth_auth_legacy'");
+    const code = await client.execute("SELECT scope FROM oauth_authorization_codes WHERE id = 'oauth_code_legacy'");
+    const token = await client.execute("SELECT scope FROM oauth_tokens WHERE id = 'oauth_token_legacy'");
+    expect(authorization.rows[0]?.scope).toBe(expected);
+    expect(code.rows[0]?.scope).toBe(expected);
+    expect(token.rows[0]?.scope).toBe(expected);
+
+    await runMigrations(client, 29, 29);
+    await client.executeMultiple(`
+      INSERT INTO folders (id, user_id, parent_folder_id, title, is_private, is_agent_read_only, created_at, updated_at)
+      VALUES ('folder_project_root', 'user_legacy', NULL, 'Project root', 0, 0, ${now}, ${now});
+      UPDATE oauth_authorizations SET access_mode = 'top_level' WHERE id = 'oauth_auth_legacy';
+      INSERT INTO oauth_authorization_folder_permissions (
+        id, authorization_id, folder_id, can_read, can_create, can_edit, can_comment, created_at, updated_at
+      ) VALUES (
+        'oauth_perm_legacy', 'oauth_auth_legacy', 'folder_project_root', 1, 0, 0, 0, ${now}, ${now}
+      );
+    `);
+    await runMigrations(client, 30, 30);
+    const permission = await client.execute(
+      "SELECT applies_to FROM oauth_authorization_folder_permissions WHERE id = 'oauth_perm_legacy'"
+    );
+    expect(permission.rows[0]?.applies_to).toBe('subtree');
+    client.close();
+  });
+
   it('creates and revokes user-owned OAuth apps', async () => {
     const { app } = await setupApp();
 
@@ -184,18 +251,25 @@ describe('oauth foundations', () => {
       updatedAt: new Date(),
     };
     await db.insert(schema.folders).values([publicFolder, privateFolder]);
+    await db.insert(schema.integrationAuthorizations).values({
+      id: 'oauth_auth_all',
+      userId: user.id,
+      accessMode: 'all',
+      canRead: true,
+      canCreate: false,
+      canEdit: false,
+      canCreateFolders: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     const [authorization] = await db
       .insert(schema.oauthAuthorizations)
       .values({
         id: 'oauth_auth_all',
+        integrationAuthorizationId: 'oauth_auth_all',
         userId: user.id,
         clientId: 'client_a',
         scope: 'notes',
-        accessMode: 'all',
-        canRead: true,
-        canCreate: false,
-        canEdit: false,
-        canCreateFolders: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -219,16 +293,23 @@ describe('oauth foundations', () => {
 
   it('lists and revokes connected apps', async () => {
     const { app, db, schema, user } = await setupApp();
-    await db.insert(schema.oauthAuthorizations).values({
+    await db.insert(schema.integrationAuthorizations).values({
       id: 'oauth_auth_connected',
       userId: user.id,
-      clientId: 'client_a',
-      scope: 'notes',
       accessMode: 'specific',
       canRead: true,
       canCreate: false,
       canEdit: false,
       canCreateFolders: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(schema.oauthAuthorizations).values({
+      id: 'oauth_auth_connected',
+      integrationAuthorizationId: 'oauth_auth_connected',
+      userId: user.id,
+      clientId: 'client_a',
+      scope: 'notes',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -281,6 +362,101 @@ describe('oauth foundations', () => {
       token_endpoint: 'http://localhost/oauth/token',
       registration_endpoint: 'http://localhost/oauth/register',
       code_challenge_methods_supported: ['S256'],
+      scopes_supported: ['notes.read', 'notes.create', 'notes.edit', 'comments.write', 'folders.create'],
+    });
+  });
+
+  it('rejects unsupported scopes and permissions beyond the requested scope', async () => {
+    const { app } = await setupApp();
+    const verifier = 's'.repeat(64);
+    const base = `response_type=code&client_id=client_a&redirect_uri=${encodeURIComponent('https://client.example/callback')}&code_challenge=${encodeURIComponent(pkceChallenge(verifier))}&code_challenge_method=S256`;
+
+    const preview = await app.request(`/api/oauth/authorize/preview?${base}&scope=notes.read%20admin`);
+    expect(preview.status).toBe(400);
+    await expect(preview.json()).resolves.toMatchObject({ error: 'invalid_scope' });
+
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        scope: 'notes.read',
+        accessMode: 'all',
+        canRead: true,
+        canEdit: true,
+      }),
+    });
+    expect(approve.status).toBe(400);
+    await expect(approve.json()).resolves.toMatchObject({ error: 'invalid_scope' });
+  });
+
+  it('stores the approved scope and intersects bearer capabilities with token scope', async () => {
+    const { app, bearerApp, db, schema, user, hashOAuthToken } = await setupApp();
+    const verifier = 't'.repeat(64);
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        scope: 'notes.read notes.edit',
+        accessMode: 'all',
+        canRead: true,
+        canEdit: false,
+      }),
+    });
+    expect(approve.status).toBe(200);
+    const [approved] = await db.select().from(schema.oauthAuthorizations);
+    expect(approved.scope).toBe('notes.read');
+
+    const bearer = 'mnoac_scope_intersection';
+    await db.insert(schema.integrationAuthorizations).values({
+      id: 'oauth_auth_scope_intersection',
+      userId: user.id,
+      accessMode: 'all',
+      canRead: true,
+      canCreate: false,
+      canEdit: true,
+      canComment: false,
+      canCreateFolders: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const [authorization] = await db
+      .insert(schema.oauthAuthorizations)
+      .values({
+        id: 'oauth_auth_scope_intersection',
+        integrationAuthorizationId: 'oauth_auth_scope_intersection',
+        userId: user.id,
+        clientId: 'client_a',
+        scope: 'notes.read notes.edit',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    await db.insert(schema.oauthTokens).values({
+      id: 'oauth_token_scope_intersection',
+      authorizationId: authorization.id,
+      accessTokenHash: hashOAuthToken(bearer),
+      refreshTokenHash: hashOAuthToken('mnort_scope_intersection'),
+      scope: 'notes.read',
+      accessTokenExpiresAt: new Date(Date.now() + 60_000),
+      refreshTokenExpiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const authenticated = await bearerApp.request('/', { headers: { authorization: `Bearer ${bearer}` } });
+    expect(authenticated.status).toBe(200);
+    await expect(authenticated.json()).resolves.toMatchObject({
+      authorization: { canRead: true, canEdit: false },
     });
   });
 
@@ -318,7 +494,7 @@ describe('oauth foundations', () => {
       }),
     });
     expect(approve.status).toBe(200);
-    const [authorization] = await db.select().from(schema.oauthAuthorizations);
+    const [authorization] = await db.select().from(schema.integrationAuthorizations);
     expect(authorization).toMatchObject({ canRead: true, canEdit: false, canComment: true });
     const { redirectUrl } = (await approve.json()) as { redirectUrl: string };
     const redirected = new URL(redirectUrl);
@@ -362,5 +538,144 @@ describe('oauth foundations', () => {
       body: new URLSearchParams({ token: tokenBody.access_token }),
     });
     expect(revoke.status).toBe(200);
+  });
+
+  it('rolls back authorization-code consumption when token issuance fails', async () => {
+    const { app, libsql } = await setupApp();
+    const verifier = 'f'.repeat(64);
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        scope: 'notes.read',
+        accessMode: 'all',
+        canRead: true,
+      }),
+    });
+    const { redirectUrl } = (await approve.json()) as { redirectUrl: string };
+    const code = new URL(redirectUrl).searchParams.get('code');
+    expect(code).toBeTruthy();
+    const exchange = () =>
+      app.request('/api/oauth/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: 'client_a',
+          redirect_uri: 'https://client.example/callback',
+          code: code ?? '',
+          code_verifier: verifier,
+        }),
+      });
+
+    await libsql.execute(`
+      CREATE TRIGGER fail_oauth_token_insert
+      BEFORE INSERT ON oauth_tokens
+      BEGIN
+        SELECT RAISE(ABORT, 'forced token insert failure');
+      END
+    `);
+    expect((await exchange()).status).toBe(500);
+    await libsql.execute('DROP TRIGGER fail_oauth_token_insert');
+    expect((await exchange()).status).toBe(200);
+  });
+
+  it('returns temporarily_unavailable when wrapped database-busy errors exhaust retries', async () => {
+    const { app, libsql } = await setupApp();
+    const verifier = 'b'.repeat(64);
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        scope: 'notes.read',
+        accessMode: 'all',
+        canRead: true,
+      }),
+    });
+    const { redirectUrl } = (await approve.json()) as { redirectUrl: string };
+    const code = new URL(redirectUrl).searchParams.get('code') ?? '';
+    const batch = vi.spyOn(libsql, 'batch').mockRejectedValue(
+      Object.assign(new Error('remote database is busy'), {
+        code: 'HRANA_WEBSOCKET_ERROR',
+        cause: { code: 'SQLITE_BUSY_TIMEOUT' },
+      })
+    );
+
+    const response = await app.request('/api/oauth/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: 'client_a',
+        redirect_uri: 'https://client.example/callback',
+        code,
+        code_verifier: verifier,
+      }),
+    });
+
+    expect(batch).toHaveBeenCalledTimes(5);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: 'temporarily_unavailable' });
+    batch.mockRestore();
+  });
+
+  it('atomically consumes authorization codes and rotates refresh tokens', async () => {
+    const { app } = await setupApp();
+    const verifier = 'r'.repeat(64);
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        scope: 'notes.read',
+        accessMode: 'all',
+        canRead: true,
+      }),
+    });
+    const { redirectUrl } = (await approve.json()) as { redirectUrl: string };
+    const code = new URL(redirectUrl).searchParams.get('code')!;
+    const exchange = () =>
+      app.request('/api/oauth/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: 'client_a',
+          redirect_uri: 'https://client.example/callback',
+          code,
+          code_verifier: verifier,
+        }),
+      });
+
+    const exchanges = await Promise.all([exchange(), exchange()]);
+    expect(exchanges.map((response) => response.status).sort()).toEqual([200, 400]);
+    const successfulExchange = exchanges.find((response) => response.status === 200)!;
+    const { refresh_token: refreshToken } = (await successfulExchange.json()) as { refresh_token: string };
+    const refresh = () =>
+      app.request('/api/oauth/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+      });
+
+    const refreshes = await Promise.all([refresh(), refresh()]);
+    expect(refreshes.map((response) => response.status).sort()).toEqual([200, 400]);
+    const successfulRefresh = refreshes.find((response) => response.status === 200);
+    expect(successfulRefresh).toBeDefined();
+    await expect(successfulRefresh?.json()).resolves.toMatchObject({ scope: 'notes.read' });
   });
 });

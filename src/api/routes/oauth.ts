@@ -1,11 +1,12 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
-import { db } from '../db/client';
+import { db, libsql } from '../db/client';
 import {
   type ApiKey,
+  authorizationFolderRules,
+  integrationAuthorizations,
   type OAuthAuthorization,
   oauthAuthorizationCodes,
-  oauthAuthorizationFolderPermissions,
   oauthAuthorizations,
   oauthClients,
   oauthTokens,
@@ -21,8 +22,12 @@ import {
   generateOAuthToken,
   hashOAuthToken,
   isRedirectUriAllowed,
+  oauthCapabilitiesFitScope,
   oauthError,
+  oauthScopeForCapabilities,
+  parseOAuthScope,
   REFRESH_TOKEN_TTL_MS,
+  SUPPORTED_OAUTH_SCOPES,
   validateDcrRedirectUri,
   validateOAuthRedirectUri,
   verifyPkce,
@@ -47,6 +52,38 @@ function textParam(value: FormDataEntryValue | string | undefined | null) {
   return typeof value === 'string' ? value : undefined;
 }
 
+function isDatabaseBusy(error: unknown) {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (typeof current === 'object' && current !== null && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as {
+      code?: unknown;
+      extendedCode?: unknown;
+      rawCode?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+    const codes = [candidate.code, candidate.extendedCode].map(String);
+    if (codes.some((code) => code.startsWith('SQLITE_BUSY')) || candidate.rawCode === 5) return true;
+    const message = typeof candidate.message === 'string' ? candidate.message : '';
+    if (/SQLITE_BUSY|database is locked/i.test(message)) return true;
+    current = candidate.cause;
+  }
+  return false;
+}
+
+async function withDatabaseBusyRetry<T>(operation: () => Promise<T>) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isDatabaseBusy(error) || attempt >= 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+    }
+  }
+}
+
 function authorizationServerMetadata(issuer: string) {
   return {
     issuer,
@@ -58,14 +95,8 @@ function authorizationServerMetadata(issuer: string) {
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['none'],
+    scopes_supported: SUPPORTED_OAUTH_SCOPES,
   };
-}
-
-function appendErrorRedirect(redirectUri: string, error: string, state?: string | null) {
-  const url = new URL(redirectUri);
-  url.searchParams.set('error', error);
-  if (state) url.searchParams.set('state', state);
-  return url.toString();
 }
 
 async function validateAuthorizeRequest(input: {
@@ -120,6 +151,15 @@ oauthRoutes.post('/register', async (c) => {
     scope?: unknown;
   } | null;
   if (!body) return c.json(oauthError('invalid_client_metadata', 'Invalid JSON'), 400);
+
+  const requestedScope = parseOAuthScope(typeof body.scope === 'string' ? body.scope : undefined, {
+    useDefault: true,
+  });
+  if (!requestedScope.ok)
+    return c.json(
+      oauthError('invalid_client_metadata', `Unsupported scopes: ${requestedScope.unsupported.join(', ')}`),
+      400
+    );
 
   const redirectUris = Array.isArray(body.redirect_uris)
     ? [
@@ -180,7 +220,7 @@ oauthRoutes.post('/register', async (c) => {
       token_endpoint_auth_method: 'none',
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
-      scope: typeof body.scope === 'string' ? body.scope : 'notes.read notes.create notes.edit',
+      scope: requestedScope.scope,
     },
     201
   );
@@ -242,33 +282,37 @@ oauthRoutes.delete('/clients/:clientId', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const now = new Date();
-  const [client] = await db
-    .update(oauthClients)
-    .set({ revokedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(oauthClients.id, c.req.param('clientId')),
-        eq(oauthClients.userId, user.id),
-        isNull(oauthClients.revokedAt)
-      )
-    )
-    .returning({ id: oauthClients.id });
-  if (!client) return c.json({ error: 'OAuth app not found' }, 404);
-
-  const authorizations = await db
-    .select({ id: oauthAuthorizations.id })
-    .from(oauthAuthorizations)
-    .where(eq(oauthAuthorizations.clientId, client.id));
-  await db
-    .update(oauthAuthorizations)
-    .set({ revokedAt: now, updatedAt: now })
-    .where(eq(oauthAuthorizations.clientId, client.id));
-  for (const authorization of authorizations)
-    await db
-      .update(oauthTokens)
+  const revoked = await db.transaction(async (tx) => {
+    const [client] = await tx
+      .update(oauthClients)
       .set({ revokedAt: now, updatedAt: now })
-      .where(eq(oauthTokens.authorizationId, authorization.id));
-  return c.json({ ok: true });
+      .where(
+        and(
+          eq(oauthClients.id, c.req.param('clientId')),
+          eq(oauthClients.userId, user.id),
+          isNull(oauthClients.revokedAt)
+        )
+      )
+      .returning({ id: oauthClients.id });
+    if (!client) return false;
+
+    const authorizations = await tx
+      .select({ id: oauthAuthorizations.id, integrationId: oauthAuthorizations.integrationAuthorizationId })
+      .from(oauthAuthorizations)
+      .where(eq(oauthAuthorizations.clientId, client.id));
+    for (const authorization of authorizations) {
+      await tx
+        .update(integrationAuthorizations)
+        .set({ revokedAt: now, updatedAt: now })
+        .where(eq(integrationAuthorizations.id, authorization.integrationId));
+      await tx
+        .update(oauthTokens)
+        .set({ revokedAt: now, updatedAt: now })
+        .where(eq(oauthTokens.authorizationId, authorization.id));
+    }
+    return true;
+  });
+  return revoked ? c.json({ ok: true }) : c.json({ error: 'OAuth app not found' }, 404);
 });
 
 oauthRoutes.get('/authorizations', async (c) => {
@@ -276,26 +320,28 @@ oauthRoutes.get('/authorizations', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const rows = await db
-    .select({ authorization: oauthAuthorizations, client: oauthClients })
+    .select({ connection: oauthAuthorizations, authorization: integrationAuthorizations, client: oauthClients })
     .from(oauthAuthorizations)
+    .innerJoin(
+      integrationAuthorizations,
+      eq(oauthAuthorizations.integrationAuthorizationId, integrationAuthorizations.id)
+    )
     .innerJoin(oauthClients, eq(oauthAuthorizations.clientId, oauthClients.id))
-    .where(eq(oauthAuthorizations.userId, user.id))
-    .orderBy(desc(oauthAuthorizations.createdAt));
+    .where(eq(integrationAuthorizations.userId, user.id))
+    .orderBy(desc(integrationAuthorizations.createdAt));
   const permissions = await db
     .select()
-    .from(oauthAuthorizationFolderPermissions)
-    .innerJoin(oauthAuthorizations, eq(oauthAuthorizationFolderPermissions.authorizationId, oauthAuthorizations.id))
-    .where(eq(oauthAuthorizations.userId, user.id));
+    .from(authorizationFolderRules)
+    .where(eq(authorizationFolderRules.userId, user.id));
 
   return c.json({
     authorizations: rows.map((row) => ({
+      ...row.connection,
       ...row.authorization,
       client: row.client,
       permissions: permissions
-        .filter(
-          (permission) => permission.oauth_authorization_folder_permissions.authorizationId === row.authorization.id
-        )
-        .map((permission) => permission.oauth_authorization_folder_permissions),
+        .filter((permission) => permission.authorizationId === row.authorization.id)
+        .map((permission) => ({ ...permission, authorizationId: row.connection.id })),
     })),
   });
 });
@@ -305,23 +351,34 @@ oauthRoutes.delete('/authorizations/:authorizationId', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const now = new Date();
-  const [authorization] = await db
-    .update(oauthAuthorizations)
-    .set({ revokedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(oauthAuthorizations.id, c.req.param('authorizationId')),
-        eq(oauthAuthorizations.userId, user.id),
-        isNull(oauthAuthorizations.revokedAt)
+  const revoked = await db.transaction(async (tx) => {
+    const [authorization] = await tx
+      .select({ id: oauthAuthorizations.id, integrationId: integrationAuthorizations.id })
+      .from(oauthAuthorizations)
+      .innerJoin(
+        integrationAuthorizations,
+        eq(oauthAuthorizations.integrationAuthorizationId, integrationAuthorizations.id)
       )
-    )
-    .returning({ id: oauthAuthorizations.id });
-  if (!authorization) return c.json({ error: 'Connected app not found' }, 404);
-  await db
-    .update(oauthTokens)
-    .set({ revokedAt: now, updatedAt: now })
-    .where(eq(oauthTokens.authorizationId, authorization.id));
-  return c.json({ ok: true });
+      .where(
+        and(
+          eq(oauthAuthorizations.id, c.req.param('authorizationId')),
+          eq(integrationAuthorizations.userId, user.id),
+          isNull(integrationAuthorizations.revokedAt)
+        )
+      )
+      .limit(1);
+    if (!authorization) return false;
+    await tx
+      .update(integrationAuthorizations)
+      .set({ revokedAt: now, updatedAt: now })
+      .where(eq(integrationAuthorizations.id, authorization.integrationId));
+    await tx
+      .update(oauthTokens)
+      .set({ revokedAt: now, updatedAt: now })
+      .where(eq(oauthTokens.authorizationId, authorization.id));
+    return true;
+  });
+  return revoked ? c.json({ ok: true }) : c.json({ error: 'Connected app not found' }, 404);
 });
 
 oauthRoutes.get('/authorize/preview', async (c) => {
@@ -344,10 +401,13 @@ oauthRoutes.get('/authorize/preview', async (c) => {
     codeChallengeMethod: c.req.query('code_challenge_method'),
   });
   if (!result.ok) return c.json(result.error, result.status);
+  const requestedScope = parseOAuthScope(c.req.query('scope'), { useDefault: true });
+  if (!requestedScope.ok)
+    return c.json(oauthError('invalid_scope', `Unsupported scopes: ${requestedScope.unsupported.join(', ')}`), 400);
   return c.json({
     client: result.client,
     request: {
-      scope: c.req.query('scope') ?? '',
+      scope: requestedScope.scope,
       state: c.req.query('state') ?? null,
       redirectUri: result.redirectUri,
     },
@@ -388,13 +448,22 @@ oauthRoutes.post('/authorize/approve', async (c) => {
     body.accessMode === 'all' || body.accessMode === 'top_level' || body.accessMode === 'specific'
       ? body.accessMode
       : 'specific';
+  const requestedScope = parseOAuthScope(body.scope, { useDefault: true });
+  if (!requestedScope.ok)
+    return c.json(oauthError('invalid_scope', `Unsupported scopes: ${requestedScope.unsupported.join(', ')}`), 400);
+
   const canRead = body.canRead ?? true;
   const canCreate = body.canCreate ?? false;
   const canEdit = body.canEdit ?? false;
   const canComment = body.canComment ?? false;
-  if (!canRead && !canCreate && !canEdit && !canComment)
+  const canCreateFolders = body.canCreateFolders ?? false;
+  const approvedCapabilities = { canRead, canCreate, canEdit, canComment, canCreateFolders };
+  if (!canRead && !canCreate && !canEdit && !canComment && !canCreateFolders)
     return c.json({ error: 'At least one permission is required' }, 400);
   if (canComment && !canRead) return c.json({ error: 'Review comments permission requires read permission' }, 400);
+  if (!oauthCapabilitiesFitScope(approvedCapabilities, requestedScope.scopes))
+    return c.json(oauthError('invalid_scope', 'Approved permissions exceed the requested OAuth scope'), 400);
+  const approvedScope = oauthScopeForCapabilities(approvedCapabilities);
   const folderIds = [...new Set(body.folderIds ?? [])];
   if (accessMode !== 'all' && folderIds.length === 0) return c.json({ error: 'At least one folder is required' }, 400);
   const selectedPermissions =
@@ -409,59 +478,77 @@ oauthRoutes.post('/authorize/approve', async (c) => {
     return c.json({ error: 'One or more folders cannot be selected' }, 400);
 
   const now = new Date();
-  const [authorization] = await db
-    .insert(oauthAuthorizations)
-    .values({
-      id: createId('oauth_auth'),
+  const code = generateOAuthToken('mnocd');
+  await db.transaction(async (tx) => {
+    const authorizationId = createId('oauth_auth');
+    const [authorization] = await tx
+      .insert(integrationAuthorizations)
+      .values({
+        id: authorizationId,
+        userId: user.id,
+        accessMode,
+        canRead,
+        canCreate,
+        canEdit,
+        canComment,
+        canCreateFolders,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    await tx.insert(oauthAuthorizations).values({
+      id: authorizationId,
+      integrationAuthorizationId: authorizationId,
       userId: user.id,
       clientId: result.clientId,
-      scope: body.scope ?? '',
-      accessMode,
-      canRead,
-      canCreate,
-      canEdit,
-      canComment,
-      canCreateFolders: body.canCreateFolders ?? false,
+      scope: approvedScope,
       createdAt: now,
       updatedAt: now,
-    })
-    .returning();
+    });
 
-  if (accessMode !== 'all' && selectedPermissions.length > 0) {
-    await db.insert(oauthAuthorizationFolderPermissions).values(
-      selectedPermissions.flatMap(({ folderId }) =>
-        folderId
-          ? [
-              {
-                id: createId('oauth_perm'),
-                authorizationId: authorization.id,
-                folderId,
-                canRead,
-                canCreate,
-                canEdit,
-                canComment,
-                createdAt: now,
-                updatedAt: now,
-              },
-            ]
-          : []
-      )
-    );
-  }
+    if (accessMode !== 'all' && selectedPermissions.length > 0) {
+      await tx
+        .insert(authorizationFolderRules)
+        .values(
+          selectedPermissions.flatMap(({ folderId }) =>
+            folderId
+              ? [
+                  {
+                    id: createId('auth_rule'),
+                    authorizationId: authorization.id,
+                    userId: user.id,
+                    folderId,
+                    canRead,
+                    canCreate,
+                    canEdit,
+                    canComment,
+                    canCreateFolders,
+                    appliesTo: accessMode === 'top_level' ? ('subtree' as const) : ('exact' as const),
+                    createdAt: now,
+                    updatedAt: now,
+                  },
+                ]
+              : []
+          )
+        )
+        .onConflictDoNothing({
+          target: [authorizationFolderRules.authorizationId, authorizationFolderRules.folderId],
+        });
+    }
 
-  const code = generateOAuthToken('mnocd');
-  await db.insert(oauthAuthorizationCodes).values({
-    id: createId('oauth_code'),
-    codeHash: hashOAuthToken(code),
-    clientId: result.clientId,
-    userId: user.id,
-    redirectUri: result.redirectUri,
-    scope: body.scope ?? '',
-    codeChallenge: result.codeChallenge,
-    codeChallengeMethod: result.codeChallengeMethod,
-    authorizationId: authorization.id,
-    expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
-    createdAt: now,
+    await tx.insert(oauthAuthorizationCodes).values({
+      id: createId('oauth_code'),
+      codeHash: hashOAuthToken(code),
+      clientId: result.clientId,
+      userId: user.id,
+      redirectUri: result.redirectUri,
+      scope: approvedScope,
+      codeChallenge: result.codeChallenge,
+      codeChallengeMethod: result.codeChallengeMethod,
+      authorizationId: authorization.id,
+      expiresAt: new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS),
+      createdAt: now,
+    });
   });
 
   const url = new URL(result.redirectUri);
@@ -540,8 +627,24 @@ async function exchangeAuthorizationCode(
     return c.json(oauthError('invalid_grant', 'PKCE verification failed'), 400);
 
   const now = new Date();
-  await db.update(oauthAuthorizationCodes).set({ usedAt: now }).where(eq(oauthAuthorizationCodes.id, row.id));
-  return issueTokens(c, row.authorizationId, row.scope, now);
+  try {
+    const tokens = await claimAndIssueTokens(
+      {
+        sql: `UPDATE oauth_authorization_codes
+              SET used_at = ?
+              WHERE id = ? AND used_at IS NULL AND expires_at > ?`,
+        args: [toEpochSeconds(now), row.id, toEpochSeconds(now)],
+      },
+      row.authorizationId,
+      row.scope,
+      now
+    );
+    return tokens ? c.json(tokens) : c.json(oauthError('invalid_grant'), 400);
+  } catch (error) {
+    if (isDatabaseBusy(error))
+      return c.json(oauthError('temporarily_unavailable', 'The authorization server is temporarily busy'), 503);
+    throw error;
+  }
 }
 
 async function refreshAccessToken(
@@ -559,37 +662,84 @@ async function refreshAccessToken(
   if (!token || token.refreshTokenExpiresAt.getTime() <= Date.now()) return c.json(oauthError('invalid_grant'), 400);
 
   const now = new Date();
-  await db.update(oauthTokens).set({ revokedAt: now, updatedAt: now }).where(eq(oauthTokens.id, token.id));
-  return issueTokens(c, token.authorizationId, token.scope, now);
+  try {
+    const tokens = await claimAndIssueTokens(
+      {
+        sql: `UPDATE oauth_tokens
+              SET revoked_at = ?, updated_at = ?
+              WHERE id = ? AND revoked_at IS NULL AND refresh_token_expires_at > ?`,
+        args: [toEpochSeconds(now), toEpochSeconds(now), token.id, toEpochSeconds(now)],
+      },
+      token.authorizationId,
+      token.scope,
+      now
+    );
+    return tokens ? c.json(tokens) : c.json(oauthError('invalid_grant'), 400);
+  } catch (error) {
+    if (isDatabaseBusy(error))
+      return c.json(oauthError('temporarily_unavailable', 'The authorization server is temporarily busy'), 503);
+    throw error;
+  }
 }
 
-async function issueTokens(c: Context<{ Variables: Variables }>, authorizationId: string, scope: string, now: Date) {
+function toEpochSeconds(value: Date) {
+  return Math.floor(value.getTime() / 1000);
+}
+
+async function claimAndIssueTokens(
+  claim: { sql: string; args: Array<string | number> },
+  authorizationId: string,
+  scope: string,
+  now: Date
+) {
   const accessToken = generateOAuthToken('mnoac');
   const refreshToken = generateOAuthToken('mnort');
   const accessTokenExpiresAt = new Date(now.getTime() + ACCESS_TOKEN_TTL_MS);
   const refreshTokenExpiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
 
-  await db.insert(oauthTokens).values({
-    id: createId('oauth_token'),
-    authorizationId,
-    accessTokenHash: hashOAuthToken(accessToken),
-    refreshTokenHash: hashOAuthToken(refreshToken),
-    scope,
-    accessTokenExpiresAt,
-    refreshTokenExpiresAt,
-    createdAt: now,
-    updatedAt: now,
-  });
-  await db
-    .update(oauthAuthorizations)
-    .set({ lastUsedAt: now, updatedAt: now })
-    .where(eq(oauthAuthorizations.id, authorizationId));
+  const tokenId = createId('oauth_token');
+  const results = await withDatabaseBusyRetry(() =>
+    libsql.batch(
+      [
+        claim,
+        {
+          sql: `INSERT INTO oauth_tokens (
+                  id, authorization_id, access_token_hash, refresh_token_hash, scope,
+                  access_token_expires_at, refresh_token_expires_at, created_at, updated_at
+                )
+                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+                WHERE changes() = 1`,
+          args: [
+            tokenId,
+            authorizationId,
+            hashOAuthToken(accessToken),
+            hashOAuthToken(refreshToken),
+            scope,
+            toEpochSeconds(accessTokenExpiresAt),
+            toEpochSeconds(refreshTokenExpiresAt),
+            toEpochSeconds(now),
+            toEpochSeconds(now),
+          ],
+        },
+        {
+          sql: `UPDATE integration_authorizations
+                SET last_used_at = ?, updated_at = ?
+                WHERE id = (
+                  SELECT integration_authorization_id FROM oauth_authorizations WHERE id = ?
+                ) AND EXISTS (SELECT 1 FROM oauth_tokens WHERE id = ?)`,
+          args: [toEpochSeconds(now), toEpochSeconds(now), authorizationId, tokenId],
+        },
+      ],
+      'write'
+    )
+  );
+  if (results[0]?.rowsAffected !== 1 || results[1]?.rowsAffected !== 1) return null;
 
-  return c.json({
+  return {
     token_type: 'Bearer',
     access_token: accessToken,
     expires_in: Math.floor(ACCESS_TOKEN_TTL_MS / 1000),
     refresh_token: refreshToken,
     scope,
-  });
+  };
 }

@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `api_key_folder_permissions_key_folder_idx` ON `api_key_folder_permissions` (`api_key_id`,`folder_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `oauth_authorization_folder_permissions_authorization_folder_idx` ON `oauth_authorization_folder_permissions` (`authorization_id`,`folder_id`);

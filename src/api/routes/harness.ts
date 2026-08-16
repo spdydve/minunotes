@@ -3,12 +3,11 @@ import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
 import {
   type ApiKey,
-  apiKeyFolderPermissions,
+  authorizationFolderRules,
   folders,
   type Note,
   notes,
   type OAuthAuthorization,
-  oauthAuthorizationFolderPermissions,
 } from '../db/schema';
 import {
   type ActorType,
@@ -325,34 +324,33 @@ harnessRoutes.post('/folders', async (c) => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  await db.insert(folders).values(folder);
+  await db.transaction(async (tx) => {
+    await tx.insert(folders).values(folder);
 
-  if (key && key.accessMode === 'specific') {
-    await db.insert(apiKeyFolderPermissions).values({
-      id: createId('agent_perm'),
-      apiKeyId: key.id,
-      folderId: folder.id,
-      canRead: key.canRead,
-      canCreate: key.canCreate,
-      canEdit: key.canEdit,
-      canComment: key.canComment,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
-  if (oauthAuthorization && oauthAuthorization.accessMode === 'specific') {
-    await db.insert(oauthAuthorizationFolderPermissions).values({
-      id: createId('oauth_perm'),
-      authorizationId: oauthAuthorization.id,
-      folderId: folder.id,
-      canRead: oauthAuthorization.canRead,
-      canCreate: oauthAuthorization.canCreate,
-      canEdit: oauthAuthorization.canEdit,
-      canComment: oauthAuthorization.canComment,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
+    const actor = key ?? oauthAuthorization;
+    const integrationAuthorizationId = key?.authorizationId ?? oauthAuthorization?.integrationAuthorizationId;
+    if (actor?.accessMode === 'specific' && integrationAuthorizationId) {
+      await tx
+        .insert(authorizationFolderRules)
+        .values({
+          id: createId('auth_rule'),
+          authorizationId: integrationAuthorizationId,
+          userId: user.id,
+          folderId: folder.id,
+          canRead: actor.canRead,
+          canCreate: actor.canCreate,
+          canEdit: actor.canEdit,
+          canComment: actor.canComment,
+          canCreateFolders: actor.canCreateFolders,
+          appliesTo: 'exact',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .onConflictDoNothing({
+          target: [authorizationFolderRules.authorizationId, authorizationFolderRules.folderId],
+        });
+    }
+  });
 
   return c.json({ folder: summarizeHarnessFolder(folder) }, 201);
 });

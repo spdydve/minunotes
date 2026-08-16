@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+  for (let index = 0; index <= 34; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -61,7 +61,7 @@ async function setupApp() {
   });
   app.route('/api-keys', apiKeyRoutes);
 
-  return { app, db, schema, folder };
+  return { app, db, libsql, schema, folder };
 }
 
 afterEach(async () => {
@@ -83,6 +83,69 @@ describe('API key Review comments permission', () => {
 
     const list = await app.request('/api-keys');
     await expect(list.json()).resolves.toMatchObject({ keys: [{ canComment: false }] });
+  });
+
+  it('stores folder restrictions beneath a global capability ceiling', async () => {
+    const { app, db, schema, folder } = await setupApp();
+    const create = await app.request('/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Global with restriction',
+        accessMode: 'all',
+        canRead: true,
+        canCreate: true,
+        canEdit: true,
+        permissions: [{ folderId: folder.id, canRead: true, canCreate: false, canEdit: false }],
+      }),
+    });
+    expect(create.status).toBe(201);
+    const [key] = await db.select().from(schema.integrationAuthorizations);
+    const [permission] = await db.select().from(schema.authorizationFolderRules);
+    expect(key).toMatchObject({ accessMode: 'all', canRead: true, canCreate: true, canEdit: true });
+    expect(permission).toMatchObject({ folderId: folder.id, canRead: true, canCreate: false, canEdit: false });
+  });
+
+  it('deduplicates folder grants and rolls back failed credential creation', async () => {
+    const { app, db, libsql, schema, folder } = await setupApp();
+    const create = await app.request('/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Deduplicated',
+        accessMode: 'specific',
+        permissions: [{ folderId: folder.id }, { folderId: folder.id }],
+      }),
+    });
+    expect(create.status).toBe(201);
+    const [permission] = await db.select().from(schema.authorizationFolderRules);
+    expect(permission).toBeDefined();
+    await expect(
+      db.insert(schema.authorizationFolderRules).values({
+        ...permission,
+        id: 'auth_rule_duplicate',
+      })
+    ).rejects.toThrow();
+
+    await libsql.execute(`
+      CREATE TRIGGER fail_authorization_rule_insert
+      BEFORE INSERT ON authorization_folder_rules
+      BEGIN
+        SELECT RAISE(ABORT, 'forced permission insert failure');
+      END
+    `);
+    const failed = await app.request('/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Must roll back',
+        accessMode: 'specific',
+        permissions: [{ folderId: folder.id }],
+      }),
+    });
+    expect(failed.status).toBe(500);
+    const keys = await db.select().from(schema.apiKeys);
+    expect(keys.map((key) => key.name)).not.toContain('Must roll back');
   });
 
   it('persists global and folder Review permission and requires read access', async () => {
@@ -109,9 +172,9 @@ describe('API key Review comments permission', () => {
     expect(create.status).toBe(201);
     const body = (await create.json()) as { apiKey: { id: string } };
 
-    const [key] = await db.select().from(schema.apiKeys);
+    const [key] = await db.select().from(schema.integrationAuthorizations);
     expect(key).toMatchObject({ canRead: true, canEdit: false, canComment: true });
-    const [permission] = await db.select().from(schema.apiKeyFolderPermissions);
+    const [permission] = await db.select().from(schema.authorizationFolderRules);
     expect(permission).toMatchObject({ folderId: folder.id, canRead: true, canEdit: false, canComment: true });
 
     const invalidUpdate = await app.request(`/api-keys/${body.apiKey.id}`, {
