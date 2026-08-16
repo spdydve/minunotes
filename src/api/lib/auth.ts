@@ -3,41 +3,30 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { emailOTP } from 'better-auth/plugins';
 import { db } from '../db/client';
 import { sendEmail } from './email';
+import { emailProtectionPlugin } from './email-protection';
 import { getApiRuntimeConfig } from './env';
+import { createOtpEmailSender } from './otp-email';
 
-const { frontendUrl, apiUrl, betterAuthUrl, allowedOrigins, cookieDomain, cookiePrefix, allowedLoginEmails, ses } =
-  getApiRuntimeConfig();
-
-function isAllowedLoginEmail(email: string) {
-  if (allowedLoginEmails.length === 0) return true;
-  return allowedLoginEmails.includes(email.trim().toLowerCase());
-}
+const { frontendUrl, apiUrl, betterAuthUrl, allowedOrigins, cookieDomain, cookiePrefix, ses } = getApiRuntimeConfig();
+const sendVerificationOTP = createOtpEmailSender({
+  fromEmail: ses.fromEmail,
+  environment: process.env.ENVIRONMENT,
+  send: sendEmail,
+  log: console,
+});
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'sqlite' }),
   plugins: [
+    emailProtectionPlugin,
     emailOTP({
-      async sendVerificationOTP({ email, otp, type }) {
-        if (!isAllowedLoginEmail(email)) {
-          console.warn(`[AUTH OTP] blocked ${type} OTP for unauthorized email: ${email}`);
-          return;
-        }
-
-        if (!ses.fromEmail) {
-          console.log(`[AUTH OTP] ${type} OTP for ${email}: ${otp}`);
-          return;
-        }
-
-        await sendEmail({
-          to: email,
-          from: ses.fromEmail,
-          subject: 'Your MinuNotes login code',
-          html: `<p>Your MinuNotes verification code is: <strong>${otp}</strong></p><p>This code will expire soon.</p>`,
-          text: `Your MinuNotes verification code is: ${otp}\n\nThis code will expire soon.`,
-        });
-      },
+      sendVerificationOTP,
       disableSignUp: false,
       sendVerificationOnSignUp: false,
+      rateLimit: {
+        window: 10 * 60,
+        max: 3,
+      },
     }),
   ],
   session: {

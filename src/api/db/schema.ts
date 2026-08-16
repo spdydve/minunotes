@@ -75,6 +75,47 @@ export const verification = sqliteTable(
   (table) => [index('verification_identifier_idx').on(table.identifier)]
 );
 
+export const emailProtectionVerdicts = sqliteTable(
+  'email_protection_verdicts',
+  {
+    emailKey: text('email_key').primaryKey(),
+    verdict: text('verdict', { enum: ['pass', 'fail'] }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('email_protection_verdicts_expires_at_idx').on(table.expiresAt)]
+);
+
+export const emailProtectionRateLimits = sqliteTable(
+  'email_protection_rate_limits',
+  {
+    bucketKey: text('bucket_key').primaryKey(),
+    requestCount: integer('request_count').notNull(),
+    windowStartedAt: integer('window_started_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('email_protection_rate_limits_expires_at_idx').on(table.expiresAt)]
+);
+
+export const emailProtectionClientReputation = sqliteTable(
+  'email_protection_client_reputation',
+  {
+    clientKey: text('client_key').primaryKey(),
+    violationCount: integer('violation_count').notNull(),
+    violationWindowStartedAt: integer('violation_window_started_at', { mode: 'timestamp_ms' }).notNull(),
+    bannedUntil: integer('banned_until', { mode: 'timestamp_ms' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('email_protection_client_reputation_banned_until_idx').on(table.bannedUntil),
+    index('email_protection_client_reputation_window_idx').on(table.violationWindowStartedAt),
+  ]
+);
+
 export const folders = sqliteTable(
   'folders',
   {
