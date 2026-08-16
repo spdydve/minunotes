@@ -47,8 +47,14 @@ export type ClientReputation = {
   violationWindowStartedAt: number;
 };
 
+export type ProtectionCleanupResult = {
+  verdictsDeleted: number;
+  rateLimitsDeleted: number;
+  reputationsDeleted: number;
+};
+
 export type ProtectionStoreCleanup = {
-  deleteExpired(now: number): Promise<void>;
+  deleteExpired(options: { now: number; staleReputationBefore: number }): Promise<ProtectionCleanupResult>;
 };
 
 export type ProtectionStore = {

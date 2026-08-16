@@ -221,6 +221,20 @@ export default $config({
           },
         },
       });
+
+      new sst.aws.Cron('EmailProtectionCleanup', {
+        schedule: 'rate(1 day)',
+        function: {
+          handler: 'src/api/email-protection/cleanup-handler.handler',
+          nodejs: {
+            install: ['@libsql/client', 'libsql'],
+          },
+          environment: {
+            TURSO_DB_URL: env.TURSO_DB_URL ?? env.LIBSQL_URL ?? 'file:local.db',
+            TURSO_AUTH_TOKEN: env.TURSO_AUTH_TOKEN ?? env.LIBSQL_AUTH_TOKEN ?? '',
+          },
+        },
+      });
     }
 
     const web = new sst.aws.StaticSite('Web', {

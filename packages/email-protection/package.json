@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./better-auth": "./src/adapters/better-auth.ts",
+    "./policy": "./src/policy.ts",
     "./ses": "./src/providers/ses-email-insights.ts",
     "./sqlite": "./src/stores/sqlite.ts"
   },

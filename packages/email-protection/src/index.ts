@@ -15,6 +15,7 @@ export type {
   DisposableEmailVerifier,
   EmailVerdict,
   EmailVerifier,
+  ProtectionCleanupResult,
   ProtectionDecision,
   ProtectionEngine,
   ProtectionLogger,

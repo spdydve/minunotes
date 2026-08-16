@@ -104,22 +104,23 @@
 
 ### Expired-state cleanup and rollout documentation
 
-- [ ] Extend cleanup to remove stale unbanned reputation rows after the violation window.
-- [ ] Return redacted cleanup counts for operational logging.
-- [ ] Add a dedicated email-protection cleanup function and scheduled SST handler.
-- [ ] Test expired deletion and preservation of active protection state.
-- [ ] Document that observe mode accumulates state and define the observe-to-enforce reset option.
-- [ ] Run package tests, root tests, TypeScript, build, Biome, and diff checks.
+- [x] Extend cleanup to remove stale unbanned reputation rows after the violation window.
+- [x] Return redacted cleanup counts for operational logging.
+- [x] Add a dedicated email-protection cleanup function and scheduled SST handler.
+- [x] Test expired deletion and preservation of active protection state.
+- [x] Document that observe mode accumulates state and define the observe-to-enforce reset option.
+- [x] Run package tests, root tests, TypeScript, build, Biome, and diff checks.
 
 ### Files
 
-- [ ] `packages/email-protection/src/types.ts`
-- [ ] `packages/email-protection/src/stores/sqlite.ts`
+- [x] `packages/email-protection/package.json`
+- [x] `packages/email-protection/src/types.ts`
+- [x] `packages/email-protection/src/stores/sqlite.ts`
 - [x] `packages/email-protection/tests/engine.test.ts`
-- [ ] `packages/email-protection/tests/sqlite.test.ts`
+- [x] `packages/email-protection/tests/sqlite.test.ts`
 - [x] `packages/email-protection/tests/better-auth-integration.test.ts`
-- [ ] `src/api/email-protection/cleanup.ts`
-- [ ] `src/api/email-protection/cleanup-handler.ts`
-- [ ] `tests/email-protection-cleanup.test.ts` if application-level behavior needs separate coverage
-- [ ] `sst.config.ts`
-- [ ] `docs/email-bot-protection.md`
+- [x] `src/api/email-protection/cleanup.ts`
+- [x] `src/api/email-protection/cleanup-handler.ts`
+- [x] Application-level cleanup test not required; package store tests cover cleanup and handler wiring is minimal.
+- [x] `sst.config.ts`
+- [x] `docs/email-bot-protection.md`

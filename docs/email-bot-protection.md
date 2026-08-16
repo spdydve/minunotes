@@ -43,6 +43,8 @@ SST defaults local to `off`, development to `observe`, and production to `enforc
 4. Verify authorized OTP delivery and rejected disposable addresses.
 5. Move development to `enforce`, then deploy production.
 
+Observe mode executes the full protection pipeline and persists rate buckets, verdicts, violations, and bans; it only downgrades abuse decisions at the response boundary. Moving to `enforce` therefore activates state accumulated during observation. Before changing modes, either retain that state when observed traffic is representative or clear the three protection tables for a clean enforcement baseline. Never clear Better Auth user or verification tables as part of this reset.
+
 ### Rollback
 
 Set `EMAIL_PROTECTION_MODE=observe` or `off` and redeploy. Keep the protection tables in place; schema removal should happen only in a later migration.
@@ -57,7 +59,7 @@ SELECT COUNT(*) FROM email_protection_verdicts WHERE verdict = 'fail';
 SELECT COUNT(*) FROM email_protection_client_reputation WHERE banned_until > unixepoch('subsecond') * 1000;
 ```
 
-Use structured application logs for outcome and reason counts.
+Use structured application logs for outcome and reason counts. A daily scheduled cleanup removes expired verdicts and rate buckets, expired bans, and unbanned reputation rows whose violation window has elapsed. Cleanup logs only aggregate deletion counts.
 
 ### Unban
 

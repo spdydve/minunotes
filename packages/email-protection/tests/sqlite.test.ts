@@ -44,25 +44,52 @@ describe('SQLite protection store', () => {
     expect(rows.rows[0]?.email_key).toBe('hashed-email');
   });
 
-  it('deletes expired cache, limit, and ban state', async () => {
+  it('deletes expired state while preserving active and recent rows', async () => {
     const store = createSqliteProtectionStore(client);
     await store.setEmailVerdict('expired-email', 'fail', 500, 100);
+    await store.setEmailVerdict('active-email', 'pass', 1_500, 100);
     await store.consumeRateLimit('expired-rate', 1, 400, 100);
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      await store.recordClientViolation('expired-client', {
-        maxViolations: 5,
-        windowMs: 1_000,
-        banMs: 100,
-        now: 100 + attempt,
-      });
-    }
+    await store.consumeRateLimit('active-rate', 1, 1_000, 100);
+    await store.recordClientViolation('stale-client', {
+      maxViolations: 5,
+      windowMs: 1_000,
+      banMs: 100,
+      now: 100,
+    });
+    await store.recordClientViolation('recent-client', {
+      maxViolations: 5,
+      windowMs: 1_000,
+      banMs: 100,
+      now: 900,
+    });
+    await store.recordClientViolation('expired-ban', {
+      maxViolations: 1,
+      windowMs: 1_000,
+      banMs: 100,
+      now: 100,
+    });
+    await store.recordClientViolation('active-ban', {
+      maxViolations: 1,
+      windowMs: 1_000,
+      banMs: 1_000,
+      now: 900,
+    });
 
-    await store.deleteExpired(1_000);
-    expect((await client.execute('SELECT COUNT(*) AS count FROM email_protection_verdicts')).rows[0]?.count).toBe(0);
-    expect((await client.execute('SELECT COUNT(*) AS count FROM email_protection_rate_limits')).rows[0]?.count).toBe(0);
-    expect(
-      (await client.execute('SELECT COUNT(*) AS count FROM email_protection_client_reputation')).rows[0]?.count
-    ).toBe(0);
+    await expect(store.deleteExpired({ now: 1_000, staleReputationBefore: 500 })).resolves.toEqual({
+      verdictsDeleted: 1,
+      rateLimitsDeleted: 1,
+      reputationsDeleted: 2,
+    });
+    expect((await client.execute('SELECT email_key FROM email_protection_verdicts')).rows).toMatchObject([
+      { email_key: 'active-email' },
+    ]);
+    expect((await client.execute('SELECT bucket_key FROM email_protection_rate_limits')).rows).toMatchObject([
+      { bucket_key: 'active-rate' },
+    ]);
+    const reputations = await client.execute(
+      'SELECT client_key FROM email_protection_client_reputation ORDER BY client_key'
+    );
+    expect(reputations.rows).toMatchObject([{ client_key: 'active-ban' }, { client_key: 'recent-client' }]);
   });
 
   it('bans at the threshold and resets after a ban expires', async () => {

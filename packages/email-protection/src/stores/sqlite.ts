@@ -13,16 +13,22 @@ function numberValue(value: InValue | undefined) {
 
 export function createSqliteProtectionStore(client: Pick<Client, 'execute'>): ProtectionStore & ProtectionStoreCleanup {
   return {
-    async deleteExpired(now) {
-      await Promise.all([
+    async deleteExpired({ now, staleReputationBefore }) {
+      const [verdicts, rateLimits, reputations] = await Promise.all([
         client.execute({ sql: 'DELETE FROM email_protection_verdicts WHERE expires_at <= ?', args: [now] }),
         client.execute({ sql: 'DELETE FROM email_protection_rate_limits WHERE expires_at <= ?', args: [now] }),
         client.execute({
           sql: `DELETE FROM email_protection_client_reputation
-                WHERE banned_until IS NOT NULL AND banned_until <= ?`,
-          args: [now],
+                WHERE (banned_until IS NOT NULL AND banned_until <= ?)
+                   OR (banned_until IS NULL AND violation_window_started_at <= ?)`,
+          args: [now, staleReputationBefore],
         }),
       ]);
+      return {
+        verdictsDeleted: verdicts.rowsAffected,
+        rateLimitsDeleted: rateLimits.rowsAffected,
+        reputationsDeleted: reputations.rowsAffected,
+      };
     },
     async getEmailVerdict(emailKey, now) {
       const result = await client.execute({
