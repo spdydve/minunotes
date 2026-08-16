@@ -7,6 +7,79 @@ export const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000;
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const AUTHORIZATION_CODE_TTL_MS = 10 * 60 * 1000;
 
+export const OAUTH_SCOPES = {
+  read: 'notes.read',
+  create: 'notes.create',
+  edit: 'notes.edit',
+  comment: 'comments.write',
+  createFolders: 'folders.create',
+} as const;
+
+export const SUPPORTED_OAUTH_SCOPES = Object.values(OAUTH_SCOPES);
+export const DEFAULT_OAUTH_SCOPE = SUPPORTED_OAUTH_SCOPES.join(' ');
+
+type OAuthCapabilities = {
+  canRead: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canComment: boolean;
+  canCreateFolders: boolean;
+};
+
+export function parseOAuthScope(scope: string | null | undefined, options: { useDefault?: boolean } = {}) {
+  const raw = scope?.trim() || (options.useDefault ? DEFAULT_OAUTH_SCOPE : '');
+  const scopes = [...new Set(raw.split(/\s+/).filter(Boolean))];
+  const unsupported = scopes.filter(
+    (value) => !SUPPORTED_OAUTH_SCOPES.includes(value as (typeof SUPPORTED_OAUTH_SCOPES)[number])
+  );
+  if (unsupported.length > 0) return { ok: false as const, unsupported };
+  return { ok: true as const, scopes: new Set(scopes), scope: scopes.join(' ') };
+}
+
+export function oauthScopeCapabilities(scopes: ReadonlySet<string>): OAuthCapabilities {
+  return {
+    canRead: scopes.has(OAUTH_SCOPES.read),
+    canCreate: scopes.has(OAUTH_SCOPES.create),
+    canEdit: scopes.has(OAUTH_SCOPES.edit),
+    canComment: scopes.has(OAUTH_SCOPES.comment) && scopes.has(OAUTH_SCOPES.read),
+    canCreateFolders: scopes.has(OAUTH_SCOPES.createFolders),
+  };
+}
+
+export function oauthScopeForCapabilities(capabilities: OAuthCapabilities) {
+  return [
+    capabilities.canRead ? OAUTH_SCOPES.read : null,
+    capabilities.canCreate ? OAUTH_SCOPES.create : null,
+    capabilities.canEdit ? OAUTH_SCOPES.edit : null,
+    capabilities.canComment ? OAUTH_SCOPES.comment : null,
+    capabilities.canCreateFolders ? OAUTH_SCOPES.createFolders : null,
+  ]
+    .filter((scope) => scope !== null)
+    .join(' ');
+}
+
+export function oauthCapabilitiesFitScope(capabilities: OAuthCapabilities, scopes: ReadonlySet<string>) {
+  const allowed = oauthScopeCapabilities(scopes);
+  return (
+    (!capabilities.canRead || allowed.canRead) &&
+    (!capabilities.canCreate || allowed.canCreate) &&
+    (!capabilities.canEdit || allowed.canEdit) &&
+    (!capabilities.canComment || allowed.canComment) &&
+    (!capabilities.canCreateFolders || allowed.canCreateFolders)
+  );
+}
+
+export function intersectOAuthCapabilities(capabilities: OAuthCapabilities, scopes: ReadonlySet<string>) {
+  const allowed = oauthScopeCapabilities(scopes);
+  return {
+    canRead: capabilities.canRead && allowed.canRead,
+    canCreate: capabilities.canCreate && allowed.canCreate,
+    canEdit: capabilities.canEdit && allowed.canEdit,
+    canComment: capabilities.canComment && allowed.canComment,
+    canCreateFolders: capabilities.canCreateFolders && allowed.canCreateFolders,
+  };
+}
+
 export function generateOAuthToken(prefix: 'mnoac' | 'mnort' | 'mnocd') {
   return `${prefix}_${randomBytes(32).toString('base64url')}`;
 }

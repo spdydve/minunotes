@@ -42,6 +42,7 @@ export type ApiKeyPermission = {
   canCreate: boolean;
   canEdit: boolean;
   canComment: boolean;
+  appliesTo: 'exact' | 'subtree';
   createdAt: string;
   updatedAt: string;
 };
@@ -69,6 +70,7 @@ export type OAuthAuthorizationPermission = {
   canCreate: boolean;
   canEdit: boolean;
   canComment: boolean;
+  appliesTo: 'exact' | 'subtree';
   createdAt: string;
   updatedAt: string;
 };
@@ -426,6 +428,7 @@ export const api = {
       canCreate?: boolean;
       canEdit?: boolean;
       canComment?: boolean;
+      appliesTo?: 'exact' | 'subtree';
     }>;
   }) => request<{ key: string; apiKey: ApiKey }>('/api-keys', { method: 'POST', body: JSON.stringify(data) }),
   updateApiKey: (
@@ -444,6 +447,7 @@ export const api = {
         canCreate?: boolean;
         canEdit?: boolean;
         canComment?: boolean;
+        appliesTo?: 'exact' | 'subtree';
       }>;
     }
   ) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: 'PATCH', body: JSON.stringify(data) }),

@@ -66,6 +66,25 @@ function OAuthAuthorizeView() {
   const [canComment, setCanComment] = useState(false);
   const [canCreateFolders, setCanCreateFolders] = useState(false);
 
+  const requestedScopes = useMemo(
+    () => new Set((preview.data?.request.scope ?? '').split(/\s+/).filter(Boolean)),
+    [preview.data?.request.scope]
+  );
+  const scopeAllows = {
+    read: requestedScopes.has('notes.read'),
+    create: requestedScopes.has('notes.create'),
+    edit: requestedScopes.has('notes.edit'),
+    comment: requestedScopes.has('comments.write') && requestedScopes.has('notes.read'),
+    createFolders: requestedScopes.has('folders.create'),
+  };
+  const approvedPermissions = {
+    canRead: canRead && scopeAllows.read,
+    canCreate: canCreate && scopeAllows.create,
+    canEdit: canEdit && scopeAllows.edit,
+    canComment: canComment && scopeAllows.comment,
+    canCreateFolders: canCreateFolders && scopeAllows.createFolders,
+  };
+
   const selectableFolders = useMemo(
     () => (folders.data?.folders ?? []).filter((folder) => !isEffectivelyPrivate(folder, folders.data?.folders ?? [])),
     [folders.data?.folders]
@@ -83,11 +102,7 @@ function OAuthAuthorizeView() {
       api.approveOAuthAuthorization({
         ...request!,
         accessMode,
-        canRead,
-        canCreate,
-        canEdit,
-        canComment,
-        canCreateFolders,
+        ...approvedPermissions,
         folderIds: [...selectedFolderIds],
       }),
     onSuccess: ({ redirectUrl }) => {
@@ -120,7 +135,7 @@ function OAuthAuthorizeView() {
   const appName = preview.data?.client.name ?? 'This app';
   const selectedCount = selectedFolderIds.size;
   const canSubmit =
-    (canRead || canCreate || canEdit || canComment) &&
+    Object.values(approvedPermissions).some(Boolean) &&
     (accessMode === 'all' || selectedCount > 0) &&
     !approve.isPending;
 
@@ -179,7 +194,8 @@ function OAuthAuthorizeView() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={canRead}
+                checked={approvedPermissions.canRead}
+                disabled={!scopeAllows.read}
                 onChange={(event) => {
                   setCanRead(event.target.checked);
                   if (!event.target.checked) setCanComment(false);
@@ -188,17 +204,28 @@ function OAuthAuthorizeView() {
               Read
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={canCreate} onChange={(e) => setCanCreate(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={approvedPermissions.canCreate}
+                disabled={!scopeAllows.create}
+                onChange={(e) => setCanCreate(e.target.checked)}
+              />
               Create notes
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={canEdit} onChange={(e) => setCanEdit(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={approvedPermissions.canEdit}
+                disabled={!scopeAllows.edit}
+                onChange={(e) => setCanEdit(e.target.checked)}
+              />
               Edit notes
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={canComment}
+                checked={approvedPermissions.canComment}
+                disabled={!scopeAllows.comment}
                 onChange={(event) => {
                   setCanComment(event.target.checked);
                   if (event.target.checked) setCanRead(true);
@@ -211,7 +238,8 @@ function OAuthAuthorizeView() {
             <input
               className="mt-1"
               type="checkbox"
-              checked={canCreateFolders}
+              checked={approvedPermissions.canCreateFolders}
+              disabled={!scopeAllows.createFolders}
               onChange={(e) => setCanCreateFolders(e.target.checked)}
             />
             <span>

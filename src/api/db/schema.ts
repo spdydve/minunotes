@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { check, foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
@@ -134,9 +134,101 @@ export const folders = sqliteTable(
   },
   (table) => [
     index('folders_user_id_idx').on(table.userId),
+    uniqueIndex('folders_id_user_id_idx').on(table.id, table.userId),
     index('folders_parent_folder_id_idx').on(table.parentFolderId),
     index('folders_user_deleted_at_idx').on(table.userId, table.deletedAt),
     index('folders_trash_batch_id_idx').on(table.trashBatchId),
+    foreignKey({
+      columns: [table.parentFolderId, table.userId],
+      foreignColumns: [table.id, table.userId],
+      name: 'folders_parent_owner_fk',
+    }).onDelete('cascade'),
+    check(
+      'folders_not_self_parent_check',
+      sql`${table.parentFolderId} is null or ${table.parentFolderId} <> ${table.id}`
+    ),
+  ]
+);
+
+export const integrationAuthorizations = sqliteTable(
+  'integration_authorizations',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    accessMode: text('access_mode', { enum: ['all', 'top_level', 'specific'] })
+      .notNull()
+      .default('all'),
+    canRead: integer('can_read', { mode: 'boolean' }).notNull().default(true),
+    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
+    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
+    canCreateFolders: integer('can_create_folders', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
+  },
+  (table) => [
+    index('integration_authorizations_user_id_idx').on(table.userId),
+    uniqueIndex('integration_authorizations_id_user_id_idx').on(table.id, table.userId),
+    check('integration_authorizations_access_mode_check', sql`${table.accessMode} in ('all', 'top_level', 'specific')`),
+    check('integration_authorizations_can_read_check', sql`${table.canRead} in (0, 1)`),
+    check('integration_authorizations_can_create_check', sql`${table.canCreate} in (0, 1)`),
+    check('integration_authorizations_can_edit_check', sql`${table.canEdit} in (0, 1)`),
+    check('integration_authorizations_can_comment_check', sql`${table.canComment} in (0, 1)`),
+    check('integration_authorizations_can_create_folders_check', sql`${table.canCreateFolders} in (0, 1)`),
+    check(
+      'integration_authorizations_comment_requires_read_check',
+      sql`${table.canComment} = 0 or ${table.canRead} = 1`
+    ),
+  ]
+);
+
+export const authorizationFolderRules = sqliteTable(
+  'authorization_folder_rules',
+  {
+    id: text('id').primaryKey(),
+    authorizationId: text('authorization_id').notNull(),
+    userId: text('user_id').notNull(),
+    folderId: text('folder_id').notNull(),
+    appliesTo: text('applies_to', { enum: ['exact', 'subtree'] })
+      .notNull()
+      .default('exact'),
+    canRead: integer('can_read', { mode: 'boolean' }).notNull().default(false),
+    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
+    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
+    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
+    canCreateFolders: integer('can_create_folders', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('authorization_folder_rules_authorization_folder_idx').on(table.authorizationId, table.folderId),
+    index('authorization_folder_rules_authorization_id_idx').on(table.authorizationId),
+    index('authorization_folder_rules_folder_id_idx').on(table.folderId),
+    index('authorization_folder_rules_user_id_idx').on(table.userId),
+    foreignKey({
+      columns: [table.authorizationId, table.userId],
+      foreignColumns: [integrationAuthorizations.id, integrationAuthorizations.userId],
+      name: 'authorization_folder_rules_authorization_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.folderId, table.userId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'authorization_folder_rules_folder_owner_fk',
+    }).onDelete('cascade'),
+    check('authorization_folder_rules_applies_to_check', sql`${table.appliesTo} in ('exact', 'subtree')`),
+    check('authorization_folder_rules_can_read_check', sql`${table.canRead} in (0, 1)`),
+    check('authorization_folder_rules_can_create_check', sql`${table.canCreate} in (0, 1)`),
+    check('authorization_folder_rules_can_edit_check', sql`${table.canEdit} in (0, 1)`),
+    check('authorization_folder_rules_can_comment_check', sql`${table.canComment} in (0, 1)`),
+    check('authorization_folder_rules_can_create_folders_check', sql`${table.canCreateFolders} in (0, 1)`),
+    check(
+      'authorization_folder_rules_comment_requires_read_check',
+      sql`${table.canComment} = 0 or ${table.canRead} = 1`
+    ),
   ]
 );
 
@@ -147,46 +239,21 @@ export const apiKeys = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    authorizationId: text('authorization_id').notNull().unique(),
     name: text('name').notNull(),
     uid: text('uid').notNull().unique(),
     hash: text('hash').notNull(),
     salt: text('salt').notNull(),
-    canCreateFolders: integer('can_create_folders', { mode: 'boolean' }).notNull().default(false),
-    canRead: integer('can_read', { mode: 'boolean' }).notNull().default(true),
-    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(true),
-    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(true),
-    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
-    accessMode: text('access_mode', { enum: ['all', 'top_level', 'specific'] })
-      .notNull()
-      .default('all'),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
-    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
-  },
-  (table) => [index('api_keys_user_id_idx').on(table.userId)]
-);
-
-export const apiKeyFolderPermissions = sqliteTable(
-  'api_key_folder_permissions',
-  {
-    id: text('id').primaryKey(),
-    apiKeyId: text('api_key_id')
-      .notNull()
-      .references(() => apiKeys.id, { onDelete: 'cascade' }),
-    folderId: text('folder_id')
-      .notNull()
-      .references(() => folders.id, { onDelete: 'cascade' }),
-    canRead: integer('can_read', { mode: 'boolean' }).notNull().default(false),
-    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
-    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
-    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index('api_key_folder_permissions_api_key_id_idx').on(table.apiKeyId),
-    index('api_key_folder_permissions_folder_id_idx').on(table.folderId),
+    index('api_keys_user_id_idx').on(table.userId),
+    foreignKey({
+      columns: [table.authorizationId, table.userId],
+      foreignColumns: [integrationAuthorizations.id, integrationAuthorizations.userId],
+      name: 'api_keys_authorization_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -216,49 +283,22 @@ export const oauthAuthorizations = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    integrationAuthorizationId: text('integration_authorization_id').notNull().unique(),
     clientId: text('client_id')
       .notNull()
       .references(() => oauthClients.id, { onDelete: 'cascade' }),
     scope: text('scope').notNull().default(''),
-    accessMode: text('access_mode', { enum: ['all', 'top_level', 'specific'] })
-      .notNull()
-      .default('specific'),
-    canRead: integer('can_read', { mode: 'boolean' }).notNull().default(true),
-    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
-    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
-    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
-    canCreateFolders: integer('can_create_folders', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
-    lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
   },
   (table) => [
     index('oauth_authorizations_user_id_idx').on(table.userId),
     index('oauth_authorizations_client_id_idx').on(table.clientId),
-  ]
-);
-
-export const oauthAuthorizationFolderPermissions = sqliteTable(
-  'oauth_authorization_folder_permissions',
-  {
-    id: text('id').primaryKey(),
-    authorizationId: text('authorization_id')
-      .notNull()
-      .references(() => oauthAuthorizations.id, { onDelete: 'cascade' }),
-    folderId: text('folder_id')
-      .notNull()
-      .references(() => folders.id, { onDelete: 'cascade' }),
-    canRead: integer('can_read', { mode: 'boolean' }).notNull().default(false),
-    canCreate: integer('can_create', { mode: 'boolean' }).notNull().default(false),
-    canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
-    canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    index('oauth_authorization_folder_permissions_authorization_id_idx').on(table.authorizationId),
-    index('oauth_authorization_folder_permissions_folder_id_idx').on(table.folderId),
+    foreignKey({
+      columns: [table.integrationAuthorizationId, table.userId],
+      foreignColumns: [integrationAuthorizations.id, integrationAuthorizations.userId],
+      name: 'oauth_authorizations_integration_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -717,14 +757,12 @@ export const folderRelations = relations(folders, ({ many, one }) => ({
   shareLinks: many(folderShareLinks),
 }));
 
-export const apiKeyRelations = relations(apiKeys, ({ many, one }) => ({
+export const apiKeyRelations = relations(apiKeys, ({ one }) => ({
   user: one(user, { fields: [apiKeys.userId], references: [user.id] }),
-  folderPermissions: many(apiKeyFolderPermissions),
-}));
-
-export const apiKeyFolderPermissionRelations = relations(apiKeyFolderPermissions, ({ one }) => ({
-  apiKey: one(apiKeys, { fields: [apiKeyFolderPermissions.apiKeyId], references: [apiKeys.id] }),
-  folder: one(folders, { fields: [apiKeyFolderPermissions.folderId], references: [folders.id] }),
+  authorization: one(integrationAuthorizations, {
+    fields: [apiKeys.authorizationId],
+    references: [integrationAuthorizations.id],
+  }),
 }));
 
 export const oauthClientRelations = relations(oauthClients, ({ many, one }) => ({
@@ -736,21 +774,13 @@ export const oauthClientRelations = relations(oauthClients, ({ many, one }) => (
 export const oauthAuthorizationRelations = relations(oauthAuthorizations, ({ many, one }) => ({
   user: one(user, { fields: [oauthAuthorizations.userId], references: [user.id] }),
   client: one(oauthClients, { fields: [oauthAuthorizations.clientId], references: [oauthClients.id] }),
-  folderPermissions: many(oauthAuthorizationFolderPermissions),
+  integrationAuthorization: one(integrationAuthorizations, {
+    fields: [oauthAuthorizations.integrationAuthorizationId],
+    references: [integrationAuthorizations.id],
+  }),
   codes: many(oauthAuthorizationCodes),
   tokens: many(oauthTokens),
 }));
-
-export const oauthAuthorizationFolderPermissionRelations = relations(
-  oauthAuthorizationFolderPermissions,
-  ({ one }) => ({
-    authorization: one(oauthAuthorizations, {
-      fields: [oauthAuthorizationFolderPermissions.authorizationId],
-      references: [oauthAuthorizations.id],
-    }),
-    folder: one(folders, { fields: [oauthAuthorizationFolderPermissions.folderId], references: [folders.id] }),
-  })
-);
 
 export const oauthAuthorizationCodeRelations = relations(oauthAuthorizationCodes, ({ one }) => ({
   client: one(oauthClients, { fields: [oauthAuthorizationCodes.clientId], references: [oauthClients.id] }),
@@ -877,10 +907,12 @@ export type Tag = typeof tags.$inferSelect;
 export type NoteTag = typeof noteTags.$inferSelect;
 export type NoteLink = typeof noteLinks.$inferSelect;
 export type Attachment = typeof attachments.$inferSelect;
-export type ApiKey = typeof apiKeys.$inferSelect;
-export type ApiKeyFolderPermission = typeof apiKeyFolderPermissions.$inferSelect;
+export type IntegrationAuthorization = typeof integrationAuthorizations.$inferSelect;
+export type AuthorizationFolderRule = typeof authorizationFolderRules.$inferSelect;
+export type ApiKeyCredential = typeof apiKeys.$inferSelect;
+export type ApiKey = ApiKeyCredential & IntegrationAuthorization;
 export type OAuthClient = typeof oauthClients.$inferSelect;
-export type OAuthAuthorization = typeof oauthAuthorizations.$inferSelect;
-export type OAuthAuthorizationFolderPermission = typeof oauthAuthorizationFolderPermissions.$inferSelect;
+export type OAuthConnection = typeof oauthAuthorizations.$inferSelect;
+export type OAuthAuthorization = OAuthConnection & IntegrationAuthorization;
 export type OAuthAuthorizationCode = typeof oauthAuthorizationCodes.$inferSelect;
 export type OAuthToken = typeof oauthTokens.$inferSelect;

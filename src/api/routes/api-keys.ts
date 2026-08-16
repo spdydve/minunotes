@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
-import { type ApiKey, apiKeyFolderPermissions, apiKeys, folders } from '../db/schema';
+import { type ApiKey, apiKeys, authorizationFolderRules, integrationAuthorizations } from '../db/schema';
 import { generateApiKey, hashApiKey } from '../lib/api-keys';
 import type { auth } from '../lib/auth';
 import { filterSelectablePermissionRows } from '../lib/folder-access';
@@ -19,15 +19,14 @@ type PermissionInput = {
   canCreate?: boolean;
   canEdit?: boolean;
   canComment?: boolean;
+  appliesTo?: 'exact' | 'subtree';
 };
 type AccessMode = 'all' | 'top_level' | 'specific';
 
 export const apiKeyRoutes = new Hono<{ Variables: Variables }>();
 
 function getUser(c: Context<{ Variables: Variables }>) {
-  const user = c.get('user');
-  if (!user) return null;
-  return user;
+  return c.get('user');
 }
 
 function parseAccessMode(value: unknown): AccessMode | undefined {
@@ -46,25 +45,36 @@ function permissionValue(
   };
 }
 
-function permissionRowsFromFolders(input: {
-  keyId: string;
+function ruleRowsFromFolders(input: {
+  authorizationId: string;
+  userId: string;
   permissions: PermissionInput[];
   canRead: boolean;
   canCreate: boolean;
   canEdit: boolean;
   canComment: boolean;
+  canCreateFolders: boolean;
+  accessMode: AccessMode;
 }) {
   return input.permissions.flatMap((permission) =>
     permission.folderId
       ? [
           {
-            id: createId('agent_perm'),
-            apiKeyId: input.keyId,
+            id: createId('auth_rule'),
+            authorizationId: input.authorizationId,
+            userId: input.userId,
             folderId: permission.folderId,
-            canRead: input.canRead,
-            canCreate: input.canCreate,
-            canEdit: input.canEdit,
-            canComment: input.canComment,
+            canRead: input.canRead && (permission.canRead ?? input.canRead),
+            canCreate: input.canCreate && (permission.canCreate ?? input.canCreate),
+            canEdit: input.canEdit && (permission.canEdit ?? input.canEdit),
+            canComment: input.canComment && (permission.canComment ?? input.canComment),
+            canCreateFolders: input.canCreateFolders,
+            appliesTo:
+              input.accessMode === 'top_level'
+                ? 'subtree'
+                : input.accessMode === 'specific'
+                  ? 'exact'
+                  : (permission.appliesTo ?? 'exact'),
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -73,40 +83,30 @@ function permissionRowsFromFolders(input: {
   );
 }
 
+function apiPermission(rule: typeof authorizationFolderRules.$inferSelect) {
+  return { ...rule, apiKeyId: rule.authorizationId };
+}
+
 apiKeyRoutes.get('/', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const keys = await db
-    .select({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      uid: apiKeys.uid,
-      canCreateFolders: apiKeys.canCreateFolders,
-      canRead: apiKeys.canRead,
-      canCreate: apiKeys.canCreate,
-      canEdit: apiKeys.canEdit,
-      canComment: apiKeys.canComment,
-      accessMode: apiKeys.accessMode,
-      createdAt: apiKeys.createdAt,
-      lastUsedAt: apiKeys.lastUsedAt,
-      revokedAt: apiKeys.revokedAt,
-    })
+    .select({ credential: apiKeys, authorization: integrationAuthorizations })
     .from(apiKeys)
-    .where(eq(apiKeys.userId, user.id))
-    .orderBy(desc(apiKeys.createdAt));
-
+    .innerJoin(integrationAuthorizations, eq(apiKeys.authorizationId, integrationAuthorizations.id))
+    .where(eq(integrationAuthorizations.userId, user.id))
+    .orderBy(desc(integrationAuthorizations.createdAt));
   const permissions = await db
     .select()
-    .from(apiKeyFolderPermissions)
-    .innerJoin(apiKeys, eq(apiKeyFolderPermissions.apiKeyId, apiKeys.id))
-    .where(eq(apiKeys.userId, user.id));
+    .from(authorizationFolderRules)
+    .where(eq(authorizationFolderRules.userId, user.id));
+
   return c.json({
-    keys: keys.map((key) => ({
-      ...key,
-      permissions: permissions
-        .filter((row) => row.api_key_folder_permissions.apiKeyId === key.id)
-        .map((row) => row.api_key_folder_permissions),
+    keys: keys.map(({ credential, authorization }) => ({
+      ...credential,
+      ...authorization,
+      permissions: permissions.filter((rule) => rule.authorizationId === authorization.id).map(apiPermission),
     })),
   });
 });
@@ -129,54 +129,69 @@ apiKeyRoutes.post('/', async (c) => {
   if (!name) return c.json({ error: 'API key name is required' }, 400);
 
   const accessMode = parseAccessMode(body?.accessMode) ?? 'all';
-  const keyPermissions = permissionValue(body);
-  if (keyPermissions.canComment && !keyPermissions.canRead)
+  const capabilities = permissionValue(body);
+  if (capabilities.canComment && !capabilities.canRead)
     return c.json({ error: 'Review comments permission requires read permission' }, 400);
+
   const { key, uid } = generateApiKey();
   const { hash, salt } = hashApiKey(key);
-  const apiKey = {
-    id: createId('agent_key'),
+  const id = createId('agent_key');
+  const now = new Date();
+  const authorization = {
+    id,
     userId: user.id,
+    accessMode,
+    canCreateFolders: body?.canCreateFolders ?? false,
+    ...capabilities,
+    createdAt: now,
+    updatedAt: now,
+    lastUsedAt: null,
+    revokedAt: null,
+  };
+  const credential = {
+    id,
+    userId: user.id,
+    authorizationId: id,
     name,
     uid,
     hash,
     salt,
-    canCreateFolders: body?.canCreateFolders ?? false,
-    ...keyPermissions,
-    accessMode,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastUsedAt: null,
-    revokedAt: null,
+    createdAt: now,
+    updatedAt: now,
   };
-
-  await db.insert(apiKeys).values(apiKey);
-
-  const requestedPermissions =
-    accessMode !== 'all'
-      ? await filterSelectablePermissionRows({ userId: user.id, accessMode, permissions: body?.permissions ?? [] })
-      : [];
-  const permissionRows = permissionRowsFromFolders({
-    keyId: apiKey.id,
-    permissions: requestedPermissions,
-    ...keyPermissions,
+  const requestedPermissions = await filterSelectablePermissionRows({
+    userId: user.id,
+    accessMode,
+    permissions: body?.permissions ?? [],
   });
-  if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
+  const rules = ruleRowsFromFolders({
+    authorizationId: id,
+    userId: user.id,
+    permissions: requestedPermissions,
+    ...capabilities,
+    canCreateFolders: authorization.canCreateFolders,
+    accessMode,
+  });
+
+  await db.transaction(async (tx) => {
+    await tx.insert(integrationAuthorizations).values(authorization);
+    await tx.insert(apiKeys).values(credential);
+    if (rules.length > 0)
+      await tx
+        .insert(authorizationFolderRules)
+        .values(rules)
+        .onConflictDoNothing({
+          target: [authorizationFolderRules.authorizationId, authorizationFolderRules.folderId],
+        });
+  });
 
   return c.json(
     {
       key,
       apiKey: {
-        id: apiKey.id,
-        name: apiKey.name,
-        uid: apiKey.uid,
-        canCreateFolders: apiKey.canCreateFolders,
-        ...keyPermissions,
-        accessMode: apiKey.accessMode,
-        createdAt: apiKey.createdAt,
-        lastUsedAt: apiKey.lastUsedAt,
-        revokedAt: apiKey.revokedAt,
-        permissions: permissionRows,
+        ...credential,
+        ...authorization,
+        permissions: rules.map(apiPermission),
       },
     },
     201
@@ -198,100 +213,114 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     permissions?: PermissionInput[];
   } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
-
   const name = body.name?.trim();
   if (body.name !== undefined && !name) return c.json({ error: 'API key name is required' }, 400);
 
   const keyId = c.req.param('keyId');
   const [existing] = await db
-    .select()
+    .select({ credential: apiKeys, authorization: integrationAuthorizations })
     .from(apiKeys)
-    .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt)))
+    .innerJoin(integrationAuthorizations, eq(apiKeys.authorizationId, integrationAuthorizations.id))
+    .where(
+      and(
+        eq(apiKeys.id, keyId),
+        eq(integrationAuthorizations.userId, user.id),
+        isNull(integrationAuthorizations.revokedAt)
+      )
+    )
     .limit(1);
   if (!existing) return c.json({ error: 'API key not found' }, 404);
 
   const accessMode = parseAccessMode(body.accessMode);
-  const nextPermissions = {
-    canRead: body.canRead ?? existing.canRead,
-    canCreate: body.canCreate ?? existing.canCreate,
-    canEdit: body.canEdit ?? existing.canEdit,
-    canComment: body.canComment ?? existing.canComment,
+  const nextCapabilities = {
+    canRead: body.canRead ?? existing.authorization.canRead,
+    canCreate: body.canCreate ?? existing.authorization.canCreate,
+    canEdit: body.canEdit ?? existing.authorization.canEdit,
+    canComment: body.canComment ?? existing.authorization.canComment,
   };
-  if (nextPermissions.canComment && !nextPermissions.canRead)
+  if (nextCapabilities.canComment && !nextCapabilities.canRead)
     return c.json({ error: 'Review comments permission requires read permission' }, 400);
-  if (
-    name !== undefined ||
+
+  const shouldUpdateAuthorization =
     body.canCreateFolders !== undefined ||
     accessMode !== undefined ||
     body.canRead !== undefined ||
     body.canCreate !== undefined ||
     body.canEdit !== undefined ||
-    body.canComment !== undefined
-  ) {
-    await db
-      .update(apiKeys)
-      .set({
-        ...(name !== undefined ? { name } : {}),
-        ...(body.canCreateFolders !== undefined ? { canCreateFolders: body.canCreateFolders } : {}),
-        ...(body.canRead !== undefined ? { canRead: body.canRead } : {}),
-        ...(body.canCreate !== undefined ? { canCreate: body.canCreate } : {}),
-        ...(body.canEdit !== undefined ? { canEdit: body.canEdit } : {}),
-        ...(body.canComment !== undefined ? { canComment: body.canComment } : {}),
-        ...(accessMode !== undefined ? { accessMode } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(apiKeys.id, keyId));
-  }
-
-  const effectiveAccessMode = accessMode ?? existing.accessMode;
-  let permissionRows: Array<typeof apiKeyFolderPermissions.$inferInsert> | undefined;
-  if (
+    body.canComment !== undefined;
+  const shouldReplaceRules =
     body.permissions !== undefined ||
     accessMode === 'all' ||
     body.canRead !== undefined ||
     body.canCreate !== undefined ||
     body.canEdit !== undefined ||
-    body.canComment !== undefined
-  ) {
-    const requestedPermissions =
-      effectiveAccessMode !== 'all'
-        ? await filterSelectablePermissionRows({
-            userId: user.id,
-            accessMode: effectiveAccessMode,
-            permissions:
-              body.permissions ??
-              (await db.select().from(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, keyId))),
-          })
-        : [];
-    permissionRows = permissionRowsFromFolders({ keyId, permissions: requestedPermissions, ...nextPermissions });
-    await db.delete(apiKeyFolderPermissions).where(eq(apiKeyFolderPermissions.apiKeyId, keyId));
-    if (permissionRows.length > 0) await db.insert(apiKeyFolderPermissions).values(permissionRows);
+    body.canComment !== undefined;
+  const effectiveAccessMode = accessMode ?? existing.authorization.accessMode;
+  let rules: Array<typeof authorizationFolderRules.$inferInsert> | undefined;
+  if (shouldReplaceRules) {
+    const requestedPermissions = await filterSelectablePermissionRows({
+      userId: user.id,
+      accessMode: effectiveAccessMode,
+      permissions:
+        body.permissions ??
+        (await db
+          .select()
+          .from(authorizationFolderRules)
+          .where(eq(authorizationFolderRules.authorizationId, existing.authorization.id))),
+    });
+    rules = ruleRowsFromFolders({
+      authorizationId: existing.authorization.id,
+      userId: user.id,
+      permissions: requestedPermissions,
+      ...nextCapabilities,
+      canCreateFolders: body.canCreateFolders ?? existing.authorization.canCreateFolders,
+      accessMode: effectiveAccessMode,
+    });
   }
 
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    if (name !== undefined) await tx.update(apiKeys).set({ name, updatedAt: now }).where(eq(apiKeys.id, keyId));
+    if (shouldUpdateAuthorization)
+      await tx
+        .update(integrationAuthorizations)
+        .set({
+          ...(body.canCreateFolders !== undefined ? { canCreateFolders: body.canCreateFolders } : {}),
+          ...(body.canRead !== undefined ? { canRead: body.canRead } : {}),
+          ...(body.canCreate !== undefined ? { canCreate: body.canCreate } : {}),
+          ...(body.canEdit !== undefined ? { canEdit: body.canEdit } : {}),
+          ...(body.canComment !== undefined ? { canComment: body.canComment } : {}),
+          ...(accessMode !== undefined ? { accessMode } : {}),
+          updatedAt: now,
+        })
+        .where(eq(integrationAuthorizations.id, existing.authorization.id));
+    if (rules) {
+      await tx
+        .delete(authorizationFolderRules)
+        .where(eq(authorizationFolderRules.authorizationId, existing.authorization.id));
+      if (rules.length > 0)
+        await tx
+          .insert(authorizationFolderRules)
+          .values(rules)
+          .onConflictDoNothing({
+            target: [authorizationFolderRules.authorizationId, authorizationFolderRules.folderId],
+          });
+    }
+  });
+
   const [updated] = await db
-    .select({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      uid: apiKeys.uid,
-      canCreateFolders: apiKeys.canCreateFolders,
-      canRead: apiKeys.canRead,
-      canCreate: apiKeys.canCreate,
-      canEdit: apiKeys.canEdit,
-      canComment: apiKeys.canComment,
-      accessMode: apiKeys.accessMode,
-      createdAt: apiKeys.createdAt,
-      lastUsedAt: apiKeys.lastUsedAt,
-      revokedAt: apiKeys.revokedAt,
-    })
+    .select({ credential: apiKeys, authorization: integrationAuthorizations })
     .from(apiKeys)
+    .innerJoin(integrationAuthorizations, eq(apiKeys.authorizationId, integrationAuthorizations.id))
     .where(eq(apiKeys.id, keyId))
     .limit(1);
-
   const permissions = await db
     .select()
-    .from(apiKeyFolderPermissions)
-    .where(eq(apiKeyFolderPermissions.apiKeyId, keyId));
-  return c.json({ apiKey: { ...updated, permissions } });
+    .from(authorizationFolderRules)
+    .where(eq(authorizationFolderRules.authorizationId, existing.authorization.id));
+  return c.json({
+    apiKey: { ...updated.credential, ...updated.authorization, permissions: permissions.map(apiPermission) },
+  });
 });
 
 apiKeyRoutes.delete('/:keyId', async (c) => {
@@ -299,11 +328,21 @@ apiKeyRoutes.delete('/:keyId', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const [key] = await db
-    .update(apiKeys)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(apiKeys.id, c.req.param('keyId')), eq(apiKeys.userId, user.id), isNull(apiKeys.revokedAt)))
-    .returning({ id: apiKeys.id });
-
+    .select({ authorizationId: apiKeys.authorizationId })
+    .from(apiKeys)
+    .innerJoin(integrationAuthorizations, eq(apiKeys.authorizationId, integrationAuthorizations.id))
+    .where(
+      and(
+        eq(apiKeys.id, c.req.param('keyId')),
+        eq(integrationAuthorizations.userId, user.id),
+        isNull(integrationAuthorizations.revokedAt)
+      )
+    )
+    .limit(1);
   if (!key) return c.json({ error: 'API key not found' }, 404);
+  await db
+    .update(integrationAuthorizations)
+    .set({ revokedAt: new Date(), updatedAt: new Date() })
+    .where(eq(integrationAuthorizations.id, key.authorizationId));
   return c.json({ ok: true });
 });

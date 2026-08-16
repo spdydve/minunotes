@@ -3,6 +3,27 @@ import { describe, expect, it } from 'vitest';
 import app from '../src/api/index';
 import { mcpRoutes } from '../src/api/routes/mcp';
 
+function oauthAuthorization() {
+  const now = new Date();
+  return {
+    id: 'oauth_auth_test',
+    integrationAuthorizationId: 'oauth_auth_test',
+    userId: 'user_test',
+    clientId: 'oauth_client_test',
+    scope: 'notes.read',
+    accessMode: 'all' as const,
+    canRead: true,
+    canCreate: false,
+    canEdit: false,
+    canComment: false,
+    canCreateFolders: false,
+    createdAt: now,
+    updatedAt: now,
+    lastUsedAt: null,
+    revokedAt: null,
+  };
+}
+
 describe('hosted MCP route', () => {
   it('requires authentication', async () => {
     const response = await app.request('/mcp', { method: 'POST' });
@@ -36,7 +57,7 @@ describe('hosted MCP route', () => {
       c.set('user', { id: 'user_test', name: 'Test User', email: 'test@example.com' });
       c.set('session', null);
       c.set('apiKey', null);
-      c.set('oauthAuthorization', { id: 'oauth_auth_test' });
+      c.set('oauthAuthorization', oauthAuthorization());
       await next();
     });
     testApp.route('/mcp', mcpRoutes);
@@ -79,7 +100,7 @@ describe('hosted MCP route', () => {
       c.set('user', { id: 'user_test', name: 'Test User', email: 'test@example.com' });
       c.set('session', null);
       c.set('apiKey', null);
-      c.set('oauthAuthorization', { id: 'oauth_auth_test' });
+      c.set('oauthAuthorization', oauthAuthorization());
       await next();
     });
     testApp.route('/mcp', mcpRoutes);
@@ -113,7 +134,45 @@ describe('hosted MCP route', () => {
       c.set('user', { id: 'user_test', name: 'Test User', email: 'test@example.com' });
       c.set('session', null);
       c.set('apiKey', null);
-      c.set('oauthAuthorization', { id: 'oauth_auth_test' });
+      c.set('oauthAuthorization', oauthAuthorization());
+      await next();
+    });
+    testApp.route('/mcp', mcpRoutes);
+
+    const response = await testApp.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: 'Bearer mnoac_test',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'notes_create_canvas',
+          arguments: { folderId: 'folder_forbidden', canvas: { nodes: [], edges: [] } },
+        },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      result: {
+        isError: true,
+        content: [{ type: 'text', text: expect.stringContaining('Forbidden (403)') }],
+      },
+    });
+  });
+
+  it('fails closed when the OAuth actor is missing its shared authorization id', async () => {
+    const testApp = new Hono();
+    testApp.use('*', async (c, next) => {
+      c.set('user', { id: 'user_test', name: 'Test User', email: 'test@example.com' });
+      c.set('session', null);
+      c.set('apiKey', null);
+      c.set('oauthAuthorization', { ...oauthAuthorization(), integrationAuthorizationId: '' });
       await next();
     });
     testApp.route('/mcp', mcpRoutes);
@@ -151,7 +210,7 @@ describe('hosted MCP route', () => {
       c.set('user', { id: 'user_test', name: 'Test User', email: 'test@example.com' });
       c.set('session', null);
       c.set('apiKey', null);
-      c.set('oauthAuthorization', { id: 'oauth_auth_test' });
+      c.set('oauthAuthorization', oauthAuthorization());
       await next();
     });
     testApp.route('/mcp', mcpRoutes);

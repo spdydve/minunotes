@@ -18,7 +18,7 @@ type ThreadResponse = {
 type MessageResponse = { message: { id: string } };
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 26; index += 1) {
+  for (let index = 0; index <= 34; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -92,13 +92,9 @@ async function setupApp() {
     documentType: 'canvas.default' as const,
   };
   const otherNote = { ...note, id: 'note_other', userId: otherUser.id, folderId: otherFolder.id };
-  const apiKey = {
+  const authorization = {
     id: 'agent_key_comments',
     userId: owner.id,
-    name: 'Reviewer',
-    uid: 'REVIEW01',
-    hash: 'hash',
-    salt: 'salt',
     canCreateFolders: false,
     canRead: true,
     canCreate: true,
@@ -111,18 +107,31 @@ async function setupApp() {
     revokedAt: null,
   };
 
+  const apiKey = {
+    ...authorization,
+    authorizationId: authorization.id,
+    name: 'Reviewer',
+    uid: 'REVIEW01',
+    hash: 'hash',
+    salt: 'salt',
+  };
+
   await db.insert(schema.user).values([owner, otherUser]);
   await db.insert(schema.folders).values([folder, otherFolder]);
   await db.insert(schema.notes).values([note, canvas, otherNote]);
+  await db.insert(schema.integrationAuthorizations).values(authorization);
   await db.insert(schema.apiKeys).values(apiKey);
-  await db.insert(schema.apiKeyFolderPermissions).values({
-    id: 'agent_perm_comments',
-    apiKeyId: apiKey.id,
+  await db.insert(schema.authorizationFolderRules).values({
+    id: 'auth_rule_comments',
+    authorizationId: apiKey.id,
+    userId: owner.id,
     folderId: folder.id,
     canRead: true,
     canCreate: true,
     canEdit: false,
     canComment: true,
+    canCreateFolders: false,
+    appliesTo: 'exact',
     createdAt: now,
     updatedAt: now,
   });
@@ -428,16 +437,16 @@ describe('note comments', () => {
     ]);
 
     await db
-      .update(schema.apiKeyFolderPermissions)
+      .update(schema.authorizationFolderRules)
       .set({ canComment: false })
-      .where(eq(schema.apiKeyFolderPermissions.apiKeyId, apiKey.id));
+      .where(eq(schema.authorizationFolderRules.authorizationId, apiKey.id));
     const folderBlocked = await harnessApp.request(`/v1/harness/notes/${note.id}/comments`);
     expect(folderBlocked.status).toBe(403);
 
     await db
-      .update(schema.apiKeyFolderPermissions)
+      .update(schema.authorizationFolderRules)
       .set({ canComment: true })
-      .where(eq(schema.apiKeyFolderPermissions.apiKeyId, apiKey.id));
+      .where(eq(schema.authorizationFolderRules.authorizationId, apiKey.id));
     apiKey.canEdit = true;
     apiKey.canComment = false;
     const keyBlocked = await harnessApp.request(`/v1/harness/notes/${note.id}/comments`);

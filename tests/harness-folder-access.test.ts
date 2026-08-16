@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+  for (let index = 0; index <= 34; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -44,13 +44,9 @@ async function setupHarnessApp(input: {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  const apiKey = {
+  const authorization = {
     id: 'agent_key_test',
     userId: user.id,
-    name: 'Test key',
-    uid: 'ABCDEFGH',
-    hash: 'hash',
-    salt: 'salt',
     canCreateFolders: input.canCreateFolders,
     canRead: true,
     canCreate: true,
@@ -63,7 +59,17 @@ async function setupHarnessApp(input: {
     revokedAt: null,
   };
 
+  const apiKey = {
+    ...authorization,
+    authorizationId: authorization.id,
+    name: 'Test key',
+    uid: 'ABCDEFGH',
+    hash: 'hash',
+    salt: 'salt',
+  };
+
   await db.insert(schema.user).values(user);
+  await db.insert(schema.integrationAuthorizations).values(authorization);
   await db.insert(schema.apiKeys).values(apiKey);
 
   const app = new Hono();
@@ -75,7 +81,7 @@ async function setupHarnessApp(input: {
   });
   app.route('/api/harness', harnessRoutes);
 
-  return { app, db, schema, apiKey };
+  return { app, db, libsql, schema, apiKey };
 }
 
 afterEach(async () => {
@@ -113,14 +119,18 @@ function noteRow(id: string, folderId: string, title: string, extras = {}) {
   };
 }
 
-function permissionRow(apiKeyId: string, folderId: string, extras = {}) {
+function permissionRow(authorizationId: string, folderId: string, extras = {}) {
   return {
-    id: `agent_perm_${folderId}`,
-    apiKeyId,
+    id: `auth_rule_${folderId}`,
+    authorizationId,
+    userId: 'user_test',
     folderId,
     canRead: true,
     canCreate: true,
     canEdit: true,
+    canComment: false,
+    canCreateFolders: false,
+    appliesTo: 'exact' as const,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...extras,
@@ -169,6 +179,25 @@ describe('agent-created folder access', () => {
     expect(response.status).toBe(403);
   });
 
+  it('rolls back folder creation when its specific-scope grant fails', async () => {
+    const { app, db, libsql, schema } = await setupHarnessApp({ canCreateFolders: true });
+    await libsql.execute(`
+      CREATE TRIGGER fail_created_folder_permission
+      BEFORE INSERT ON authorization_folder_rules
+      BEGIN
+        SELECT RAISE(ABORT, 'forced permission insert failure');
+      END
+    `);
+
+    const response = await app.request('/api/harness/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Must roll back' }),
+    });
+    expect(response.status).toBe(500);
+    expect(await db.select().from(schema.folders)).toEqual([]);
+  });
+
   it('auto-grants scoped permissions for folders created by an allowed API key', async () => {
     const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: true });
 
@@ -182,10 +211,11 @@ describe('agent-created folder access', () => {
     const { folder } = (await createFolderResponse.json()) as { folder: { id: string; title: string } };
     expect(folder.title).toBe('Agent Workspace');
 
-    const permissions = await db.select().from(schema.apiKeyFolderPermissions);
+    const permissions = await db.select().from(schema.authorizationFolderRules);
     expect(permissions).toEqual([
       expect.objectContaining({
-        apiKeyId: apiKey.id,
+        authorizationId: apiKey.id,
+        userId: apiKey.userId,
         folderId: folder.id,
         canRead: true,
         canCreate: true,
@@ -235,6 +265,39 @@ describe('agent-created folder access', () => {
     const body = (await response.json()) as { folders: Array<{ id: string }> };
     expect(body.folders.map((folder) => folder.id)).toContain(publicFolder.id);
     expect(body.folders.map((folder) => folder.id)).not.toContain(privateFolder.id);
+  });
+
+  it('uses per-folder rules to restrict a global key without reducing access elsewhere', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'all' });
+    await db
+      .insert(schema.folders)
+      .values([
+        folderRow('folder_global_reference', 'Reference'),
+        folderRow('folder_global_inbox', 'Inbox'),
+        folderRow('folder_global_open', 'Open'),
+      ]);
+    await db
+      .insert(schema.authorizationFolderRules)
+      .values([
+        permissionRow(apiKey.id, 'folder_global_reference', { canCreate: false, canEdit: false }),
+        permissionRow(apiKey.id, 'folder_global_inbox', { canCreate: true, canEdit: false }),
+      ]);
+
+    const foldersResponse = await app.request('/api/harness/folders');
+    const foldersBody = (await foldersResponse.json()) as { folders: Array<{ id: string }> };
+    expect(foldersBody.folders.map((folder) => folder.id)).toEqual(
+      expect.arrayContaining(['folder_global_reference', 'folder_global_inbox', 'folder_global_open'])
+    );
+
+    const create = (folderId: string) =>
+      app.request('/api/harness/notes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ folderId, title: 'Created' }),
+      });
+    expect((await create('folder_global_reference')).status).toBe(403);
+    expect((await create('folder_global_inbox')).status).toBe(201);
+    expect((await create('folder_global_open')).status).toBe(201);
   });
 
   it('allows global read access but blocks writes in read-only folders', async () => {
@@ -288,13 +351,15 @@ describe('agent-created folder access', () => {
       updatedAt: new Date(),
     };
     await db.insert(schema.folders).values([parent, child]);
-    await db.insert(schema.apiKeyFolderPermissions).values({
+    await db.insert(schema.authorizationFolderRules).values({
       id: 'agent_perm_project',
-      apiKeyId: apiKey.id,
+      authorizationId: apiKey.id,
+      userId: apiKey.userId,
       folderId: parent.id,
       canRead: true,
       canCreate: true,
       canEdit: true,
+      appliesTo: 'subtree',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -325,9 +390,10 @@ describe('agent-created folder access', () => {
       updatedAt: new Date(),
     };
     await db.insert(schema.folders).values(folder);
-    await db.insert(schema.apiKeyFolderPermissions).values({
+    await db.insert(schema.authorizationFolderRules).values({
       id: 'agent_perm_specific',
-      apiKeyId: apiKey.id,
+      authorizationId: apiKey.id,
+      userId: apiKey.userId,
       folderId: folder.id,
       canRead: true,
       canCreate: true,
@@ -347,7 +413,7 @@ describe('agent-created folder access', () => {
   it('honors per-folder permission flags for specific access', async () => {
     const { app, db, schema, apiKey } = await setupHarnessApp({ canCreateFolders: false, accessMode: 'specific' });
     await db.insert(schema.folders).values(folderRow('folder_specific_readonly', 'Specific read only'));
-    await db.insert(schema.apiKeyFolderPermissions).values(
+    await db.insert(schema.authorizationFolderRules).values(
       permissionRow(apiKey.id, 'folder_specific_readonly', {
         canRead: true,
         canCreate: false,
@@ -398,10 +464,11 @@ describe('agent-created folder access', () => {
       updatedAt: new Date(),
     };
     await db.insert(schema.folders).values([parent, child, privateChild]);
-    await db.insert(schema.apiKeyFolderPermissions).values([
+    await db.insert(schema.authorizationFolderRules).values([
       {
         id: 'agent_perm_parent',
-        apiKeyId: apiKey.id,
+        authorizationId: apiKey.id,
+        userId: apiKey.userId,
         folderId: parent.id,
         canRead: true,
         canCreate: true,
@@ -411,7 +478,8 @@ describe('agent-created folder access', () => {
       },
       {
         id: 'agent_perm_private_child',
-        apiKeyId: apiKey.id,
+        authorizationId: apiKey.id,
+        userId: apiKey.userId,
         folderId: privateChild.id,
         canRead: true,
         canCreate: true,
@@ -428,9 +496,10 @@ describe('agent-created folder access', () => {
     expect(body.folders.map((folder) => folder.id)).not.toContain(child.id);
     expect(body.folders.map((folder) => folder.id)).not.toContain(privateChild.id);
 
-    await db.insert(schema.apiKeyFolderPermissions).values({
+    await db.insert(schema.authorizationFolderRules).values({
       id: 'agent_perm_child',
-      apiKeyId: apiKey.id,
+      authorizationId: apiKey.id,
+      userId: apiKey.userId,
       folderId: child.id,
       canRead: true,
       canCreate: true,
@@ -450,7 +519,7 @@ describe('agent-created folder access', () => {
       .insert(schema.folders)
       .values([folderRow('folder_source', 'Source'), folderRow('folder_target', 'Target')]);
     await db
-      .insert(schema.apiKeyFolderPermissions)
+      .insert(schema.authorizationFolderRules)
       .values([permissionRow(apiKey.id, 'folder_source'), permissionRow(apiKey.id, 'folder_target')]);
     await db
       .insert(schema.notes)
@@ -495,7 +564,7 @@ describe('agent-created folder access', () => {
         folderRow('folder_target', 'Target'),
       ]);
     await db
-      .insert(schema.apiKeyFolderPermissions)
+      .insert(schema.authorizationFolderRules)
       .values([permissionRow(apiKey.id, 'folder_allowed'), permissionRow(apiKey.id, 'folder_target')]);
     await db
       .insert(schema.notes)
@@ -523,7 +592,7 @@ describe('agent-created folder access', () => {
     await db
       .insert(schema.folders)
       .values([folderRow('folder_source', 'Source'), folderRow('folder_target', 'Target')]);
-    await db.insert(schema.apiKeyFolderPermissions).values(permissionRow(apiKey.id, 'folder_source'));
+    await db.insert(schema.authorizationFolderRules).values(permissionRow(apiKey.id, 'folder_source'));
     await db.insert(schema.notes).values(noteRow('note_one', 'folder_source', 'One'));
 
     const response = await app.request('/api/harness/notes/move', {
@@ -546,8 +615,11 @@ describe('agent-created folder access', () => {
         folderRow('folder_child_b', 'Child B', 'folder_root_b'),
       ]);
     await db
-      .insert(schema.apiKeyFolderPermissions)
-      .values([permissionRow(apiKey.id, 'folder_root_a'), permissionRow(apiKey.id, 'folder_root_b')]);
+      .insert(schema.authorizationFolderRules)
+      .values([
+        permissionRow(apiKey.id, 'folder_root_a', { appliesTo: 'subtree' }),
+        permissionRow(apiKey.id, 'folder_root_b', { appliesTo: 'subtree' }),
+      ]);
     await db.insert(schema.notes).values(noteRow('note_cross_root', 'folder_child_a', 'Cross root'));
 
     const response = await app.request('/api/harness/notes/move', {

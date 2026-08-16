@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+  for (let index = 0; index <= 34; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -39,13 +39,9 @@ async function setup(accessMode: 'all' | 'specific' = 'all') {
     createdAt: now,
     updatedAt: now,
   };
-  const apiKey = {
+  const authorization = {
     id: 'agent_key_pagination',
     userId: user.id,
-    name: 'Pagination key',
-    uid: 'PAGEKEY1',
-    hash: 'hash',
-    salt: 'salt',
     canCreateFolders: true,
     canRead: true,
     canCreate: true,
@@ -56,7 +52,16 @@ async function setup(accessMode: 'all' | 'specific' = 'all') {
     lastUsedAt: null,
     revokedAt: null,
   };
+  const apiKey = {
+    ...authorization,
+    authorizationId: authorization.id,
+    name: 'Pagination key',
+    uid: 'PAGEKEY1',
+    hash: 'hash',
+    salt: 'salt',
+  };
   await db.insert(schema.user).values(user);
+  await db.insert(schema.integrationAuthorizations).values(authorization);
   await db.insert(schema.apiKeys).values(apiKey);
 
   const app = new Hono();
@@ -139,13 +144,16 @@ describe('harness cursor pagination', () => {
     const visibleFolder = folder('folder_visible', 'Visible', now);
     const hiddenFolder = folder('folder_hidden', 'Hidden', now);
     await db.insert(schema.folders).values([visibleFolder, hiddenFolder]);
-    await db.insert(schema.apiKeyFolderPermissions).values({
+    await db.insert(schema.authorizationFolderRules).values({
       id: 'permission_visible',
-      apiKeyId: apiKey.id,
+      authorizationId: apiKey.id,
+      userId: apiKey.userId,
       folderId: visibleFolder.id,
       canRead: true,
       canCreate: true,
       canEdit: true,
+      canCreateFolders: true,
+      appliesTo: 'exact',
       createdAt: now,
       updatedAt: now,
     });

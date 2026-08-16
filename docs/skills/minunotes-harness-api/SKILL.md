@@ -26,6 +26,12 @@ X-API-Key: <MINUNOTES_API_KEY>
 
 Use JSON for request/response bodies.
 
+## Permission model
+
+The API key's global capabilities are a maximum ceiling. Folder-specific rules may reduce those capabilities but never increase them. For keys with `all` access, an unconfigured folder inherits the global ceiling. For `top_level` and `specific` keys, a matching folder rule is required. Rules can apply to an exact folder or a subtree; the nearest applicable rule wins.
+
+Private and trashed folders are unavailable regardless of the key. Agent-read-only folders deny writes even when the key and folder rule otherwise allow editing. Treat `403` as an intentional permission boundary and do not retry against unrelated folders.
+
 ## Rich Markdown
 
 - GitHub-style callouts use `> [!NOTE]`, `TIP`, `IMPORTANT`, `WARNING`, or `CAUTION`.

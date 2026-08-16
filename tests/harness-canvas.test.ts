@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 25; index += 1) {
+  for (let index = 0; index <= 34; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -40,13 +40,9 @@ async function setupHarnessApp() {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  const apiKey = {
+  const authorization = {
     id: 'agent_key_test',
     userId: user.id,
-    name: 'Test key',
-    uid: 'ABCDEFGH',
-    hash: 'hash',
-    salt: 'salt',
     canCreateFolders: true,
     canRead: true,
     canCreate: true,
@@ -56,6 +52,14 @@ async function setupHarnessApp() {
     updatedAt: new Date(),
     lastUsedAt: null,
     revokedAt: null,
+  };
+  const apiKey = {
+    ...authorization,
+    authorizationId: authorization.id,
+    name: 'Test key',
+    uid: 'ABCDEFGH',
+    hash: 'hash',
+    salt: 'salt',
   };
   const folder = {
     id: 'folder_canvas',
@@ -69,6 +73,7 @@ async function setupHarnessApp() {
   };
 
   await db.insert(schema.user).values(user);
+  await db.insert(schema.integrationAuthorizations).values(authorization);
   await db.insert(schema.apiKeys).values(apiKey);
   await db.insert(schema.folders).values(folder);
 
