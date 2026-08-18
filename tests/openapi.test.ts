@@ -14,12 +14,18 @@ describe('harness OpenAPI spec', () => {
         securitySchemes: Record<string, unknown>;
         schemas: Record<
           string,
-          { properties?: Record<string, { $ref?: string; enum?: string[]; items?: { $ref?: string } }> }
+          {
+            properties?: Record<
+              string,
+              { $ref?: string; enum?: string[]; items?: { $ref?: string }; type?: string | string[] }
+            >;
+          }
         >;
       };
     };
 
     expect(spec.openapi).toBe('3.1.0');
+    expect(spec.info.description).toContain('explicitly enabled authenticated collaboration grants');
     expect(spec.info.description).toContain('Trashed content is excluded');
     expect(spec.components.securitySchemes.ApiKeyAuth).toMatchObject({
       type: 'apiKey',
@@ -38,6 +44,22 @@ describe('harness OpenAPI spec', () => {
     expect(spec.components.schemas.FoldersResponse?.properties?.pageInfo).toMatchObject({
       $ref: '#/components/schemas/PageInfo',
     });
+    expect(spec.components.schemas.AccessSummary?.properties?.role?.enum).toEqual([
+      'owner',
+      'viewer',
+      'commenter',
+      'editor',
+    ]);
+    expect(spec.components.schemas.AccessSummary?.properties?.source?.enum).toEqual([
+      'owner',
+      'note_grant',
+      'folder_grant',
+    ]);
+    expect(spec.components.schemas.NoteResponse?.properties?.access?.$ref).toBe('#/components/schemas/AccessSummary');
+    expect(spec.components.schemas.CompactNote?.properties).not.toHaveProperty('access');
+    expect(spec.components.schemas.Folder?.properties).not.toHaveProperty('access');
+    expect(spec.components.schemas.Note?.properties?.folderId?.type).toEqual(['string', 'null']);
+    expect(spec.components.schemas.Note?.properties).not.toHaveProperty('userId');
     expect(spec.components.schemas.PaginatedTagsResponse?.properties?.pageInfo).toMatchObject({
       $ref: '#/components/schemas/PageInfo',
     });

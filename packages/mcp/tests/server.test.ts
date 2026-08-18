@@ -97,10 +97,14 @@ describe('createNotesMcpServer', () => {
       'notes_replace_note_tags',
     ]);
     expect(Object.keys(registered).filter((name) => /trash|restore|permanent.*delete/i.test(name))).toEqual([]);
-    expect(registered.notes_list_folders.description).toContain('Trashed folder subtrees are excluded');
-    expect(registered.notes_search.description).toContain('Trashed content is excluded');
-    expect(registered.notes_search.description).toContain('compact metadata without full note content');
-    expect(registered.notes_get_note.description).toContain('Trashed content returns not found');
+    expect(registered.notes_list_folders.description).toContain('explicitly scoped shared folders');
+    expect(registered.notes_list_folders.description).toContain('owner/grant ids');
+    expect(registered.notes_search.description).toContain('explicitly scoped shared notes');
+    expect(registered.notes_search.description).toContain('null folder context');
+    expect(registered.notes_get_note.description).toContain('Do not read solely to inspect permissions');
+    expect(registered.notes_get_note.description).toContain('inaccessible, revoked, or trashed');
+    expect(registered.notes_create_note.description).toContain('without reading unrelated notes');
+    expect(registered.notes_move_notes.description).toContain('Shared-resource structure is owner-only');
     expect(registered.notes_list_folders.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(registered.notes_create_folder.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(registered.notes_edit_note.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });

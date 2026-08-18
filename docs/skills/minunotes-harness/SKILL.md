@@ -9,13 +9,27 @@ Use this skill when registered MinuNotes tools are available. Prefer tools over 
 
 ## Permission boundary
 
-Global integration capabilities are a maximum ceiling. Folder rules may restrict them but cannot grant more access. For all-folder access, folders without a rule inherit the ceiling; restricted access modes require a matching rule. The nearest exact or subtree rule wins. Private and trashed folders remain unavailable, and agent-read-only folders deny writes. Report permission errors rather than retrying against unrelated content.
+Global integration capabilities are a maximum ceiling. Folder rules may restrict them but cannot grant more access. For all-folder access, folders without a rule inherit the ceiling; restricted access modes require a matching rule. The nearest exact or subtree rule wins. Private and trashed folders remain unavailable, and agent-read-only folders deny writes.
+
+Authenticated collaboration is a separate scope. Existing and new connections default to `sharedAccessMode: none`; the user must explicitly select active grants with `specific` or accept the current-and-future warning for `all`. Effective shared access is the intersection of the human Viewer/Commenter/Editor role, connection capabilities, selected shared mode, owner safety policy, and note API-editability. Revocation or downgrade applies immediately.
+
+A full note read may include privacy-safe role/source context, but never read a note solely to inspect permissions. A direct-note grant has `folderId: null`; do not infer, search for, or reconstruct its containing folder. Content created in a shared folder belongs to that folder owner. Shared-resource structure, resharing, public links, moves, and Trash remain owner-only. Report `403`/`404` permission boundaries rather than retrying against unrelated content or treating not found as proof of deletion.
 
 ## Tool usage patterns
 
 - Find/create location: `minunotes_list_folders` → `minunotes_create_folder` if needed.
 - Discovery first: `minunotes_search_notes` and `minunotes_orphans` return compact metadata only; use `minunotes_read_note`, `minunotes_read_lines`, or outline/section tools to expand a selected note.
 - Safe note edit: search or `minunotes_read_note` → capture `contentHash` → `minunotes_edit_note` with `baseHash`.
+
+## Net-new note fast path
+
+When the task is to create a new note without using existing note content:
+
+1. Resolve the requested folder using folder titles and `parentFolderId` relationships.
+2. Create the note directly with `minunotes_create_note`.
+3. Do not search or read existing notes merely to confirm the folder or inspect permissions.
+
+If note search is independently necessary for folder discovery, use only its compact metadata. If folder pagination is unavailable or discovery remains incomplete, report that limitation or request clarification instead of reading unrelated notes.
 
 ## Retrieval workflow
 
@@ -26,7 +40,7 @@ Use the smallest tool result that supports the next decision:
 3. **Expand selectively** with `minunotes_read_note` for the complete source, or `minunotes_read_outline` followed by `minunotes_read_section` for one heading. Use `minunotes_read_lines` for a bounded range.
 4. **Edit only after reading** the current note and copying its `contentHash` into the edit request.
 
-Discovery tools are cursor-paginated. When a response has `pageInfo.hasMore: true`, pass `pageInfo.nextCursor` back to the same tool with the same query and filters. Do not reuse a cursor with another tool or changed search, and do not fetch every page unless the task requires broader coverage.
+Discovery tools are cursor-paginated when their registered input exposes `cursor`. When a response has `pageInfo.hasMore: true`, pass `pageInfo.nextCursor` back to the same tool with the same query and filters. If that tool does not accept a cursor, report the discovery limitation rather than inspecting unrelated note bodies. Do not reuse a cursor with another tool or changed search, and do not fetch every page unless the task requires broader coverage.
 
 Do not read every search result automatically. Rank candidates by title, folder, document type, and matched context, then expand only the notes needed to answer the task.
 - Section edit: `minunotes_read_outline` → `minunotes_read_section` → targeted `replace_text` or `replace_range`.
@@ -35,6 +49,19 @@ Do not read every search result automatically. Rank candidates by title, folder,
 - Canvas note link: `minunotes_read_note` → `minunotes_link_canvas_node_to_note` or `minunotes_unlink_canvas_node` with the latest `contentHash` as `baseHash`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
 - Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. List a thread before editing its messages; message edits/deletes are author-only, and reactions are actor-specific toggles.
+
+## Shared-note editing protocol
+
+Treat canonical edits and Review comments as different collaboration modes:
+
+- If the user explicitly requests a narrow edit, read the current note, capture a fresh `contentHash`, make only the requested change, and summarize the changed sections afterward. No additional approval or pre-edit diff is required.
+- If the user asks for feedback, review, or suggestions—or the connection can comment but not edit—use Review comments instead of changing canonical content.
+- Before a broad rewrite, substantial deletion, structural reorganization, or change whose intent is ambiguous, present a concise plan or proposed diff and request approval.
+- Do not resolve another collaborator's ambiguity by silently rewriting their work. Prefer an anchored comment or ask the user when preserving intent is uncertain.
+- On a `409` conflict, do not overwrite or automatically replay the old patch. Read the latest note, rebase the proposed change, and request approval if the rebased diff is materially different.
+- On `403` or `404`, stop after the first denial and report the collaboration boundary without probing other resources.
+- Treat returned role/source as descriptive context, not a guarantee that mutation is allowed; credential scope and owner policy are still enforced by the edit request.
+- After a routine edit, provide a concise summary rather than dumping a full diff. Show a full diff when requested or when the change was broad enough to require approval.
 
 ## Review workflow
 
@@ -107,7 +134,7 @@ Review tools require explicit Review comments permission plus read scope for eve
 - Prefer focused canvas link/unlink tools over whole-document replacement when only an internal target changes.
 - Internal canvas note links and external URLs are independent. Link/unlink operations must preserve `node.url` and unrelated node metadata.
 - Preserve markdown structure, wikilinks, tags, and app-owned image URLs such as `/internal/attachments/.../content`.
-- If permission is denied, report it; do not retry unrelated actions.
+- If permission is denied or shared access disappears, report it; do not retry unrelated actions, probe for hidden ancestry, or attempt to expand the connection's scope.
 - After edits, report folder ID, note ID, and a concise summary of changes.
 
 ## Route note

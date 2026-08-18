@@ -19,6 +19,14 @@ Each key has Read, Create, and Edit permissions for its selected scope. Folder-l
 
 Private folders are never accessible to agents or integrations. Private status also applies to child folders.
 
+## Shared collaboration access
+
+Authenticated notes and folders shared with the connection owner are disabled for integrations by default. Choose **No shared content**, select active grants with **Specific**, or explicitly allow **All current and future shared content**.
+
+Effective shared access cannot exceed the human Viewer, Commenter, or Editor role. It also remains bounded by connection capabilities, OAuth scope, private/read-only owner policy, and note API-editability. Downgrades and revocations apply immediately.
+
+Full note reads include privacy-safe role/source context. Discovery stays compact, and direct-note grants intentionally omit folder context. Content created by an Editor's agent in a shared folder belongs to that folder owner. Integrations cannot reshare, administer public links, move shared resources, modify shared structure, or use Trash.
+
 Trashed notes, templates, and folder subtrees are also unavailable to integrations. Harness, OpenAPI, hosted MCP, local MCP, OAuth, and API-key clients cannot list Trash or trash, restore, or permanently delete content. Owners perform those actions in the authenticated web interface.
 
 ## Core endpoints
