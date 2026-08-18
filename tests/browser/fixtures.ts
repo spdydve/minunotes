@@ -278,6 +278,14 @@ export async function mockBrowserApi(
     [browserFixture.target.id, { ...browserFixture.target }],
     [browserFixture.child.id, { ...browserFixture.child }],
   ]);
+  const sharedOwnerIdentity = {
+    key: 'user_collaborationowner',
+    type: 'user' as const,
+    displayName: 'Shared Owner',
+    maskedEmail: 's•••@e•••.com',
+    label: 'Shared Owner',
+    isCurrentUser: false,
+  };
   const trashNotes = options.emptyTrash
     ? []
     : [{ ...browserFixture.trashedNote }, { ...browserFixture.trashedTemplate }];
@@ -374,7 +382,7 @@ export async function mockBrowserApi(
               type: 'note' as const,
               grantId: 'grant_shared_note',
               role: options.noteAccessRole === 'owner' ? 'viewer' : (options.noteAccessRole ?? 'viewer'),
-              owner: { key: 'collaboration_owner_browser', name: 'Shared Owner' },
+              owner: sharedOwnerIdentity,
               note: {
                 id: browserFixture.source.id,
                 title: browserFixture.source.title,
@@ -386,7 +394,7 @@ export async function mockBrowserApi(
               type: 'folder' as const,
               grantId: 'grant_shared_folder',
               role: 'editor' as const,
-              owner: { key: 'collaboration_owner_browser', name: 'Shared Owner' },
+              owner: sharedOwnerIdentity,
               folder: {
                 id: browserFixture.folder.id,
                 title: browserFixture.folder.title,
@@ -763,7 +771,7 @@ export async function mockBrowserApi(
               ...note,
               ...(shared ? { folderId: null } : {}),
               access: shared ? { role: 'commenter', source: 'note_grant' } : { role: 'owner', source: 'owner' },
-              owner: shared ? { name: 'Shared Owner' } : null,
+              owner: shared ? sharedOwnerIdentity : null,
             };
           })
           .filter(
@@ -804,7 +812,7 @@ export async function mockBrowserApi(
               folderTitle: shared ? null : browserFixture.folder.title,
               ...(shared ? { folderId: null } : {}),
               access: shared ? { role: 'commenter', source: 'note_grant' } : { role: 'owner', source: 'owner' },
-              owner: shared ? { name: 'Shared Owner' } : null,
+              owner: shared ? sharedOwnerIdentity : null,
             };
           })
           .filter(

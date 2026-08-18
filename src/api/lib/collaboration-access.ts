@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, or, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { authorizationCollaborationScopes, collaborationGrants, folders, notes, user } from '../db/schema';
-import { publicIdentityKey } from './collaboration-identity';
+import { serializeCollaborationUserIdentity } from './collaboration-identity';
 import { isDescendantOrSelf, loadFolderAccessTree } from './folder-access';
 
 export type CollaborationRole = 'viewer' | 'commenter' | 'editor';
@@ -20,10 +20,6 @@ export type CollaborationAccess = {
 
 export function serializeCollaborationAccess(access: CollaborationAccess) {
   return { role: access.role, source: access.source };
-}
-
-function publicCollaborationUserKey(userId: string) {
-  return publicIdentityKey('user', userId);
 }
 
 const ROLE_RANK: Record<EffectiveCollaborationRole, number> = {
@@ -434,7 +430,7 @@ export async function listDirectCollaborations(actorUserId: string) {
   const rows = await db
     .select({
       grant: collaborationGrants,
-      owner: { id: user.id, name: user.name },
+      owner: { id: user.id, name: user.name, email: user.email },
       note: {
         id: notes.id,
         folderId: notes.folderId,
@@ -466,6 +462,7 @@ export async function listDirectCollaborations(actorUserId: string) {
   const resolved = await Promise.all(
     rows.map(async (row) => {
       const tree = await folderTreeForOwner(row.owner.id);
+      const ownerIdentity = serializeCollaborationUserIdentity({ ...row.owner, currentUserId: actorUserId });
       const ownerGrants = grantsByOwner.get(row.owner.id) ?? [];
       const targetNote = row.note;
       if (row.grant.noteId && targetNote && !targetNote.deletedAt && tree.byId.has(targetNote.folderId)) {
@@ -484,7 +481,7 @@ export async function listDirectCollaborations(actorUserId: string) {
           type: 'note' as const,
           grantId: row.grant.id,
           role: access.role,
-          owner: { key: publicCollaborationUserKey(row.owner.id), name: row.owner.name },
+          owner: ownerIdentity,
           note: {
             id: targetNote.id,
             title: targetNote.title,
@@ -508,7 +505,7 @@ export async function listDirectCollaborations(actorUserId: string) {
           type: 'folder' as const,
           grantId: row.grant.id,
           role: access.role,
-          owner: { key: publicCollaborationUserKey(row.owner.id), name: row.owner.name },
+          owner: ownerIdentity,
           folder: { id: targetFolder.id, title: targetFolder.title, updatedAt: targetFolder.updatedAt },
         };
       }

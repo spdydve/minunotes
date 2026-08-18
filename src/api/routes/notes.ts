@@ -20,6 +20,7 @@ import {
   resolveNoteCollaborationAccess,
   serializeCollaborationAccess,
 } from '../lib/collaboration-access';
+import { serializeCollaborationUserIdentity } from '../lib/collaboration-identity';
 import { createId } from '../lib/id';
 import { pageRows, parsePageRequest } from '../lib/pagination';
 import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
@@ -78,14 +79,18 @@ async function serializeDiscoveryNotes<T extends { id: string; folderId: string 
     ...new Set(visible.filter((item) => item.access.role !== 'owner').map((item) => item.access.resourceOwnerUserId)),
   ];
   const ownerRows = ownerIds.length
-    ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ownerIds))
+    ? await db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(inArray(users.id, ownerIds))
     : [];
-  const ownerNames = new Map(ownerRows.map((owner) => [owner.id, owner.name]));
+  const ownerIdentities = new Map(
+    ownerRows.map((owner) => [owner.id, serializeCollaborationUserIdentity({ ...owner, currentUserId: actorUserId })])
+  );
   return visible.map(({ note, access }) => ({
     ...(access.source === 'note_grant' ? { ...note, folderId: null, folderTitle: null } : note),
     access: serializeCollaborationAccess(access),
-    owner:
-      access.role === 'owner' ? null : { name: ownerNames.get(access.resourceOwnerUserId)?.trim() || 'Another person' },
+    owner: access.role === 'owner' ? null : (ownerIdentities.get(access.resourceOwnerUserId) ?? null),
   }));
 }
 

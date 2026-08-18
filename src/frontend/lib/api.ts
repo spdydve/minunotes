@@ -200,20 +200,28 @@ export type NoteShareLink = {
   url: string | null;
 };
 export type CollaborationRole = 'viewer' | 'commenter' | 'editor';
+export type CollaborationIdentity = {
+  key: string;
+  type: 'user' | 'agent' | 'former';
+  displayName: string | null;
+  maskedEmail: string | null;
+  label: string;
+  isCurrentUser: boolean;
+};
 export type CollaborationResourceType = 'note' | 'folder';
 export type SharedCollaboration =
   | {
       type: 'note';
       grantId: string;
       role: CollaborationRole | 'owner';
-      owner: { key: string; name: string };
+      owner: CollaborationIdentity;
       note: { id: string; title: string; documentType: DocumentType; updatedAt: string };
     }
   | {
       type: 'folder';
       grantId: string;
       role: CollaborationRole | 'owner';
-      owner: { key: string; name: string };
+      owner: CollaborationIdentity;
       folder: { id: string; title: string; updatedAt: string };
     };
 export type SharedCollaborationsPage = {
@@ -405,7 +413,7 @@ export type SectionResponse = {
 export type DiscoveryScope = 'all' | 'mine' | 'shared';
 export type DiscoveryNote = NoteListItem & {
   access: CollaborationAccess;
-  owner: { name: string } | null;
+  owner: CollaborationIdentity | null;
 };
 export type SearchNote = DiscoveryNote & { folderTitle: string | null };
 

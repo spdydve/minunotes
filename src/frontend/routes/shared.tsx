@@ -114,7 +114,7 @@ function SharedResourceRow({ item }: { item: SharedCollaboration }) {
   return (
     <tr className="border-t border-[var(--notes-border)] hover:bg-[var(--notes-hover)]">
       <td className="max-w-sm px-4 py-3">{link}</td>
-      <td className="px-4 py-3">{item.owner.name || 'Another person'}</td>
+      <td className="px-4 py-3">{item.owner.label}</td>
       <td className="px-4 py-3">{ROLE_LABEL[item.role]}</td>
       <td className="px-4 py-3 text-[var(--notes-muted)]">{new Date(resource.updatedAt).toLocaleDateString()}</td>
     </tr>

@@ -90,8 +90,7 @@ export function SharedIntegrationAccess({
               <span className="min-w-0">
                 <span className="block truncate font-medium">{resourceTitle(item)}</span>
                 <span className="notes-muted block truncate text-xs">
-                  {item.type === 'folder' ? 'Folder' : 'Note'} · Shared by {item.owner.name || 'another person'} ·{' '}
-                  {ROLE_LABEL[item.role]}
+                  {item.type === 'folder' ? 'Folder' : 'Note'} · Shared by {item.owner.label} · {ROLE_LABEL[item.role]}
                 </span>
               </span>
             </label>

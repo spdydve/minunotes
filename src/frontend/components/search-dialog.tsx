@@ -59,7 +59,7 @@ export function SearchDialog() {
   const results = useMemo<SearchResult[]>(() => {
     const noteSubtitle = (note: NonNullable<typeof recent.data>['notes'][number] & { folderTitle?: string | null }) => {
       if (note.access.role !== 'owner')
-        return `Shared by ${note.owner?.name || 'another person'} · ${ROLE_LABEL[note.access.role]}`;
+        return `Shared by ${note.owner?.label ?? 'another person'} · ${ROLE_LABEL[note.access.role]}`;
       return (
         note.folderTitle || folders.data?.folders.find((folder) => folder.id === note.folderId)?.title || 'My note'
       );
@@ -89,7 +89,7 @@ export function SearchDialog() {
             .map((item) => ({
               id: item.type === 'folder' ? item.folder.id : '',
               title: item.type === 'folder' ? item.folder.title : '',
-              subtitle: `Shared by ${item.owner.name || 'another person'} · ${ROLE_LABEL[item.role]}`,
+              subtitle: `Shared by ${item.owner.label} · ${ROLE_LABEL[item.role]}`,
               kind: 'folder' as const,
             }));
     const noteResults = (search.data?.notes ?? []).map((note) => ({

@@ -121,7 +121,7 @@ afterEach(async () => {
 
 describe('collaborator management', () => {
   it('creates, lists, updates, and removes an existing-user note grant', async () => {
-    const { app, db, libsql, schema, collaborator, storage } = await setup();
+    const { app, db, libsql, schema, owner, collaborator, storage } = await setup();
     const created = await app.request('/notes/note/collaborators', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -306,7 +306,12 @@ describe('collaborator management', () => {
         {
           type: 'note',
           role: 'commenter',
-          owner: { key: expect.stringMatching(/^user_[a-f0-9]{16}$/) },
+          owner: {
+            key: expect.stringMatching(/^user_[a-f0-9]{16}$/),
+            label: owner.name,
+            displayName: owner.name,
+            maskedEmail: 'o•••@e•••.com',
+          },
           note: { id: 'note', title: 'Note' },
         },
       ],
@@ -742,18 +747,19 @@ describe('collaborator management', () => {
           folderId: null,
           folderTitle: null,
           access: { role: 'commenter', source: 'note_grant' },
-          owner: { name: otherOwner.name },
+          owner: expect.objectContaining({ label: otherOwner.name, maskedEmail: 'o•••@e•••.com' }),
         }),
         expect.objectContaining({
           id: 'note_scope_folder',
           folderId: 'folder_scope_shared',
           folderTitle: 'Shared project',
           access: { role: 'commenter', source: 'folder_grant' },
-          owner: { name: otherOwner.name },
+          owner: expect.objectContaining({ label: otherOwner.name, maskedEmail: 'o•••@e•••.com' }),
         }),
       ])
     );
     expect(JSON.stringify(all.body)).not.toContain(otherOwner.id);
+    expect(JSON.stringify(all.body)).not.toContain(otherOwner.email);
 
     const mine = await search('mine');
     expect(mine.body.notes.map((note) => note.id)).toEqual(['note_scope_owned']);
