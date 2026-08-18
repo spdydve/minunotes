@@ -182,8 +182,16 @@ html,
 body,
 #root {
   min-height: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
+
+html:has(.notes-app-shell),
+body:has(.notes-app-shell),
+#root:has(> .notes-app-shell) {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--notes-bg);

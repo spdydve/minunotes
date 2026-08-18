@@ -80,7 +80,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--notes-bg)] text-[var(--notes-text)]">
+    <div className="notes-app-shell flex h-screen min-h-0 overflow-hidden bg-[var(--notes-bg)] text-[var(--notes-text)]">
       <SearchDialog />
       {desktopSidebarCollapsed ? null : (
         <div className="hidden md:block">
@@ -111,7 +111,7 @@ export function AppShell() {
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {desktopSidebarCollapsed ? (
           <button
             className="fixed left-4 top-[5px] z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"

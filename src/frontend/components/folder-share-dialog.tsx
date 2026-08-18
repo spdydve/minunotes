@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Link2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type Folder, type FolderShareLink } from '../lib/api';
+import { api, type FolderShareLink } from '../lib/api';
 import { CollaboratorAccessList } from './collaborator-access-list';
 
 export function FolderShareDialog({
@@ -10,7 +10,7 @@ export function FolderShareDialog({
   open,
   onOpenChange,
 }: {
-  folder: Folder;
+  folder: { id: string };
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {

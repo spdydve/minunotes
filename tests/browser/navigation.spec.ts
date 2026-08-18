@@ -164,6 +164,37 @@ test('opens search with recent notes and restores trigger focus on Escape', asyn
   await expect(searchButton).toBeFocused();
 });
 
+test('scopes unified search and labels shared notes and folders', async ({ page }) => {
+  await mockBrowserApi(page, { includeSharedCollaborations: true });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Search notes' });
+  const scope = dialog.getByRole('group', { name: 'Search scope' });
+  const all = scope.getByRole('button', { name: 'All', exact: true });
+  const mine = scope.getByRole('button', { name: 'Owned by me', exact: true });
+  const shared = scope.getByRole('button', { name: 'Shared with me', exact: true });
+  await expect(all).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
+
+  await mine.click();
+  await expect(mine).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('option', { name: /Source Note/ })).toHaveCount(0);
+  await shared.click();
+  await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
+
+  const input = dialog.getByRole('textbox', { name: 'Search notes or folders' });
+  await input.fill('Browser tests');
+  await expect(dialog.getByRole('option', { name: /Browser tests Shared by Shared Owner · Editor/ })).toBeVisible();
+  await mine.click();
+  await expect(dialog.getByRole('option', { name: /Browser tests Folder/ })).toBeVisible();
+
+  await input.fill('Source');
+  await expect(dialog.getByRole('option', { name: /Source Note/ })).toHaveCount(0);
+  await all.click();
+  await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
+});
+
 test('navigates keyboard-only search while the desktop sidebar is collapsed', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/');

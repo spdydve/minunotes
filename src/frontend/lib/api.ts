@@ -220,6 +220,18 @@ export type SharedCollaborationsPage = {
   collaborations: SharedCollaboration[];
   pageInfo: { hasMore: boolean; nextCursor: string | null };
 };
+export type OwnedSharedResource = {
+  type: CollaborationResourceType;
+  resource: { id: string; title: string; updatedAt: string };
+  activeCollaboratorCount: number;
+  pendingInvitationCount: number;
+  expiredInvitationCount: number;
+  publicLinkActive: boolean;
+};
+export type OwnedSharedResourcesPage = {
+  resources: OwnedSharedResource[];
+  pageInfo: { hasMore: boolean; nextCursor: string | null };
+};
 export type CollaborationInvitationPreview = {
   resource: { type: 'note' | 'folder'; id: string; title: string };
   owner: { name: string };
@@ -390,7 +402,12 @@ export type SectionResponse = {
   contentHash: string;
   section: DocumentSection & { markdown: string; content: string };
 };
-export type SearchNote = NoteListItem & { folderTitle: string };
+export type DiscoveryScope = 'all' | 'mine' | 'shared';
+export type DiscoveryNote = NoteListItem & {
+  access: CollaborationAccess;
+  owner: { name: string } | null;
+};
+export type SearchNote = DiscoveryNote & { folderTitle: string | null };
 
 async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, { method: 'POST', body: formData, credentials: 'include' });
@@ -526,6 +543,12 @@ export const api = {
     if (cursor) search.set('cursor', cursor);
     return request<SharedCollaborationsPage>(`/collaborations/shared-with-me?${search}`);
   },
+  sharedByMePage: (type: CollaborationResourceType, query: string, cursor?: string | null, limit = 25) => {
+    const search = new URLSearchParams({ type, limit: String(limit) });
+    if (query) search.set('q', query);
+    if (cursor) search.set('cursor', cursor);
+    return request<OwnedSharedResourcesPage>(`/collaborations/shared-by-me?${search}`);
+  },
   resourceCollaborators: (resourceType: CollaborationResourceType, resourceId: string) =>
     request<CollaborationManagementResponse>(`/${resourceType}s/${resourceId}/collaborators`),
   addResourceCollaborator: (
@@ -625,8 +648,10 @@ export const api = {
     request<PageResponse & { notes: NoteListItem[]; access: CollaborationAccess }>(
       `/folders/${folderId}/notes?type=${type}&page=${page}&limit=${limit}`
     ),
-  recentNotes: (limit = 10, page = 1) =>
-    request<PageResponse & { notes: NoteListItem[] }>(`/notes/recent?page=${page}&limit=${limit}`),
+  recentNotes: (limit = 10, page = 1, scope: DiscoveryScope = 'all') =>
+    request<PageResponse & { notes: DiscoveryNote[] }>(
+      `/notes/recent?page=${page}&limit=${limit}&scope=${encodeURIComponent(scope)}`
+    ),
   createNote: (
     folderId: string,
     data?: { title?: string; content?: string; type?: NoteType; documentType?: DocumentType }
@@ -743,9 +768,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ noteIds }),
     }),
-  searchNotes: (q: string, type: NoteType = 'note', limit = 50, tag?: string, page = 1) =>
+  searchNotes: (
+    q: string,
+    type: NoteType = 'note',
+    limit = 50,
+    tag?: string,
+    page = 1,
+    scope: DiscoveryScope = 'all'
+  ) =>
     request<PageResponse & { notes: SearchNote[] }>(
-      `/notes/search?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
+      `/notes/search?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}&scope=${encodeURIComponent(scope)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
     ),
   uploadNoteImage: async (noteId: string, file: File) => {
     let phase = 'requesting signed upload URL';

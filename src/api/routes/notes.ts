@@ -1,7 +1,7 @@
-import { and, desc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
-import { apiKeys, folders, noteShareLinks, notes, templateFolderAssignments } from '../db/schema';
+import { apiKeys, folders, noteShareLinks, notes, templateFolderAssignments, user as users } from '../db/schema';
 import {
   type DocumentEdit,
   editDocument,
@@ -53,6 +53,40 @@ function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get('user');
   if (!user) return null;
   return user;
+}
+
+type DiscoveryScope = 'all' | 'mine' | 'shared';
+
+function parseDiscoveryScope(value: string | undefined): DiscoveryScope | null {
+  if (value === undefined || value === 'all') return 'all';
+  if (value === 'mine' || value === 'shared') return value;
+  return null;
+}
+
+async function serializeDiscoveryNotes<T extends { id: string; folderId: string | null; folderTitle?: string | null }>(
+  actorUserId: string,
+  notesToSerialize: readonly T[]
+) {
+  const resolved = await Promise.all(
+    notesToSerialize.map(async (note) => {
+      const access = await resolveNoteCollaborationAccess({ actorUserId, noteId: note.id });
+      return access ? { note, access } : null;
+    })
+  );
+  const visible = resolved.filter((item): item is NonNullable<typeof item> => item !== null);
+  const ownerIds = [
+    ...new Set(visible.filter((item) => item.access.role !== 'owner').map((item) => item.access.resourceOwnerUserId)),
+  ];
+  const ownerRows = ownerIds.length
+    ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ownerIds))
+    : [];
+  const ownerNames = new Map(ownerRows.map((owner) => [owner.id, owner.name]));
+  return visible.map(({ note, access }) => ({
+    ...(access.source === 'note_grant' ? { ...note, folderId: null, folderTitle: null } : note),
+    access: serializeCollaborationAccess(access),
+    owner:
+      access.role === 'owner' ? null : { name: ownerNames.get(access.resourceOwnerUserId)?.trim() || 'Another person' },
+  }));
 }
 
 async function readCollaborativeDocument(actorUserId: string, noteId: string) {
@@ -198,6 +232,8 @@ noteRoutes.get('/search', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
+  const scope = parseDiscoveryScope(c.req.query('scope'));
+  if (!scope) return c.json({ error: 'Scope must be all, mine, or shared' }, 400);
   const q = c.req.query('q')?.trim();
   if (!q) return c.json({ notes: [], page: page.page, limit: page.limit, hasMore: false });
 
@@ -210,16 +246,10 @@ noteRoutes.get('/search', async (c) => {
     offset: page.offset,
     type,
     tag,
-    includeCollaborations: type === 'note',
+    discoveryScope: type === 'note' ? scope : 'mine',
   });
-  const visibleDocuments = await Promise.all(
-    result.value.documents.map(async (note) => {
-      const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: note.id });
-      return access?.source === 'note_grant' ? { ...note, folderId: null, folderTitle: null } : note;
-    })
-  );
   return c.json({
-    notes: visibleDocuments,
+    notes: await serializeDiscoveryNotes(user.id, result.value.documents),
     page: page.page,
     limit: page.limit,
     hasMore: result.value.pageInfo.hasMore,
@@ -231,22 +261,29 @@ noteRoutes.get('/recent', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'), { defaultLimit: 10, maxLimit: 50 });
+  const scope = parseDiscoveryScope(c.req.query('scope'));
+  if (!scope) return c.json({ error: 'Scope must be all, mine, or shared' }, 400);
+  const accessWhere =
+    scope === 'mine'
+      ? activeNoteWhere(user.id, eq(notes.type, 'note'))
+      : scope === 'shared'
+        ? collaborationAccessibleNoteWhere(user.id, 'read', eq(notes.type, 'note'), ne(notes.userId, user.id))
+        : collaborationAccessibleNoteWhere(user.id, 'read', eq(notes.type, 'note'));
   const rows = await db
     .select(compactNoteSelection)
     .from(notes)
-    .where(collaborationAccessibleNoteWhere(user.id, 'read', eq(notes.type, 'note')))
+    .where(accessWhere)
     .orderBy(desc(notes.updatedAt), notes.id)
     .limit(page.limit + 1)
     .offset(page.offset);
   const result = pageRows(rows, page);
-  const visibleNotes = await Promise.all(
-    result.items.map(async (note) => {
-      const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: note.id });
-      return access?.source === 'note_grant' ? { ...note, folderId: null } : note;
-    })
-  );
 
-  return c.json({ notes: visibleNotes, page: result.page, limit: result.limit, hasMore: result.hasMore });
+  return c.json({
+    notes: await serializeDiscoveryNotes(user.id, result.items),
+    page: result.page,
+    limit: result.limit,
+    hasMore: result.hasMore,
+  });
 });
 
 noteRoutes.get('/orphans', async (c) => {

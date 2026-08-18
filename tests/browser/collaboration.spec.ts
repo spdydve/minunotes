@@ -13,6 +13,94 @@ test('lists direct shared roots without exposing owner identifiers', async ({ pa
   await expect(page.getByText('collaboration_owner_browser')).toHaveCount(0);
 });
 
+test('manages owner-shared notes and folders with search and independent pagination', async ({ page }) => {
+  await mockBrowserApi(page, { includeSharedByMe: true });
+  await page.goto('/shared/by-me');
+
+  await expect(page.getByRole('heading', { name: 'Shared by me' })).toBeVisible();
+  await expect(page).toHaveTitle('Shared by me - MinuNotes');
+  await expect(
+    page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Shared by me' })
+  ).toHaveAttribute('aria-current', 'page');
+  const tabs = page.getByRole('navigation', { name: 'Sharing views' });
+  await expect(tabs.getByRole('link', { name: 'Shared with me' })).toBeVisible();
+  await expect(tabs.getByRole('link', { name: 'Shared by me' })).toHaveAttribute('aria-current', 'page');
+
+  const notesSection = page.getByRole('region', { name: 'Notes' });
+  const foldersSection = page.getByRole('region', { name: 'Folders' });
+  await expect(foldersSection.getByRole('button', { name: 'Next' })).toBeDisabled();
+  const sourceRow = notesSection.getByRole('row', { name: /Source Note/ });
+  await expect(sourceRow).toContainText('active collaborators: 2');
+  await expect(sourceRow).toContainText('pending invitations: 1');
+  await expect(sourceRow).toContainText('On');
+  await notesSection.getByRole('button', { name: 'Next' }).click();
+  await expect(notesSection.getByRole('row', { name: /Linked Note/ })).toContainText('expired invitations: 1');
+  await expect(notesSection.getByRole('button', { name: 'Previous' })).toBeEnabled();
+  await expect(foldersSection.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await notesSection.getByRole('button', { name: 'Previous' }).click();
+
+  const sharingSearch = page.getByRole('search');
+  await sharingSearch.getByRole('searchbox', { name: 'Search shared by me' }).fill('Browser tests');
+  await sharingSearch.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Folders' }).getByRole('row', { name: /Browser tests/ })).toBeVisible();
+  await expect(page.getByText('No shared notes match “Browser tests”.')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear' }).click();
+
+  await page.getByRole('button', { name: `Manage sharing for ${browserFixture.source.title}` }).click();
+  await expect(page.getByRole('heading', { name: 'Share note' })).toBeVisible();
+  await expect(page.getByText('People with access')).toBeVisible();
+  await page.getByRole('button', { name: 'Close share dialog' }).click();
+
+  await page.getByRole('button', { name: `Manage sharing for ${browserFixture.folder.title}` }).click();
+  await expect(page.getByRole('heading', { name: 'Share folder' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close share dialog' }).click();
+});
+
+test('keeps shared management scrolling inside the app shell', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await mockBrowserApi(page, { includeSharedByMe: true });
+  await page.goto('/shared/by-me');
+  await expect(page.getByRole('heading', { name: 'Shared by me' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Source Note/ })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Browser tests/ })).toBeVisible();
+
+  const overflow = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('#root');
+    const main = document.querySelector<HTMLElement>('main');
+    if (!root || !main) throw new Error('App shell is missing');
+    return {
+      htmlOverflowY: getComputedStyle(document.documentElement).overflowY,
+      bodyOverflowY: getComputedStyle(document.body).overflowY,
+      rootOverflowY: getComputedStyle(root).overflowY,
+      mainOverflowY: getComputedStyle(main).overflowY,
+      mainScrolls: main.scrollHeight > main.clientHeight,
+    };
+  });
+  expect(overflow).toEqual({
+    htmlOverflowY: 'hidden',
+    bodyOverflowY: 'hidden',
+    rootOverflowY: 'hidden',
+    mainOverflowY: 'auto',
+    mainScrolls: true,
+  });
+});
+
+test('shows empty owner-sharing tables', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/shared/by-me');
+
+  await expect(page.getByText('No notes are currently shared.')).toBeVisible();
+  await expect(page.getByText('No folders are currently shared.')).toBeVisible();
+});
+
+test('shows owner-sharing load errors', async ({ page }) => {
+  await mockBrowserApi(page, { sharedByMeLoadFails: true });
+  await page.goto('/shared/by-me');
+
+  await expect(page.getByRole('heading', { name: 'Unable to load shared notes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Unable to load shared folders' })).toBeVisible();
+});
+
 test('invitation landing safely continues an unauthenticated recipient to email authentication', async ({ page }) => {
   await mockBrowserApi(page, { sessionEmail: null, collaborationInvitation: {} });
   await page.goto('/invite/invitation_token');

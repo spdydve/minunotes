@@ -16,6 +16,7 @@ import { apiAccessSettingsRoute } from './routes/settings.api-access';
 import { shareRoute } from './routes/share.$token';
 import { folderShareRoute } from './routes/share.folders.$token';
 import { sharedRoute } from './routes/shared';
+import { sharedByMeRoute } from './routes/shared.by-me';
 import { templatesRoute } from './routes/templates';
 import { trashRoute } from './routes/trash';
 
@@ -36,6 +37,7 @@ const routeTree = rootRoute.addChildren([
   resourcesRoute,
   resourceDocRoute,
   sharedRoute,
+  sharedByMeRoute,
   folderShareRoute,
   shareRoute,
 ]);

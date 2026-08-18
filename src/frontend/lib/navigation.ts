@@ -17,6 +17,7 @@ export type NavigationDestination =
   | { kind: 'note'; noteId: string }
   | { kind: 'templates' }
   | { kind: 'shared' }
+  | { kind: 'shared-by-me' }
   | { kind: 'trash' }
   | { kind: 'folder-settings'; folderId: string }
   | { kind: 'folder-template'; folderId: string }
@@ -30,7 +31,16 @@ export type NavigationItem = {
 };
 
 export type AppNavigationModel = {
-  section: 'home' | 'folders' | 'templates' | 'shared' | 'trash' | 'settings' | 'resources' | 'other';
+  section:
+    | 'home'
+    | 'folders'
+    | 'templates'
+    | 'shared-with-me'
+    | 'shared-by-me'
+    | 'trash'
+    | 'settings'
+    | 'resources'
+    | 'other';
   activeFolderId: string | null;
   breadcrumbs: NavigationItem[];
   mobileTitle: string;
@@ -154,10 +164,21 @@ export function buildAppNavigationModel({
   if (pathname === '/shared') {
     const shared: NavigationItem = { label: 'Shared with me', destination: { kind: 'shared' } };
     return {
-      section: 'shared',
+      section: 'shared-with-me',
       activeFolderId: null,
       breadcrumbs: [home, shared],
       mobileTitle: 'Shared with me',
+      parent: home,
+    };
+  }
+
+  if (pathname === '/shared/by-me') {
+    const shared: NavigationItem = { label: 'Shared by me', destination: { kind: 'shared-by-me' } };
+    return {
+      section: 'shared-by-me',
+      activeFolderId: null,
+      breadcrumbs: [home, shared],
+      mobileTitle: 'Shared by me',
       parent: home,
     };
   }

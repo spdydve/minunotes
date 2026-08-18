@@ -14,6 +14,7 @@ import {
   revokeCollaborationInvitation,
   updateResourceCollaborator,
 } from '../lib/collaboration-invitations';
+import { InvalidOwnedSharingCursorError, listOwnedSharedResourcesPage } from '../lib/collaboration-owned';
 import { getApiRuntimeConfig } from '../lib/env';
 
 type Variables = {
@@ -208,6 +209,31 @@ collaborationRoutes.get('/collaborations/shared-with-me', async (c) => {
     return c.json({ collaborations: page.items, pageInfo: page.pageInfo });
   } catch {
     return c.json({ error: 'Invalid collaboration cursor' }, 400);
+  }
+});
+
+collaborationRoutes.get('/collaborations/shared-by-me', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const type = c.req.query('type');
+  if (type !== 'note' && type !== 'folder') return c.json({ error: 'Type must be note or folder' }, 400);
+  const requestedLimit = Number(c.req.query('limit') ?? 25);
+  if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50)
+    return c.json({ error: 'Limit must be between 1 and 50' }, 400);
+  const query = c.req.query('q')?.trim() ?? '';
+  if (query.length > 200) return c.json({ error: 'Query must be 200 characters or fewer' }, 400);
+  try {
+    const page = await listOwnedSharedResourcesPage({
+      ownerUserId: user.id,
+      type,
+      query,
+      limit: requestedLimit,
+      cursor: c.req.query('cursor'),
+    });
+    return c.json({ resources: page.items, pageInfo: page.pageInfo });
+  } catch (error) {
+    if (error instanceof InvalidOwnedSharingCursorError) return c.json({ error: 'Invalid collaboration cursor' }, 400);
+    throw error;
   }
 });
 

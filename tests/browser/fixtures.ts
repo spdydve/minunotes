@@ -260,6 +260,8 @@ export async function mockBrowserApi(
     emptyTrash?: boolean;
     noteAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
     includeSharedCollaborations?: boolean;
+    includeSharedByMe?: boolean;
+    sharedByMeLoadFails?: boolean;
     sessionEmail?: string | null;
     collaborationInvitation?: {
       status?: 'pending' | 'accepted';
@@ -292,6 +294,23 @@ export async function mockBrowserApi(
   let commentId = 0;
   let hashVersion = 1;
   let noteAccessRole: 'owner' | 'viewer' | 'commenter' | 'editor' | null = options.noteAccessRole ?? 'owner';
+  let noteShareLink: {
+    id: string;
+    noteId: string;
+    permission: 'read';
+    url: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null = options.includeSharedByMe
+    ? {
+        id: 'note_share_owned',
+        noteId: browserFixture.source.id,
+        permission: 'read',
+        url: 'http://localhost:5173/share/note_share_owned',
+        createdAt: now,
+        updatedAt: now,
+      }
+    : null;
   let folderShareLink: {
     id: string;
     folderId: string;
@@ -381,6 +400,86 @@ export async function mockBrowserApi(
         collaborations: type ? collaborations.filter((item) => item.type === type) : collaborations,
         ...(type ? { pageInfo: { hasMore: false, nextCursor: null } } : {}),
       });
+    }
+
+    if (path === '/collaborations/shared-by-me' && method === 'GET') {
+      if (options.sharedByMeLoadFails) return json({ error: 'Unable to load owner sharing' }, 500);
+      const type = url.searchParams.get('type');
+      const query = url.searchParams.get('q')?.toLowerCase() ?? '';
+      const cursor = url.searchParams.get('cursor');
+      const noteResources = [
+        {
+          type: 'note' as const,
+          resource: {
+            id: browserFixture.source.id,
+            title: browserFixture.source.title,
+            updatedAt: browserFixture.source.updatedAt,
+          },
+          activeCollaboratorCount: 2,
+          pendingInvitationCount: 1,
+          expiredInvitationCount: 0,
+          publicLinkActive: true,
+        },
+        {
+          type: 'note' as const,
+          resource: {
+            id: browserFixture.linked.id,
+            title: browserFixture.linked.title,
+            updatedAt: browserFixture.linked.updatedAt,
+          },
+          activeCollaboratorCount: 0,
+          pendingInvitationCount: 0,
+          expiredInvitationCount: 1,
+          publicLinkActive: false,
+        },
+      ];
+      const folderResources = [
+        {
+          type: 'folder' as const,
+          resource: {
+            id: browserFixture.folder.id,
+            title: browserFixture.folder.title,
+            updatedAt: browserFixture.folder.updatedAt,
+          },
+          activeCollaboratorCount: 1,
+          pendingInvitationCount: 1,
+          expiredInvitationCount: 1,
+          publicLinkActive: false,
+        },
+      ];
+      if (!options.includeSharedByMe) return json({ resources: [], pageInfo: { hasMore: false, nextCursor: null } });
+      const matching = (type === 'note' ? noteResources : folderResources).filter((item) =>
+        item.resource.title.toLowerCase().includes(query)
+      );
+      if (type === 'note' && !query) {
+        const resources = cursor === 'owned-note-page-2' ? matching.slice(1) : matching.slice(0, 1);
+        return json({
+          resources,
+          pageInfo: {
+            hasMore: !cursor && matching.length > 1,
+            nextCursor: !cursor && matching.length > 1 ? 'owned-note-page-2' : null,
+          },
+        });
+      }
+      return json({ resources: matching, pageInfo: { hasMore: false, nextCursor: null } });
+    }
+
+    const noteShareLinkMatch = path.match(/^\/notes\/([^/]+)\/share-link$/);
+    if (noteShareLinkMatch && method === 'GET') return json({ shareLink: noteShareLink });
+    if (noteShareLinkMatch && method === 'POST') {
+      noteShareLink = {
+        id: 'note_share_owned',
+        noteId: noteShareLinkMatch[1],
+        permission: 'read',
+        url: 'http://localhost:5173/share/note_share_owned',
+        createdAt: now,
+        updatedAt: now,
+      };
+      return json({ shareLink: noteShareLink }, 201);
+    }
+    if (noteShareLinkMatch && method === 'DELETE') {
+      noteShareLink = null;
+      return json({ ok: true });
     }
 
     if (/^\/(notes|folders)\/[^/]+\/collaborators$/.test(path) && method === 'GET')
@@ -653,12 +752,26 @@ export async function mockBrowserApi(
       });
     }
 
-    if (path === '/notes/recent' && method === 'GET')
+    if (path === '/notes/recent' && method === 'GET') {
+      const scope = url.searchParams.get('scope') ?? 'all';
       return json({
         notes: [...notes.values()]
           .filter((note) => note.type === 'note')
-          .map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
+          .map((note) => {
+            const shared = options.includeSharedCollaborations && note.id === browserFixture.source.id;
+            return {
+              ...note,
+              ...(shared ? { folderId: null } : {}),
+              access: shared ? { role: 'commenter', source: 'note_grant' } : { role: 'owner', source: 'owner' },
+              owner: shared ? { name: 'Shared Owner' } : null,
+            };
+          })
+          .filter(
+            (note) =>
+              scope === 'all' || (scope === 'shared' ? note.access.role !== 'owner' : note.access.role === 'owner')
+          ),
       });
+    }
 
     if (path === '/notes/trash' && method === 'POST') {
       const body = request.postDataJSON() as { noteIds?: string[] };
@@ -680,10 +793,24 @@ export async function mockBrowserApi(
 
     if (path === '/notes/search' && method === 'GET') {
       const query = url.searchParams.get('q')?.toLowerCase() ?? '';
+      const scope = url.searchParams.get('scope') ?? 'all';
       return json({
         notes: [...notes.values()]
           .filter((note) => note.title.toLowerCase().includes(query))
-          .map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
+          .map((note) => {
+            const shared = options.includeSharedCollaborations && note.id === browserFixture.source.id;
+            return {
+              ...note,
+              folderTitle: shared ? null : browserFixture.folder.title,
+              ...(shared ? { folderId: null } : {}),
+              access: shared ? { role: 'commenter', source: 'note_grant' } : { role: 'owner', source: 'owner' },
+              owner: shared ? { name: 'Shared Owner' } : null,
+            };
+          })
+          .filter(
+            (note) =>
+              scope === 'all' || (scope === 'shared' ? note.access.role !== 'owner' : note.access.role === 'owner')
+          ),
       });
     }
 

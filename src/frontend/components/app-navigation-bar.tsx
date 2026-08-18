@@ -46,6 +46,12 @@ function DestinationLink({
           {children}
         </Link>
       );
+    case 'shared-by-me':
+      return (
+        <Link to="/shared/by-me" {...common}>
+          {children}
+        </Link>
+      );
     case 'trash':
       return (
         <Link to="/trash" {...common}>

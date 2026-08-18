@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Link2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type NoteListItem, type NoteShareLink } from '../lib/api';
+import { api, type NoteShareLink } from '../lib/api';
 import { CollaboratorAccessList } from './collaborator-access-list';
 
 export function NoteShareDialog({
@@ -10,7 +10,7 @@ export function NoteShareDialog({
   open,
   onOpenChange,
 }: {
-  note: NoteListItem;
+  note: { id: string };
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {

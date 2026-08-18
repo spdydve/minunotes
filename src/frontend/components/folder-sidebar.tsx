@@ -213,11 +213,19 @@ export function FolderSidebar({
         </Link>
         <Link
           to="/shared"
-          className={`block rounded-md px-3 py-2 text-sm ${navigation.section === 'shared' ? 'bg-[var(--notes-hover)] font-semibold text-[var(--notes-text)]' : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'}`}
-          aria-current={navigation.section === 'shared' ? 'page' : undefined}
+          className={`block rounded-md px-3 py-2 text-sm ${navigation.section === 'shared-with-me' ? 'bg-[var(--notes-hover)] font-semibold text-[var(--notes-text)]' : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'}`}
+          aria-current={navigation.section === 'shared-with-me' ? 'page' : undefined}
           onClick={onNavigate}
         >
           Shared with me
+        </Link>
+        <Link
+          to="/shared/by-me"
+          className={`block rounded-md px-3 py-2 text-sm ${navigation.section === 'shared-by-me' ? 'bg-[var(--notes-hover)] font-semibold text-[var(--notes-text)]' : 'text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]'}`}
+          aria-current={navigation.section === 'shared-by-me' ? 'page' : undefined}
+          onClick={onNavigate}
+        >
+          Shared by me
         </Link>
         <Link
           to="/templates"

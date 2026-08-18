@@ -356,6 +356,7 @@ export async function searchDocuments(input: {
   cursorScope?: string;
   offset?: number;
   includeCollaborations?: boolean;
+  discoveryScope?: 'all' | 'mine' | 'shared';
   integrationAccess?: { authorizationId: string; sharedAccessMode: SharedAccessMode };
 }) {
   const query = input.query.trim();
@@ -386,8 +387,10 @@ export async function searchDocuments(input: {
           and ${tags.normalizedName} = ${tagName}
       )`
     : undefined;
+  const includesCollaborations =
+    input.includeCollaborations || input.discoveryScope === 'all' || input.discoveryScope === 'shared';
   const folderTitleSearchMatch =
-    input.includeCollaborations || input.integrationAccess
+    includesCollaborations || input.integrationAccess
       ? and(eq(notes.userId, input.userId), like(folders.title, pattern))
       : like(folders.title, pattern);
   const searchRank = sql<number>`case
@@ -440,9 +443,11 @@ export async function searchDocuments(input: {
               sharedAccessMode: input.integrationAccess.sharedAccessMode,
               ownedFolderIds: input.folderIds,
             })
-          : input.includeCollaborations
-            ? collaborationAccessibleNoteWhere(input.userId)
-            : activeNoteWhere(input.userId),
+          : input.discoveryScope === 'shared'
+            ? collaborationAccessibleNoteWhere(input.userId, 'read', sql`${notes.userId} <> ${input.userId}`)
+            : includesCollaborations
+              ? collaborationAccessibleNoteWhere(input.userId)
+              : activeNoteWhere(input.userId),
         eq(notes.type, type),
         input.integrationAccess
           ? undefined

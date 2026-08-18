@@ -661,6 +661,281 @@ describe('collaborator management', () => {
     libsql.close();
   });
 
+  it('scopes note discovery and serializes privacy-safe shared context', async () => {
+    const { app, db, libsql, schema, owner, otherOwner } = await setup();
+    await db.insert(schema.notes).values({
+      id: 'note_scope_owned',
+      folderId: 'folder',
+      userId: owner.id,
+      title: 'Scope owned note',
+      content: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(schema.folders).values([
+      {
+        id: 'folder_scope_direct',
+        userId: otherOwner.id,
+        parentFolderId: null,
+        title: 'Direct container',
+        isPrivate: false,
+        isAgentReadOnly: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 'folder_scope_shared',
+        userId: otherOwner.id,
+        parentFolderId: null,
+        title: 'Shared project',
+        isPrivate: false,
+        isAgentReadOnly: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    await db.insert(schema.notes).values([
+      {
+        id: 'note_scope_direct',
+        folderId: 'folder_scope_direct',
+        userId: otherOwner.id,
+        title: 'Scope direct note',
+        content: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 'note_scope_folder',
+        folderId: 'folder_scope_shared',
+        userId: otherOwner.id,
+        title: 'Scope folder note',
+        content: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+    const grantAsOtherOwner = (resource: string) =>
+      app.request(`/${resource}/collaborators`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-test-user': otherOwner.id },
+        body: JSON.stringify({ email: owner.email, role: 'commenter' }),
+      });
+    expect((await grantAsOtherOwner('notes/note_scope_direct')).status).toBe(201);
+    expect((await grantAsOtherOwner('folders/folder_scope_shared')).status).toBe(201);
+
+    const search = async (scope?: string) => {
+      const response = await app.request(`/notes/search?q=Scope${scope ? `&scope=${scope}` : ''}`);
+      return { response, body: (await response.json()) as { notes: Array<Record<string, unknown>> } };
+    };
+    const all = await search();
+    expect(all.response.status).toBe(200);
+    expect(all.body.notes).toHaveLength(3);
+    expect(all.body.notes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'note_scope_owned',
+          access: { role: 'owner', source: 'owner' },
+          owner: null,
+        }),
+        expect.objectContaining({
+          id: 'note_scope_direct',
+          folderId: null,
+          folderTitle: null,
+          access: { role: 'commenter', source: 'note_grant' },
+          owner: { name: otherOwner.name },
+        }),
+        expect.objectContaining({
+          id: 'note_scope_folder',
+          folderId: 'folder_scope_shared',
+          folderTitle: 'Shared project',
+          access: { role: 'commenter', source: 'folder_grant' },
+          owner: { name: otherOwner.name },
+        }),
+      ])
+    );
+    expect(JSON.stringify(all.body)).not.toContain(otherOwner.id);
+
+    const mine = await search('mine');
+    expect(mine.body.notes.map((note) => note.id)).toEqual(['note_scope_owned']);
+    const shared = await search('shared');
+    expect(shared.body.notes.map((note) => note.id).sort()).toEqual(['note_scope_direct', 'note_scope_folder']);
+
+    const recentShared = await app.request('/notes/recent?scope=shared');
+    const recentSharedBody = (await recentShared.json()) as { notes: Array<Record<string, unknown>> };
+    expect(recentSharedBody.notes.map((note) => note.id).sort()).toEqual(['note_scope_direct', 'note_scope_folder']);
+    expect((await app.request('/notes/search?q=Scope&scope=invalid')).status).toBe(400);
+    expect((await app.request('/notes/recent?scope=invalid')).status).toBe(400);
+
+    expect(
+      (
+        await app.request('/notes/note_scope_direct/collaborators/owner', {
+          method: 'DELETE',
+          headers: { 'x-test-user': otherOwner.id },
+        })
+      ).status
+    ).toBe(200);
+    const afterRevocation = await search('shared');
+    expect(afterRevocation.body.notes.map((note) => note.id)).toEqual(['note_scope_folder']);
+    libsql.close();
+  });
+
+  it('lists owner-managed sharing roots with aggregate statuses, search, pagination, and isolation', async () => {
+    const { app, collaborator, db, libsql, schema, otherOwner } = await setup();
+    const now = Date.now();
+    await db.insert(schema.notes).values([
+      {
+        id: 'note_public',
+        folderId: 'folder',
+        userId: 'owner',
+        title: 'Public roadmap',
+        content: '',
+        createdAt: new Date(now - 2_000),
+        updatedAt: new Date(now - 2_000),
+      },
+      {
+        id: 'note_inherited_only',
+        folderId: 'folder',
+        userId: 'owner',
+        title: 'Inherited only',
+        content: '',
+        createdAt: new Date(now - 3_000),
+        updatedAt: new Date(now - 3_000),
+      },
+    ]);
+
+    const add = (resource: string, email: string, role = 'viewer') =>
+      app.request(`/${resource}/collaborators`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, role }),
+      });
+    expect((await add('notes/note', collaborator.email, 'editor')).status).toBe(201);
+    expect((await add('notes/note', 'expired@example.com')).status).toBe(201);
+    expect((await add('folders/folder', collaborator.email, 'viewer')).status).toBe(201);
+    expect((await add('folders/folder', 'pending@example.com')).status).toBe(201);
+    await db
+      .update(schema.collaborationInvitations)
+      .set({ expiresAt: new Date(now - 1_000) })
+      .where(eq(schema.collaborationInvitations.invitedEmailKey, 'expired@example.com'));
+    expect(
+      (
+        await app.request('/notes/note_public/share-link', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      ).status
+    ).toBe(201);
+
+    await db.insert(schema.folders).values({
+      id: 'other_folder',
+      userId: otherOwner.id,
+      parentFolderId: null,
+      title: 'Other owner folder',
+      isPrivate: false,
+      isAgentReadOnly: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(schema.collaborationInvitations).values({
+      id: 'other_invitation',
+      ownerUserId: otherOwner.id,
+      invitedEmailKey: 'someone@example.com',
+      noteId: null,
+      folderId: 'other_folder',
+      role: 'viewer',
+      tokenHash: 'other-token-hash',
+      invitedByUserId: otherOwner.id,
+      expiresAt: new Date(now + 60_000),
+      acceptedAt: null,
+      acceptedByUserId: null,
+      revokedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const notesResponse = await app.request('/collaborations/shared-by-me?type=note');
+    expect(notesResponse.status).toBe(200);
+    const notesBody = (await notesResponse.json()) as {
+      resources: Array<{
+        resource: { id: string };
+        activeCollaboratorCount: number;
+        pendingInvitationCount: number;
+        expiredInvitationCount: number;
+        publicLinkActive: boolean;
+      }>;
+      pageInfo: { hasMore: boolean; nextCursor: string | null };
+    };
+    expect(notesBody.resources).toHaveLength(2);
+    expect(notesBody.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resource: expect.objectContaining({ id: 'note' }),
+          activeCollaboratorCount: 1,
+          pendingInvitationCount: 0,
+          expiredInvitationCount: 1,
+          publicLinkActive: false,
+        }),
+        expect.objectContaining({
+          resource: expect.objectContaining({ id: 'note_public' }),
+          activeCollaboratorCount: 0,
+          pendingInvitationCount: 0,
+          expiredInvitationCount: 0,
+          publicLinkActive: true,
+        }),
+      ])
+    );
+    expect(notesBody.resources.some((item) => item.resource.id === 'note_inherited_only')).toBe(false);
+
+    const foldersResponse = await app.request('/collaborations/shared-by-me?type=folder');
+    await expect(foldersResponse.json()).resolves.toMatchObject({
+      resources: [
+        {
+          type: 'folder',
+          resource: { id: 'folder' },
+          activeCollaboratorCount: 1,
+          pendingInvitationCount: 1,
+          expiredInvitationCount: 0,
+          publicLinkActive: false,
+        },
+      ],
+    });
+
+    const searchResponse = await app.request('/collaborations/shared-by-me?type=note&q=ROAD');
+    const searchBody = (await searchResponse.json()) as typeof notesBody;
+    expect(searchBody.resources.map((item) => item.resource.id)).toEqual(['note_public']);
+
+    const firstPage = await app.request('/collaborations/shared-by-me?type=note&limit=1');
+    const firstPageBody = (await firstPage.json()) as typeof notesBody;
+    expect(firstPageBody.resources).toHaveLength(1);
+    expect(firstPageBody.pageInfo).toMatchObject({ hasMore: true, nextCursor: expect.any(String) });
+    const secondPage = await app.request(
+      `/collaborations/shared-by-me?type=note&limit=1&cursor=${encodeURIComponent(firstPageBody.pageInfo.nextCursor ?? '')}`
+    );
+    const secondPageBody = (await secondPage.json()) as typeof notesBody;
+    expect(secondPageBody.resources).toHaveLength(1);
+    expect(secondPageBody.resources[0]?.resource.id).not.toBe(firstPageBody.resources[0]?.resource.id);
+    expect(secondPageBody.pageInfo).toEqual({ hasMore: false, nextCursor: null });
+    expect(
+      (
+        await app.request(
+          `/collaborations/shared-by-me?type=note&q=road&cursor=${encodeURIComponent(firstPageBody.pageInfo.nextCursor ?? '')}`
+        )
+      ).status
+    ).toBe(400);
+    const literalWildcard = await app.request('/collaborations/shared-by-me?type=note&q=%25');
+    await expect(literalWildcard.json()).resolves.toMatchObject({ resources: [] });
+
+    expect((await app.request('/collaborations/shared-by-me')).status).toBe(400);
+    expect((await app.request('/collaborations/shared-by-me?type=note&cursor=invalid')).status).toBe(400);
+    expect((await app.request(`/collaborations/shared-by-me?type=note&q=${'a'.repeat(201)}`)).status).toBe(400);
+    const isolated = await app.request('/collaborations/shared-by-me?type=folder', {
+      headers: { 'x-test-user': collaborator.id },
+    });
+    await expect(isolated.json()).resolves.toMatchObject({ resources: [] });
+    libsql.close();
+  });
+
   it('creates a safe pending invitation for an unknown email and regenerates it', async () => {
     const { app, db, libsql, schema } = await setup();
     const invite = () =>

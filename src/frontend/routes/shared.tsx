@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
+import { SharingPageTabs } from '../components/sharing-page-tabs';
 import { EmptyState } from '../components/ui/empty-state';
 import { api, type CollaborationResourceType, type SharedCollaboration } from '../lib/api';
 import { rootRoute } from './__root';
@@ -15,6 +16,7 @@ function SharedWithMeView() {
         <h1 className="font-semibold text-2xl">Shared with me</h1>
         <p className="notes-muted mt-1 text-sm">Notes and folder roots other people have shared with you.</p>
       </div>
+      <SharingPageTabs current="with-me" />
       <div className="space-y-8">
         <SharedResourceTable type="note" />
         <SharedResourceTable type="folder" />
