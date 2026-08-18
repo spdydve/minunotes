@@ -36,6 +36,7 @@ import {
 import { findSection, parseSections } from '../harness/sections';
 import type { auth } from '../lib/auth';
 import {
+  type CollaborationAccess,
   integrationAccessibleFolderWhere,
   resolveIntegrationFolderAccess,
   resolveIntegrationNoteAccess,
@@ -110,7 +111,7 @@ async function readHarnessDocument(
   const owned = await readDocument({ documentId: noteId, userId: user.id });
   if (owned.ok) {
     if (!(await hasFolderPermission(c, owned.value.note.folderId, capability))) return null;
-    return { ...owned.value, resourceOwnerUserId: user.id, source: 'owner' as const };
+    return { ...owned.value, resourceOwnerUserId: user.id, role: 'owner' as const, source: 'owner' as const };
   }
   if (!integration?.authorizationId) return null;
   const access = await resolveIntegrationNoteAccess({
@@ -132,6 +133,7 @@ async function readHarnessDocument(
     ...shared.value,
     note: access.source === 'note_grant' ? { ...note, folderId: null } : note,
     resourceOwnerUserId: access.resourceOwnerUserId,
+    role: access.role,
     source: access.source,
   };
 }
@@ -152,7 +154,7 @@ async function resolveHarnessFolder(
     .limit(1);
   if (owned?.userId === user.id)
     return (await hasFolderPermission(c, folderId, capability))
-      ? { resourceOwnerUserId: user.id, source: 'owner' as const }
+      ? { resourceOwnerUserId: user.id, role: 'owner' as const, source: 'owner' as const }
       : null;
   if (!integration?.authorizationId) return null;
   const access = await resolveIntegrationFolderAccess({
@@ -162,7 +164,7 @@ async function resolveHarnessFolder(
     folderId,
     capability,
   });
-  return access ? { resourceOwnerUserId: access.resourceOwnerUserId, source: access.source } : null;
+  return access ? { resourceOwnerUserId: access.resourceOwnerUserId, role: access.role, source: access.source } : null;
 }
 
 async function harnessDocumentDeniedStatus(userId: string, noteId: string) {
@@ -186,6 +188,7 @@ type HarnessFolderSummary = Pick<
 >;
 
 type SummarizableNote = HarnessNoteSummary & { content?: string; userId?: string };
+type HarnessAccessSummary = Pick<CollaborationAccess, 'role' | 'source'>;
 
 function summarizeHarnessFolder(folder: HarnessFolderSummary): HarnessFolderSummary {
   return {
@@ -209,6 +212,10 @@ function summarizeHarnessNote(note: SummarizableNote): HarnessNoteSummary {
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
   };
+}
+
+function summarizeHarnessAccess(access: HarnessAccessSummary): HarnessAccessSummary {
+  return { role: access.role, source: access.source };
 }
 
 function isValidCursorDate(value: unknown): value is string {
@@ -438,7 +445,8 @@ harnessRoutes.get('/folders', async (c) => {
     if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
     throw error;
   }
-  return c.json({ folders: page.items.map(summarizeHarnessFolder), pageInfo: page.pageInfo });
+  const visibleFolders = page.items.map(summarizeHarnessFolder);
+  return c.json({ folders: visibleFolders, pageInfo: page.pageInfo });
 });
 
 harnessRoutes.post('/folders', async (c) => {
@@ -722,7 +730,13 @@ harnessRoutes.post('/canvases/from-syntax', async (c) => {
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json({ ...summarizeHarnessDocumentResult(result.value), diagnostics: compiled.diagnostics }, 201);
+  return c.json(
+    {
+      ...summarizeHarnessDocumentResult(result.value),
+      diagnostics: compiled.diagnostics,
+    },
+    201
+  );
 });
 
 harnessRoutes.get('/notes/orphans', async (c) => {
@@ -862,7 +876,12 @@ harnessRoutes.get('/notes/:noteId', async (c) => {
     const status = await harnessDocumentDeniedStatus(user.id, noteId);
     return c.json({ error: status === 403 ? 'Forbidden' : 'Note not found' }, status);
   }
-  return c.json({ note: result.note, contentHash: result.contentHash });
+  const { userId: _resourceOwnerUserId, ...note } = result.note;
+  return c.json({
+    note,
+    contentHash: result.contentHash,
+    access: summarizeHarnessAccess(result),
+  });
 });
 
 harnessRoutes.get('/notes/:noteId/comments', async (c) => {

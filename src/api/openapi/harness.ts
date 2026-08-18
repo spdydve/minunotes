@@ -4,7 +4,7 @@ export const harnessOpenApiSpec = {
     title: 'MinuNotes Harness API',
     version: '0.1.0',
     description:
-      'Agent-focused API for scoped active MinuNotes content. Trashed content is excluded, and Trash lifecycle operations are owner-only and not exposed by this specification.',
+      'Agent-focused API for scoped active MinuNotes content, including explicitly enabled authenticated collaboration grants. Shared access is bounded by the human role, credential capabilities, selected shared mode, owner safety policy, and note API-editability. Trashed content is excluded, and owner-only sharing, structure, and Trash lifecycle operations are not exposed.',
   },
   servers: [{ url: '/' }],
   security: [{ ApiKeyAuth: [] }],
@@ -43,7 +43,7 @@ export const harnessOpenApiSpec = {
         operationId: 'listFolders',
         summary: 'List accessible active folders',
         description:
-          'Returns compact active folder metadata only. Owner/database fields are omitted; trashed folders and descendants of trashed folders are excluded.',
+          'Returns compact owned and explicitly scoped shared-folder metadata. Owner/database and grant identifiers are omitted; inaccessible ancestry and trashed folder subtrees are excluded.',
         parameters: [
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
           { name: 'cursor', in: 'query', schema: { type: 'string' } },
@@ -84,7 +84,7 @@ export const harnessOpenApiSpec = {
         operationId: 'searchNotes',
         summary: 'Search active notes',
         description:
-          'Searches active notes only. Returns compact metadata without note content; use the read-note, lines, or section endpoints to expand a selected note. Trashed notes and notes below trashed folders are excluded.',
+          'Searches active owned and explicitly scoped shared notes. Returns compact metadata with privacy-safe role/source context but without note content. Direct-note grants return null folder context. Use the read-note, lines, or section endpoints to expand a selected note.',
         parameters: [
           { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
           { name: 'tag', in: 'query', schema: { type: 'string' } },
@@ -235,7 +235,8 @@ export const harnessOpenApiSpec = {
         tags: ['Notes'],
         operationId: 'getNote',
         summary: 'Read an active note',
-        description: 'Returns not found when the note or any folder ancestor is trashed.',
+        description:
+          'Reads an owned or explicitly scoped shared note when its content is needed and returns privacy-safe role/source context. Do not read solely to inspect permissions. Direct-note grants return null folder context. Owner and grant database identifiers are never returned. Not found can also mean inaccessible, revoked, or trashed.',
         parameters: [{ $ref: '#/components/parameters/NoteId' }],
         responses: {
           '200': {
@@ -1075,6 +1076,15 @@ export const harnessOpenApiSpec = {
           },
         },
       },
+      AccessSummary: {
+        type: 'object',
+        required: ['role', 'source'],
+        description: 'Privacy-safe effective collaboration context. No owner, grant, or authorization ids are exposed.',
+        properties: {
+          role: { type: 'string', enum: ['owner', 'viewer', 'commenter', 'editor'] },
+          source: { type: 'string', enum: ['owner', 'note_grant', 'folder_grant'] },
+        },
+      },
       Folder: {
         type: 'object',
         required: ['id', 'parentFolderId', 'title', 'isPrivate', 'isAgentReadOnly', 'createdAt', 'updatedAt'],
@@ -1159,7 +1169,10 @@ export const harnessOpenApiSpec = {
         ],
         properties: {
           id: { type: 'string' },
-          folderId: { type: 'string' },
+          folderId: {
+            type: ['string', 'null'],
+            description: 'Null for a direct-note grant so inaccessible folder context cannot be inferred.',
+          },
           title: { type: 'string' },
           content: {
             type: 'string',
@@ -1172,7 +1185,7 @@ export const harnessOpenApiSpec = {
           updatedByActorId: { type: ['string', 'null'] },
           createdAt: { type: 'string' },
           updatedAt: { type: 'string' },
-          folderTitle: { type: 'string' },
+          folderTitle: { type: ['string', 'null'] },
         },
       },
       CompactNote: {
@@ -1180,24 +1193,35 @@ export const harnessOpenApiSpec = {
         required: ['id', 'folderId', 'title', 'documentType', 'type', 'createdAt', 'updatedAt'],
         properties: {
           id: { type: 'string' },
-          folderId: { type: 'string' },
+          folderId: {
+            type: ['string', 'null'],
+            description: 'Null for a direct-note grant so inaccessible folder context cannot be inferred.',
+          },
           title: { type: 'string' },
           documentType: { $ref: '#/components/schemas/DocumentType' },
           type: { type: 'string', enum: ['note', 'template'] },
           createdAt: { type: 'string' },
           updatedAt: { type: 'string' },
+          folderTitle: { type: ['string', 'null'] },
         },
       },
       NoteResponse: {
         type: 'object',
-        required: ['note', 'contentHash'],
-        properties: { note: { $ref: '#/components/schemas/Note' }, contentHash: { type: 'string' } },
+        required: ['note', 'contentHash', 'access'],
+        properties: {
+          note: { $ref: '#/components/schemas/Note' },
+          contentHash: { type: 'string' },
+          access: { $ref: '#/components/schemas/AccessSummary' },
+        },
       },
       NoteMutationResponse: {
         type: 'object',
         required: ['note', 'contentHash'],
         description: 'Compact create/update response. Use the read-note endpoint to retrieve full content.',
-        properties: { note: { $ref: '#/components/schemas/CompactNote' }, contentHash: { type: 'string' } },
+        properties: {
+          note: { $ref: '#/components/schemas/CompactNote' },
+          contentHash: { type: 'string' },
+        },
       },
       MoveNotesResponse: {
         type: 'object',
@@ -1352,7 +1376,7 @@ export const harnessOpenApiSpec = {
         type: 'object',
         properties: {
           noteId: { type: 'string' },
-          folderId: { type: 'string' },
+          folderId: { type: ['string', 'null'] },
           title: { type: 'string' },
           line: { type: 'integer' },
           column: { type: 'integer' },

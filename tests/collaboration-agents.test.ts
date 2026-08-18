@@ -334,19 +334,36 @@ describe('collaborator agent access', () => {
     });
     const selected = await app.request('/harness/notes/shared_note');
     expect(selected.status).toBe(200);
-    await expect(selected.json()).resolves.toMatchObject({
-      note: { id: 'shared_note', folderId: null, userId: 'owner', content: 'Shared content' },
+    const selectedBody = (await selected.json()) as {
+      note: Record<string, unknown>;
+      access: Record<string, unknown>;
+    };
+    expect(selectedBody).toMatchObject({
+      note: { id: 'shared_note', folderId: null, content: 'Shared content' },
+      access: { role: 'viewer', source: 'note_grant' },
     });
+    expect(selectedBody.note).not.toHaveProperty('userId');
     const selectedSearch = await app.request('/harness/notes/search?q=content');
     await expect(selectedSearch.json()).resolves.toMatchObject({
-      notes: [{ id: 'shared_note', folderId: null, folderTitle: null }],
+      notes: [
+        {
+          id: 'shared_note',
+          folderId: null,
+          folderTitle: null,
+        },
+      ],
     });
     const hiddenFolderSearch = await app.request('/harness/notes/search?q=Shared%20folder');
     await expect(hiddenFolderSearch.json()).resolves.toMatchObject({ notes: [] });
     await expect(
       app.request('/harness/notes/search-lines?q=Shared').then((response) => response.json())
     ).resolves.toMatchObject({
-      matches: [expect.objectContaining({ noteId: 'shared_note', folderId: null })],
+      matches: [
+        expect.objectContaining({
+          noteId: 'shared_note',
+          folderId: null,
+        }),
+      ],
     });
     await expect(
       app.request('/harness/notes/shared_note/links').then((response) => response.json())
@@ -453,7 +470,10 @@ describe('collaborator agent access', () => {
       body: JSON.stringify({ folderId: 'shared_folder', title: 'Agent canvas' }),
     });
     expect(createdCanvas.status).toBe(201);
-    const createdCanvasBody = (await createdCanvas.json()) as { note: { id: string }; contentHash: string };
+    const createdCanvasBody = (await createdCanvas.json()) as {
+      note: { id: string };
+      contentHash: string;
+    };
     const replacedCanvas = await app.request(`/harness/notes/${createdCanvasBody.note.id}/canvas`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -489,7 +509,11 @@ describe('collaborator agent access', () => {
       .set({ role: 'editor' })
       .where(eq(schema.collaborationGrants.id, 'shared_grant'));
     apiKey.canEdit = true;
-    const editable = (await (await app.request('/harness/notes/shared_note')).json()) as { contentHash: string };
+    const editable = (await (await app.request('/harness/notes/shared_note')).json()) as {
+      contentHash: string;
+      access: Record<string, unknown>;
+    };
+    expect(editable.access).toMatchObject({ role: 'editor', source: 'note_grant' });
     const edited = await app.request('/harness/notes/shared_note/edit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -517,7 +541,10 @@ describe('collaborator agent access', () => {
     const [storedTag] = await db.select().from(schema.tags).where(eq(schema.tags.name, 'agent-shared'));
     expect(storedTag.userId).toBe('owner');
     apiKey.canComment = true;
-    const commentRead = (await (await app.request('/harness/notes/shared_note')).json()) as { contentHash: string };
+    const commentRead = (await (await app.request('/harness/notes/shared_note')).json()) as {
+      contentHash: string;
+      access: Record<string, unknown>;
+    };
     const comment = await app.request('/harness/notes/shared_note/comments', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -539,6 +566,33 @@ describe('collaborator agent access', () => {
         messages: [{ author: { label: 'Collaborator key', isCurrentUser: true } }],
       },
     });
+
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'commenter' })
+      .where(eq(schema.collaborationGrants.id, 'shared_grant'));
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'commenter' })
+      .where(eq(schema.collaborationGrants.id, 'folder_editor_grant'));
+    const downgradedEdit = await app.request('/harness/notes/shared_note/edit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        baseHash: commentRead.contentHash,
+        edits: [{ type: 'append', text: 'blocked by downgrade' }],
+      }),
+    });
+    expect(downgradedEdit.status).toBe(404);
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'editor' })
+      .where(eq(schema.collaborationGrants.id, 'shared_grant'));
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'editor' })
+      .where(eq(schema.collaborationGrants.id, 'folder_editor_grant'));
+
     await db.update(schema.folders).set({ isAgentReadOnly: true }).where(eq(schema.folders.id, 'shared_folder'));
     expect(
       (

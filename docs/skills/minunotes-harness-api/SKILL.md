@@ -30,7 +30,11 @@ Use JSON for request/response bodies.
 
 The API key's global capabilities are a maximum ceiling. Folder-specific rules may reduce those capabilities but never increase them. For keys with `all` access, an unconfigured folder inherits the global ceiling. For `top_level` and `specific` keys, a matching folder rule is required. Rules can apply to an exact folder or a subtree; the nearest applicable rule wins.
 
-Private and trashed folders are unavailable regardless of the key. Agent-read-only folders deny writes even when the key and folder rule otherwise allow editing. Treat `403` as an intentional permission boundary and do not retry against unrelated folders.
+Private and trashed folders are unavailable regardless of the key. Agent-read-only folders deny writes even when the key and folder rule otherwise allow editing.
+
+Authenticated collaboration uses a separate `sharedAccessMode`: `none` (the default), `specific` selected active grants, or `all` current and future grants after an explicit user warning. Shared access never exceeds the collaborator's current Viewer/Commenter/Editor role and still intersects API-key capabilities, owner folder safety, and note API-editability. Revocation and downgrade apply immediately.
+
+A full note read may include privacy-safe role/source context, but never read a note solely to inspect permissions. Direct-note grants return `folderId: null`; never infer or probe for the hidden containing folder. Notes created in a shared folder belong to its owner. Agents cannot change shared structure, reshare, administer public links, move shared resources, or use Trash. Treat `403` and `404` as intentional boundaries and do not retry against unrelated folders, infer resource existence, or attempt permission escalation.
 
 ## Rich Markdown
 
@@ -48,7 +52,7 @@ Private and trashed folders are unavailable regardless of the key. Agent-read-on
 ## Safety and editing rules
 
 - Use only the harness/API. Do not use browser access unless explicitly asked.
-- Never fabricate note contents. Read/search first, then act.
+- Never fabricate existing note contents. Read or search only when existing content is required for the task.
 - Always read a note and capture `contentHash` before editing.
 - Include `baseHash` when editing to avoid overwriting concurrent changes.
 - Prefer small, targeted edits.
@@ -58,7 +62,30 @@ Private and trashed folders are unavailable regardless of the key. Agent-read-on
 - For app-owned images, preserve normal URL markdown such as `/internal/attachments/.../content`.
 - Report the folder ID, note ID, and final changed markdown or section summary after edits.
 - Use note moves to organize agent-created notes only within folders the API key can edit/create in.
-- If an API key lacks permission, report the permission issue instead of retrying unrelated actions.
+- If an API key lacks permission or a shared grant was revoked/downgraded, report the issue instead of retrying unrelated actions or probing hidden context.
+
+## Shared-note editing protocol
+
+Treat canonical edits and Review comments as different collaboration modes:
+
+- For an explicit, narrow edit request, read the current note, capture a fresh `contentHash`, make only the requested change, and summarize the changed sections afterward. Do not require another approval or pre-edit diff.
+- For feedback, review, or suggestion requests—or when the connection can comment but cannot edit—use Review comments rather than changing canonical content.
+- Before a broad rewrite, substantial deletion, structural reorganization, or ambiguous change, present a concise plan or proposed diff and request approval.
+- When another collaborator's intent is uncertain, prefer an anchored comment or ask the user instead of silently rewriting their work.
+- On `409`, do not overwrite or automatically replay the stale patch. Read the latest note, rebase the proposed change, and request approval if the rebased diff is materially different.
+- On `403` or `404`, stop after the first denial and report the collaboration boundary without probing other resources.
+- Role/source context is descriptive, not a mutation guarantee; credential scope and owner policy remain authoritative.
+- After routine edits, provide a concise changed-section summary. Show a full diff when requested or when a broad change required approval.
+
+## Net-new note fast path
+
+When creating a new note that does not depend on existing note content:
+
+1. Resolve the target folder from folder titles and `parentFolderId` relationships, following folder-list pagination as needed.
+2. Create the note directly.
+3. Do not search or read existing notes merely to confirm the folder or inspect permissions.
+
+If note search is independently necessary for folder discovery, use only compact result metadata. If folder discovery remains incomplete, report the limitation or request clarification instead of reading unrelated note bodies.
 
 ## Common commands
 
