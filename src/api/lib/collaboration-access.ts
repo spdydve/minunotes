@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
 import { and, eq, inArray, isNull, or, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { authorizationCollaborationScopes, collaborationGrants, folders, notes, user } from '../db/schema';
+import { publicIdentityKey } from './collaboration-identity';
 import { isDescendantOrSelf, loadFolderAccessTree } from './folder-access';
 
 export type CollaborationRole = 'viewer' | 'commenter' | 'editor';
@@ -23,7 +23,7 @@ export function serializeCollaborationAccess(access: CollaborationAccess) {
 }
 
 function publicCollaborationUserKey(userId: string) {
-  return `user_${createHash('sha256').update(userId).digest('hex').slice(0, 16)}`;
+  return publicIdentityKey('user', userId);
 }
 
 const ROLE_RANK: Record<EffectiveCollaborationRole, number> = {

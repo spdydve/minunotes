@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import emojiRegex from 'emoji-regex';
 import { db } from '../db/client';
@@ -15,6 +14,7 @@ import {
   user,
 } from '../db/schema';
 import { readDocument } from '../harness/commands';
+import { publicIdentityKey } from '../lib/collaboration-identity';
 import { createId } from '../lib/id';
 
 export const MAX_COMMENT_BODY_LENGTH = 10_000;
@@ -123,7 +123,7 @@ function isOwnerActor(actor: CommentActor, userId: string) {
 }
 
 function publicCommentUserId(userId: string) {
-  return `user_${createHash('sha256').update(userId).digest('hex').slice(0, 16)}`;
+  return publicIdentityKey('user', userId);
 }
 
 async function readCommentableNote(input: { noteId: string; userId: string }) {
@@ -258,7 +258,7 @@ async function createActorSerializer(userId: string, references: ActorReference[
     if (oauthAgent)
       return {
         type: 'agent',
-        id: `agent_${createHash('sha256').update(oauthAgent.id).digest('hex').slice(0, 16)}`,
+        id: publicIdentityKey('agent', oauthAgent.id),
         name: oauthAgent.name,
       };
     return { type: 'agent', id: 'integration', name: 'Integration' };
