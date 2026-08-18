@@ -1,7 +1,14 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
-import { type ApiKey, apiKeys, authorizationFolderRules, integrationAuthorizations } from '../db/schema';
+import {
+  type ApiKey,
+  apiKeys,
+  authorizationCollaborationScopes,
+  authorizationFolderRules,
+  collaborationGrants,
+  integrationAuthorizations,
+} from '../db/schema';
 import { generateApiKey, hashApiKey } from '../lib/api-keys';
 import type { auth } from '../lib/auth';
 import { filterSelectablePermissionRows } from '../lib/folder-access';
@@ -22,6 +29,7 @@ type PermissionInput = {
   appliesTo?: 'exact' | 'subtree';
 };
 type AccessMode = 'all' | 'top_level' | 'specific';
+type SharedAccessMode = 'none' | 'specific' | 'all';
 
 export const apiKeyRoutes = new Hono<{ Variables: Variables }>();
 
@@ -32,6 +40,22 @@ function getUser(c: Context<{ Variables: Variables }>) {
 function parseAccessMode(value: unknown): AccessMode | undefined {
   if (value === 'selected') return 'specific';
   return value === 'specific' || value === 'top_level' || value === 'all' ? value : undefined;
+}
+
+function parseSharedAccessMode(value: unknown): SharedAccessMode | undefined {
+  return value === 'none' || value === 'specific' || value === 'all' ? value : undefined;
+}
+
+async function validateCollaborationGrantIds(userId: string, values: unknown) {
+  if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) return null;
+  const ids = [...new Set(values)];
+  if (ids.length > 100) return null;
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ id: collaborationGrants.id })
+    .from(collaborationGrants)
+    .where(and(eq(collaborationGrants.granteeUserId, userId), inArray(collaborationGrants.id, ids)));
+  return rows.length === ids.length ? ids : null;
 }
 
 function permissionValue(
@@ -101,12 +125,19 @@ apiKeyRoutes.get('/', async (c) => {
     .select()
     .from(authorizationFolderRules)
     .where(eq(authorizationFolderRules.userId, user.id));
+  const collaborationScopes = await db
+    .select()
+    .from(authorizationCollaborationScopes)
+    .where(eq(authorizationCollaborationScopes.userId, user.id));
 
   return c.json({
     keys: keys.map(({ credential, authorization }) => ({
       ...credential,
       ...authorization,
       permissions: permissions.filter((rule) => rule.authorizationId === authorization.id).map(apiPermission),
+      collaborationGrantIds: collaborationScopes
+        .filter((scope) => scope.authorizationId === authorization.id)
+        .map((scope) => scope.collaborationGrantId),
     })),
   });
 });
@@ -124,11 +155,20 @@ apiKeyRoutes.post('/', async (c) => {
     canEdit?: boolean;
     canComment?: boolean;
     permissions?: PermissionInput[];
+    sharedAccessMode?: SharedAccessMode;
+    collaborationGrantIds?: string[];
   } | null;
   const name = body?.name?.trim();
   if (!name) return c.json({ error: 'API key name is required' }, 400);
 
   const accessMode = parseAccessMode(body?.accessMode) ?? 'all';
+  const sharedAccessMode = parseSharedAccessMode(body?.sharedAccessMode) ?? 'none';
+  const collaborationGrantIds = await validateCollaborationGrantIds(user.id, body?.collaborationGrantIds ?? []);
+  if (!collaborationGrantIds) return c.json({ error: 'One or more collaboration grants are invalid' }, 400);
+  if (sharedAccessMode !== 'specific' && collaborationGrantIds.length > 0)
+    return c.json({ error: 'Collaboration grant selections require specific shared access mode' }, 400);
+  if (sharedAccessMode === 'specific' && collaborationGrantIds.length === 0)
+    return c.json({ error: 'At least one collaboration grant is required for specific shared access' }, 400);
   const capabilities = permissionValue(body);
   if (capabilities.canComment && !capabilities.canRead)
     return c.json({ error: 'Review comments permission requires read permission' }, 400);
@@ -141,6 +181,7 @@ apiKeyRoutes.post('/', async (c) => {
     id,
     userId: user.id,
     accessMode,
+    sharedAccessMode,
     canCreateFolders: body?.canCreateFolders ?? false,
     ...capabilities,
     createdAt: now,
@@ -176,6 +217,16 @@ apiKeyRoutes.post('/', async (c) => {
   await db.transaction(async (tx) => {
     await tx.insert(integrationAuthorizations).values(authorization);
     await tx.insert(apiKeys).values(credential);
+    if (sharedAccessMode === 'specific' && collaborationGrantIds.length > 0)
+      await tx.insert(authorizationCollaborationScopes).values(
+        collaborationGrantIds.map((collaborationGrantId) => ({
+          id: createId('auth_collaboration_scope'),
+          authorizationId: id,
+          userId: user.id,
+          collaborationGrantId,
+          createdAt: now,
+        }))
+      );
     if (rules.length > 0)
       await tx
         .insert(authorizationFolderRules)
@@ -192,6 +243,7 @@ apiKeyRoutes.post('/', async (c) => {
         ...credential,
         ...authorization,
         permissions: rules.map(apiPermission),
+        collaborationGrantIds,
       },
     },
     201
@@ -211,6 +263,8 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     canEdit?: boolean;
     canComment?: boolean;
     permissions?: PermissionInput[];
+    sharedAccessMode?: SharedAccessMode;
+    collaborationGrantIds?: string[];
   } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   const name = body.name?.trim();
@@ -232,6 +286,32 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
   if (!existing) return c.json({ error: 'API key not found' }, 404);
 
   const accessMode = parseAccessMode(body.accessMode);
+  const sharedAccessMode = parseSharedAccessMode(body.sharedAccessMode);
+  if (body.sharedAccessMode !== undefined && !sharedAccessMode)
+    return c.json({ error: 'Shared access mode must be none, specific, or all' }, 400);
+  const effectiveSharedAccessMode = sharedAccessMode ?? existing.authorization.sharedAccessMode;
+  const collaborationGrantIds =
+    body.collaborationGrantIds !== undefined
+      ? await validateCollaborationGrantIds(user.id, body.collaborationGrantIds)
+      : undefined;
+  if (body.collaborationGrantIds !== undefined && !collaborationGrantIds)
+    return c.json({ error: 'One or more collaboration grants are invalid' }, 400);
+  if (effectiveSharedAccessMode !== 'specific' && (collaborationGrantIds?.length ?? 0) > 0)
+    return c.json({ error: 'Collaboration grant selections require specific shared access mode' }, 400);
+  const shouldReplaceCollaborationScopes =
+    body.collaborationGrantIds !== undefined || body.sharedAccessMode !== undefined;
+  const nextCollaborationGrantIds =
+    collaborationGrantIds ??
+    (effectiveSharedAccessMode === 'specific' && existing.authorization.sharedAccessMode === 'specific'
+      ? (
+          await db
+            .select({ collaborationGrantId: authorizationCollaborationScopes.collaborationGrantId })
+            .from(authorizationCollaborationScopes)
+            .where(eq(authorizationCollaborationScopes.authorizationId, existing.authorization.id))
+        ).map((scope) => scope.collaborationGrantId)
+      : []);
+  if (effectiveSharedAccessMode === 'specific' && nextCollaborationGrantIds.length === 0)
+    return c.json({ error: 'At least one collaboration grant is required for specific shared access' }, 400);
   const nextCapabilities = {
     canRead: body.canRead ?? existing.authorization.canRead,
     canCreate: body.canCreate ?? existing.authorization.canCreate,
@@ -247,7 +327,8 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     body.canRead !== undefined ||
     body.canCreate !== undefined ||
     body.canEdit !== undefined ||
-    body.canComment !== undefined;
+    body.canComment !== undefined ||
+    sharedAccessMode !== undefined;
   const shouldReplaceRules =
     body.permissions !== undefined ||
     accessMode === 'all' ||
@@ -291,9 +372,25 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
           ...(body.canEdit !== undefined ? { canEdit: body.canEdit } : {}),
           ...(body.canComment !== undefined ? { canComment: body.canComment } : {}),
           ...(accessMode !== undefined ? { accessMode } : {}),
+          ...(sharedAccessMode !== undefined ? { sharedAccessMode } : {}),
           updatedAt: now,
         })
         .where(eq(integrationAuthorizations.id, existing.authorization.id));
+    if (shouldReplaceCollaborationScopes) {
+      await tx
+        .delete(authorizationCollaborationScopes)
+        .where(eq(authorizationCollaborationScopes.authorizationId, existing.authorization.id));
+      if (effectiveSharedAccessMode === 'specific' && nextCollaborationGrantIds.length > 0)
+        await tx.insert(authorizationCollaborationScopes).values(
+          nextCollaborationGrantIds.map((collaborationGrantId) => ({
+            id: createId('auth_collaboration_scope'),
+            authorizationId: existing.authorization.id,
+            userId: user.id,
+            collaborationGrantId,
+            createdAt: now,
+          }))
+        );
+    }
     if (rules) {
       await tx
         .delete(authorizationFolderRules)
@@ -318,8 +415,17 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     .select()
     .from(authorizationFolderRules)
     .where(eq(authorizationFolderRules.authorizationId, existing.authorization.id));
+  const collaborationScopes = await db
+    .select({ collaborationGrantId: authorizationCollaborationScopes.collaborationGrantId })
+    .from(authorizationCollaborationScopes)
+    .where(eq(authorizationCollaborationScopes.authorizationId, existing.authorization.id));
   return c.json({
-    apiKey: { ...updated.credential, ...updated.authorization, permissions: permissions.map(apiPermission) },
+    apiKey: {
+      ...updated.credential,
+      ...updated.authorization,
+      permissions: permissions.map(apiPermission),
+      collaborationGrantIds: collaborationScopes.map((scope) => scope.collaborationGrantId),
+    },
   });
 });
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import emojiRegex from 'emoji-regex';
 import { db } from '../db/client';
@@ -9,6 +10,8 @@ import {
   noteCommentMessageReactions,
   noteCommentMessages,
   noteCommentThreads,
+  oauthAuthorizations,
+  oauthClients,
   user,
 } from '../db/schema';
 import { readDocument } from '../harness/commands';
@@ -53,6 +56,7 @@ export type SerializedCommentMessage = {
   threadId: string;
   body: string;
   author: SafeCommentActor;
+  authoredByCurrentActor: boolean;
   createdAt: Date;
   updatedAt: Date;
   reactions: SerializedCommentReaction[];
@@ -73,6 +77,7 @@ export type SerializedCommentThread = {
     detached: boolean;
   };
   createdBy: SafeCommentActor;
+  authoredByCurrentActor: boolean;
   resolvedBy: SafeCommentActor | null;
   resolvedAt: Date | null;
   createdAt: Date;
@@ -115,6 +120,10 @@ function sameActor(reference: ActorReference, actor: CommentActor) {
 
 function isOwnerActor(actor: CommentActor, userId: string) {
   return actor.type === 'user' && actor.id === userId;
+}
+
+function publicCommentUserId(userId: string) {
+  return `user_${createHash('sha256').update(userId).digest('hex').slice(0, 16)}`;
 }
 
 async function readCommentableNote(input: { noteId: string; userId: string }) {
@@ -200,7 +209,17 @@ function validateAnchor(
 }
 
 async function createActorSerializer(userId: string, references: ActorReference[]) {
-  const [owner] = await db.select({ name: user.name }).from(user).where(eq(user.id, userId)).limit(1);
+  const userIds = [
+    ...new Set(
+      references
+        .filter((reference) => reference.actorType === 'user' && reference.actorId)
+        .map((reference) => reference.actorId as string)
+    ),
+  ];
+  const users = userIds.length
+    ? await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, userIds))
+    : [];
+  const usersById = new Map(users.map((actorUser) => [actorUser.id, actorUser]));
   const agentIds = [
     ...new Set(
       references
@@ -212,14 +231,36 @@ async function createActorSerializer(userId: string, references: ActorReference[
     ? await db
         .select({ id: apiKeys.id, uid: apiKeys.uid, name: apiKeys.name })
         .from(apiKeys)
-        .where(and(eq(apiKeys.userId, userId), inArray(apiKeys.id, agentIds)))
+        .where(inArray(apiKeys.id, agentIds))
     : [];
   const keysById = new Map(keys.map((key) => [key.id, key]));
+  const oauthAgents = agentIds.length
+    ? await db
+        .select({ id: oauthAuthorizations.id, name: oauthClients.name })
+        .from(oauthAuthorizations)
+        .innerJoin(oauthClients, eq(oauthAuthorizations.clientId, oauthClients.id))
+        .where(inArray(oauthAuthorizations.id, agentIds))
+    : [];
+  const oauthAgentsById = new Map(oauthAgents.map((agent) => [agent.id, agent]));
 
   return (reference: ActorReference): SafeCommentActor => {
-    if (reference.actorType === 'user') return { type: 'user', id: 'owner', name: owner?.name ?? 'Owner' };
+    if (reference.actorType === 'user') {
+      const actorUser = reference.actorId ? usersById.get(reference.actorId) : null;
+      return {
+        type: 'user',
+        id: reference.actorId === userId ? 'owner' : publicCommentUserId(reference.actorId ?? 'unknown'),
+        name: actorUser?.name ?? (reference.actorId === userId ? 'Owner' : 'Collaborator'),
+      };
+    }
     const key = reference.actorId ? keysById.get(reference.actorId) : null;
     if (key) return { type: 'agent', id: key.uid, name: key.name };
+    const oauthAgent = reference.actorId ? oauthAgentsById.get(reference.actorId) : null;
+    if (oauthAgent)
+      return {
+        type: 'agent',
+        id: `agent_${createHash('sha256').update(oauthAgent.id).digest('hex').slice(0, 16)}`,
+        name: oauthAgent.name,
+      };
     return { type: 'agent', id: 'integration', name: 'Integration' };
   };
 }
@@ -298,6 +339,10 @@ async function serializeThreads(
       actorType: thread.createdByActorType,
       actorId: thread.createdByActorId,
     }),
+    authoredByCurrentActor: sameActor(
+      { actorType: thread.createdByActorType, actorId: thread.createdByActorId },
+      actor
+    ),
     resolvedBy: thread.resolvedByActorType
       ? serializeActor({
           actorType: thread.resolvedByActorType,
@@ -312,6 +357,7 @@ async function serializeThreads(
       threadId: message.threadId,
       body: message.body,
       author: serializeActor({ actorType: message.actorType, actorId: message.actorId }),
+      authoredByCurrentActor: sameActor({ actorType: message.actorType, actorId: message.actorId }, actor),
       createdAt: message.createdAt,
       updatedAt: message.updatedAt,
       reactions: serializeReactions(reactionsByMessage.get(message.id) ?? [], actor),
@@ -553,6 +599,7 @@ export async function addCommentReply(input: {
         threadId: message.threadId,
         body: message.body,
         author: serializeActor({ actorType: message.actorType, actorId: message.actorId }),
+        authoredByCurrentActor: true,
         createdAt: message.createdAt,
         updatedAt: message.updatedAt,
         reactions: [],
@@ -572,9 +619,9 @@ export async function updateCommentAnchor(input: {
   if (!current.ok) return current;
   const anchor = validateAnchor(input.anchor, current.value.note.content, current.value.contentHash);
   if (!anchor.ok) return anchor;
-  const [thread] = await db
-    .update(noteCommentThreads)
-    .set({ ...anchor.value, updatedAt: new Date() })
+  const [existing] = await db
+    .select()
+    .from(noteCommentThreads)
     .where(
       and(
         eq(noteCommentThreads.id, input.threadId),
@@ -582,9 +629,22 @@ export async function updateCommentAnchor(input: {
         eq(noteCommentThreads.userId, input.userId)
       )
     )
-    .returning();
-  if (!thread)
+    .limit(1);
+  if (!existing)
     return { ok: false, status: 404, error: 'Comment thread not found' } satisfies CommentOperationResult<never>;
+  if (
+    !isOwnerActor(input.actor, input.userId) &&
+    !sameActor({ actorType: existing.createdByActorType, actorId: existing.createdByActorId }, input.actor)
+  )
+    return {
+      ok: false,
+      status: 403,
+      error: 'Only the thread author or note owner can update its anchor',
+    } satisfies CommentOperationResult<never>;
+  await db
+    .update(noteCommentThreads)
+    .set({ ...anchor.value, updatedAt: new Date() })
+    .where(eq(noteCommentThreads.id, existing.id));
   const serialized = await loadSerializedThread(input);
   if (!serialized)
     return { ok: false, status: 404, error: 'Comment thread not found' } satisfies CommentOperationResult<never>;
@@ -599,6 +659,7 @@ export async function setCommentThreadStatus(input: {
   userId: string;
   actor: CommentActor;
   status: 'open' | 'resolved';
+  canManageAnyThread?: boolean;
 }) {
   const current = await readCommentableNote(input);
   if (!current.ok) return current;
@@ -616,6 +677,7 @@ export async function setCommentThreadStatus(input: {
   if (!existing)
     return { ok: false, status: 404, error: 'Comment thread not found' } satisfies CommentOperationResult<never>;
   if (
+    !input.canManageAnyThread &&
     !isOwnerActor(input.actor, input.userId) &&
     !sameActor({ actorType: existing.createdByActorType, actorId: existing.createdByActorId }, input.actor)
   )
@@ -695,6 +757,7 @@ export async function updateCommentMessage(input: {
         threadId: updated.threadId,
         body: updated.body,
         author: serializeActor({ actorType: updated.actorType, actorId: updated.actorId }),
+        authoredByCurrentActor: true,
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
         reactions: await serializeMessageReactions(updated.id, input.actor),

@@ -1,9 +1,11 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db, libsql } from '../db/client';
 import {
   type ApiKey,
+  authorizationCollaborationScopes,
   authorizationFolderRules,
+  collaborationGrants,
   integrationAuthorizations,
   type OAuthAuthorization,
   oauthAuthorizationCodes,
@@ -333,6 +335,10 @@ oauthRoutes.get('/authorizations', async (c) => {
     .select()
     .from(authorizationFolderRules)
     .where(eq(authorizationFolderRules.userId, user.id));
+  const collaborationScopes = await db
+    .select()
+    .from(authorizationCollaborationScopes)
+    .where(eq(authorizationCollaborationScopes.userId, user.id));
 
   return c.json({
     authorizations: rows.map((row) => ({
@@ -342,6 +348,9 @@ oauthRoutes.get('/authorizations', async (c) => {
       permissions: permissions
         .filter((permission) => permission.authorizationId === row.authorization.id)
         .map((permission) => ({ ...permission, authorizationId: row.connection.id })),
+      collaborationGrantIds: collaborationScopes
+        .filter((scope) => scope.authorizationId === row.authorization.id)
+        .map((scope) => scope.collaborationGrantId),
     })),
   });
 });
@@ -433,6 +442,8 @@ oauthRoutes.post('/authorize/approve', async (c) => {
     canComment?: boolean;
     canCreateFolders?: boolean;
     folderIds?: string[];
+    sharedAccessMode?: 'none' | 'specific' | 'all';
+    collaborationGrantIds?: string[];
   } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   const result = await validateAuthorizeRequest({
@@ -464,6 +475,38 @@ oauthRoutes.post('/authorize/approve', async (c) => {
   if (!oauthCapabilitiesFitScope(approvedCapabilities, requestedScope.scopes))
     return c.json(oauthError('invalid_scope', 'Approved permissions exceed the requested OAuth scope'), 400);
   const approvedScope = oauthScopeForCapabilities(approvedCapabilities);
+  if (
+    body.sharedAccessMode !== undefined &&
+    body.sharedAccessMode !== 'none' &&
+    body.sharedAccessMode !== 'specific' &&
+    body.sharedAccessMode !== 'all'
+  )
+    return c.json({ error: 'Shared access mode must be none, specific, or all' }, 400);
+  const sharedAccessMode =
+    body.sharedAccessMode === 'specific' || body.sharedAccessMode === 'all' ? body.sharedAccessMode : 'none';
+  if (
+    body.collaborationGrantIds !== undefined &&
+    (!Array.isArray(body.collaborationGrantIds) ||
+      !body.collaborationGrantIds.every((collaborationGrantId) => typeof collaborationGrantId === 'string'))
+  )
+    return c.json({ error: 'Collaboration grant ids must be an array of strings' }, 400);
+  const collaborationGrantIds = [...new Set(body.collaborationGrantIds ?? [])];
+  if (collaborationGrantIds.length > 100)
+    return c.json({ error: 'No more than 100 collaboration grants may be selected' }, 400);
+  if (sharedAccessMode !== 'specific' && collaborationGrantIds.length > 0)
+    return c.json({ error: 'Collaboration grant selections require specific shared access mode' }, 400);
+  if (sharedAccessMode === 'specific' && collaborationGrantIds.length === 0)
+    return c.json({ error: 'At least one collaboration grant is required for specific shared access' }, 400);
+  if (collaborationGrantIds.length > 0) {
+    const validGrants = await db
+      .select({ id: collaborationGrants.id })
+      .from(collaborationGrants)
+      .where(
+        and(eq(collaborationGrants.granteeUserId, user.id), inArray(collaborationGrants.id, collaborationGrantIds))
+      );
+    if (validGrants.length !== collaborationGrantIds.length)
+      return c.json({ error: 'One or more collaboration grants are invalid' }, 400);
+  }
   const folderIds = [...new Set(body.folderIds ?? [])];
   if (accessMode !== 'all' && folderIds.length === 0) return c.json({ error: 'At least one folder is required' }, 400);
   const selectedPermissions =
@@ -492,6 +535,7 @@ oauthRoutes.post('/authorize/approve', async (c) => {
         canEdit,
         canComment,
         canCreateFolders,
+        sharedAccessMode,
         createdAt: now,
         updatedAt: now,
       })
@@ -505,6 +549,17 @@ oauthRoutes.post('/authorize/approve', async (c) => {
       createdAt: now,
       updatedAt: now,
     });
+
+    if (sharedAccessMode === 'specific' && collaborationGrantIds.length > 0)
+      await tx.insert(authorizationCollaborationScopes).values(
+        collaborationGrantIds.map((collaborationGrantId) => ({
+          id: createId('auth_collaboration_scope'),
+          authorizationId: authorization.id,
+          userId: user.id,
+          collaborationGrantId,
+          createdAt: now,
+        }))
+      );
 
     if (accessMode !== 'all' && selectedPermissions.length > 0) {
       await tx

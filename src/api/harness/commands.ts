@@ -5,11 +5,16 @@ import {
   createDefaultMindMapDocument,
   type JsonCanvasDocument,
 } from '@dpklabs/minucanvas';
-import { and, asc, desc, eq, gt, inArray, like, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, like, lt, or, sql } from 'drizzle-orm';
 import type { MinuNotesNodeExtra, MinuNotesNodeMetadata } from '../../shared/canvas-links';
 import { syncNoteAttachmentReferences } from '../attachments/references';
 import { db } from '../db/client';
 import { folders, type Note, noteEvents, notes, noteTags, noteVersions, tags } from '../db/schema';
+import {
+  collaborationAccessibleNoteWhere,
+  integrationAccessibleNoteWhere,
+  type SharedAccessMode,
+} from '../lib/collaboration-access';
 import { createId } from '../lib/id';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from '../notes/links';
 import { compactNoteSelection } from '../notes/listing';
@@ -220,21 +225,30 @@ export async function searchAllDocumentLines(input: {
   caseSensitive?: boolean;
   cursor?: LineSearchCursor | null;
   cursorScope?: string;
+  integrationAccess?: { authorizationId: string; sharedAccessMode: SharedAccessMode };
 }) {
   const query = input.query.trim();
   if (!query)
     return { ok: true, value: { query, matches: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
-  if (input.folderIds && input.folderIds.size === 0)
+  if (!input.integrationAccess && input.folderIds && input.folderIds.size === 0)
     return { ok: true, value: { query, matches: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
 
   const pattern = `%${query}%`;
-  const where = input.folderId
-    ? activeNoteWhere(
-        input.userId,
-        eq(notes.folderId, input.folderId),
-        or(like(notes.title, pattern), like(notes.content, pattern))
+  const searchMatch = or(like(notes.title, pattern), like(notes.content, pattern));
+  const where = input.integrationAccess
+    ? integrationAccessibleNoteWhere(
+        {
+          actorUserId: input.userId,
+          authorizationId: input.integrationAccess.authorizationId,
+          sharedAccessMode: input.integrationAccess.sharedAccessMode,
+          ownedFolderIds: input.folderIds,
+        },
+        input.folderId ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId)) : undefined,
+        searchMatch
       )
-    : activeNoteWhere(input.userId, or(like(notes.title, pattern), like(notes.content, pattern)));
+    : input.folderId
+      ? activeNoteWhere(input.userId, eq(notes.folderId, input.folderId), searchMatch)
+      : activeNoteWhere(input.userId, searchMatch);
   const cursor = input.cursor;
   const cursorDate = cursor ? new Date(cursor.noteUpdatedAt) : null;
   const afterCursor =
@@ -255,7 +269,17 @@ export async function searchAllDocumentLines(input: {
       updatedAt: notes.updatedAt,
     })
     .from(notes)
-    .where(and(where, input.folderIds ? inArray(notes.folderId, [...input.folderIds]) : undefined, afterCursor))
+    .where(
+      and(
+        where,
+        input.integrationAccess
+          ? undefined
+          : input.folderIds
+            ? inArray(notes.folderId, [...input.folderIds])
+            : undefined,
+        afterCursor
+      )
+    )
     .orderBy(desc(notes.updatedAt), asc(notes.title), asc(notes.id));
   const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
   const matches: Array<
@@ -331,10 +355,12 @@ export async function searchDocuments(input: {
   cursor?: NoteSearchCursor | null;
   cursorScope?: string;
   offset?: number;
+  includeCollaborations?: boolean;
+  integrationAccess?: { authorizationId: string; sharedAccessMode: SharedAccessMode };
 }) {
   const query = input.query.trim();
   if (!query) return { ok: true, value: { documents: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
-  if (input.folderIds && input.folderIds.size === 0)
+  if (!input.integrationAccess && input.folderIds && input.folderIds.size === 0)
     return { ok: true, value: { documents: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
 
   const pattern = `%${query}%`;
@@ -348,7 +374,7 @@ export async function searchDocuments(input: {
     select 1 from ${noteTags}
     inner join ${tags} on ${tags.id} = ${noteTags.tagId}
     where ${noteTags.noteId} = ${notes.id}
-      and ${noteTags.userId} = ${input.userId}
+      and ${noteTags.userId} = ${notes.userId}
       and lower(${tags.name}) like lower(${pattern})
   )`;
   const exactTagMatch = tagName
@@ -356,16 +382,20 @@ export async function searchDocuments(input: {
         select 1 from ${noteTags}
         inner join ${tags} on ${tags.id} = ${noteTags.tagId}
         where ${noteTags.noteId} = ${notes.id}
-          and ${noteTags.userId} = ${input.userId}
+          and ${noteTags.userId} = ${notes.userId}
           and ${tags.normalizedName} = ${tagName}
       )`
     : undefined;
+  const folderTitleSearchMatch =
+    input.includeCollaborations || input.integrationAccess
+      ? and(eq(notes.userId, input.userId), like(folders.title, pattern))
+      : like(folders.title, pattern);
   const searchRank = sql<number>`case
     when lower(${notes.title}) = lower(${query}) then 0
     when lower(${notes.title}) like lower(${prefixPattern}) then 1
     when lower(${notes.title}) like lower(${pattern}) then 2
     when ${tagSearchMatch} then 3
-    when lower(${folders.title}) like lower(${pattern}) then 4
+    when ${folderTitleSearchMatch} then 4
     else 5
   end`;
   const afterCursor = input.cursor
@@ -400,14 +430,27 @@ export async function searchDocuments(input: {
       searchRank,
     })
     .from(notes)
-    .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, input.userId)))
+    .innerJoin(folders, and(eq(notes.folderId, folders.id), eq(folders.userId, notes.userId)))
     .where(
       and(
-        activeNoteWhere(input.userId),
+        input.integrationAccess
+          ? integrationAccessibleNoteWhere({
+              actorUserId: input.userId,
+              authorizationId: input.integrationAccess.authorizationId,
+              sharedAccessMode: input.integrationAccess.sharedAccessMode,
+              ownedFolderIds: input.folderIds,
+            })
+          : input.includeCollaborations
+            ? collaborationAccessibleNoteWhere(input.userId)
+            : activeNoteWhere(input.userId),
         eq(notes.type, type),
-        input.folderIds ? inArray(notes.folderId, [...input.folderIds]) : undefined,
+        input.integrationAccess
+          ? undefined
+          : input.folderIds
+            ? inArray(notes.folderId, [...input.folderIds])
+            : undefined,
         exactTagMatch,
-        or(like(notes.title, pattern), like(notes.content, pattern), like(folders.title, pattern), tagSearchMatch),
+        or(like(notes.title, pattern), like(notes.content, pattern), folderTitleSearchMatch, tagSearchMatch),
         afterCursor
       )
     )
@@ -518,6 +561,7 @@ async function insertNoteEvent(input: {
           eq(noteEvents.noteId, input.noteId),
           eq(noteEvents.userId, input.userId),
           eq(noteEvents.actorType, 'user'),
+          input.actorId ? eq(noteEvents.actorId, input.actorId) : isNull(noteEvents.actorId),
           inArray(noteEvents.eventType, ['update', 'edit_patch']),
           gt(noteEvents.createdAt, cutoff)
         )

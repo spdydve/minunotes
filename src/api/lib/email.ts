@@ -2,6 +2,11 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
 const ses = new SESv2Client({ region: process.env.SES_REGION || process.env.AWS_REGION || 'us-east-1' });
 const EMAIL_ADDRESS_PATTERN = /(?:^|<)[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/;
+const RECIPIENT_EMAIL_ADDRESS_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+export function isValidEmailAddress(value: string) {
+  return RECIPIENT_EMAIL_ADDRESS_PATTERN.test(value);
+}
 
 function assertValidFromEmail(from: string) {
   if (EMAIL_ADDRESS_PATTERN.test(from)) return;

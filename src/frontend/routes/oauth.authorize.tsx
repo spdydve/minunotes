@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createRoute, Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
+import { SharedIntegrationAccess } from '../components/shared-integration-access';
 import { Button } from '../components/ui/button';
-import { type ApiKeyAccessMode, api, type Folder, type OAuthAuthorizeRequest } from '../lib/api';
+import { type ApiKeyAccessMode, api, type Folder, type OAuthAuthorizeRequest, type SharedAccessMode } from '../lib/api';
 import { rootRoute } from './__root';
 
 function folderPath(folder: Folder, folders: Folder[]) {
@@ -53,6 +54,7 @@ function getAuthorizeRequest(): OAuthAuthorizeRequest | null {
 function OAuthAuthorizeView() {
   const request = useMemo(() => getAuthorizeRequest(), []);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
+  const collaborations = useQuery({ queryKey: ['shared-with-me'], queryFn: api.sharedWithMe });
   const preview = useQuery({
     queryKey: ['oauth-authorize-preview', request],
     queryFn: () => api.oauthAuthorizePreview(request!),
@@ -65,6 +67,8 @@ function OAuthAuthorizeView() {
   const [canEdit, setCanEdit] = useState(false);
   const [canComment, setCanComment] = useState(false);
   const [canCreateFolders, setCanCreateFolders] = useState(false);
+  const [sharedAccessMode, setSharedAccessMode] = useState<SharedAccessMode>('none');
+  const [selectedGrantIds, setSelectedGrantIds] = useState<Set<string>>(new Set());
 
   const requestedScopes = useMemo(
     () => new Set((preview.data?.request.scope ?? '').split(/\s+/).filter(Boolean)),
@@ -104,6 +108,8 @@ function OAuthAuthorizeView() {
         accessMode,
         ...approvedPermissions,
         folderIds: [...selectedFolderIds],
+        sharedAccessMode,
+        collaborationGrantIds: sharedAccessMode === 'specific' ? [...selectedGrantIds] : [],
       }),
     onSuccess: ({ redirectUrl }) => {
       window.location.href = redirectUrl;
@@ -117,7 +123,7 @@ function OAuthAuthorizeView() {
         <p className="notes-muted mt-2 text-sm">The authorization request is missing required parameters.</p>
       </section>
     );
-  if (preview.isLoading || folders.isLoading)
+  if (preview.isLoading || folders.isLoading || collaborations.isLoading)
     return <p className="notes-muted text-sm">Loading authorization request...</p>;
   if (preview.error)
     return (
@@ -137,6 +143,7 @@ function OAuthAuthorizeView() {
   const canSubmit =
     Object.values(approvedPermissions).some(Boolean) &&
     (accessMode === 'all' || selectedCount > 0) &&
+    (sharedAccessMode !== 'specific' || selectedGrantIds.size > 0) &&
     !approve.isPending;
 
   return (
@@ -288,6 +295,16 @@ function OAuthAuthorizeView() {
             </div>
           </div>
         ) : null}
+
+        <div className="mt-5">
+          <SharedIntegrationAccess
+            collaborations={collaborations.data?.collaborations ?? []}
+            mode={sharedAccessMode}
+            selectedGrantIds={selectedGrantIds}
+            onModeChange={setSharedAccessMode}
+            onSelectionChange={setSelectedGrantIds}
+          />
+        </div>
 
         {approve.error ? (
           <p className="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">

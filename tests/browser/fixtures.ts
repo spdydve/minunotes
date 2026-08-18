@@ -19,6 +19,7 @@ type BrowserCommentMessage = {
   createdAt: string;
   updatedAt: string;
   reactions: Array<{ emoji: string; count: number; reactedByCurrentActor: boolean }>;
+  authoredByCurrentActor: boolean;
 };
 
 type BrowserCommentThread = {
@@ -32,6 +33,7 @@ type BrowserCommentThread = {
   createdAt: string;
   updatedAt: string;
   messages: BrowserCommentMessage[];
+  authoredByCurrentActor: boolean;
 };
 
 type Note = {
@@ -256,6 +258,13 @@ export async function mockBrowserApi(
     trashLoadFails?: boolean;
     trashMutationFails?: boolean;
     emptyTrash?: boolean;
+    noteAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
+    includeSharedCollaborations?: boolean;
+    sessionEmail?: string | null;
+    collaborationInvitation?: {
+      status?: 'pending' | 'accepted';
+      acceptStatus?: 200 | 403 | 404;
+    };
   } = {}
 ) {
   const folders = [{ ...browserFixture.folder }, { ...browserFixture.childFolder }];
@@ -282,6 +291,7 @@ export async function mockBrowserApi(
   const commentRequests: Array<{ method: string; path: string; body: unknown }> = [];
   let commentId = 0;
   let hashVersion = 1;
+  let noteAccessRole: 'owner' | 'viewer' | 'commenter' | 'editor' | null = options.noteAccessRole ?? 'owner';
   let folderShareLink: {
     id: string;
     folderId: string;
@@ -300,11 +310,13 @@ export async function mockBrowserApi(
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
     if (path === '/auth/get-session') {
+      const sessionEmail = options.sessionEmail === undefined ? 'browser@example.com' : options.sessionEmail;
+      if (!sessionEmail) return json(null);
       return json({
         user: {
           id: 'user_browser',
           name: 'Browser Test User',
-          email: 'browser@example.com',
+          email: sessionEmail,
           emailVerified: true,
           image: null,
           createdAt: now,
@@ -313,6 +325,96 @@ export async function mockBrowserApi(
         session: { id: 'session_browser', userId: 'user_browser', expiresAt: '2099-01-01T00:00:00.000Z' },
       });
     }
+
+    const invitationMatch = path.match(/^\/collaboration-invitations\/([^/]+)\/(preview|accept)$/);
+    if (invitationMatch && options.collaborationInvitation) {
+      if (invitationMatch[2] === 'preview' && method === 'GET')
+        return json({
+          resource: { type: 'note', id: browserFixture.source.id, title: browserFixture.source.title },
+          owner: { name: 'Shared Owner' },
+          role: 'commenter',
+          invitedEmail: 'b••••••@example.com',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          status: options.collaborationInvitation.status ?? 'pending',
+        });
+      if (invitationMatch[2] === 'accept' && method === 'POST') {
+        const acceptStatus = options.collaborationInvitation.acceptStatus ?? 200;
+        if (acceptStatus === 403) return json({ error: 'Invitation email does not match the signed-in account' }, 403);
+        if (acceptStatus === 404) return json({ error: 'Invitation not found' }, 404);
+        return json({
+          grant: { id: 'grant_invitation', role: 'commenter' },
+          destination: `/notes/${browserFixture.source.id}`,
+        });
+      }
+    }
+
+    if (path === '/collaborations/shared-with-me' && method === 'GET') {
+      const collaborations = options.includeSharedCollaborations
+        ? [
+            {
+              type: 'note' as const,
+              grantId: 'grant_shared_note',
+              role: options.noteAccessRole === 'owner' ? 'viewer' : (options.noteAccessRole ?? 'viewer'),
+              owner: { key: 'collaboration_owner_browser', name: 'Shared Owner' },
+              note: {
+                id: browserFixture.source.id,
+                title: browserFixture.source.title,
+                documentType: browserFixture.source.documentType,
+                updatedAt: browserFixture.source.updatedAt,
+              },
+            },
+            {
+              type: 'folder' as const,
+              grantId: 'grant_shared_folder',
+              role: 'editor' as const,
+              owner: { key: 'collaboration_owner_browser', name: 'Shared Owner' },
+              folder: {
+                id: browserFixture.folder.id,
+                title: browserFixture.folder.title,
+                updatedAt: browserFixture.folder.updatedAt,
+              },
+            },
+          ]
+        : [];
+      const type = url.searchParams.get('type');
+      return json({
+        collaborations: type ? collaborations.filter((item) => item.type === type) : collaborations,
+        ...(type ? { pageInfo: { hasMore: false, nextCursor: null } } : {}),
+      });
+    }
+
+    if (/^\/(notes|folders)\/[^/]+\/collaborators$/.test(path) && method === 'GET')
+      return json({
+        resource: { id: path.split('/')[2], title: 'Shared resource' },
+        owner: { id: 'user_browser', name: 'Browser Test User', email: 'browser@example.com' },
+        grants: [
+          {
+            id: 'grant_browser_active',
+            role: 'viewer',
+            createdAt: now,
+            updatedAt: now,
+            user: { id: 'user_active', name: 'Active Collaborator', email: 'active@example.com' },
+          },
+        ],
+        invitations: [
+          {
+            id: 'invitation_browser_pending',
+            email: 'pending@example.com',
+            role: 'commenter',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'invitation_browser_expired',
+            email: 'expired@example.com',
+            role: 'editor',
+            expiresAt: '2000-01-01T00:00:00.000Z',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
 
     if (path === '/trash' && method === 'GET') {
       if (options.trashLoadFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
@@ -408,6 +510,17 @@ export async function mockBrowserApi(
       return json({ folder }, 201);
     }
 
+    const folderDetailMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)\/detail$/);
+    if (folderDetailMatch && method === 'GET') {
+      const folder = folders.find((candidate) => candidate.id === folderDetailMatch[1]);
+      if (!folder) return json({ error: 'Folder not found' }, 404);
+      return json({
+        folder,
+        childFolders: folders.filter((candidate) => candidate.parentFolderId === folder.id),
+        access: { role: 'owner', source: 'owner' },
+      });
+    }
+
     const folderMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)$/);
     if (folderMatch && method === 'DELETE') {
       const rootId = folderMatch[1];
@@ -436,6 +549,7 @@ export async function mockBrowserApi(
       const type = url.searchParams.get('type') === 'template' ? 'template' : 'note';
       return json({
         notes: [...notes.values()].filter((note) => note.folderId === folderNotesMatch[1] && note.type === type),
+        access: { role: 'owner', source: 'owner' },
       });
     }
 
@@ -674,6 +788,7 @@ export async function mockBrowserApi(
           createdAt: now,
           updatedAt: now,
           reactions: [],
+          authoredByCurrentActor: true,
         };
         thread.messages.push(message);
         thread.updatedAt = now;
@@ -728,6 +843,7 @@ export async function mockBrowserApi(
           resolvedAt: null,
           createdAt: now,
           updatedAt: now,
+          authoredByCurrentActor: true,
           messages: [
             {
               id: `comment_message_${++commentId}`,
@@ -737,6 +853,7 @@ export async function mockBrowserApi(
               createdAt: now,
               updatedAt: now,
               reactions: [],
+              authoredByCurrentActor: true,
             },
           ],
         };
@@ -752,7 +869,17 @@ export async function mockBrowserApi(
     if (noteMatch) {
       const note = notes.get(noteMatch[1]);
       if (!note) return json({ error: 'Note not found' }, 404);
-      if (method === 'GET') return json({ note, contentHash: `hash_${hashVersion}` });
+      if (method === 'GET') {
+        if (!noteAccessRole) return json({ error: 'Note not found' }, 404);
+        return json({
+          note,
+          contentHash: `hash_${hashVersion}`,
+          access: {
+            role: noteAccessRole,
+            source: noteAccessRole === 'owner' ? 'owner' : 'note_grant',
+          },
+        });
+      }
       if (method === 'DELETE') {
         if (options.noteTrashFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
         notes.delete(note.id);
@@ -817,6 +944,9 @@ export async function mockBrowserApi(
     statusRequests,
     commentThreads,
     commentRequests,
+    setNoteAccessRole(role: 'owner' | 'viewer' | 'commenter' | 'editor' | null) {
+      noteAccessRole = role;
+    },
     externalUpdate(noteId: string, changes: Partial<Pick<Note, 'title' | 'content'>>) {
       const note = notes.get(noteId);
       if (!note) throw new Error(`Note not found: ${noteId}`);

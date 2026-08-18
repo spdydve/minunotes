@@ -15,6 +15,7 @@ function ApiAccessSettingsView() {
   const [oauthAppOpen, setOAuthAppOpen] = useState(false);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
   const keys = useQuery({ queryKey: ['api-keys'], queryFn: api.apiKeys });
+  const collaborations = useQuery({ queryKey: ['shared-with-me'], queryFn: api.sharedWithMe });
   const oauthClients = useQuery({ queryKey: ['oauth-clients'], queryFn: api.oauthClients, enabled: showOAuthApps });
   const connectedApps = useQuery({
     queryKey: ['oauth-authorizations'],
@@ -48,6 +49,7 @@ function ApiAccessSettingsView() {
         </div>
         <ApiKeyAccessDialog
           folders={folders.data?.folders ?? []}
+          collaborations={collaborations.data?.collaborations ?? []}
           onSaved={() => qc.invalidateQueries({ queryKey: ['api-keys'] })}
           trigger={(open) => <Button onClick={open}>Create key</Button>}
         />
@@ -75,6 +77,14 @@ function ApiAccessSettingsView() {
           >
             <div className="min-w-0">
               <p className="truncate font-medium">{key.name}</p>
+              <p className="notes-muted mt-0.5 text-xs">
+                Shared:{' '}
+                {key.sharedAccessMode === 'none'
+                  ? 'none'
+                  : key.sharedAccessMode === 'all'
+                    ? 'all current and future shares'
+                    : `${key.collaborationGrantIds.length} selected`}
+              </p>
             </div>
             <code className="text-xs text-[var(--notes-muted)]">
               <span className="md:hidden">UID </span>
@@ -91,6 +101,7 @@ function ApiAccessSettingsView() {
             <div className="flex flex-wrap gap-2 md:justify-end">
               <ApiKeyAccessDialog
                 folders={folders.data?.folders ?? []}
+                collaborations={collaborations.data?.collaborations ?? []}
                 apiKey={key}
                 onSaved={() => qc.invalidateQueries({ queryKey: ['api-keys'] })}
                 trigger={(open) => (
@@ -202,6 +213,12 @@ function ApiAccessSettingsView() {
                   : authorization.accessMode === 'top_level'
                     ? `${authorization.permissions.length} project root${authorization.permissions.length === 1 ? '' : 's'}`
                     : `${authorization.permissions.length} specific folder${authorization.permissions.length === 1 ? '' : 's'}`;
+              const sharedAccess =
+                authorization.sharedAccessMode === 'none'
+                  ? 'No shared content'
+                  : authorization.sharedAccessMode === 'all'
+                    ? 'All current and future shares'
+                    : `${authorization.collaborationGrantIds.length} selected share${authorization.collaborationGrantIds.length === 1 ? '' : 's'}`;
               const permissions =
                 [
                   authorization.canRead ? 'Read' : null,
@@ -226,6 +243,8 @@ function ApiAccessSettingsView() {
                   <span className="text-xs text-[var(--notes-muted)]">
                     <span className="md:hidden">Access </span>
                     {access}
+                    <br />
+                    {sharedAccess}
                     <br />
                     {permissions}
                   </span>

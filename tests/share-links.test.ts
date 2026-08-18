@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 34; index += 1) {
+  for (let index = 0; index <= 35; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -296,7 +296,17 @@ describe('note share links', () => {
       folderId: 'folder_a',
       userId: 'user_a',
       title: 'Shared Canvas',
-      content: JSON.stringify({ nodes: [], edges: [] }),
+      content: JSON.stringify({
+        nodes: [
+          {
+            id: 'linked-node',
+            type: 'text',
+            text: 'Visible label',
+            minunotes: { link: { type: 'note', id: 'note_a' }, preserved: true },
+          },
+        ],
+        edges: [],
+      }),
       documentType: 'canvas.default',
       type: 'note',
       isApiEditable: true,
@@ -319,7 +329,17 @@ describe('note share links', () => {
     const body = (await publicRead.json()) as { note: { title: string; content: string; documentType: string } };
     expect(body.note.title).toBe('Shared Canvas');
     expect(body.note.documentType).toBe('canvas.default');
-    expect(JSON.parse(body.note.content)).toEqual({ nodes: [], edges: [] });
+    expect(JSON.parse(body.note.content)).toEqual({
+      nodes: [
+        {
+          id: 'linked-node',
+          type: 'text',
+          text: 'Visible label',
+          minunotes: { preserved: true },
+        },
+      ],
+      edges: [],
+    });
   });
 
   it('returns existing active share metadata on repeated create', async () => {

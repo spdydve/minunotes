@@ -16,6 +16,7 @@ export type NavigationDestination =
   | { kind: 'folder'; folderId: string }
   | { kind: 'note'; noteId: string }
   | { kind: 'templates' }
+  | { kind: 'shared' }
   | { kind: 'trash' }
   | { kind: 'folder-settings'; folderId: string }
   | { kind: 'folder-template'; folderId: string }
@@ -29,7 +30,7 @@ export type NavigationItem = {
 };
 
 export type AppNavigationModel = {
-  section: 'home' | 'folders' | 'templates' | 'trash' | 'settings' | 'resources' | 'other';
+  section: 'home' | 'folders' | 'templates' | 'shared' | 'trash' | 'settings' | 'resources' | 'other';
   activeFolderId: string | null;
   breadcrumbs: NavigationItem[];
   mobileTitle: string;
@@ -147,6 +148,17 @@ export function buildAppNavigationModel({
       breadcrumbs: isActivity ? [...base, activity] : base,
       mobileTitle: isActivity ? 'Note activity' : note?.title || 'Note',
       parent: isActivity ? noteItem : (base.at(-2) ?? home),
+    };
+  }
+
+  if (pathname === '/shared') {
+    const shared: NavigationItem = { label: 'Shared with me', destination: { kind: 'shared' } };
+    return {
+      section: 'shared',
+      activeFolderId: null,
+      breadcrumbs: [home, shared],
+      mobileTitle: 'Shared with me',
+      parent: home,
     };
   }
 

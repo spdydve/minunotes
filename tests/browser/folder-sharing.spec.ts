@@ -8,15 +8,34 @@ test('enables and copies a read-only folder share link', async ({ context, page 
 
   await page.getByRole('main').getByLabel(`Actions for ${browserFixture.folder.title}`).click();
   await page.getByRole('button', { name: 'Share' }).click();
-  await expect(page.getByRole('heading', { name: 'Share folder' })).toBeVisible();
+  const shareDialog = page.getByRole('heading', { name: 'Share folder' }).locator('..').locator('..');
+  await expect(shareDialog).toBeVisible();
+  await expect(shareDialog.getByRole('button', { name: 'Invite', exact: true })).toBeVisible();
+  await expect(shareDialog).toHaveClass(/max-w-2xl/);
+  await expect(shareDialog.getByText('browser@example.com')).toHaveCount(0);
+  await expect(shareDialog.getByRole('heading', { level: 3 })).toHaveText(['Public link', 'People with access']);
+  await expect(shareDialog.getByText('Active', { exact: true })).toBeVisible();
+  await expect(shareDialog.getByText('Pending', { exact: true })).toBeVisible();
+  await expect(shareDialog.getByText('Expired', { exact: true })).toBeVisible();
+  const statusPositions = await Promise.all(
+    ['Active', 'Pending', 'Expired'].map(async (status) => {
+      const box = await shareDialog.getByText(status, { exact: true }).boundingBox();
+      expect(box).not.toBeNull();
+      return box?.x ?? 0;
+    })
+  );
+  expect(Math.max(...statusPositions) - Math.min(...statusPositions)).toBeLessThan(2);
+  await expect(shareDialog.getByRole('button', { name: 'Resend invitation for expired@example.com' })).toBeVisible();
 
-  await page.getByRole('combobox').selectOption('read');
+  const publicLinkSection = shareDialog.getByRole('heading', { name: 'Public link' }).locator('..');
+  await expect(publicLinkSection.getByRole('button', { name: 'Copy public link' })).toHaveCount(0);
+  await publicLinkSection.getByRole('combobox').selectOption('read');
   await expect(
     page.getByText('This folder is publicly viewable by anyone with the link. Editing is disabled.')
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'Copy link' }).click();
-  await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
+  await publicLinkSection.getByRole('button', { name: 'Copy public link' }).click();
+  await expect(publicLinkSection.getByRole('button', { name: 'Copied' })).toBeVisible();
 });
 
 test('moves selected notes from a folder list', async ({ page }) => {

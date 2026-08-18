@@ -3,6 +3,12 @@ import { getMinuNotesNodeLink } from '../../shared/canvas-links';
 import { NOTE_ID_PATTERN, normalizeWikilinkTitle, parseWikilinks } from '../../shared/wikilinks';
 import { db } from '../db/client';
 import { noteLinks, notes } from '../db/schema';
+import {
+  collaborationAccessibleNoteWhere,
+  hasFolderCollaborationAccessSql,
+  integrationAccessibleNoteWhere,
+  type SharedAccessMode,
+} from '../lib/collaboration-access';
 import { createId } from '../lib/id';
 import { activeNoteWhere } from '../trash/policy';
 
@@ -78,6 +84,53 @@ export function parseInternalNoteUrls(markdown: string): ParsedNoteLink[] {
 
 export function parseNoteLinks(markdown: string): ParsedNoteLink[] {
   return [...parseWikiLinks(markdown), ...parseInternalNoteUrls(markdown)].sort((a, b) => a.from - b.from);
+}
+
+export function sanitizeCanvasNoteLinksForVisibleTargets(input: {
+  content: string;
+  visibleTargetIds: ReadonlySet<string>;
+}) {
+  let canvas: { nodes?: unknown[] };
+  try {
+    canvas = JSON.parse(input.content) as { nodes?: unknown[] };
+  } catch {
+    return { content: input.content, hiddenLinkCount: 0 };
+  }
+  if (!Array.isArray(canvas.nodes)) return { content: input.content, hiddenLinkCount: 0 };
+
+  let hiddenLinkCount = 0;
+  for (const node of canvas.nodes) {
+    const link = getMinuNotesNodeLink(node);
+    if (!link || input.visibleTargetIds.has(link.id) || !node || typeof node !== 'object') continue;
+    const metadata = (node as { minunotes?: unknown }).minunotes;
+    if (!metadata || typeof metadata !== 'object') continue;
+    delete (metadata as { link?: unknown }).link;
+    if (Object.keys(metadata).length === 0) delete (node as { minunotes?: unknown }).minunotes;
+    hiddenLinkCount += 1;
+  }
+  return {
+    content: hiddenLinkCount > 0 ? JSON.stringify(canvas) : input.content,
+    hiddenLinkCount,
+  };
+}
+
+export async function sanitizeCanvasNoteLinksForActor(input: { actorUserId: string; content: string }) {
+  const targetIds = [
+    ...new Set(
+      parseCanvasNoteLinks(input.content)
+        .map((link) => link.targetNoteId)
+        .filter((id): id is string => !!id)
+    ),
+  ];
+  if (targetIds.length === 0) return { content: input.content, hiddenLinkCount: 0 };
+  const visibleTargets = await db
+    .select({ id: notes.id })
+    .from(notes)
+    .where(collaborationAccessibleNoteWhere(input.actorUserId, 'read', inArray(notes.id, targetIds)));
+  return sanitizeCanvasNoteLinksForVisibleTargets({
+    content: input.content,
+    visibleTargetIds: new Set(visibleTargets.map((target) => target.id)),
+  });
 }
 
 export function parseCanvasNoteLinks(content: string): ParsedNoteLink[] {
@@ -198,11 +251,15 @@ export async function resolveUnresolvedNoteLinks(input: { userId: string; title:
     );
 }
 
-export async function listOutgoingLinks(input: { userId: string; noteId: string }) {
+export async function listOutgoingLinks(input: { userId: string; noteId: string; actorUserId?: string }) {
   const source = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
+    .where(
+      input.actorUserId
+        ? collaborationAccessibleNoteWhere(input.actorUserId, 'read', eq(notes.id, input.noteId))
+        : activeNoteWhere(input.userId, eq(notes.id, input.noteId))
+    )
     .limit(1);
   if (source.length === 0) return null;
 
@@ -226,14 +283,32 @@ export async function listOutgoingLinks(input: { userId: string; noteId: string 
   const activeTargets = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(activeNoteWhere(input.userId, inArray(notes.id, targetIds)));
+    .where(
+      input.actorUserId
+        ? collaborationAccessibleNoteWhere(input.actorUserId, 'read', inArray(notes.id, targetIds))
+        : activeNoteWhere(input.userId, inArray(notes.id, targetIds))
+    );
   const activeTargetIds = new Set(activeTargets.map((target) => target.id));
   return links.map((link) =>
-    link.targetNoteId && !activeTargetIds.has(link.targetNoteId) ? { ...link, targetNoteId: null } : link
+    link.targetNoteId && !activeTargetIds.has(link.targetNoteId)
+      ? {
+          ...link,
+          targetNoteId: null,
+          targetTitle: link.linkType === 'wikilink' ? link.targetTitle : link.label?.trim() || 'Linked note',
+        }
+      : link
   );
 }
 
-export async function listOrphanNotes(input: { userId: string }) {
+export async function listOrphanNotes(input: {
+  userId: string;
+  actorUserId?: string;
+  integrationAccess?: {
+    authorizationId: string;
+    sharedAccessMode: SharedAccessMode;
+    ownedFolderIds?: ReadonlySet<string> | null;
+  };
+}) {
   const candidates = await db
     .select({
       id: notes.id,
@@ -245,7 +320,21 @@ export async function listOrphanNotes(input: { userId: string }) {
       updatedAt: notes.updatedAt,
     })
     .from(notes)
-    .where(activeNoteWhere(input.userId, eq(notes.type, 'note')))
+    .where(
+      input.integrationAccess
+        ? integrationAccessibleNoteWhere(
+            {
+              actorUserId: input.userId,
+              authorizationId: input.integrationAccess.authorizationId,
+              sharedAccessMode: input.integrationAccess.sharedAccessMode,
+              ownedFolderIds: input.integrationAccess.ownedFolderIds,
+            },
+            eq(notes.type, 'note')
+          )
+        : input.actorUserId
+          ? collaborationAccessibleNoteWhere(input.actorUserId, 'read', eq(notes.type, 'note'))
+          : activeNoteWhere(input.userId, eq(notes.type, 'note'))
+    )
     .orderBy(notes.title);
   if (candidates.length === 0) return candidates;
 
@@ -255,32 +344,53 @@ export async function listOrphanNotes(input: { userId: string }) {
     .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
     .where(
       and(
-        eq(noteLinks.userId, input.userId),
+        input.actorUserId || input.integrationAccess ? undefined : eq(noteLinks.userId, input.userId),
         inArray(
           noteLinks.targetNoteId,
           candidates.map((note) => note.id)
         ),
-        activeNoteWhere(input.userId)
+        input.integrationAccess
+          ? integrationAccessibleNoteWhere({
+              actorUserId: input.userId,
+              authorizationId: input.integrationAccess.authorizationId,
+              sharedAccessMode: input.integrationAccess.sharedAccessMode,
+              ownedFolderIds: input.integrationAccess.ownedFolderIds,
+            })
+          : input.actorUserId
+            ? collaborationAccessibleNoteWhere(input.actorUserId)
+            : activeNoteWhere(input.userId)
       )
     );
   const linkedIds = new Set(incoming.map((link) => link.targetNoteId));
   return candidates.filter((note) => !linkedIds.has(note.id));
 }
 
-export async function listBacklinks(input: { userId: string; noteId: string }) {
+export async function listBacklinks(input: { userId: string; noteId: string; actorUserId?: string }) {
   const target = await db
     .select({ id: notes.id })
     .from(notes)
-    .where(activeNoteWhere(input.userId, eq(notes.id, input.noteId)))
+    .where(
+      input.actorUserId
+        ? collaborationAccessibleNoteWhere(input.actorUserId, 'read', eq(notes.id, input.noteId))
+        : activeNoteWhere(input.userId, eq(notes.id, input.noteId))
+    )
     .limit(1);
   if (target.length === 0) return null;
 
-  return db
+  const canAccessSourceFolder = input.actorUserId
+    ? hasFolderCollaborationAccessSql({
+        actorUserId: input.actorUserId,
+        folderId: notes.folderId,
+        ownerUserId: notes.userId,
+      })
+    : sql<boolean>`1`;
+  const rows = await db
     .select({
       id: noteLinks.id,
       sourceNoteId: noteLinks.sourceNoteId,
       sourceTitle: notes.title,
       sourceFolderId: notes.folderId,
+      canAccessSourceFolder,
       targetTitle: noteLinks.targetTitle,
       label: noteLinks.label,
       linkType: noteLinks.linkType,
@@ -290,7 +400,15 @@ export async function listBacklinks(input: { userId: string; noteId: string }) {
     .from(noteLinks)
     .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
     .where(
-      and(eq(noteLinks.userId, input.userId), eq(noteLinks.targetNoteId, input.noteId), activeNoteWhere(input.userId))
+      and(
+        eq(noteLinks.userId, input.userId),
+        eq(noteLinks.targetNoteId, input.noteId),
+        input.actorUserId ? collaborationAccessibleNoteWhere(input.actorUserId) : activeNoteWhere(input.userId)
+      )
     )
     .orderBy(notes.title);
+  return rows.map(({ canAccessSourceFolder: folderVisible, sourceFolderId, ...row }) => ({
+    ...row,
+    sourceFolderId: folderVisible ? sourceFolderId : null,
+  }));
 }

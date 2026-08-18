@@ -87,11 +87,13 @@ function FolderContentsTable({
   allFolders,
   queryKey,
   onDeleteNote,
+  canManage,
 }: {
   items: ContentItem[];
   allFolders: Folder[];
   queryKey: unknown[];
   onDeleteNote: (note: NoteListItem) => unknown | Promise<unknown>;
+  canManage: boolean;
 }) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   const visibleNotes = items.flatMap((item) => (item.kind === 'note' ? [item.note] : []));
@@ -120,7 +122,7 @@ function FolderContentsTable({
   };
 
   const bulkActions =
-    selectedNotes.length > 0 ? (
+    canManage && selectedNotes.length > 0 ? (
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] px-3 py-2 text-sm">
         <span className="text-[var(--notes-muted)]">
           {selectedNotes.length} {selectedNotes.length === 1 ? 'note' : 'notes'} selected
@@ -172,7 +174,9 @@ function FolderContentsTable({
                     </span>
                   </span>
                 </Link>
-                <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} icon="more" />
+                {canManage ? (
+                  <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} icon="more" />
+                ) : null}
               </div>
             </div>
           ) : (
@@ -182,13 +186,15 @@ function FolderContentsTable({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <input
-                    type="checkbox"
-                    className="mt-3"
-                    aria-label={`Select ${item.note.title}`}
-                    checked={selectedNoteIds.has(item.note.id)}
-                    onChange={(event) => toggleNote(item.note.id, event.currentTarget.checked)}
-                  />
+                  {canManage ? (
+                    <input
+                      type="checkbox"
+                      className="mt-3"
+                      aria-label={`Select ${item.note.title}`}
+                      checked={selectedNoteIds.has(item.note.id)}
+                      onChange={(event) => toggleNote(item.note.id, event.currentTarget.checked)}
+                    />
+                  ) : null}
                   <Link
                     to="/notes/$noteId"
                     params={{ noteId: item.note.id }}
@@ -216,7 +222,7 @@ function FolderContentsTable({
                     </span>
                   </Link>
                 </div>
-                <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />
+                {canManage ? <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} /> : null}
               </div>
             </div>
           )
@@ -228,15 +234,17 @@ function FolderContentsTable({
           <thead className="bg-[var(--notes-table-header-bg)]">
             <tr>
               <th className="border-[var(--notes-border)] border-b px-5 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
-                <input
-                  type="checkbox"
-                  aria-label="Select all notes"
-                  checked={allVisibleNotesSelected}
-                  ref={(input) => {
-                    if (input) input.indeterminate = someVisibleNotesSelected && !allVisibleNotesSelected;
-                  }}
-                  onChange={(event) => toggleAllVisibleNotes(event.currentTarget.checked)}
-                />
+                {canManage ? (
+                  <input
+                    type="checkbox"
+                    aria-label="Select all notes"
+                    checked={allVisibleNotesSelected}
+                    ref={(input) => {
+                      if (input) input.indeterminate = someVisibleNotesSelected && !allVisibleNotesSelected;
+                    }}
+                    onChange={(event) => toggleAllVisibleNotes(event.currentTarget.checked)}
+                  />
+                ) : null}
               </th>
               <th className="border-[var(--notes-border)] border-b px-5 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
                 Name
@@ -259,7 +267,7 @@ function FolderContentsTable({
                 className="transition-colors hover:bg-[var(--notes-table-row-hover)]"
               >
                 <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 align-middle">
-                  {item.kind === 'note' ? (
+                  {canManage && item.kind === 'note' ? (
                     <input
                       type="checkbox"
                       aria-label={`Select ${item.note.title}`}
@@ -316,15 +324,15 @@ function FolderContentsTable({
                 </td>
                 <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 text-right align-middle">
                   <div className="flex justify-end">
-                    {item.kind === 'folder' ? (
+                    {canManage && item.kind === 'folder' ? (
                       <FolderActionsPopover
                         folder={item.folder}
                         depth={folderDepth(item.folder, allFolders)}
                         icon="more"
                       />
-                    ) : (
+                    ) : canManage && item.kind === 'note' ? (
                       <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />
-                    )}
+                    ) : null}
                   </div>
                 </td>
               </tr>
@@ -351,6 +359,11 @@ function FolderView() {
   const { data: foldersData } = useQuery({
     queryKey: ['folders'],
     queryFn: api.folders,
+  });
+  const { data: folderDetail } = useQuery({
+    queryKey: ['folder-detail', folderId],
+    queryFn: () => api.folderDetail(folderId),
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
   const create = useMutation({
     mutationFn: (documentType: 'markdown' | 'canvas.default' | 'canvas.mindmap' = 'markdown') =>
@@ -383,9 +396,16 @@ function FolderView() {
       </section>
     );
 
-  const allFolders = foldersData?.folders ?? [];
-  const folder = allFolders.find((item) => item.id === folderId);
-  const childFolders = page === 1 ? allFolders.filter((item) => item.parentFolderId === folderId) : [];
+  const allFolders = [
+    ...(foldersData?.folders ?? []),
+    ...(folderDetail ? [folderDetail.folder, ...folderDetail.childFolders] : []),
+  ].filter((folder, index, items) => items.findIndex((candidate) => candidate.id === folder.id) === index);
+  const folder = folderDetail?.folder ?? allFolders.find((item) => item.id === folderId);
+  const childFolders =
+    page === 1 ? (folderDetail?.childFolders ?? allFolders.filter((item) => item.parentFolderId === folderId)) : [];
+  const accessRole = data?.access.role ?? folderDetail?.access.role ?? 'viewer';
+  const canCreate = accessRole === 'owner' || accessRole === 'editor';
+  const isOwner = accessRole === 'owner';
   const notes = data?.notes ?? [];
   const items: ContentItem[] = [
     ...childFolders.map((child) => ({
@@ -416,55 +436,63 @@ function FolderView() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-semibold text-xl">{folder?.title ?? 'Folder notes'}</h2>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="inline-flex overflow-hidden rounded-md border border-[var(--notes-button-secondary-border)]">
-            <button
-              type="button"
-              className="border-[var(--notes-button-secondary-border)] border-r bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={create.isPending}
-              onClick={createMarkdownNote}
-            >
-              New Note
-            </button>
-            <Popover open={newMenuOpen} onOpenChange={setNewMenuOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center bg-[var(--notes-button-secondary-bg)] px-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={create.isPending}
-                  aria-label="Open new options"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-48 p-1">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]"
-                  onClick={openTemplatePicker}
-                >
-                  <FileText className="h-4 w-4 text-[var(--notes-muted)]" />
-                  <span>From template</span>
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]"
-                  onClick={createCanvasNote}
-                >
-                  <Shapes className="h-4 w-4 text-[var(--notes-muted)]" />
-                  <span>Canvas</span>
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]"
-                  onClick={createMindMapNote}
-                >
-                  <GitBranch className="h-4 w-4 text-[var(--notes-muted)]" />
-                  <span>Mind map</span>
-                </button>
-              </PopoverContent>
-            </Popover>
-          </div>
-          {folder ? (
+          {canCreate ? (
+            <div className="inline-flex overflow-hidden rounded-md border border-[var(--notes-button-secondary-border)]">
+              <button
+                type="button"
+                className="border-[var(--notes-button-secondary-border)] border-r bg-[var(--notes-button-secondary-bg)] px-3 py-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={create.isPending}
+                onClick={createMarkdownNote}
+              >
+                New Note
+              </button>
+              <Popover open={newMenuOpen} onOpenChange={setNewMenuOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center bg-[var(--notes-button-secondary-bg)] px-2 text-[var(--notes-button-secondary-text)] text-sm transition-colors hover:bg-[var(--notes-button-secondary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={create.isPending}
+                    aria-label="Open new options"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-48 p-1">
+                  {isOwner ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]"
+                      onClick={openTemplatePicker}
+                    >
+                      <FileText className="h-4 w-4 text-[var(--notes-muted)]" />
+                      <span>From template</span>
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]"
+                    onClick={createCanvasNote}
+                  >
+                    <Shapes className="h-4 w-4 text-[var(--notes-muted)]" />
+                    <span>Canvas</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[var(--notes-hover)]"
+                    onClick={createMindMapNote}
+                  >
+                    <GitBranch className="h-4 w-4 text-[var(--notes-muted)]" />
+                    <span>Mind map</span>
+                  </button>
+                </PopoverContent>
+              </Popover>
+            </div>
+          ) : (
+            <span className="rounded-md border border-[var(--notes-border)] px-2 py-1 text-[var(--notes-muted)] text-xs capitalize">
+              {accessRole}
+            </span>
+          )}
+          {isOwner && folder ? (
             <FolderActionsPopover folder={folder} depth={folderDepth(folder, allFolders)} icon="settings" />
           ) : null}
         </div>
@@ -476,6 +504,7 @@ function FolderView() {
           allFolders={allFolders}
           queryKey={['notes', folderId]}
           onDeleteNote={(note) => remove.mutateAsync({ noteId: note.id })}
+          canManage={isOwner}
         />
       ) : (
         <EmptyState>No folders or notes yet.</EmptyState>

@@ -16,11 +16,12 @@ export function AppShell() {
   const pathname = location.pathname;
   const session = authClient.useSession();
   const isAuthRoute = pathname === '/auth';
+  const isInvitationRoute = pathname.startsWith('/invite/');
   const isPublicShareRoute = pathname.startsWith('/share/');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(getStoredSidebarCollapsed);
   const navigationNoteId = noteIdFromNavigationPath(pathname);
-  const navigationEnabled = Boolean(session.data?.user && !isAuthRoute && !isPublicShareRoute);
+  const navigationEnabled = Boolean(session.data?.user && !isAuthRoute && !isInvitationRoute && !isPublicShareRoute);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders, enabled: navigationEnabled });
   const navigationNote = useQuery({
     queryKey: ['note', navigationNoteId],
@@ -46,7 +47,7 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (isPublicShareRoute) return;
+    if (isPublicShareRoute || isInvitationRoute) return;
     const pageTitle =
       pathname === '/auth'
         ? 'Sign in'
@@ -56,7 +57,7 @@ export function AppShell() {
             ? `${navigationNote.data.note.title} activity`
             : navigation.mobileTitle;
     document.title = `${pageTitle} - MinuNotes`;
-  }, [isPublicShareRoute, navigation.mobileTitle, navigationNote.data?.note, pathname]);
+  }, [isInvitationRoute, isPublicShareRoute, navigation.mobileTitle, navigationNote.data?.note, pathname]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -66,7 +67,7 @@ export function AppShell() {
     storeSidebarCollapsed(desktopSidebarCollapsed);
   }, [desktopSidebarCollapsed]);
 
-  if (isAuthRoute || isPublicShareRoute) return <Outlet />;
+  if (isAuthRoute || isInvitationRoute || isPublicShareRoute) return <Outlet />;
   if (session.isPending)
     return (
       <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">

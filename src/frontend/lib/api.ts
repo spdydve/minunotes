@@ -47,6 +47,7 @@ export type ApiKeyPermission = {
   updatedAt: string;
 };
 export type ApiKeyAccessMode = 'all' | 'top_level' | 'specific';
+export type SharedAccessMode = 'none' | 'specific' | 'all';
 export type ApiKey = {
   id: string;
   name: string;
@@ -57,6 +58,8 @@ export type ApiKey = {
   canEdit: boolean;
   canComment: boolean;
   accessMode: ApiKeyAccessMode;
+  sharedAccessMode: SharedAccessMode;
+  collaborationGrantIds: string[];
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -91,6 +94,8 @@ export type OAuthAuthorization = {
   clientId: string;
   scope: string;
   accessMode: ApiKeyAccessMode;
+  sharedAccessMode: SharedAccessMode;
+  collaborationGrantIds: string[];
   canCreateFolders: boolean;
   canRead: boolean;
   canCreate: boolean;
@@ -134,7 +139,11 @@ export type Note = {
 };
 export type NoteListItem = Omit<Note, 'content'>;
 export type PageResponse = { page: number; limit: number; hasMore: boolean };
-export type NoteResponse = { note: Note; contentHash: string };
+export type CollaborationAccess = {
+  role: CollaborationRole | 'owner';
+  source: 'owner' | 'note_grant' | 'folder_grant';
+};
+export type NoteResponse = { note: Note; contentHash: string; access?: CollaborationAccess };
 export type MoveNotesResponse = { notes: NoteResponse[] };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
 export type CommentActor = { type: 'user' | 'agent'; id: string; name: string };
@@ -160,6 +169,7 @@ export type CommentMessage = {
   threadId: string;
   body: string;
   author: CommentActor;
+  authoredByCurrentActor: boolean;
   createdAt: string;
   updatedAt: string;
   reactions: CommentReaction[];
@@ -170,6 +180,7 @@ export type CommentThread = {
   status: 'open' | 'resolved';
   anchor: CommentAnchor;
   createdBy: CommentActor;
+  authoredByCurrentActor: boolean;
   resolvedBy: CommentActor | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -187,6 +198,54 @@ export type NoteShareLink = {
   expiresAt: string | null;
   revokedAt: string | null;
   url: string | null;
+};
+export type CollaborationRole = 'viewer' | 'commenter' | 'editor';
+export type CollaborationResourceType = 'note' | 'folder';
+export type SharedCollaboration =
+  | {
+      type: 'note';
+      grantId: string;
+      role: CollaborationRole | 'owner';
+      owner: { key: string; name: string };
+      note: { id: string; title: string; documentType: DocumentType; updatedAt: string };
+    }
+  | {
+      type: 'folder';
+      grantId: string;
+      role: CollaborationRole | 'owner';
+      owner: { key: string; name: string };
+      folder: { id: string; title: string; updatedAt: string };
+    };
+export type SharedCollaborationsPage = {
+  collaborations: SharedCollaboration[];
+  pageInfo: { hasMore: boolean; nextCursor: string | null };
+};
+export type CollaborationInvitationPreview = {
+  resource: { type: 'note' | 'folder'; id: string; title: string };
+  owner: { name: string };
+  role: CollaborationRole;
+  invitedEmail: string;
+  expiresAt: string;
+  status: 'pending' | 'accepted';
+};
+export type CollaborationManagementResponse = {
+  resource: { id: string; title: string };
+  owner: { id: string; name: string; email: string } | null;
+  grants: Array<{
+    id: string;
+    role: CollaborationRole;
+    createdAt: string;
+    updatedAt: string;
+    user: { id: string; name: string; email: string };
+  }>;
+  invitations: Array<{
+    id: string;
+    email: string;
+    role: CollaborationRole;
+    expiresAt: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 export type FolderShareLink = {
   id: string;
@@ -393,6 +452,8 @@ export const api = {
       canComment: boolean;
       canCreateFolders: boolean;
       folderIds: string[];
+      sharedAccessMode: SharedAccessMode;
+      collaborationGrantIds: string[];
     }
   ) =>
     request<{ redirectUrl: string }>('/oauth/authorize/approve', {
@@ -412,6 +473,8 @@ export const api = {
         canComment: data.canComment,
         canCreateFolders: data.canCreateFolders,
         folderIds: data.folderIds,
+        sharedAccessMode: data.sharedAccessMode,
+        collaborationGrantIds: data.collaborationGrantIds,
       }),
     }),
   createApiKey: (data: {
@@ -422,6 +485,8 @@ export const api = {
     canCreate?: boolean;
     canEdit?: boolean;
     canComment?: boolean;
+    sharedAccessMode?: SharedAccessMode;
+    collaborationGrantIds?: string[];
     permissions: Array<{
       folderId: string;
       canRead?: boolean;
@@ -441,6 +506,8 @@ export const api = {
       canCreate?: boolean;
       canEdit?: boolean;
       canComment?: boolean;
+      sharedAccessMode?: SharedAccessMode;
+      collaborationGrantIds?: string[];
       permissions?: Array<{
         folderId: string;
         canRead?: boolean;
@@ -453,6 +520,72 @@ export const api = {
   ) => request<{ apiKey: ApiKey }>(`/api-keys/${keyId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   revokeApiKey: (keyId: string) => request<{ ok: true }>(`/api-keys/${keyId}`, { method: 'DELETE' }),
   folders: () => request<{ folders: Folder[] }>('/folders'),
+  sharedWithMe: () => request<{ collaborations: SharedCollaboration[] }>('/collaborations/shared-with-me'),
+  sharedWithMePage: (type: CollaborationResourceType, cursor?: string | null, limit = 25) => {
+    const search = new URLSearchParams({ type, limit: String(limit) });
+    if (cursor) search.set('cursor', cursor);
+    return request<SharedCollaborationsPage>(`/collaborations/shared-with-me?${search}`);
+  },
+  resourceCollaborators: (resourceType: CollaborationResourceType, resourceId: string) =>
+    request<CollaborationManagementResponse>(`/${resourceType}s/${resourceId}/collaborators`),
+  addResourceCollaborator: (
+    resourceType: CollaborationResourceType,
+    resourceId: string,
+    data: { email: string; role: CollaborationRole }
+  ) =>
+    request<
+      | {
+          kind: 'grant';
+          emailDelivery: 'sent' | 'disabled' | 'failed';
+          grant: { id: string; granteeUserId: string; role: CollaborationRole };
+        }
+      | {
+          kind: 'invitation';
+          emailDelivery: 'sent' | 'disabled' | 'failed';
+          invitation: {
+            id: string;
+            email: string;
+            role: CollaborationRole;
+            expiresAt: string;
+            invitationUrl: string;
+          };
+        }
+    >(`/${resourceType}s/${resourceId}/collaborators`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateResourceCollaborator: (
+    resourceType: CollaborationResourceType,
+    resourceId: string,
+    userId: string,
+    role: CollaborationRole
+  ) =>
+    request<{ grant: { id: string; role: CollaborationRole } }>(
+      `/${resourceType}s/${resourceId}/collaborators/${userId}`,
+      { method: 'PATCH', body: JSON.stringify({ role }) }
+    ),
+  removeResourceCollaborator: (resourceType: CollaborationResourceType, resourceId: string, userId: string) =>
+    request<{ ok: true }>(`/${resourceType}s/${resourceId}/collaborators/${userId}`, { method: 'DELETE' }),
+  collaborationInvitationPreview: (token: string) =>
+    request<CollaborationInvitationPreview>(`/collaboration-invitations/${encodeURIComponent(token)}/preview`),
+  acceptCollaborationInvitation: (token: string) =>
+    request<{ destination: string; alreadyAccepted: boolean }>(
+      `/collaboration-invitations/${encodeURIComponent(token)}/accept`,
+      { method: 'POST', body: JSON.stringify({}) }
+    ),
+  resendCollaborationInvitation: (invitationId: string) =>
+    request<{
+      emailDelivery: 'sent' | 'disabled' | 'failed';
+      invitation: {
+        id: string;
+        email: string;
+        role: CollaborationRole;
+        expiresAt: string;
+        invitationUrl: string;
+      };
+    }>(`/collaboration-invitations/${invitationId}/resend`, { method: 'POST', body: JSON.stringify({}) }),
+  revokeCollaborationInvitation: (invitationId: string) =>
+    request<{ ok: true }>(`/collaboration-invitations/${invitationId}`, { method: 'DELETE' }),
   folderShareLink: (folderId: string) =>
     request<{ shareLink: FolderShareLink | null }>(`/folders/${folderId}/share-link`),
   createFolderShareLink: (folderId: string, regenerate = false) =>
@@ -486,8 +619,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ folderIds }),
     }),
+  folderDetail: (folderId: string) =>
+    request<{ folder: Folder; childFolders: Folder[]; access: CollaborationAccess }>(`/folders/${folderId}/detail`),
   notes: (folderId: string, type: NoteType = 'note', page = 1, limit = 50) =>
-    request<PageResponse & { notes: NoteListItem[] }>(
+    request<PageResponse & { notes: NoteListItem[]; access: CollaborationAccess }>(
       `/folders/${folderId}/notes?type=${type}&page=${page}&limit=${limit}`
     ),
   recentNotes: (limit = 10, page = 1) =>

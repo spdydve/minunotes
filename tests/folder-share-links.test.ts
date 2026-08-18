@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 34; index += 1) {
+  for (let index = 0; index <= 35; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -191,6 +191,67 @@ describe('folder share links', () => {
     expect(body.notes.map((note) => note.title)).not.toContain('Template');
     expect(body.share.id).toBe(shareLink.id);
     expect(body.share.permission).toBe('read');
+  });
+
+  it('keeps canvas links inside the shared subtree and strips outside targets', async () => {
+    const { app, db, schema } = await setupFolderShareApp();
+    await db.insert(schema.notes).values([
+      {
+        id: 'note_outside',
+        folderId: 'folder_private',
+        userId: 'user_a',
+        title: 'Outside',
+        content: '',
+        documentType: 'markdown',
+        type: 'note',
+        isApiEditable: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 'note_canvas',
+        folderId: 'folder_a',
+        userId: 'user_a',
+        title: 'Canvas',
+        content: JSON.stringify({
+          nodes: [
+            {
+              id: 'inside',
+              type: 'text',
+              text: 'Inside',
+              minunotes: { link: { type: 'note', id: 'note_child' } },
+            },
+            {
+              id: 'outside',
+              type: 'text',
+              text: 'Outside',
+              minunotes: { link: { type: 'note', id: 'note_outside' } },
+            },
+          ],
+          edges: [],
+        }),
+        documentType: 'canvas.default',
+        type: 'note',
+        isApiEditable: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const create = await app.request('/api/folders/folder_a/share-link', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    const token = tokenFromUrl(((await create.json()) as { shareLink: { url: string } }).shareLink.url);
+    const body = (await (await app.request(`/api/share/folders/${token}`)).json()) as {
+      notes: Array<{ id: string; content: string }>;
+    };
+    const canvas = JSON.parse(body.notes.find((note) => note.id === 'note_canvas')?.content ?? '{}') as {
+      nodes: Array<{ id: string; minunotes?: { link?: { id: string } } }>;
+    };
+    expect(canvas.nodes.find((node) => node.id === 'inside')?.minunotes?.link?.id).toBe('note_child');
+    expect(canvas.nodes.find((node) => node.id === 'outside')?.minunotes?.link).toBeUndefined();
   });
 
   it('serves attachments only through their owning note in the shared subtree', async () => {

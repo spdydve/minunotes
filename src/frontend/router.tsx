@@ -6,6 +6,7 @@ import { newFromTemplateRoute } from './routes/folders.$folderId.new-from-templa
 import { folderSettingsRoute } from './routes/folders.$folderId.settings';
 import { folderTemplateSettingsRoute } from './routes/folders.$folderId.templates';
 import { indexRoute } from './routes/index';
+import { inviteRoute } from './routes/invite.$token';
 import { noteRoute } from './routes/notes.$noteId';
 import { noteActivityRoute } from './routes/notes.$noteId.activity';
 import { oauthAuthorizeRoute } from './routes/oauth.authorize';
@@ -14,6 +15,7 @@ import { resourceDocRoute } from './routes/resources.$slug';
 import { apiAccessSettingsRoute } from './routes/settings.api-access';
 import { shareRoute } from './routes/share.$token';
 import { folderShareRoute } from './routes/share.folders.$token';
+import { sharedRoute } from './routes/shared';
 import { templatesRoute } from './routes/templates';
 import { trashRoute } from './routes/trash';
 
@@ -28,10 +30,12 @@ const routeTree = rootRoute.addChildren([
   noteRoute,
   noteActivityRoute,
   authRoute,
+  inviteRoute,
   oauthAuthorizeRoute,
   apiAccessSettingsRoute,
   resourcesRoute,
   resourceDocRoute,
+  sharedRoute,
   folderShareRoute,
   shareRoute,
 ]);

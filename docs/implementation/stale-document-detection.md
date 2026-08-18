@@ -6,8 +6,9 @@
 
 - Markdown and canvas saves send the editor’s latest known `contentHash` as `baseHash`.
 - Stale-status polling starts after asynchronous note hydration instead of silently remaining inactive.
-- A `409 Conflict` preserves the local draft and shows the stale-note warning.
-- Reload applies current server content directly instead of leaving the editor in a loading state.
+- A `409 Conflict` preserves the local title and content and shows the stale-note warning.
+- Users can review and copy the preserved title or content before reloading.
+- Reload applies current server content while retaining the conflicting local draft until the user dismisses it.
 - API and browser tests cover clean external updates, dirty save races, reload, and canvas saves.
 
 ## Why
@@ -166,6 +167,7 @@ Frontend behavior:
 - [x] Pause/prevent autosave while stale.
 - [x] Add reload action.
 - [x] Verify an external update triggers the banner and cannot overwrite a dirty local draft.
+- [x] Keep the conflicting local title and content available for review and copying after reload.
 
 ## Regression hardening
 
@@ -176,6 +178,7 @@ The hardened behavior now:
 - sends the latest known content hash with Markdown and canvas saves;
 - starts polling after the note content hash is loaded;
 - preserves a dirty local draft when an external update wins the race;
+- exposes preserved Markdown or canvas content for copying before and after reload;
 - reloads current server content without leaving the route stuck in a loading state; and
 - has API and browser regression coverage for stale conflicts, clean-note polling, dirty drafts, reload, and canvas saves.
 

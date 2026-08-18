@@ -4,6 +4,11 @@ import { db } from '../db/client';
 import { folderShareLinks, folders, notes, templateFolderAssignments } from '../db/schema';
 import { createDocument, listDocuments, listFolders } from '../harness/commands';
 import type { auth } from '../lib/auth';
+import {
+  collaborationRoleAllows,
+  resolveFolderCollaborationAccess,
+  serializeCollaborationAccess,
+} from '../lib/collaboration-access';
 import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { parsePageRequest } from '../lib/pagination';
@@ -216,15 +221,59 @@ folderRoutes.delete('/:folderId/share-link', async (c) => {
   return c.json({ ok: true });
 });
 
+folderRoutes.get('/:folderId/detail', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const folderId = c.req.param('folderId');
+  const access = await resolveFolderCollaborationAccess({ actorUserId: user.id, folderId });
+  if (!access) return c.json({ error: 'Folder not found' }, 404);
+  const [folder] = await db
+    .select()
+    .from(folders)
+    .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.id, folderId)))
+    .limit(1);
+  if (!folder) return c.json({ error: 'Folder not found' }, 404);
+  const parentAccess = folder.parentFolderId
+    ? await resolveFolderCollaborationAccess({ actorUserId: user.id, folderId: folder.parentFolderId })
+    : null;
+  const childFolders = await db
+    .select()
+    .from(folders)
+    .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.parentFolderId, folderId)));
+  const serializeFolder = ({ userId: _userId, ...value }: typeof folders.$inferSelect) => value;
+  return c.json({
+    folder: serializeFolder(parentAccess ? folder : { ...folder, parentFolderId: null }),
+    childFolders: childFolders.map(serializeFolder),
+    access: serializeCollaborationAccess(access),
+  });
+});
+
 folderRoutes.get('/:folderId/notes', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const folderId = c.req.param('folderId');
+  let access = await resolveFolderCollaborationAccess({ actorUserId: user.id, folderId });
+  if (!access) {
+    const [ownedFolder] = await db
+      .select({ id: folders.id })
+      .from(folders)
+      .where(and(eq(folders.id, folderId), eq(folders.userId, user.id)))
+      .limit(1);
+    if (!ownedFolder) return c.json({ error: 'Folder not found' }, 404);
+    access = {
+      actorUserId: user.id,
+      resourceOwnerUserId: user.id,
+      role: 'owner',
+      source: 'owner',
+      applicableGrantIds: [],
+    };
+  }
   const type = c.req.query('type') === 'template' ? 'template' : 'note';
+  if (type === 'template' && access.role !== 'owner') return c.json({ error: 'Folder not found' }, 404);
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
   const result = await listDocuments({
-    userId: user.id,
+    userId: access.resourceOwnerUserId,
     folderId,
     type,
     offset: page.offset,
@@ -232,6 +281,7 @@ folderRoutes.get('/:folderId/notes', async (c) => {
   });
   return c.json({
     notes: result.value.documents,
+    access: serializeCollaborationAccess(access),
     page: page.page,
     limit: page.limit,
     hasMore: result.value.hasMore,
@@ -261,6 +311,12 @@ folderRoutes.get('/:folderId/templates', async (c) => {
 folderRoutes.post('/:folderId/notes', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await resolveFolderCollaborationAccess({
+    actorUserId: user.id,
+    folderId: c.req.param('folderId'),
+  });
+  if (!access) return c.json({ error: 'Folder not found' }, 404);
+  if (!collaborationRoleAllows(access.role, 'create')) return c.json({ error: 'Forbidden' }, 403);
 
   const body = (await c.req.json().catch(() => ({}))) as {
     title?: string;
@@ -270,20 +326,25 @@ folderRoutes.post('/:folderId/notes', async (c) => {
   };
   const documentType =
     body.documentType === 'canvas.default' || body.documentType === 'canvas.mindmap' ? body.documentType : 'markdown';
+  if (body.type === 'template' && access.role !== 'owner')
+    return c.json({ error: 'Collaborators cannot create templates' }, 403);
   if (body.type === 'template' && documentType !== 'markdown')
     return c.json({ error: 'Templates must be markdown documents' }, 400);
   const result = await createDocument({
-    userId: user.id,
+    userId: access.resourceOwnerUserId,
     folderId: c.req.param('folderId'),
     title: body.title,
     markdown: body.content,
     documentType,
     type: body.type === 'template' ? 'template' : 'note',
     actorType: 'user',
+    actorId: user.id,
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json({ note: result.value.note }, 201);
+  if (access.role === 'owner') return c.json({ note: result.value.note }, 201);
+  const { userId: _userId, updatedByActorId: _updatedByActorId, ...note } = result.value.note;
+  return c.json({ note: { ...note, updatedByActorId: null } }, 201);
 });
 
 folderRoutes.delete('/:folderId', async (c) => {

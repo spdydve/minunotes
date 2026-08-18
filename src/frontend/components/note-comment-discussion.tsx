@@ -30,10 +30,6 @@ function isEdited(message: CommentMessage) {
   return new Date(message.updatedAt).getTime() > new Date(message.createdAt).getTime();
 }
 
-function canEditMessage(message: CommentMessage) {
-  return message.author.type === 'user' && message.author.id === 'owner';
-}
-
 function initials(name: string) {
   const value = name
     .split(/\s+/)
@@ -50,9 +46,11 @@ export function NoteCommentDiscussion({
   onEditMessage,
   onDeleteMessage,
   onToggleReaction,
+  canModerate,
 }: {
   thread: CommentThread;
   busy: boolean;
+  canModerate: boolean;
   onEditMessage: (threadId: string, messageId: string, body: string) => Promise<void>;
   onDeleteMessage: (threadId: string, messageId: string) => Promise<void>;
   onToggleReaction: (threadId: string, messageId: string, emoji: CommentReactionEmoji) => Promise<void>;
@@ -79,7 +77,8 @@ export function NoteCommentDiscussion({
   return (
     <div className="space-y-0">
       {thread.messages.map((message, index) => {
-        const editable = canEditMessage(message);
+        const editable = message.authoredByCurrentActor;
+        const deletable = editable || canModerate;
         const editing = editingMessageId === message.id;
         const isRoot = index === 0;
         return (
@@ -172,7 +171,7 @@ export function NoteCommentDiscussion({
                       )}
                     </PopoverContent>
                   </Popover>
-                  {editable ? (
+                  {editable || (deletable && !isRoot) ? (
                     <Popover>
                       <QuickTooltip label="More comment actions">
                         <PopoverTrigger asChild>
@@ -186,20 +185,22 @@ export function NoteCommentDiscussion({
                         </PopoverTrigger>
                       </QuickTooltip>
                       <PopoverContent align="end" className="w-40">
-                        <PopoverClose asChild>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--notes-hover)]"
-                            onClick={() => {
-                              setEditingMessageId(message.id);
-                              setEditingBody(message.body);
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Edit
-                          </button>
-                        </PopoverClose>
-                        {!isRoot ? (
+                        {editable ? (
+                          <PopoverClose asChild>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--notes-hover)]"
+                              onClick={() => {
+                                setEditingMessageId(message.id);
+                                setEditingBody(message.body);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                          </PopoverClose>
+                        ) : null}
+                        {!isRoot && deletable ? (
                           <PopoverClose asChild>
                             <button
                               type="button"
