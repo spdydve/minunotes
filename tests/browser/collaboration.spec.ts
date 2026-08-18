@@ -6,6 +6,10 @@ test('lists direct shared roots without exposing owner identifiers', async ({ pa
   await page.goto('/shared');
 
   await expect(page.getByRole('heading', { name: 'Shared with me' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Shared' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
   await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Folders' })).toBeVisible();
   await expect(page.getByRole('row', { name: /Source Note Shared Owner Commenter/ })).toBeVisible();
@@ -19,9 +23,10 @@ test('manages owner-shared notes and folders with search and independent paginat
 
   await expect(page.getByRole('heading', { name: 'Shared by me' })).toBeVisible();
   await expect(page).toHaveTitle('Shared by me - MinuNotes');
-  await expect(
-    page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Shared by me' })
-  ).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Shared' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
   const tabs = page.getByRole('navigation', { name: 'Sharing views' });
   await expect(tabs.getByRole('link', { name: 'Shared with me' })).toBeVisible();
   await expect(tabs.getByRole('link', { name: 'Shared by me' })).toHaveAttribute('aria-current', 'page');

@@ -125,7 +125,7 @@ test('renders callouts and Mermaid diagrams in live mode', async ({ page }) => {
       .first()
       .evaluate((element) => getComputedStyle(element).fill);
   const darkNodeFill = await nodeFill();
-  await page.getByLabel('Open settings').click();
+  await page.getByLabel('Open account and settings menu').click();
   await page.getByLabel('Theme').selectOption('catppuccin-latte');
   await expect(page.locator('html')).toHaveClass(/theme-catppuccin-latte/);
   await expect.poll(nodeFill).not.toBe(darkNodeFill);

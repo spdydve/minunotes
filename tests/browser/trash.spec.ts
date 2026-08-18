@@ -5,15 +5,17 @@ function trashRow(page: Page, title: string) {
   return page.getByRole('listitem').filter({ hasText: title });
 }
 
+async function openTrashFromMoreMenu(page: Page) {
+  await page.getByRole('button', { name: 'More navigation' }).click();
+  return page.getByRole('button', { name: 'Trash', exact: true });
+}
+
 test('shows recoverable content separately from the active tree and blocks direct reads', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/trash');
 
   await expect(page).toHaveTitle('Trash - MinuNotes');
-  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Trash' })).toHaveAttribute(
-    'aria-current',
-    'page'
-  );
+  await expect(await openTrashFromMoreMenu(page)).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('heading', { name: 'Folders' })).toBeVisible();
   await expect(page.getByText(browserFixture.trashedFolder.title)).toBeVisible();
   await expect(page.getByText('2 subfolders · 3 notes')).toBeVisible();
@@ -76,7 +78,7 @@ test('chooses a destination for a template whose original folder is unavailable'
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Open menu' }).click();
-  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Trash' }).click();
+  await (await openTrashFromMoreMenu(page)).click();
   await expect(page.getByRole('main').getByRole('heading', { name: 'Trash', exact: true })).toBeVisible();
 
   const restoreButton = trashRow(page, browserFixture.trashedTemplate.title).getByRole('button', {
