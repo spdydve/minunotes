@@ -194,7 +194,7 @@ function IntegrationsView() {
           <div className="mb-4 mt-8">
             <h2 className="text-lg font-semibold">Connected apps</h2>
             <p className="mt-1 text-sm text-[var(--notes-muted)]">
-              OAuth apps authorized through MinuNotes, such as hosted MCP or ChatGPT-style connectors.
+              OAuth apps authorized to access MinuNotes on your behalf.
             </p>
           </div>
           <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
