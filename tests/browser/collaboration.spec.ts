@@ -2,7 +2,11 @@ import { expect, test } from '@playwright/test';
 import { browserFixture, mockBrowserApi } from './fixtures';
 
 test('lists direct shared roots without exposing owner identifiers', async ({ page }) => {
-  await mockBrowserApi(page, { includeSharedCollaborations: true, noteAccessRole: 'commenter' });
+  await mockBrowserApi(page, {
+    includeSharedCollaborations: true,
+    noteAccessRole: 'commenter',
+    folderAccessRole: 'editor',
+  });
   await page.goto('/shared');
 
   await expect(page.getByRole('heading', { name: 'Shared with me' })).toBeVisible();
@@ -14,12 +18,54 @@ test('lists direct shared roots without exposing owner identifiers', async ({ pa
   await expect(page.getByRole('heading', { name: 'Folders' })).toBeVisible();
   await expect(page.getByRole('row', { name: /Source Note Shared Owner Commenter/ })).toBeVisible();
   await expect(page.getByRole('row', { name: /Browser tests Shared Owner Editor/ })).toBeVisible();
-  const ownerAvatars = page.locator('[data-avatar-palette]');
+  const ownerAvatars = page.locator('table [data-avatar-palette]');
   await expect(ownerAvatars).toHaveCount(2);
   expect(await ownerAvatars.nth(0).getAttribute('data-avatar-palette')).toBe(
     await ownerAvatars.nth(1).getAttribute('data-avatar-palette')
   );
   await expect(page.getByText('collaboration_owner_browser')).toHaveCount(0);
+
+  await page.getByRole('link', { name: browserFixture.source.title, exact: true }).click();
+  let breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb.getByRole('link', { name: 'Shared with me' })).toBeVisible();
+  await expect(breadcrumb.getByText(browserFixture.source.title, { exact: true })).toBeVisible();
+  await expect(breadcrumb.getByText(browserFixture.folder.title, { exact: true })).toHaveCount(0);
+  await page.reload();
+  breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb.getByRole('link', { name: 'Shared with me' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Shared' })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+
+  await page.goto('/shared');
+  await page
+    .getByRole('row', { name: /Browser tests Shared Owner Editor/ })
+    .getByRole('link', { name: browserFixture.folder.title, exact: true })
+    .click();
+  breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb.getByRole('link', { name: 'Shared with me' })).toBeVisible();
+  await expect(breadcrumb.getByText(browserFixture.folder.title, { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Shared with me' })
+  ).toBeVisible();
+});
+
+test('keeps inherited shared-folder context for canonical note links and reloads', async ({ page }) => {
+  await mockBrowserApi(page, {
+    noteAccessRole: 'editor',
+    noteAccessSource: 'folder_grant',
+    folderAccessRole: 'editor',
+  });
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb.getByRole('link', { name: 'Shared with me' })).toBeVisible();
+  await expect(breadcrumb.getByRole('link', { name: browserFixture.folder.title })).toBeVisible();
+  await expect(breadcrumb.getByText(browserFixture.source.title, { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(breadcrumb.getByRole('link', { name: browserFixture.folder.title })).toBeVisible();
 });
 
 test('manages owner-shared notes and folders with search and independent pagination', async ({ page }) => {

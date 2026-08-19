@@ -233,16 +233,30 @@ folderRoutes.get('/:folderId/detail', async (c) => {
     .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.id, folderId)))
     .limit(1);
   if (!folder) return c.json({ error: 'Folder not found' }, 404);
-  const parentAccess = folder.parentFolderId
-    ? await resolveFolderCollaborationAccess({ actorUserId: user.id, folderId: folder.parentFolderId })
-    : null;
+  const ancestors: Array<typeof folders.$inferSelect> = [];
+  const seenAncestorIds = new Set<string>();
+  let parentFolderId = folder.parentFolderId;
+  while (parentFolderId && !seenAncestorIds.has(parentFolderId)) {
+    seenAncestorIds.add(parentFolderId);
+    const parentAccess = await resolveFolderCollaborationAccess({ actorUserId: user.id, folderId: parentFolderId });
+    if (!parentAccess || parentAccess.resourceOwnerUserId !== access.resourceOwnerUserId) break;
+    const [parentFolder] = await db
+      .select()
+      .from(folders)
+      .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.id, parentFolderId)))
+      .limit(1);
+    if (!parentFolder) break;
+    ancestors.unshift(parentFolder);
+    parentFolderId = parentFolder.parentFolderId;
+  }
   const childFolders = await db
     .select()
     .from(folders)
     .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.parentFolderId, folderId)));
   const serializeFolder = ({ userId: _userId, ...value }: typeof folders.$inferSelect) => value;
   return c.json({
-    folder: serializeFolder(parentAccess ? folder : { ...folder, parentFolderId: null }),
+    folder: serializeFolder(ancestors.length > 0 ? folder : { ...folder, parentFolderId: null }),
+    ancestors: ancestors.map(serializeFolder),
     childFolders: childFolders.map(serializeFolder),
     access: serializeCollaborationAccess(access),
   });

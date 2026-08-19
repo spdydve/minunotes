@@ -654,7 +654,9 @@ export const api = {
       body: JSON.stringify({ folderIds }),
     }),
   folderDetail: (folderId: string) =>
-    request<{ folder: Folder; childFolders: Folder[]; access: CollaborationAccess }>(`/folders/${folderId}/detail`),
+    request<{ folder: Folder; ancestors: Folder[]; childFolders: Folder[]; access: CollaborationAccess }>(
+      `/folders/${folderId}/detail`
+    ),
   notes: (folderId: string, type: NoteType = 'note', page = 1, limit = 50) =>
     request<PageResponse & { notes: NoteListItem[]; access: CollaborationAccess }>(
       `/folders/${folderId}/notes?type=${type}&page=${page}&limit=${limit}`

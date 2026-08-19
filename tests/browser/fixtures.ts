@@ -268,6 +268,8 @@ export async function mockBrowserApi(
     trashMutationFails?: boolean;
     emptyTrash?: boolean;
     noteAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
+    noteAccessSource?: 'note_grant' | 'folder_grant';
+    folderAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
     includeSharedCollaborations?: boolean;
     includeSharedByMe?: boolean;
     sharedByMeLoadFails?: boolean;
@@ -655,10 +657,16 @@ export async function mockBrowserApi(
     if (folderDetailMatch && method === 'GET') {
       const folder = folders.find((candidate) => candidate.id === folderDetailMatch[1]);
       if (!folder) return json({ error: 'Folder not found' }, 404);
+      const folderAccessRole = options.folderAccessRole ?? 'owner';
+      const ancestors = folders.filter((candidate) => candidate.id === folder.parentFolderId);
       return json({
         folder,
+        ancestors,
         childFolders: folders.filter((candidate) => candidate.parentFolderId === folder.id),
-        access: { role: 'owner', source: 'owner' },
+        access: {
+          role: folderAccessRole,
+          source: folderAccessRole === 'owner' ? 'owner' : 'folder_grant',
+        },
       });
     }
 
@@ -1045,7 +1053,7 @@ export async function mockBrowserApi(
           contentHash: `hash_${hashVersion}`,
           access: {
             role: noteAccessRole,
-            source: noteAccessRole === 'owner' ? 'owner' : 'note_grant',
+            source: noteAccessRole === 'owner' ? 'owner' : (options.noteAccessSource ?? 'note_grant'),
           },
         });
       }

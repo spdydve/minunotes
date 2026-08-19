@@ -6,9 +6,20 @@ export type NavigationFolder = {
 
 export type NavigationNote = {
   id: string;
-  folderId: string;
+  folderId: string | null;
   title: string;
   type: 'note' | 'template';
+};
+
+export type NavigationAccess = {
+  role: 'owner' | 'viewer' | 'commenter' | 'editor';
+  source: 'owner' | 'note_grant' | 'folder_grant';
+};
+
+export type NavigationFolderContext = {
+  folder: NavigationFolder;
+  ancestors: NavigationFolder[];
+  access: NavigationAccess;
 };
 
 export type NavigationDestination =
@@ -55,7 +66,7 @@ export function noteIdFromNavigationPath(pathname: string): string | null {
   return pathMatch(pathname, /^\/notes\/([^/]+)(?:\/activity)?\/?$/)?.[1] ?? null;
 }
 
-function folderIdFromNavigationPath(pathname: string): string | null {
+export function folderIdFromNavigationPath(pathname: string): string | null {
   return pathMatch(pathname, /^\/folders\/([^/]+)(?:\/.*)?$/)?.[1] ?? null;
 }
 
@@ -88,22 +99,29 @@ export function buildAppNavigationModel({
   pathname,
   folders,
   note,
+  noteAccess,
+  folderContext,
 }: {
   pathname: string;
   folders: NavigationFolder[];
   note?: NavigationNote | null;
+  noteAccess?: NavigationAccess | null;
+  folderContext?: NavigationFolderContext | null;
 }): AppNavigationModel {
   const home: NavigationItem = { label: 'Home', destination: { kind: 'home' } };
   const folderId = folderIdFromNavigationPath(pathname);
   const noteId = noteIdFromNavigationPath(pathname);
+  const shared: NavigationItem = { label: 'Shared with me', destination: { kind: 'shared' } };
 
   if (pathname === '/') {
     return { section: 'home', activeFolderId: null, breadcrumbs: [home], mobileTitle: 'Recent notes', parent: null };
   }
 
   if (folderId) {
-    const foldersForPath = folderItems(folderId, folders);
-    const base = [home, ...foldersForPath];
+    const isSharedFolder = folderContext?.access.role !== 'owner' && folderContext?.access.source === 'folder_grant';
+    const availableFolders = isSharedFolder ? [...folderContext.ancestors, folderContext.folder] : folders;
+    const foldersForPath = folderItems(folderId, availableFolders);
+    const base = isSharedFolder ? [shared, ...foldersForPath] : [home, ...foldersForPath];
     const currentFolder = foldersForPath.at(-1);
     if (/\/settings\/?$/.test(pathname) || /\/templates\/?$/.test(pathname)) {
       const settings: NavigationItem = {
@@ -111,11 +129,11 @@ export function buildAppNavigationModel({
         destination: { kind: 'folder-settings', folderId },
       };
       return {
-        section: 'folders',
-        activeFolderId: folderId,
+        section: isSharedFolder ? 'shared-with-me' : 'folders',
+        activeFolderId: isSharedFolder ? null : folderId,
         breadcrumbs: [...base, settings],
         mobileTitle: `${currentFolder?.label ?? 'Folder'} settings`,
-        parent: currentFolder ?? home,
+        parent: currentFolder ?? (isSharedFolder ? shared : home),
       };
     }
     if (/\/new-from-template\/?$/.test(pathname)) {
@@ -124,16 +142,16 @@ export function buildAppNavigationModel({
         destination: { kind: 'folder-template', folderId },
       };
       return {
-        section: 'folders',
-        activeFolderId: folderId,
+        section: isSharedFolder ? 'shared-with-me' : 'folders',
+        activeFolderId: isSharedFolder ? null : folderId,
         breadcrumbs: [...base, create],
         mobileTitle: 'New from template',
-        parent: currentFolder ?? home,
+        parent: currentFolder ?? (isSharedFolder ? shared : home),
       };
     }
     return {
-      section: 'folders',
-      activeFolderId: folderId,
+      section: isSharedFolder ? 'shared-with-me' : 'folders',
+      activeFolderId: isSharedFolder ? null : folderId,
       breadcrumbs: base,
       mobileTitle: currentFolder?.label ?? 'Folder',
       parent: parentOf(base),
@@ -146,23 +164,32 @@ export function buildAppNavigationModel({
       label: note?.title || 'Note',
       destination: { kind: 'note', noteId },
     };
+    const isSharedNote = noteAccess?.role !== 'owner' && noteAccess?.source === 'note_grant';
+    const isFolderSharedNote = noteAccess?.role !== 'owner' && noteAccess?.source === 'folder_grant';
+    const sharedFolderHierarchy =
+      isFolderSharedNote && folderContext
+        ? folderItems(folderContext.folder.id, [...folderContext.ancestors, folderContext.folder])
+        : [];
     const folderHierarchy = note?.folderId ? folderItems(note.folderId, folders) : [];
     const base = isTemplate
       ? [{ label: 'Templates', destination: { kind: 'templates' } } satisfies NavigationItem, noteItem]
-      : [home, ...folderHierarchy, noteItem];
+      : isSharedNote
+        ? [shared, noteItem]
+        : isFolderSharedNote
+          ? [shared, ...sharedFolderHierarchy, noteItem]
+          : [home, ...folderHierarchy, noteItem];
     const isActivity = /\/activity\/?$/.test(pathname);
     const activity: NavigationItem = { label: 'Activity', destination: { kind: 'note', noteId } };
     return {
-      section: isTemplate ? 'templates' : 'folders',
-      activeFolderId: isTemplate ? null : (note?.folderId ?? null),
+      section: isTemplate ? 'templates' : isSharedNote || isFolderSharedNote ? 'shared-with-me' : 'folders',
+      activeFolderId: isTemplate || isSharedNote || isFolderSharedNote ? null : (note?.folderId ?? null),
       breadcrumbs: isActivity ? [...base, activity] : base,
       mobileTitle: isActivity ? 'Note activity' : note?.title || 'Note',
-      parent: isActivity ? noteItem : (base.at(-2) ?? home),
+      parent: isActivity ? noteItem : (base.at(-2) ?? (isSharedNote || isFolderSharedNote ? shared : home)),
     };
   }
 
   if (pathname === '/shared') {
-    const shared: NavigationItem = { label: 'Shared with me', destination: { kind: 'shared' } };
     return {
       section: 'shared-with-me',
       activeFolderId: null,

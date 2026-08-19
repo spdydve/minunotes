@@ -527,7 +527,7 @@ describe('collaborator management', () => {
   });
 
   it('lists notes in an inherited shared folder without exposing templates', async () => {
-    const { app, libsql, collaborator } = await setup();
+    const { app, db, libsql, schema, owner, collaborator, otherOwner } = await setup();
     const grant = await app.request('/folders/folder/collaborators', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -556,7 +556,44 @@ describe('collaborator management', () => {
       childFolders: [],
       access: { role: 'viewer', source: 'folder_grant' },
     });
+    expect(detailBody).toMatchObject({ ancestors: [] });
     expect(detailBody.folder).not.toHaveProperty('userId');
+
+    await db.insert(schema.folders).values({
+      id: 'folder_child',
+      userId: owner.id,
+      parentFolderId: 'folder',
+      title: 'Child folder',
+      isPrivate: false,
+      isAgentReadOnly: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const childDetail = await app.request('/folders/folder_child/detail', {
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(childDetail.status).toBe(200);
+    expect(await childDetail.json()).toMatchObject({
+      folder: { id: 'folder_child', parentFolderId: 'folder' },
+      ancestors: [{ id: 'folder', parentFolderId: null }],
+      access: { role: 'viewer', source: 'folder_grant' },
+    });
+
+    const directChildGrant = await app.request('/folders/folder_child/collaborators', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: otherOwner.email, role: 'viewer' }),
+    });
+    expect(directChildGrant.status).toBe(201);
+    const directChildDetail = await app.request('/folders/folder_child/detail', {
+      headers: { 'x-test-user': otherOwner.id },
+    });
+    expect(directChildDetail.status).toBe(200);
+    expect(await directChildDetail.json()).toMatchObject({
+      folder: { id: 'folder_child', parentFolderId: null },
+      ancestors: [],
+      access: { role: 'viewer', source: 'folder_grant' },
+    });
 
     const templates = await app.request('/folders/folder/notes?type=template', {
       headers: { 'x-test-user': collaborator.id },

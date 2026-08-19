@@ -4,7 +4,7 @@ import { PanelLeftOpen } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { authClient } from '../lib/auth-client';
-import { buildAppNavigationModel, noteIdFromNavigationPath } from '../lib/navigation';
+import { buildAppNavigationModel, folderIdFromNavigationPath, noteIdFromNavigationPath } from '../lib/navigation';
 import { getStoredSidebarCollapsed, storeSidebarCollapsed } from '../lib/navigation-preferences';
 import { applyNoteTheme, getStoredTheme } from '../lib/themes';
 import { AppNavigationBar } from './app-navigation-bar';
@@ -21,6 +21,7 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(getStoredSidebarCollapsed);
   const navigationNoteId = noteIdFromNavigationPath(pathname);
+  const navigationRouteFolderId = folderIdFromNavigationPath(pathname);
   const navigationEnabled = Boolean(session.data?.user && !isAuthRoute && !isInvitationRoute && !isPublicShareRoute);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders, enabled: navigationEnabled });
   const navigationNote = useQuery({
@@ -32,14 +33,28 @@ export function AppShell() {
     enabled: navigationEnabled && Boolean(navigationNoteId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
+  const navigationContextFolderId =
+    navigationRouteFolderId ??
+    (navigationNote.data?.access?.source === 'folder_grant' ? navigationNote.data.note.folderId : null);
+  const navigationFolder = useQuery({
+    queryKey: ['folder-detail', navigationContextFolderId],
+    queryFn: () => {
+      if (!navigationContextFolderId) throw new Error('Navigation folder ID is required');
+      return api.folderDetail(navigationContextFolderId);
+    },
+    enabled: navigationEnabled && Boolean(navigationContextFolderId),
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
+  });
   const navigation = useMemo(
     () =>
       buildAppNavigationModel({
         pathname,
         folders: folders.data?.folders ?? [],
         note: navigationNote.data?.note ?? null,
+        noteAccess: navigationNote.data?.access ?? null,
+        folderContext: navigationFolder.data ?? null,
       }),
-    [pathname, folders.data?.folders, navigationNote.data?.note]
+    [pathname, folders.data?.folders, navigationNote.data, navigationFolder.data]
   );
 
   useEffect(() => {
@@ -70,7 +85,7 @@ export function AppShell() {
   if (isAuthRoute || isInvitationRoute || isPublicShareRoute) return <Outlet />;
   if (session.isPending)
     return (
-      <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">
+      <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-[var(--notes-muted)] text-sm">
         Loading...
       </div>
     );
@@ -114,7 +129,7 @@ export function AppShell() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {desktopSidebarCollapsed ? (
           <button
-            className="fixed left-4 top-[5px] z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"
+            className="fixed top-[5px] left-4 z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"
             type="button"
             aria-label="Expand sidebar"
             onClick={() => setDesktopSidebarCollapsed(false)}
