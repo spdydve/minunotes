@@ -77,12 +77,18 @@ test('uses vertical primary navigation and groups secondary destinations under M
   await expect(page).toHaveURL('/resources');
   await expect(more).toHaveAttribute('aria-current', 'page');
 
+  await more.click();
+  await page.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await expect(page).toHaveURL('/integrations');
+  await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  await expect(more).toHaveAttribute('aria-current', 'page');
+
   await page.getByRole('button', { name: 'Open account and settings menu' }).click();
   await expect(page.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Theme', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Logout', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Resources', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'API Access', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Integrations', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Trash', exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Theme', exact: true }).click();
@@ -488,6 +494,15 @@ test('redirects legacy folder template settings before rendering', async ({ page
   await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}/settings`);
   await expect(page.getByText('Opening folder settings...')).toHaveCount(0);
   await expect(page).toHaveTitle(`${browserFixture.folder.title} settings - MinuNotes`);
+});
+
+test('redirects legacy API Access links to Integrations', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/settings/api-access');
+
+  await expect(page).toHaveURL('/integrations');
+  await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  await expect(page).toHaveTitle('Integrations - MinuNotes');
 });
 
 test('sets descriptive titles for authenticated and shared routes', async ({ page }) => {

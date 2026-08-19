@@ -70,9 +70,9 @@ function DestinationLink({
           {children}
         </Link>
       );
-    case 'api-access':
+    case 'integrations':
       return (
-        <Link to="/settings/api-access" {...common}>
+        <Link to="/integrations" {...common}>
           {children}
         </Link>
       );

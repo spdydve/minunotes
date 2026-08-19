@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createRoute, Link } from '@tanstack/react-router';
+import { createRoute, Link, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ApiKeyAccessDialog } from '../components/api-key-access-dialog';
 import { DeleteConfirmDialog } from '../components/delete-confirm-dialog';
@@ -10,7 +10,7 @@ import { rootRoute } from './__root';
 
 const showOAuthApps = import.meta.env.VITE_ENABLE_OAUTH_APPS === 'true';
 
-function ApiAccessSettingsView() {
+function IntegrationsView() {
   const qc = useQueryClient();
   const [oauthAppOpen, setOAuthAppOpen] = useState(false);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
@@ -42,9 +42,9 @@ function ApiAccessSettingsView() {
           <Link to="/" className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
             ← Back to notes
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold">API Access</h1>
+          <h1 className="mt-2 text-2xl font-semibold">Integrations</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage API keys for agents, scripts, MCP stdio, and trusted automation.
+            Manage connected apps, API keys, MCP access, and trusted automation.
           </p>
         </div>
         <ApiKeyAccessDialog
@@ -290,8 +290,16 @@ function ApiAccessSettingsView() {
   );
 }
 
-export const apiAccessSettingsRoute = createRoute({
+export const integrationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/integrations',
+  component: IntegrationsView,
+});
+
+export const legacyApiAccessRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/api-access',
-  component: ApiAccessSettingsView,
+  beforeLoad: () => {
+    throw redirect({ to: '/integrations', replace: true });
+  },
 });

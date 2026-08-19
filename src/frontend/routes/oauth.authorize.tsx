@@ -148,8 +148,8 @@ function OAuthAuthorizeView() {
 
   return (
     <section className="mx-auto w-full max-w-3xl">
-      <Link to="/settings/api-access" className="text-xs text-[var(--notes-muted)] hover:text-[var(--notes-text)]">
-        ← API Access
+      <Link to="/integrations" className="text-xs text-[var(--notes-muted)] hover:text-[var(--notes-text)]">
+        ← Integrations
       </Link>
       <div className="mt-4 rounded-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)] p-5 shadow-sm">
         <h1 className="text-2xl font-semibold">Authorize {appName}</h1>

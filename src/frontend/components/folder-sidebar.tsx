@@ -326,11 +326,11 @@ export function FolderSidebar({
               <PopoverClose asChild>
                 <ActionMenuButton
                   onClick={() => {
-                    nav({ to: '/settings/api-access' });
+                    nav({ to: '/integrations' });
                     onNavigate?.();
                   }}
                 >
-                  API Access
+                  Integrations
                 </ActionMenuButton>
               </PopoverClose>
               <div className="my-1 border-[var(--notes-border)] border-t pt-1">

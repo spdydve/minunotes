@@ -32,7 +32,7 @@ export type NavigationDestination =
   | { kind: 'trash' }
   | { kind: 'folder-settings'; folderId: string }
   | { kind: 'folder-template'; folderId: string }
-  | { kind: 'api-access' }
+  | { kind: 'integrations' }
   | { kind: 'resources' }
   | { kind: 'resource'; slug: string };
 
@@ -232,13 +232,13 @@ export function buildAppNavigationModel({
     };
   }
 
-  if (pathname === '/settings/api-access') {
-    const settings: NavigationItem = { label: 'API Access', destination: { kind: 'api-access' } };
+  if (pathname === '/integrations') {
+    const integrations: NavigationItem = { label: 'Integrations', destination: { kind: 'integrations' } };
     return {
       section: 'settings',
       activeFolderId: null,
-      breadcrumbs: [home, settings],
-      mobileTitle: 'API Access',
+      breadcrumbs: [home, integrations],
+      mobileTitle: 'Integrations',
       parent: home,
     };
   }

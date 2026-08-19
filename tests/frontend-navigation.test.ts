@@ -128,7 +128,7 @@ describe('app navigation model', () => {
     expect(trash.mobileTitle).toBe('Trash');
     expect(trash.parent?.label).toBe('Home');
     expect(trash.breadcrumbs.map((item) => item.label)).toEqual(['Home', 'Trash']);
-    expect(labels('/settings/api-access')).toEqual(['Home', 'API Access']);
+    expect(labels('/integrations')).toEqual(['Home', 'Integrations']);
     expect(labels('/resources/wikilinks-backlinks')).toEqual(['Home', 'Resources', 'Wikilinks Backlinks']);
   });
 });
