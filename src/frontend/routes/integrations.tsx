@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createRoute, Link } from '@tanstack/react-router';
+import { createRoute, Link, redirect } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ApiKeyAccessDialog } from '../components/api-key-access-dialog';
 import { DeleteConfirmDialog } from '../components/delete-confirm-dialog';
@@ -10,11 +10,12 @@ import { rootRoute } from './__root';
 
 const showOAuthApps = import.meta.env.VITE_ENABLE_OAUTH_APPS === 'true';
 
-function ApiAccessSettingsView() {
+function IntegrationsView() {
   const qc = useQueryClient();
   const [oauthAppOpen, setOAuthAppOpen] = useState(false);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
   const keys = useQuery({ queryKey: ['api-keys'], queryFn: api.apiKeys });
+  const collaborations = useQuery({ queryKey: ['shared-with-me'], queryFn: api.sharedWithMe });
   const oauthClients = useQuery({ queryKey: ['oauth-clients'], queryFn: api.oauthClients, enabled: showOAuthApps });
   const connectedApps = useQuery({
     queryKey: ['oauth-authorizations'],
@@ -36,28 +37,29 @@ function ApiAccessSettingsView() {
 
   return (
     <section className="mx-auto w-full max-w-5xl">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6">
+        <Link to="/" className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
+          ← Back to notes
+        </Link>
+        <h1 className="mt-2 text-2xl font-semibold">Integrations</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Manage connected apps, API keys, MCP access, and trusted automation.
+        </p>
+      </div>
+
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Link to="/" className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100">
-            ← Back to notes
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold">API Access</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage API keys for agents, scripts, MCP stdio, and trusted automation.
+          <h2 className="text-lg font-semibold">API keys</h2>
+          <p className="mt-1 text-sm text-[var(--notes-muted)]">
+            Manual tokens for local agents, scripts, MCP stdio, and trusted automation.
           </p>
         </div>
         <ApiKeyAccessDialog
           folders={folders.data?.folders ?? []}
+          collaborations={collaborations.data?.collaborations ?? []}
           onSaved={() => qc.invalidateQueries({ queryKey: ['api-keys'] })}
           trigger={(open) => <Button onClick={open}>Create key</Button>}
         />
-      </div>
-
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold">API keys</h2>
-        <p className="mt-1 text-sm text-[var(--notes-muted)]">
-          Manual tokens for local agents, scripts, MCP stdio, and trusted automation.
-        </p>
       </div>
       <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
         <div className="hidden grid-cols-[1.3fr_0.8fr_1fr_1fr_auto] gap-3 border-b border-[var(--notes-border)] bg-[var(--notes-table-header-bg)] px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)] md:grid">
@@ -75,6 +77,14 @@ function ApiAccessSettingsView() {
           >
             <div className="min-w-0">
               <p className="truncate font-medium">{key.name}</p>
+              <p className="notes-muted mt-0.5 text-xs">
+                Shared:{' '}
+                {key.sharedAccessMode === 'none'
+                  ? 'none'
+                  : key.sharedAccessMode === 'all'
+                    ? 'all current and future shares'
+                    : `${key.collaborationGrantIds.length} selected`}
+              </p>
             </div>
             <code className="text-xs text-[var(--notes-muted)]">
               <span className="md:hidden">UID </span>
@@ -91,6 +101,7 @@ function ApiAccessSettingsView() {
             <div className="flex flex-wrap gap-2 md:justify-end">
               <ApiKeyAccessDialog
                 folders={folders.data?.folders ?? []}
+                collaborations={collaborations.data?.collaborations ?? []}
                 apiKey={key}
                 onSaved={() => qc.invalidateQueries({ queryKey: ['api-keys'] })}
                 trigger={(open) => (
@@ -183,7 +194,7 @@ function ApiAccessSettingsView() {
           <div className="mb-4 mt-8">
             <h2 className="text-lg font-semibold">Connected apps</h2>
             <p className="mt-1 text-sm text-[var(--notes-muted)]">
-              OAuth apps authorized through MinuNotes, such as hosted MCP or ChatGPT-style connectors.
+              OAuth apps authorized to access MinuNotes on your behalf.
             </p>
           </div>
           <div className="overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)]">
@@ -202,6 +213,12 @@ function ApiAccessSettingsView() {
                   : authorization.accessMode === 'top_level'
                     ? `${authorization.permissions.length} project root${authorization.permissions.length === 1 ? '' : 's'}`
                     : `${authorization.permissions.length} specific folder${authorization.permissions.length === 1 ? '' : 's'}`;
+              const sharedAccess =
+                authorization.sharedAccessMode === 'none'
+                  ? 'No shared content'
+                  : authorization.sharedAccessMode === 'all'
+                    ? 'All current and future shares'
+                    : `${authorization.collaborationGrantIds.length} selected share${authorization.collaborationGrantIds.length === 1 ? '' : 's'}`;
               const permissions =
                 [
                   authorization.canRead ? 'Read' : null,
@@ -226,6 +243,8 @@ function ApiAccessSettingsView() {
                   <span className="text-xs text-[var(--notes-muted)]">
                     <span className="md:hidden">Access </span>
                     {access}
+                    <br />
+                    {sharedAccess}
                     <br />
                     {permissions}
                   </span>
@@ -271,8 +290,16 @@ function ApiAccessSettingsView() {
   );
 }
 
-export const apiAccessSettingsRoute = createRoute({
+export const integrationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/integrations',
+  component: IntegrationsView,
+});
+
+export const legacyApiAccessRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/api-access',
-  component: ApiAccessSettingsView,
+  beforeLoad: () => {
+    throw redirect({ to: '/integrations', replace: true });
+  },
 });

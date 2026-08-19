@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { db } from '../db/client';
 import { attachments, folderShareLinks, folders, noteShareLinks, notes } from '../db/schema';
 import { hashShareToken } from '../lib/share-tokens';
+import { sanitizeCanvasNoteLinksForVisibleTargets } from '../notes/links';
 import {
   databaseSharedWikilinkRepository,
   resolveSourceWikilinks,
@@ -214,6 +215,8 @@ shareRoutes.get('/folders/:token', async (c) => {
     .where(activeNoteWhere(row.folder.userId, eq(notes.type, 'note')))
     .orderBy(asc(notes.title));
 
+  const visibleNotes = sharedNotes.filter((note) => folderIds.has(note.folderId));
+  const visibleNoteIds = new Set(visibleNotes.map((note) => note.id));
   return c.json({
     folder: {
       id: row.folder.id,
@@ -221,7 +224,17 @@ shareRoutes.get('/folders/:token', async (c) => {
       updatedAt: row.folder.updatedAt,
     },
     folders: userFolders.filter((folder) => folder.id !== row.folder.id && folderIds.has(folder.id)),
-    notes: sharedNotes.filter((note) => folderIds.has(note.folderId)),
+    notes: visibleNotes.map((note) =>
+      note.documentType.startsWith('canvas.')
+        ? {
+            ...note,
+            content: sanitizeCanvasNoteLinksForVisibleTargets({
+              content: note.content,
+              visibleTargetIds: visibleNoteIds,
+            }).content,
+          }
+        : note
+    ),
     share: row.share,
   });
 });
@@ -233,10 +246,13 @@ shareRoutes.get('/:token', async (c) => {
   const row = await loadActiveNoteShare(token);
   if (!row) return c.json({ error: 'Shared note not found' }, 404);
   const resolutions = await resolveSourceWikilinks({ kind: 'note', token, source: row.note });
+  const content = row.note.documentType.startsWith('canvas.')
+    ? sanitizeCanvasNoteLinksForVisibleTargets({ content: row.note.content, visibleTargetIds: new Set() }).content
+    : row.note.content;
   return c.json({
     note: {
       title: row.note.title,
-      content: row.note.content,
+      content,
       documentType: row.note.documentType,
       updatedAt: row.note.updatedAt,
     },

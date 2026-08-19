@@ -15,9 +15,11 @@ import { createRateLimitMiddleware } from './middleware/rate-limit';
 import { createRequestSizeLimitMiddleware } from './middleware/request-limits';
 import { securityHeadersMiddleware } from './middleware/security-headers';
 import { harnessOpenApiSpec } from './openapi/harness';
+import { accountRoutes } from './routes/account';
 import { apiKeyRoutes } from './routes/api-keys';
 import { attachmentRoutes } from './routes/attachments';
 import { authRoutes } from './routes/auth';
+import { collaborationRoutes } from './routes/collaboration';
 import { folderRoutes } from './routes/folders';
 import { harnessRoutes } from './routes/harness';
 import { mcpRoutes } from './routes/mcp';
@@ -46,6 +48,26 @@ const authRateLimit = createRateLimitMiddleware({
 const apiKeyRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 30, keyPrefix: 'api-keys' });
 const harnessRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 120, keyPrefix: 'harness' });
 const publicShareRateLimit = createRateLimitMiddleware({ windowMs: 60_000, max: 300, keyPrefix: 'public-share' });
+const invitationPreviewRateLimit = createRateLimitMiddleware({
+  windowMs: 60_000,
+  max: 30,
+  keyPrefix: 'collaboration-invitation-preview',
+});
+const invitationAcceptanceRateLimit = createRateLimitMiddleware({
+  windowMs: 60_000,
+  max: 10,
+  keyPrefix: 'collaboration-invitation-acceptance',
+});
+const invitationResendRateLimit = createRateLimitMiddleware({
+  windowMs: 60_000,
+  max: 10,
+  keyPrefix: 'collaboration-invitation-resend',
+});
+const collaboratorManagementRateLimit = createRateLimitMiddleware({
+  windowMs: 60_000,
+  max: 30,
+  keyPrefix: 'collaborator-management',
+});
 const writeBodyLimit = createRequestSizeLimitMiddleware({ maxBytes: 256 * 1024 });
 const uploadBodyLimit = createRequestSizeLimitMiddleware({ maxBytes: 12 * 1024 * 1024 });
 
@@ -159,9 +181,16 @@ app.use('/oauth/clients', authenticationMiddleware);
 app.use('/oauth/clients/*', authenticationMiddleware);
 app.use('/oauth/authorizations', authenticationMiddleware);
 app.use('/oauth/authorizations/*', authenticationMiddleware);
+app.use('/internal/account', authenticationMiddleware);
+app.use('/internal/account/*', authenticationMiddleware);
 app.use('/internal/folders', authenticationMiddleware);
 app.use('/internal/folders/*', authenticationMiddleware);
 app.use('/internal/notes/*', authenticationMiddleware);
+app.use('/internal/collaborations', authenticationMiddleware);
+app.use('/internal/collaborations/*', authenticationMiddleware);
+app.use('/internal/collaboration-invitations/:token/accept', authenticationMiddleware);
+app.use('/internal/collaboration-invitations/:invitationId/resend', authenticationMiddleware);
+app.use('/internal/collaboration-invitations/:invitationId', authenticationMiddleware);
 app.use('/internal/trash', authenticationMiddleware);
 app.use('/internal/trash/*', authenticationMiddleware);
 app.use('/internal/attachments', authenticationMiddleware);
@@ -172,6 +201,13 @@ app.use('/v1/harness/*', harnessApiKeyAuthenticationMiddleware);
 app.use('/mcp', mcpOAuthAuthenticationMiddleware);
 app.use('/mcp/*', mcpOAuthAuthenticationMiddleware);
 
+app.use('/internal/collaboration-invitations/:token/preview', invitationPreviewRateLimit);
+app.use('/internal/collaboration-invitations/:token/accept', invitationAcceptanceRateLimit);
+app.use('/internal/collaboration-invitations/:invitationId/resend', invitationResendRateLimit);
+app.use('/internal/notes/:noteId/collaborators', collaboratorManagementRateLimit);
+app.use('/internal/notes/:noteId/collaborators/:accessKey', collaboratorManagementRateLimit);
+app.use('/internal/folders/:folderId/collaborators', collaboratorManagementRateLimit);
+app.use('/internal/folders/:folderId/collaborators/:accessKey', collaboratorManagementRateLimit);
 app.use('/internal/api-keys', apiKeyRateLimit);
 app.use('/internal/api-keys/*', apiKeyRateLimit);
 app.use('/v1/harness/*', harnessRateLimit);
@@ -185,6 +221,12 @@ app.use('/internal/notes/:noteId', writeBodyLimit);
 app.use('/internal/notes/:noteId/edit', writeBodyLimit);
 app.use('/internal/notes/:noteId/comments', writeBodyLimit);
 app.use('/internal/notes/:noteId/comments/*', writeBodyLimit);
+app.use('/internal/notes/:noteId/collaborators', writeBodyLimit);
+app.use('/internal/notes/:noteId/collaborators/*', writeBodyLimit);
+app.use('/internal/folders/:folderId/collaborators', writeBodyLimit);
+app.use('/internal/folders/:folderId/collaborators/*', writeBodyLimit);
+app.use('/internal/collaboration-invitations/:token/accept', writeBodyLimit);
+app.use('/internal/collaboration-invitations/:invitationId/resend', writeBodyLimit);
 app.use('/internal/notes/:noteId/share-link', writeBodyLimit);
 app.use('/internal/trash/notes/:noteId/restore', writeBodyLimit);
 app.use('/internal/trash/folders/:folderId/restore', writeBodyLimit);
@@ -205,6 +247,8 @@ app.use('/internal/attachments/notes/:noteId/images', uploadBodyLimit);
 app.use('/internal/attachments/notes/:noteId/image-uploads', writeBodyLimit);
 app.use('/internal/attachments/:attachmentId/complete', writeBodyLimit);
 
+app.route('/internal/account', accountRoutes);
+app.route('/internal', collaborationRoutes);
 app.route('/internal/folders', folderRoutes);
 app.route('/internal/notes', noteRoutes);
 app.route('/internal/share', shareRoutes);

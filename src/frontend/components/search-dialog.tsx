@@ -2,11 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../lib/api';
+import { api, type DiscoveryScope } from '../lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
 const OPEN_SEARCH_EVENT = 'minunotes:open-search';
+const SEARCH_SCOPES: Array<{ value: DiscoveryScope; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'mine', label: 'Owned by me' },
+  { value: 'shared', label: 'Shared with me' },
+];
 
 export function openSearchDialog() {
   window.dispatchEvent(new Event(OPEN_SEARCH_EVENT));
@@ -15,6 +20,8 @@ export function openSearchDialog() {
 export function searchShortcutLabel(platform = typeof navigator === 'undefined' ? '' : navigator.platform) {
   return /Mac|iPhone|iPad|iPod/i.test(platform) ? '⌘K' : 'Ctrl+K';
 }
+
+const ROLE_LABEL = { viewer: 'Viewer', commenter: 'Commenter', editor: 'Editor', owner: 'Owner' } as const;
 
 type SearchResult = {
   id: string;
@@ -26,45 +33,80 @@ type SearchResult = {
 export function SearchDialog() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [scope, setScope] = useState<DiscoveryScope>('all');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const nav = useNavigate();
   const trimmed = query.trim();
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders, enabled: open });
+  const sharedFolders = useQuery({
+    queryKey: ['shared-with-me', 'folder', 'search'],
+    queryFn: () => api.sharedWithMePage('folder', null, 50),
+    enabled: open && scope !== 'mine',
+  });
   const recent = useQuery({
-    queryKey: ['notes', 'recent'],
-    queryFn: () => api.recentNotes(6),
+    queryKey: ['notes', 'recent', scope],
+    queryFn: () => api.recentNotes(6, 1, scope),
     enabled: open && !trimmed,
   });
   const search = useQuery({
-    queryKey: ['note-search', trimmed],
-    queryFn: () => api.searchNotes(trimmed),
+    queryKey: ['note-search', trimmed, scope],
+    queryFn: () => api.searchNotes(trimmed, 'note', 50, undefined, 1, scope),
     enabled: open && trimmed.length > 0,
   });
 
   const results = useMemo<SearchResult[]>(() => {
+    const noteSubtitle = (note: NonNullable<typeof recent.data>['notes'][number] & { folderTitle?: string | null }) => {
+      if (note.access.role !== 'owner')
+        return `Shared by ${note.owner?.label ?? 'another person'} · ${ROLE_LABEL[note.access.role]}`;
+      return (
+        note.folderTitle || folders.data?.folders.find((folder) => folder.id === note.folderId)?.title || 'My note'
+      );
+    };
     if (!trimmed) {
       return (recent.data?.notes ?? []).slice(0, 6).map((note) => ({
         id: note.id,
         title: note.title,
-        subtitle: folders.data?.folders.find((folder) => folder.id === note.folderId)?.title ?? 'Note',
+        subtitle: noteSubtitle(note),
         kind: 'note',
       }));
     }
     const normalized = trimmed.toLowerCase();
-    const folderResults = (folders.data?.folders ?? [])
-      .filter((folder) => folder.title.toLowerCase().includes(normalized))
-      .slice(0, 5)
-      .map((folder) => ({ id: folder.id, title: folder.title, subtitle: 'Folder', kind: 'folder' as const }));
+    const ownedFolderResults =
+      scope === 'shared'
+        ? []
+        : (folders.data?.folders ?? [])
+            .filter((folder) => folder.title.toLowerCase().includes(normalized))
+            .slice(0, 5)
+            .map((folder) => ({ id: folder.id, title: folder.title, subtitle: 'Folder', kind: 'folder' as const }));
+    const sharedFolderResults =
+      scope === 'mine'
+        ? []
+        : (sharedFolders.data?.collaborations ?? [])
+            .filter((item) => item.type === 'folder' && item.folder.title.toLowerCase().includes(normalized))
+            .slice(0, 5)
+            .map((item) => ({
+              id: item.type === 'folder' ? item.folder.id : '',
+              title: item.type === 'folder' ? item.folder.title : '',
+              subtitle: `Shared by ${item.owner.label} · ${ROLE_LABEL[item.role]}`,
+              kind: 'folder' as const,
+            }));
     const noteResults = (search.data?.notes ?? []).map((note) => ({
       id: note.id,
       title: note.title,
-      subtitle: note.folderTitle,
+      subtitle: noteSubtitle(note),
       kind: 'note' as const,
     }));
-    return [...folderResults, ...noteResults];
-  }, [folders.data?.folders, recent.data?.notes, search.data?.notes, trimmed]);
+    const combined = [...ownedFolderResults, ...sharedFolderResults, ...noteResults];
+    const seen = new Set<string>();
+    return combined.filter((result) => {
+      const key = `${result.kind}:${result.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [folders.data?.folders, recent.data, scope, search.data?.notes, sharedFolders.data?.collaborations, trimmed]);
 
   useEffect(() => {
     const requestOpen = () => {
@@ -98,6 +140,7 @@ export function SearchDialog() {
   const closeDialog = () => {
     setOpen(false);
     setQuery('');
+    setScope('all');
     setActiveIndex(0);
   };
 
@@ -121,7 +164,7 @@ export function SearchDialog() {
     }
   };
 
-  const isFetching = trimmed ? search.isFetching : recent.isFetching;
+  const isFetching = trimmed ? search.isFetching || (scope !== 'mine' && sharedFolders.isFetching) : recent.isFetching;
 
   return (
     <Dialog
@@ -145,7 +188,7 @@ export function SearchDialog() {
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <DialogTitle className="text-lg font-semibold">Search notes</DialogTitle>
+            <DialogTitle className="font-semibold text-lg">Search notes</DialogTitle>
             <DialogDescription id="search-dialog-description" className="notes-muted mt-1 text-xs">
               Search folders and notes, or open a recent note.
             </DialogDescription>
@@ -170,13 +213,34 @@ export function SearchDialog() {
             onKeyDown={handleInputKeyDown}
           />
         </div>
+        <fieldset className="mt-3 flex flex-wrap gap-2 border-0 p-0">
+          <legend className="sr-only">Search scope</legend>
+          {SEARCH_SCOPES.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={scope === option.value}
+              className={`rounded-full border px-3 py-1 font-medium text-xs ${
+                scope === option.value
+                  ? 'border-[var(--notes-accent)] bg-[var(--notes-hover)] text-[var(--notes-text)]'
+                  : 'border-[var(--notes-border)] text-[var(--notes-muted)] hover:text-[var(--notes-text)]'
+              }`}
+              onClick={() => {
+                setScope(option.value);
+                setActiveIndex(0);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </fieldset>
         <div
           id="search-results"
           role="listbox"
           aria-label={trimmed ? 'Search results' : 'Recent notes'}
           className="mt-4 max-h-[min(28rem,60dvh)] space-y-2 overflow-y-auto"
         >
-          <p className="notes-muted px-1 text-xs font-medium uppercase tracking-wide">
+          <p className="notes-muted px-1 font-medium text-xs uppercase tracking-wide">
             {trimmed ? 'Results' : 'Recent notes'}
           </p>
           {isFetching ? (

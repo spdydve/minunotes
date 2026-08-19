@@ -1,6 +1,11 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { notes, noteTags, tags } from '../db/schema';
+import {
+  collaborationAccessibleNoteWhere,
+  integrationAccessibleNoteWhere,
+  type SharedAccessMode,
+} from '../lib/collaboration-access';
 import { createId } from '../lib/id';
 import { activeNoteWhere } from '../trash/policy';
 
@@ -57,6 +62,53 @@ export async function listUserTags(input: { userId: string; noteIds?: string[]; 
     .groupBy(tags.id)
     .orderBy(asc(tags.name), asc(tags.id));
   return rows satisfies SerializedTag[];
+}
+
+export async function listIntegrationAccessibleTags(input: {
+  actorUserId: string;
+  authorizationId: string;
+  sharedAccessMode: SharedAccessMode;
+  ownedFolderIds: ReadonlySet<string>;
+}) {
+  return db
+    .select({
+      id: tags.id,
+      name: tags.name,
+      normalizedName: tags.normalizedName,
+      noteCount: sql<number>`count(${noteTags.id})`,
+    })
+    .from(tags)
+    .innerJoin(noteTags, and(eq(noteTags.tagId, tags.id), eq(noteTags.userId, tags.userId)))
+    .innerJoin(notes, and(eq(noteTags.noteId, notes.id), eq(noteTags.userId, notes.userId)))
+    .where(
+      integrationAccessibleNoteWhere(
+        {
+          actorUserId: input.actorUserId,
+          authorizationId: input.authorizationId,
+          sharedAccessMode: input.sharedAccessMode,
+          ownedFolderIds: input.ownedFolderIds,
+        },
+        eq(notes.type, 'note')
+      )
+    )
+    .groupBy(tags.id)
+    .orderBy(asc(tags.name), asc(tags.id));
+}
+
+export async function listAccessibleTags(actorUserId: string) {
+  return db
+    .select({
+      id: tags.id,
+      name: tags.name,
+      normalizedName: tags.normalizedName,
+      noteCount: sql<number>`count(${noteTags.id})`,
+    })
+    .from(tags)
+    .innerJoin(noteTags, and(eq(noteTags.tagId, tags.id), eq(noteTags.userId, tags.userId)))
+    .innerJoin(notes, and(eq(noteTags.noteId, notes.id), eq(noteTags.userId, notes.userId)))
+    .where(collaborationAccessibleNoteWhere(actorUserId, 'read', eq(notes.type, 'note')))
+    .groupBy(tags.id)
+    .orderBy(asc(tags.name), asc(tags.id));
 }
 
 export async function listNoteTags(input: { userId: string; noteId: string }) {

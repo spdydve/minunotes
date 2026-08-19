@@ -11,14 +11,24 @@ type BrowserCommentAnchor = {
   detached: boolean;
 };
 
+type BrowserIdentity = {
+  key: string;
+  type: 'user' | 'agent' | 'former' | 'system';
+  displayName: string | null;
+  maskedEmail: string | null;
+  label: string;
+  isCurrentUser: boolean;
+};
+
 type BrowserCommentMessage = {
   id: string;
   threadId: string;
   body: string;
-  author: { type: 'user' | 'agent'; id: string; name: string };
+  author: BrowserIdentity;
   createdAt: string;
   updatedAt: string;
   reactions: Array<{ emoji: string; count: number; reactedByCurrentActor: boolean }>;
+  authoredByCurrentActor: boolean;
 };
 
 type BrowserCommentThread = {
@@ -26,12 +36,13 @@ type BrowserCommentThread = {
   noteId: string;
   status: 'open' | 'resolved';
   anchor: BrowserCommentAnchor;
-  createdBy: { type: 'user' | 'agent'; id: string; name: string };
-  resolvedBy: { type: 'user' | 'agent'; id: string; name: string } | null;
+  createdBy: BrowserIdentity;
+  resolvedBy: BrowserIdentity | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
   messages: BrowserCommentMessage[];
+  authoredByCurrentActor: boolean;
 };
 
 type Note = {
@@ -256,6 +267,17 @@ export async function mockBrowserApi(
     trashLoadFails?: boolean;
     trashMutationFails?: boolean;
     emptyTrash?: boolean;
+    noteAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
+    noteAccessSource?: 'note_grant' | 'folder_grant';
+    folderAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
+    includeSharedCollaborations?: boolean;
+    includeSharedByMe?: boolean;
+    sharedByMeLoadFails?: boolean;
+    sessionEmail?: string | null;
+    collaborationInvitation?: {
+      status?: 'pending' | 'accepted';
+      acceptStatus?: 200 | 403 | 404;
+    };
   } = {}
 ) {
   const folders = [{ ...browserFixture.folder }, { ...browserFixture.childFolder }];
@@ -267,6 +289,22 @@ export async function mockBrowserApi(
     [browserFixture.target.id, { ...browserFixture.target }],
     [browserFixture.child.id, { ...browserFixture.child }],
   ]);
+  const browserUserIdentity: BrowserIdentity = {
+    key: 'user_browsercurrent',
+    type: 'user',
+    displayName: 'Browser Test User',
+    maskedEmail: 'b•••@e•••.com',
+    label: 'You',
+    isCurrentUser: true,
+  };
+  const sharedOwnerIdentity = {
+    key: 'user_collaborationowner',
+    type: 'user' as const,
+    displayName: 'Shared Owner',
+    maskedEmail: 's•••@e•••.com',
+    label: 'Shared Owner',
+    isCurrentUser: false,
+  };
   const trashNotes = options.emptyTrash
     ? []
     : [{ ...browserFixture.trashedNote }, { ...browserFixture.trashedTemplate }];
@@ -282,6 +320,24 @@ export async function mockBrowserApi(
   const commentRequests: Array<{ method: string; path: string; body: unknown }> = [];
   let commentId = 0;
   let hashVersion = 1;
+  let noteAccessRole: 'owner' | 'viewer' | 'commenter' | 'editor' | null = options.noteAccessRole ?? 'owner';
+  let noteShareLink: {
+    id: string;
+    noteId: string;
+    permission: 'read';
+    url: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null = options.includeSharedByMe
+    ? {
+        id: 'note_share_owned',
+        noteId: browserFixture.source.id,
+        permission: 'read',
+        url: 'http://localhost:5173/share/note_share_owned',
+        createdAt: now,
+        updatedAt: now,
+      }
+    : null;
   let folderShareLink: {
     id: string;
     folderId: string;
@@ -299,12 +355,25 @@ export async function mockBrowserApi(
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
+    if (path === '/account/profile' && method === 'GET') {
+      const sessionEmail = options.sessionEmail === undefined ? 'browser@example.com' : options.sessionEmail;
+      return json({ profile: { identity: browserUserIdentity, email: sessionEmail, imageUrl: null } });
+    }
+
+    if (path === '/auth/update-user' && method === 'POST') {
+      const body = request.postDataJSON() as { name?: string };
+      browserUserIdentity.displayName = body.name?.trim().replace(/\s+/g, ' ') || null;
+      return json({ status: true });
+    }
+
     if (path === '/auth/get-session') {
+      const sessionEmail = options.sessionEmail === undefined ? 'browser@example.com' : options.sessionEmail;
+      if (!sessionEmail) return json(null);
       return json({
         user: {
           id: 'user_browser',
-          name: 'Browser Test User',
-          email: 'browser@example.com',
+          name: browserUserIdentity.displayName ?? '',
+          email: sessionEmail,
           emailVerified: true,
           image: null,
           createdAt: now,
@@ -313,6 +382,182 @@ export async function mockBrowserApi(
         session: { id: 'session_browser', userId: 'user_browser', expiresAt: '2099-01-01T00:00:00.000Z' },
       });
     }
+
+    const invitationMatch = path.match(/^\/collaboration-invitations\/([^/]+)\/(preview|accept)$/);
+    if (invitationMatch && options.collaborationInvitation) {
+      if (invitationMatch[2] === 'preview' && method === 'GET')
+        return json({
+          resource: { type: 'note', id: browserFixture.source.id, title: browserFixture.source.title },
+          owner: { name: 'Shared Owner' },
+          role: 'commenter',
+          invitedEmail: 'b••••••@example.com',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          status: options.collaborationInvitation.status ?? 'pending',
+        });
+      if (invitationMatch[2] === 'accept' && method === 'POST') {
+        const acceptStatus = options.collaborationInvitation.acceptStatus ?? 200;
+        if (acceptStatus === 403) return json({ error: 'Invitation email does not match the signed-in account' }, 403);
+        if (acceptStatus === 404) return json({ error: 'Invitation not found' }, 404);
+        return json({
+          grant: { id: 'grant_invitation', role: 'commenter' },
+          destination: `/notes/${browserFixture.source.id}`,
+        });
+      }
+    }
+
+    if (path === '/collaborations/shared-with-me' && method === 'GET') {
+      const collaborations = options.includeSharedCollaborations
+        ? [
+            {
+              type: 'note' as const,
+              grantId: 'access_shared_note',
+              role: options.noteAccessRole === 'owner' ? 'viewer' : (options.noteAccessRole ?? 'viewer'),
+              owner: sharedOwnerIdentity,
+              note: {
+                id: browserFixture.source.id,
+                title: browserFixture.source.title,
+                documentType: browserFixture.source.documentType,
+                updatedAt: browserFixture.source.updatedAt,
+              },
+            },
+            {
+              type: 'folder' as const,
+              grantId: 'access_shared_folder',
+              role: 'editor' as const,
+              owner: sharedOwnerIdentity,
+              folder: {
+                id: browserFixture.folder.id,
+                title: browserFixture.folder.title,
+                updatedAt: browserFixture.folder.updatedAt,
+              },
+            },
+          ]
+        : [];
+      const type = url.searchParams.get('type');
+      return json({
+        collaborations: type ? collaborations.filter((item) => item.type === type) : collaborations,
+        ...(type ? { pageInfo: { hasMore: false, nextCursor: null } } : {}),
+      });
+    }
+
+    if (path === '/collaborations/shared-by-me' && method === 'GET') {
+      if (options.sharedByMeLoadFails) return json({ error: 'Unable to load owner sharing' }, 500);
+      const type = url.searchParams.get('type');
+      const query = url.searchParams.get('q')?.toLowerCase() ?? '';
+      const cursor = url.searchParams.get('cursor');
+      const noteResources = [
+        {
+          type: 'note' as const,
+          resource: {
+            id: browserFixture.source.id,
+            title: browserFixture.source.title,
+            updatedAt: browserFixture.source.updatedAt,
+          },
+          activeCollaboratorCount: 2,
+          pendingInvitationCount: 1,
+          expiredInvitationCount: 0,
+          publicLinkActive: true,
+        },
+        {
+          type: 'note' as const,
+          resource: {
+            id: browserFixture.linked.id,
+            title: browserFixture.linked.title,
+            updatedAt: browserFixture.linked.updatedAt,
+          },
+          activeCollaboratorCount: 0,
+          pendingInvitationCount: 0,
+          expiredInvitationCount: 1,
+          publicLinkActive: false,
+        },
+      ];
+      const folderResources = [
+        {
+          type: 'folder' as const,
+          resource: {
+            id: browserFixture.folder.id,
+            title: browserFixture.folder.title,
+            updatedAt: browserFixture.folder.updatedAt,
+          },
+          activeCollaboratorCount: 1,
+          pendingInvitationCount: 1,
+          expiredInvitationCount: 1,
+          publicLinkActive: false,
+        },
+      ];
+      if (!options.includeSharedByMe) return json({ resources: [], pageInfo: { hasMore: false, nextCursor: null } });
+      const matching = (type === 'note' ? noteResources : folderResources).filter((item) =>
+        item.resource.title.toLowerCase().includes(query)
+      );
+      if (type === 'note' && !query) {
+        const resources = cursor === 'owned-note-page-2' ? matching.slice(1) : matching.slice(0, 1);
+        return json({
+          resources,
+          pageInfo: {
+            hasMore: !cursor && matching.length > 1,
+            nextCursor: !cursor && matching.length > 1 ? 'owned-note-page-2' : null,
+          },
+        });
+      }
+      return json({ resources: matching, pageInfo: { hasMore: false, nextCursor: null } });
+    }
+
+    const noteShareLinkMatch = path.match(/^\/notes\/([^/]+)\/share-link$/);
+    if (noteShareLinkMatch && method === 'GET') return json({ shareLink: noteShareLink });
+    if (noteShareLinkMatch && method === 'POST') {
+      noteShareLink = {
+        id: 'note_share_owned',
+        noteId: noteShareLinkMatch[1],
+        permission: 'read',
+        url: 'http://localhost:5173/share/note_share_owned',
+        createdAt: now,
+        updatedAt: now,
+      };
+      return json({ shareLink: noteShareLink }, 201);
+    }
+    if (noteShareLinkMatch && method === 'DELETE') {
+      noteShareLink = null;
+      return json({ ok: true });
+    }
+
+    if (/^\/(notes|folders)\/[^/]+\/collaborators$/.test(path) && method === 'GET')
+      return json({
+        resource: { id: path.split('/')[2], title: 'Shared resource' },
+        grants: [
+          {
+            key: 'access_browseractive',
+            role: 'viewer',
+            createdAt: now,
+            updatedAt: now,
+            user: {
+              key: 'user_browseractive',
+              type: 'user',
+              displayName: 'Active Collaborator',
+              maskedEmail: 'a•••@e•••.com',
+              label: 'Active Collaborator',
+              isCurrentUser: false,
+            },
+          },
+        ],
+        invitations: [
+          {
+            id: 'invitation_browser_pending',
+            email: 'p•••@e•••.com',
+            role: 'commenter',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'invitation_browser_expired',
+            email: 'e•••@e•••.com',
+            role: 'editor',
+            expiresAt: '2000-01-01T00:00:00.000Z',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      });
 
     if (path === '/trash' && method === 'GET') {
       if (options.trashLoadFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
@@ -408,6 +653,23 @@ export async function mockBrowserApi(
       return json({ folder }, 201);
     }
 
+    const folderDetailMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)\/detail$/);
+    if (folderDetailMatch && method === 'GET') {
+      const folder = folders.find((candidate) => candidate.id === folderDetailMatch[1]);
+      if (!folder) return json({ error: 'Folder not found' }, 404);
+      const folderAccessRole = options.folderAccessRole ?? 'owner';
+      const ancestors = folders.filter((candidate) => candidate.id === folder.parentFolderId);
+      return json({
+        folder,
+        ancestors,
+        childFolders: folders.filter((candidate) => candidate.parentFolderId === folder.id),
+        access: {
+          role: folderAccessRole,
+          source: folderAccessRole === 'owner' ? 'owner' : 'folder_grant',
+        },
+      });
+    }
+
     const folderMatch = path.match(/^\/folders\/(folder_[a-zA-Z0-9_]+)$/);
     if (folderMatch && method === 'DELETE') {
       const rootId = folderMatch[1];
@@ -436,6 +698,7 @@ export async function mockBrowserApi(
       const type = url.searchParams.get('type') === 'template' ? 'template' : 'note';
       return json({
         notes: [...notes.values()].filter((note) => note.folderId === folderNotesMatch[1] && note.type === type),
+        access: { role: 'owner', source: 'owner' },
       });
     }
 
@@ -539,12 +802,26 @@ export async function mockBrowserApi(
       });
     }
 
-    if (path === '/notes/recent' && method === 'GET')
+    if (path === '/notes/recent' && method === 'GET') {
+      const scope = url.searchParams.get('scope') ?? 'all';
       return json({
         notes: [...notes.values()]
           .filter((note) => note.type === 'note')
-          .map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
+          .map((note) => {
+            const shared = options.includeSharedCollaborations && note.id === browserFixture.source.id;
+            return {
+              ...note,
+              ...(shared ? { folderId: null } : {}),
+              access: shared ? { role: 'commenter', source: 'note_grant' } : { role: 'owner', source: 'owner' },
+              owner: shared ? sharedOwnerIdentity : null,
+            };
+          })
+          .filter(
+            (note) =>
+              scope === 'all' || (scope === 'shared' ? note.access.role !== 'owner' : note.access.role === 'owner')
+          ),
       });
+    }
 
     if (path === '/notes/trash' && method === 'POST') {
       const body = request.postDataJSON() as { noteIds?: string[] };
@@ -566,10 +843,24 @@ export async function mockBrowserApi(
 
     if (path === '/notes/search' && method === 'GET') {
       const query = url.searchParams.get('q')?.toLowerCase() ?? '';
+      const scope = url.searchParams.get('scope') ?? 'all';
       return json({
         notes: [...notes.values()]
           .filter((note) => note.title.toLowerCase().includes(query))
-          .map((note) => ({ ...note, folderTitle: browserFixture.folder.title })),
+          .map((note) => {
+            const shared = options.includeSharedCollaborations && note.id === browserFixture.source.id;
+            return {
+              ...note,
+              folderTitle: shared ? null : browserFixture.folder.title,
+              ...(shared ? { folderId: null } : {}),
+              access: shared ? { role: 'commenter', source: 'note_grant' } : { role: 'owner', source: 'owner' },
+              owner: shared ? sharedOwnerIdentity : null,
+            };
+          })
+          .filter(
+            (note) =>
+              scope === 'all' || (scope === 'shared' ? note.access.role !== 'owner' : note.access.role === 'owner')
+          ),
       });
     }
 
@@ -670,10 +961,11 @@ export async function mockBrowserApi(
           id: `comment_message_${++commentId}`,
           threadId,
           body: (body as { body?: string }).body ?? '',
-          author: { type: 'user', id: 'owner', name: 'Browser Test User' },
+          author: browserUserIdentity,
           createdAt: now,
           updatedAt: now,
           reactions: [],
+          authoredByCurrentActor: true,
         };
         thread.messages.push(message);
         thread.updatedAt = now;
@@ -685,7 +977,7 @@ export async function mockBrowserApi(
       }
       if (action === 'resolve' || action === 'reopen') {
         thread.status = action === 'resolve' ? 'resolved' : 'open';
-        thread.resolvedBy = action === 'resolve' ? { type: 'user', id: 'owner', name: 'Browser Test User' } : null;
+        thread.resolvedBy = action === 'resolve' ? browserUserIdentity : null;
         thread.resolvedAt = action === 'resolve' ? now : null;
         return json({ thread });
       }
@@ -723,20 +1015,22 @@ export async function mockBrowserApi(
           noteId,
           status: 'open',
           anchor: { ...body.anchor, detached: body.anchor.detached ?? false },
-          createdBy: { type: 'user', id: 'owner', name: 'Browser Test User' },
+          createdBy: browserUserIdentity,
           resolvedBy: null,
           resolvedAt: null,
           createdAt: now,
           updatedAt: now,
+          authoredByCurrentActor: true,
           messages: [
             {
               id: `comment_message_${++commentId}`,
               threadId,
               body: body.body,
-              author: { type: 'user', id: 'owner', name: 'Browser Test User' },
+              author: browserUserIdentity,
               createdAt: now,
               updatedAt: now,
               reactions: [],
+              authoredByCurrentActor: true,
             },
           ],
         };
@@ -752,7 +1046,17 @@ export async function mockBrowserApi(
     if (noteMatch) {
       const note = notes.get(noteMatch[1]);
       if (!note) return json({ error: 'Note not found' }, 404);
-      if (method === 'GET') return json({ note, contentHash: `hash_${hashVersion}` });
+      if (method === 'GET') {
+        if (!noteAccessRole) return json({ error: 'Note not found' }, 404);
+        return json({
+          note,
+          contentHash: `hash_${hashVersion}`,
+          access: {
+            role: noteAccessRole,
+            source: noteAccessRole === 'owner' ? 'owner' : (options.noteAccessSource ?? 'note_grant'),
+          },
+        });
+      }
       if (method === 'DELETE') {
         if (options.noteTrashFails) return json({ error: 'Trash is temporarily unavailable' }, 500);
         notes.delete(note.id);
@@ -817,6 +1121,9 @@ export async function mockBrowserApi(
     statusRequests,
     commentThreads,
     commentRequests,
+    setNoteAccessRole(role: 'owner' | 'viewer' | 'commenter' | 'editor' | null) {
+      noteAccessRole = role;
+    },
     externalUpdate(noteId: string, changes: Partial<Pick<Note, 'title' | 'content'>>) {
       const note = notes.get(noteId);
       if (!note) throw new Error(`Note not found: ${noteId}`);

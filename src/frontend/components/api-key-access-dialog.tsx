@@ -1,6 +1,14 @@
 import { Check, Copy, Plus, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { type ApiKey, type ApiKeyAccessMode, api, type Folder } from '../lib/api';
+import {
+  type ApiKey,
+  type ApiKeyAccessMode,
+  api,
+  type Folder,
+  type SharedAccessMode,
+  type SharedCollaboration,
+} from '../lib/api';
+import { SharedIntegrationAccess } from './shared-integration-access';
 import { Button } from './ui/button';
 
 type PermissionValue = { canRead: boolean; canCreate: boolean; canEdit: boolean; canComment: boolean };
@@ -65,11 +73,13 @@ function scopeLabel(mode: ApiKeyAccessMode) {
 
 export function ApiKeyAccessDialog({
   folders,
+  collaborations,
   apiKey,
   onSaved,
   trigger,
 }: {
   folders: Folder[];
+  collaborations: SharedCollaboration[];
   apiKey?: ApiKey;
   onSaved: () => void;
   trigger: (open: () => void) => ReactNode;
@@ -84,6 +94,8 @@ export function ApiKeyAccessDialog({
   const [accessMode, setAccessMode] = useState<ApiKeyAccessMode>('all');
   const [keyPermission, setKeyPermission] = useState<PermissionValue>(defaultPermission);
   const [canCreateFolders, setCanCreateFolders] = useState(false);
+  const [sharedAccessMode, setSharedAccessMode] = useState<SharedAccessMode>('none');
+  const [selectedGrantIds, setSelectedGrantIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const isEditing = !!apiKey;
   const selectableFolders = useMemo(
@@ -121,6 +133,8 @@ export function ApiKeyAccessDialog({
     setCopied(false);
     setCanCreateFolders(apiKey?.canCreateFolders ?? false);
     setAccessMode(apiKey?.accessMode ?? 'all');
+    setSharedAccessMode(apiKey?.sharedAccessMode ?? 'none');
+    setSelectedGrantIds(new Set(apiKey?.collaborationGrantIds ?? []));
     setKeyPermission(
       apiKey
         ? {
@@ -191,6 +205,8 @@ export function ApiKeyAccessDialog({
         name,
         accessMode,
         canCreateFolders,
+        sharedAccessMode,
+        collaborationGrantIds: sharedAccessMode === 'specific' ? [...selectedGrantIds] : [],
         ...keyPermission,
         permissions: selectedPermissions(),
       };
@@ -438,12 +454,23 @@ export function ApiKeyAccessDialog({
                   </div>
                 </div>
 
+                <div className="mt-4">
+                  <SharedIntegrationAccess
+                    collaborations={collaborations}
+                    mode={sharedAccessMode}
+                    selectedGrantIds={selectedGrantIds}
+                    onModeChange={setSharedAccessMode}
+                    onSelectionChange={setSelectedGrantIds}
+                  />
+                </div>
+
                 <div className="mt-4 flex justify-end">
                   <Button
                     disabled={
                       !name.trim() ||
                       saving ||
                       (accessMode !== 'all' && selectedFolderIds.size === 0) ||
+                      (sharedAccessMode === 'specific' && selectedGrantIds.size === 0) ||
                       !(
                         keyPermission.canRead ||
                         keyPermission.canCreate ||

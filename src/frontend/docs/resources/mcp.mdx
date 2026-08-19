@@ -78,7 +78,15 @@ Tags:
 
 Tool discovery is handled by the MCP protocol. Clients call `tools/list`; MinuNotes registers tool names, descriptions, schemas, annotations, and handlers.
 
-Move operations are all-or-nothing, capped at 100 notes, and require edit access to every source folder plus create access to the target folder.
+## Shared content
+
+Hosted and local MCP can use authenticated collaboration only when the connection owner explicitly enables `specific` selected grants or `all` current and future grants. The default is `none`. Human role, connection capabilities, OAuth scope, owner safety policy, and note API-editability all remain ceilings.
+
+Full note reads return privacy-safe role/source context. Discovery stays compact, and direct-note grants omit folder context. Content created in shared folders belongs to the folder owner. Shared structure, resharing, moves, public-link administration, and Trash are owner-only. Revoked or downgraded access fails immediately; clients should report the boundary rather than probe or retry unrelated resources.
+
+For net-new content, resolve the target folder from folder metadata and create directly. Do not read unrelated notes merely to confirm the folder or inspect permissions.
+
+Move operations are all-or-nothing, capped at 100 owned notes, and require edit access to every source folder plus create access to the target folder. Shared notes cannot be moved.
 
 ## Canvas JSON versus Minu syntax
 

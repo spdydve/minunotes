@@ -128,6 +128,12 @@ Canvas replacement and node-link mutations require a current `baseHash`. Setting
 
 ## Tool boundaries
 
+MCP tools expose owned content plus authenticated collaboration explicitly enabled by the connection owner. Shared access defaults to `none`; `specific` selects active grants and `all` includes current and future grants after an explicit warning. Effective permissions also intersect the collaborator's current role, credential capabilities, OAuth scope, owner safety policy, and note API-editability.
+
+Full note reads return privacy-safe role/source context. Discovery remains compact, and direct-note grants use null folder context. Content created in a shared folder belongs to that folder owner. Shared structure, resharing, moves, public-link administration, and Trash remain owner-only. Downgrade and revocation apply immediately; not found may mean inaccessible or revoked and must not be used to infer existence.
+
+For net-new content, resolve the target folder from folder metadata and create directly. Do not search or read unrelated notes to verify the folder or inspect permissions.
+
 MCP tools expose active content only. Trashed notes, templates, and folder subtrees are omitted from lists and search and return not found on direct reads. Hosted and local MCP intentionally provide no tools to list Trash or trash, restore, or permanently delete content. Owners perform those operations through the authenticated MinuNotes web interface.
 
 Review comments are available only on active Markdown notes. Every comment operation requires explicit **Review comments** permission plus folder read access; note edit permission and API editability are not required. Existing and new credentials have Review comments disabled until explicitly granted. Message edits/deletes are author-only, reactions are actor-specific toggles accepting one standard Unicode emoji, and anchor creation or remapping requires the current note content hash.
@@ -137,7 +143,7 @@ Tags are available because they already have user-facing Note Details behavior. 
 Implementation notes:
 
 - Uses the official `@modelcontextprotocol/sdk`.
-- Honors MinuNotes access modes: all non-private folders, selected project roots, or specific selected non-private folders. Private folders are not accessible to MCP.
+- Honors owned-folder modes plus separate `none | specific | all` authenticated-collaboration scope. Private folders are not accessible to MCP.
 - Move operations require edit access to every source folder and create access to the target folder.
 - Uses stdio transport for local process-spawned MCP clients.
 - Uses Streamable HTTP transport for hosted `/mcp` clients.

@@ -50,12 +50,9 @@ export function OAuthAppDialog({
     onError: (error) => setError(error instanceof ApiError ? error.message : 'Unable to create app'),
   });
 
-  const chooseCustom = (preset?: 'chatgpt' | 'mcp') => {
+  const chooseCustom = (preset?: 'mcp') => {
     setMode('custom');
-    if (preset === 'chatgpt') {
-      setName('ChatGPT connector');
-      setDescription('ChatGPT or custom GPT connector for MinuNotes');
-    } else if (preset === 'mcp') {
+    if (preset === 'mcp') {
       setName('MCP client');
       setDescription('Hosted MCP client using OAuth');
     }
@@ -102,16 +99,6 @@ export function OAuthAppDialog({
               <button
                 type="button"
                 className="rounded-xl border border-[var(--notes-border)] bg-[var(--notes-bg)] p-4 text-left hover:bg-[var(--notes-hover)]"
-                onClick={() => chooseCustom('chatgpt')}
-              >
-                <p className="font-semibold">ChatGPT</p>
-                <p className="notes-muted mt-1 text-sm">
-                  Create an OAuth app for a ChatGPT-style connector. You will need the redirect URI from ChatGPT.
-                </p>
-              </button>
-              <button
-                type="button"
-                className="rounded-xl border border-[var(--notes-border)] bg-[var(--notes-bg)] p-4 text-left hover:bg-[var(--notes-hover)]"
                 onClick={() => chooseCustom('mcp')}
               >
                 <p className="font-semibold">Hosted MCP client</p>
@@ -140,7 +127,7 @@ export function OAuthAppDialog({
                   className="mt-1 w-full rounded-md border border-[var(--notes-input-border)] bg-[var(--notes-input-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--notes-ring)]"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="ChatGPT connector"
+                  placeholder="My integration"
                 />
               </label>
               <label className="block text-sm font-medium">

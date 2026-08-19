@@ -1,6 +1,6 @@
 # Harness API
 
-The harness API is the core MinuNotes surface for agents, scripts, OpenAPI tools, and MCP adapters. API keys can access all non-private folders, selected project roots, or explicit specific folders.
+The harness API is the core MinuNotes surface for agents, scripts, OpenAPI tools, and MCP adapters. API keys can access authorized owned folders and explicitly enabled authenticated collaboration grants.
 
 ## Auth
 
@@ -19,7 +19,13 @@ API keys can use one of two folder access modes:
 - **Project roots**: access selected top-level folders and their non-private subfolders.
 - **Specific folders**: access only folders explicitly listed on the key.
 
-Folder-level read-only blocks Create/Edit for All and Project-root scopes. Specific folder grants can be used as explicit write exceptions. Private folders are excluded from API, MCP, and integration access. A private parent also makes its child folders private for API access.
+Folder-level read-only blocks Create/Edit for All and Project-root scopes. Specific owned-folder grants can be used as explicit write exceptions. Private folders are excluded from API, MCP, and integration access. A private parent also makes its child folders private for API access.
+
+### Shared access
+
+Shared content uses a separate `none | specific | all` mode and defaults to `none`. Specific mode selects active human collaboration grants; all mode includes current and future grants after an explicit warning. Effective access is the intersection of the current human role, credential capabilities, selected shared mode, owner safety policy, and note API-editability.
+
+Full note reads include privacy-safe role/source context. Discovery remains compact, and direct-note grants return null folder context. Shared-folder creation stores new content in the resource owner's corpus. Agents cannot reshare, change shared structure, move shared resources, administer public links, or use Trash. Revocation and downgrade apply immediately.
 
 Folder creation is separate. Only keys with folder-creation permission can call:
 
@@ -47,6 +53,8 @@ Folder, tag, note-search, orphan, and cross-note line-search endpoints return co
 
 Pass `nextCursor` back as `cursor` to the same endpoint with the same query and filters. Cursors are scoped to the search and authorized folders, so changing either returns `400`. Continue only when the current page is insufficient; do not fetch every page or expand every note by default.
 
+For a net-new note that does not depend on existing content, resolve the target from folder titles and parent relationships, then create directly. Do not search or read neighboring notes merely to confirm the folder or inspect permissions.
+
 ## Trash boundary
 
 The harness API exposes active content only. Trashed notes, templates, and folder subtrees are omitted from folder lists, search, line search, tags, graph results, and attachment access. Direct requests for trashed IDs return not found.
@@ -56,12 +64,12 @@ Harness and API-key clients cannot list Trash or trash, restore, or permanently 
 ## Safe editing flow
 
 1. Search or list folders.
-2. Read the note.
+2. Read the note because its content is needed for the edit.
 3. Capture `contentHash`.
-4. Send small edits with `baseHash`.
-5. Read back the note and report final markdown or a changed-section summary.
+4. Send the smallest relevant edit with `baseHash`.
+5. Read back the note and report final Markdown or a changed-section summary.
 
-Create and update responses return compact note metadata plus `contentHash`; they do not include full note `content`. Use the read-note endpoint when content is needed.
+Create and update responses return compact note metadata plus `contentHash`; they do not include full note `content`. Use the read-note endpoint only when content is needed.
 
 ## Review comments
 

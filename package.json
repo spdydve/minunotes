@@ -80,7 +80,8 @@
     "react": "latest",
     "react-dom": "latest",
     "sst": "4.14.3",
-    "tailwind-merge": "latest"
+    "tailwind-merge": "latest",
+    "tldts": "^7.4.10"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",

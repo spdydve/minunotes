@@ -40,6 +40,18 @@ function DestinationLink({
           {children}
         </Link>
       );
+    case 'shared':
+      return (
+        <Link to="/shared" {...common}>
+          {children}
+        </Link>
+      );
+    case 'shared-by-me':
+      return (
+        <Link to="/shared/by-me" {...common}>
+          {children}
+        </Link>
+      );
     case 'trash':
       return (
         <Link to="/trash" {...common}>
@@ -58,9 +70,9 @@ function DestinationLink({
           {children}
         </Link>
       );
-    case 'api-access':
+    case 'integrations':
       return (
-        <Link to="/settings/api-access" {...common}>
+        <Link to="/integrations" {...common}>
           {children}
         </Link>
       );

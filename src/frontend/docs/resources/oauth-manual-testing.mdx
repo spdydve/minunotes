@@ -4,7 +4,7 @@ Use these checks when validating API keys, hosted MCP, local MCP, and OAuth conn
 
 ## API key harness smoke test
 
-Create an API key in **Settings → API Access → API keys**. Then call the harness directly:
+Create an API key in **Integrations → API keys**. Then call the harness directly:
 
 ```sh
 curl "$MINUNOTES_API_URL/v1/harness/folders" \
@@ -58,7 +58,7 @@ notes-mcp
 
 Use OAuth for hosted or third-party connected apps where the user should approve access in the browser.
 
-1. Go to **Settings → API Access → Apps → Add App**.
+1. Go to **Integrations → Apps → Add App**.
 2. Create a custom app.
 3. Use a redirect URI such as:
 

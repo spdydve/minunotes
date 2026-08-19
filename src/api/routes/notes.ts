@@ -1,7 +1,7 @@
-import { and, desc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
-import { apiKeys, folders, noteShareLinks, notes, templateFolderAssignments } from '../db/schema';
+import { apiKeys, folders, noteShareLinks, notes, templateFolderAssignments, user as users } from '../db/schema';
 import {
   type DocumentEdit,
   editDocument,
@@ -13,6 +13,15 @@ import {
 } from '../harness/commands';
 import { findSection, parseSections } from '../harness/sections';
 import type { auth } from '../lib/auth';
+import {
+  type CollaborationAccess,
+  collaborationAccessibleNoteWhere,
+  collaborationRoleAllows,
+  resolveNoteCollaborationAccess,
+  serializeCollaborationAccess,
+} from '../lib/collaboration-access';
+import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
+import { serializeCollaborationUserIdentity } from '../lib/collaboration-identity';
 import { createId } from '../lib/id';
 import { pageRows, parsePageRequest } from '../lib/pagination';
 import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
@@ -28,9 +37,9 @@ import {
   updateCommentAnchor,
   updateCommentMessage,
 } from '../notes/comments';
-import { listBacklinks, listOrphanNotes, listOutgoingLinks } from '../notes/links';
+import { listBacklinks, listOrphanNotes, listOutgoingLinks, sanitizeCanvasNoteLinksForActor } from '../notes/links';
 import { compactNoteSelection } from '../notes/listing';
-import { listNoteTags, listUserTags, setNoteTags } from '../notes/tags';
+import { listAccessibleTags, listNoteTags, setNoteTags } from '../notes/tags';
 import { getNoteVersion, listNoteVersions, restoreNoteVersion, serializeVersion } from '../notes/versions';
 import { trashNote, trashNotes } from '../trash/operations';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
@@ -46,6 +55,69 @@ function getUser(c: Context<{ Variables: Variables }>) {
   const user = c.get('user');
   if (!user) return null;
   return user;
+}
+
+type DiscoveryScope = 'all' | 'mine' | 'shared';
+
+function parseDiscoveryScope(value: string | undefined): DiscoveryScope | null {
+  if (value === undefined || value === 'all') return 'all';
+  if (value === 'mine' || value === 'shared') return value;
+  return null;
+}
+
+async function serializeDiscoveryNotes<T extends { id: string; folderId: string | null; folderTitle?: string | null }>(
+  actorUserId: string,
+  notesToSerialize: readonly T[]
+) {
+  const resolved = await Promise.all(
+    notesToSerialize.map(async (note) => {
+      const access = await resolveNoteCollaborationAccess({ actorUserId, noteId: note.id });
+      return access ? { note, access } : null;
+    })
+  );
+  const visible = resolved.filter((item): item is NonNullable<typeof item> => item !== null);
+  const ownerIds = [
+    ...new Set(visible.filter((item) => item.access.role !== 'owner').map((item) => item.access.resourceOwnerUserId)),
+  ];
+  const ownerRows = ownerIds.length
+    ? await db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(inArray(users.id, ownerIds))
+    : [];
+  const ownerIdentities = new Map(
+    ownerRows.map((owner) => [owner.id, serializeCollaborationUserIdentity({ ...owner, currentUserId: actorUserId })])
+  );
+  return visible.map(({ note, access }) => ({
+    ...(access.source === 'note_grant' ? { ...note, folderId: null, folderTitle: null } : note),
+    access: serializeCollaborationAccess(access),
+    owner: access.role === 'owner' ? null : (ownerIdentities.get(access.resourceOwnerUserId) ?? null),
+  }));
+}
+
+async function readCollaborativeDocument(actorUserId: string, noteId: string) {
+  const access = await resolveNoteCollaborationAccess({ actorUserId, noteId });
+  if (!access) return null;
+  const result = await readDocument({ documentId: noteId, userId: access.resourceOwnerUserId });
+  if (!result.ok) return null;
+  if (access.role === 'owner' || !result.value.note.documentType.startsWith('canvas.'))
+    return { ...result.value, access, hiddenCanvasLinkCount: 0 };
+  const sanitized = await sanitizeCanvasNoteLinksForActor({ actorUserId, content: result.value.note.content });
+  return {
+    ...result.value,
+    note: { ...result.value.note, content: sanitized.content },
+    access,
+    hiddenCanvasLinkCount: sanitized.hiddenLinkCount,
+  };
+}
+
+function serializeCollaborativeNote<T extends { userId: string; updatedByActorId: string | null }>(
+  note: T,
+  access: CollaborationAccess
+) {
+  if (access.role === 'owner') return note;
+  const { userId: _userId, ...safeNote } = note;
+  return { ...safeNote, updatedByActorId: null };
 }
 
 async function withPublicActorUid<
@@ -87,7 +159,7 @@ noteRoutes.get('/tags', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  return c.json({ tags: await listUserTags({ userId: user.id }) });
+  return c.json({ tags: await listAccessibleTags(user.id) });
 });
 
 noteRoutes.get('/templates', async (c) => {
@@ -166,6 +238,8 @@ noteRoutes.get('/search', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
+  const scope = parseDiscoveryScope(c.req.query('scope'));
+  if (!scope) return c.json({ error: 'Scope must be all, mine, or shared' }, 400);
   const q = c.req.query('q')?.trim();
   if (!q) return c.json({ notes: [], page: page.page, limit: page.limit, hasMore: false });
 
@@ -178,9 +252,10 @@ noteRoutes.get('/search', async (c) => {
     offset: page.offset,
     type,
     tag,
+    discoveryScope: type === 'note' ? scope : 'mine',
   });
   return c.json({
-    notes: result.value.documents,
+    notes: await serializeDiscoveryNotes(user.id, result.value.documents),
     page: page.page,
     limit: page.limit,
     hasMore: result.value.pageInfo.hasMore,
@@ -192,16 +267,29 @@ noteRoutes.get('/recent', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'), { defaultLimit: 10, maxLimit: 50 });
+  const scope = parseDiscoveryScope(c.req.query('scope'));
+  if (!scope) return c.json({ error: 'Scope must be all, mine, or shared' }, 400);
+  const accessWhere =
+    scope === 'mine'
+      ? activeNoteWhere(user.id, eq(notes.type, 'note'))
+      : scope === 'shared'
+        ? collaborationAccessibleNoteWhere(user.id, 'read', eq(notes.type, 'note'), ne(notes.userId, user.id))
+        : collaborationAccessibleNoteWhere(user.id, 'read', eq(notes.type, 'note'));
   const rows = await db
     .select(compactNoteSelection)
     .from(notes)
-    .where(activeNoteWhere(user.id, eq(notes.type, 'note')))
+    .where(accessWhere)
     .orderBy(desc(notes.updatedAt), notes.id)
     .limit(page.limit + 1)
     .offset(page.offset);
   const result = pageRows(rows, page);
 
-  return c.json({ notes: result.items, page: result.page, limit: result.limit, hasMore: result.hasMore });
+  return c.json({
+    notes: await serializeDiscoveryNotes(user.id, result.items),
+    page: result.page,
+    limit: result.limit,
+    hasMore: result.hasMore,
+  });
 });
 
 noteRoutes.get('/orphans', async (c) => {
@@ -209,9 +297,15 @@ noteRoutes.get('/orphans', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
-  const rows = await listOrphanNotes({ userId: user.id });
+  const rows = await listOrphanNotes({ userId: user.id, actorUserId: user.id });
   const result = pageRows(rows.slice(page.offset, page.offset + page.limit + 1), page);
-  return c.json({ notes: result.items, page: result.page, limit: result.limit, hasMore: result.hasMore });
+  const visibleNotes = await Promise.all(
+    result.items.map(async (note) => {
+      const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: note.id });
+      return access?.source === 'note_grant' ? { ...note, folderId: null } : note;
+    })
+  );
+  return c.json({ notes: visibleNotes, page: result.page, limit: result.limit, hasMore: result.hasMore });
 });
 
 noteRoutes.get('/:noteId/tags', async (c) => {
@@ -219,13 +313,9 @@ noteRoutes.get('/:noteId/tags', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const noteId = c.req.param('noteId');
-  const [note] = await db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
-    .limit(1);
-  if (!note) return c.json({ error: 'Note not found' }, 404);
-  return c.json({ tags: await listNoteTags({ userId: user.id, noteId }) });
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId });
+  if (!access) return c.json({ error: 'Note not found' }, 404);
+  return c.json({ tags: await listNoteTags({ userId: access.resourceOwnerUserId, noteId }) });
 });
 
 noteRoutes.put('/:noteId/tags', async (c) => {
@@ -233,24 +323,31 @@ noteRoutes.put('/:noteId/tags', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const noteId = c.req.param('noteId');
-  const [note] = await db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(activeNoteWhere(user.id, eq(notes.id, noteId)))
-    .limit(1);
-  if (!note) return c.json({ error: 'Note not found' }, 404);
+  const current = await readCollaborativeDocument(user.id, noteId);
+  if (!current) return c.json({ error: 'Note not found' }, 404);
+  const { access } = current;
+  if (!collaborationRoleAllows(access.role, 'edit')) return c.json({ error: 'Forbidden' }, 403);
+  if (access.role !== 'owner' && current.note.type === 'template') return c.json({ error: 'Forbidden' }, 403);
   const body = (await c.req.json().catch(() => null)) as { tags?: string[] } | null;
   if (!body || !Array.isArray(body.tags)) return c.json({ error: 'Tags array is required' }, 400);
-  return c.json({ tags: await setNoteTags({ userId: user.id, noteId, tags: body.tags }) });
+  return c.json({
+    tags: await setNoteTags({ userId: access.resourceOwnerUserId, noteId, tags: body.tags }),
+  });
 });
 
 noteRoutes.get('/:noteId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const result = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
-  if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json({ ...result.value, note: await withPublicActorUid(result.value.note) });
+  const result = await readCollaborativeDocument(user.id, c.req.param('noteId'));
+  if (!result) return c.json({ error: 'Note not found' }, 404);
+  const noteWithActor = await withPublicActorUid(result.note);
+  const note = serializeCollaborativeNote(noteWithActor, result.access);
+  return c.json({
+    ...result,
+    note: result.access.source === 'note_grant' ? { ...note, folderId: null } : note,
+    access: serializeCollaborationAccess(result.access),
+  });
 });
 
 noteRoutes.get('/:noteId/versions', async (c) => {
@@ -298,6 +395,15 @@ noteRoutes.post('/:noteId/versions/:versionId/restore', async (c) => {
   });
 });
 
+async function resolveHumanCommentContext(c: Context<{ Variables: Variables }>) {
+  const actor = getUser(c);
+  if (!actor) return c.json({ error: 'Unauthorized' }, 401);
+  const access = await resolveNoteCollaborationAccess({ actorUserId: actor.id, noteId: c.req.param('noteId') ?? '' });
+  if (!access) return c.json({ error: 'Note not found' }, 404);
+  if (!collaborationRoleAllows(access.role, 'comment')) return c.json({ error: 'Forbidden' }, 403);
+  return { actor, access };
+}
+
 function commentErrorResponse(
   c: Context<{ Variables: Variables }>,
   result: { status: 400 | 403 | 404 | 409; error: string; currentHash?: string }
@@ -309,20 +415,20 @@ function commentErrorResponse(
 }
 
 noteRoutes.get('/:noteId/comments', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const result = await listCommentThreads({
     noteId: c.req.param('noteId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
   });
   if (!result.ok) return commentErrorResponse(c, result);
   return c.json(result.value);
 });
 
 noteRoutes.post('/:noteId/comments', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const body = (await c.req.json().catch(() => null)) as {
     body?: string;
     anchor?: CommentAnchorInput;
@@ -332,8 +438,8 @@ noteRoutes.post('/:noteId/comments', async (c) => {
   if (!body.anchor) return c.json({ error: 'Comment anchor is required' }, 400);
   const result = await createCommentThread({
     noteId: c.req.param('noteId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
     body: body.body,
     anchor: body.anchor,
   });
@@ -342,16 +448,16 @@ noteRoutes.post('/:noteId/comments', async (c) => {
 });
 
 noteRoutes.post('/:noteId/comments/:threadId/replies', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const body = (await c.req.json().catch(() => null)) as { body?: string } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   if (typeof body.body !== 'string') return c.json({ error: 'Comment body is required' }, 400);
   const result = await addCommentReply({
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
     body: body.body,
   });
   if (!result.ok) return commentErrorResponse(c, result);
@@ -359,16 +465,16 @@ noteRoutes.post('/:noteId/comments/:threadId/replies', async (c) => {
 });
 
 noteRoutes.patch('/:noteId/comments/:threadId/anchor', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const body = (await c.req.json().catch(() => null)) as { anchor?: CommentAnchorInput } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   if (!body.anchor) return c.json({ error: 'Comment anchor is required' }, 400);
   const result = await updateCommentAnchor({
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
     anchor: body.anchor,
   });
   if (!result.ok) return commentErrorResponse(c, result);
@@ -380,14 +486,15 @@ for (const [path, status] of [
   ['reopen', 'open'],
 ] as const) {
   noteRoutes.post(`/:noteId/comments/:threadId/${path}`, async (c) => {
-    const user = getUser(c);
-    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+    const context = await resolveHumanCommentContext(c);
+    if (context instanceof Response) return context;
     const result = await setCommentThreadStatus({
       noteId: c.req.param('noteId'),
       threadId: c.req.param('threadId'),
-      userId: user.id,
-      actor: { type: 'user', id: user.id },
+      userId: context.access.resourceOwnerUserId,
+      actor: { type: 'user', id: context.actor.id },
       status,
+      canManageAnyThread: context.access.role === 'owner' || context.access.role === 'editor',
     });
     if (!result.ok) return commentErrorResponse(c, result);
     return c.json(result.value);
@@ -395,8 +502,8 @@ for (const [path, status] of [
 }
 
 noteRoutes.patch('/:noteId/comments/:threadId/messages/:messageId', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const body = (await c.req.json().catch(() => null)) as { body?: string } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   if (typeof body.body !== 'string') return c.json({ error: 'Comment body is required' }, 400);
@@ -404,8 +511,8 @@ noteRoutes.patch('/:noteId/comments/:threadId/messages/:messageId', async (c) =>
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
     messageId: c.req.param('messageId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
     body: body.body,
   });
   if (!result.ok) return commentErrorResponse(c, result);
@@ -413,8 +520,8 @@ noteRoutes.patch('/:noteId/comments/:threadId/messages/:messageId', async (c) =>
 });
 
 noteRoutes.post('/:noteId/comments/:threadId/messages/:messageId/reactions', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const body = (await c.req.json().catch(() => null)) as { emoji?: string } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   if (typeof body.emoji !== 'string') return c.json({ error: 'Reaction emoji is required' }, 400);
@@ -422,8 +529,8 @@ noteRoutes.post('/:noteId/comments/:threadId/messages/:messageId/reactions', asy
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
     messageId: c.req.param('messageId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
     emoji: body.emoji,
   });
   if (!result.ok) return commentErrorResponse(c, result);
@@ -431,27 +538,27 @@ noteRoutes.post('/:noteId/comments/:threadId/messages/:messageId/reactions', asy
 });
 
 noteRoutes.delete('/:noteId/comments/:threadId/messages/:messageId', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const result = await deleteCommentMessage({
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
     messageId: c.req.param('messageId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
   });
   if (!result.ok) return commentErrorResponse(c, result);
   return c.json(result.value);
 });
 
 noteRoutes.delete('/:noteId/comments/:threadId', async (c) => {
-  const user = getUser(c);
-  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const context = await resolveHumanCommentContext(c);
+  if (context instanceof Response) return context;
   const result = await deleteCommentThread({
     noteId: c.req.param('noteId'),
     threadId: c.req.param('threadId'),
-    userId: user.id,
-    actor: { type: 'user', id: user.id },
+    userId: context.access.resourceOwnerUserId,
+    actor: { type: 'user', id: context.actor.id },
   });
   if (!result.ok) return commentErrorResponse(c, result);
   return c.json(result.value);
@@ -461,12 +568,12 @@ noteRoutes.get('/:noteId/status', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const result = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
-  if (!result.ok) return c.json({ error: result.error }, result.status);
+  const result = await readCollaborativeDocument(user.id, c.req.param('noteId'));
+  if (!result) return c.json({ error: 'Note not found' }, 404);
   return c.json({
-    noteId: result.value.note.id,
-    contentHash: result.value.contentHash,
-    updatedAt: result.value.note.updatedAt,
+    noteId: result.note.id,
+    contentHash: result.contentHash,
+    updatedAt: result.note.updatedAt,
   });
 });
 
@@ -553,7 +660,14 @@ noteRoutes.get('/:noteId/links', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const links = await listOutgoingLinks({ userId: user.id, noteId: c.req.param('noteId') });
+  const noteId = c.req.param('noteId');
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId });
+  if (!access) return c.json({ error: 'Note not found' }, 404);
+  const links = await listOutgoingLinks({
+    userId: access.resourceOwnerUserId,
+    actorUserId: user.id,
+    noteId,
+  });
   if (!links) return c.json({ error: 'Note not found' }, 404);
   return c.json({ noteId: c.req.param('noteId'), links });
 });
@@ -562,7 +676,14 @@ noteRoutes.get('/:noteId/backlinks', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const backlinks = await listBacklinks({ userId: user.id, noteId: c.req.param('noteId') });
+  const noteId = c.req.param('noteId');
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId });
+  if (!access) return c.json({ error: 'Note not found' }, 404);
+  const backlinks = await listBacklinks({
+    userId: access.resourceOwnerUserId,
+    actorUserId: user.id,
+    noteId,
+  });
   if (!backlinks) return c.json({ error: 'Note not found' }, 404);
   return c.json({ noteId: c.req.param('noteId'), backlinks });
 });
@@ -578,20 +699,36 @@ noteRoutes.get('/:noteId/events', async (c) => {
     limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
   });
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json(result.value);
+  const serializeActor = await createCollaborationActorSerializer({
+    references: result.value.events.map((event) => ({
+      type: event.actorType as 'user' | 'agent' | 'system',
+      id: event.actorId ?? (event.actorType === 'user' ? event.userId : null),
+    })),
+    currentActor: { type: 'user', id: user.id },
+  });
+  return c.json({
+    noteId: result.value.noteId,
+    events: result.value.events.map(({ userId: _ownerUserId, actorId, actorType, ...event }) => ({
+      ...event,
+      actor: serializeActor({
+        type: actorType as 'user' | 'agent' | 'system',
+        id: actorId ?? (actorType === 'user' ? _ownerUserId : null),
+      }),
+    })),
+  });
 });
 
 noteRoutes.get('/:noteId/outline', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const result = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
-  if (!result.ok) return c.json({ error: result.error }, result.status);
+  const result = await readCollaborativeDocument(user.id, c.req.param('noteId'));
+  if (!result) return c.json({ error: 'Note not found' }, 404);
 
   return c.json({
-    noteId: result.value.note.id,
-    contentHash: result.value.contentHash,
-    sections: parseSections(result.value.note.content),
+    noteId: result.note.id,
+    contentHash: result.contentHash,
+    sections: parseSections(result.note.content),
   });
 });
 
@@ -599,19 +736,19 @@ noteRoutes.get('/:noteId/sections/:sectionId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const result = await readDocument({ documentId: c.req.param('noteId'), userId: user.id });
-  if (!result.ok) return c.json({ error: result.error }, result.status);
+  const result = await readCollaborativeDocument(user.id, c.req.param('noteId'));
+  if (!result) return c.json({ error: 'Note not found' }, 404);
 
-  const section = findSection(result.value.note.content, c.req.param('sectionId'));
+  const section = findSection(result.note.content, c.req.param('sectionId'));
   if (!section) return c.json({ error: 'Section not found' }, 404);
 
   return c.json({
-    noteId: result.value.note.id,
-    contentHash: result.value.contentHash,
+    noteId: result.note.id,
+    contentHash: result.contentHash,
     section: {
       ...section,
-      markdown: result.value.note.content.slice(section.from, section.to),
-      content: result.value.note.content.slice(section.contentFrom, section.contentTo),
+      markdown: result.note.content.slice(section.from, section.to),
+      content: result.note.content.slice(section.contentFrom, section.contentTo),
     },
   });
 });
@@ -664,6 +801,11 @@ noteRoutes.post('/move', async (c) => {
 noteRoutes.post('/:noteId/edit', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const current = await readCollaborativeDocument(user.id, c.req.param('noteId'));
+  if (!current) return c.json({ error: 'Note not found' }, 404);
+  const { access } = current;
+  if (!collaborationRoleAllows(access.role, 'edit')) return c.json({ error: 'Forbidden' }, 403);
+  if (access.role !== 'owner' && current.note.type === 'template') return c.json({ error: 'Forbidden' }, 403);
 
   const body = (await c.req.json().catch(() => null)) as { edits?: DocumentEdit[]; baseHash?: string } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
@@ -672,10 +814,11 @@ noteRoutes.post('/:noteId/edit', async (c) => {
 
   const result = await editDocument({
     documentId: c.req.param('noteId'),
-    userId: user.id,
+    userId: access.resourceOwnerUserId,
     edits: body.edits,
     baseHash: body.baseHash,
     actorType: 'user',
+    actorId: user.id,
   });
 
   if (!result.ok)
@@ -683,12 +826,20 @@ noteRoutes.post('/:noteId/edit', async (c) => {
       { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
       result.status
     );
-  return c.json(result.value);
+  const note = serializeCollaborativeNote(result.value.note, access);
+  return c.json(
+    access.source === 'note_grant' ? { ...result.value, note: { ...note, folderId: null } } : { ...result.value, note }
+  );
 });
 
 noteRoutes.patch('/:noteId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const current = await readCollaborativeDocument(user.id, c.req.param('noteId'));
+  if (!current) return c.json({ error: 'Note not found' }, 404);
+  const { access } = current;
+  if (!collaborationRoleAllows(access.role, 'edit')) return c.json({ error: 'Forbidden' }, 403);
+  if (access.role !== 'owner' && current.note.type === 'template') return c.json({ error: 'Forbidden' }, 403);
 
   const body = (await c.req.json().catch(() => null)) as {
     title?: string;
@@ -699,23 +850,34 @@ noteRoutes.patch('/:noteId', async (c) => {
     baseHash?: string;
   } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+  if (
+    access.role !== 'owner' &&
+    (body.folderId !== undefined || body.isApiEditable !== undefined || body.createdAt !== undefined)
+  )
+    return c.json({ error: 'Collaborators can only change note title and content' }, 403);
 
   const title = body.title?.trim();
   if (body.title !== undefined && !title) return c.json({ error: 'Note title is required' }, 400);
+  if (access.role !== 'owner' && body.content !== undefined && current.hiddenCanvasLinkCount > 0)
+    return c.json({ error: 'Canvas contains note links you cannot edit' }, 403);
+  let content = body.content;
+  if (access.role !== 'owner' && content !== undefined && current.note.documentType.startsWith('canvas.'))
+    content = (await sanitizeCanvasNoteLinksForActor({ actorUserId: user.id, content })).content;
   const createdAt = body.createdAt !== undefined ? new Date(body.createdAt) : undefined;
   if (body.createdAt !== undefined && (!createdAt || Number.isNaN(createdAt.getTime())))
     return c.json({ error: 'Invalid created date' }, 400);
 
   const result = await updateDocument({
     documentId: c.req.param('noteId'),
-    userId: user.id,
+    userId: access.resourceOwnerUserId,
     title,
-    markdown: body.content,
+    markdown: content,
     folderId: body.folderId,
     isApiEditable: body.isApiEditable,
     createdAt,
     baseHash: body.baseHash,
     actorType: 'user',
+    actorId: user.id,
   });
 
   if (!result.ok)
@@ -723,7 +885,20 @@ noteRoutes.patch('/:noteId', async (c) => {
       { error: result.error, ...('currentHash' in result ? { currentHash: result.currentHash } : {}) },
       result.status
     );
-  return c.json(result.value);
+  let responseValue = result.value;
+  if (access.role !== 'owner' && responseValue.note.documentType.startsWith('canvas.')) {
+    const sanitized = await sanitizeCanvasNoteLinksForActor({
+      actorUserId: user.id,
+      content: responseValue.note.content,
+    });
+    responseValue = { ...responseValue, note: { ...responseValue.note, content: sanitized.content } };
+  }
+  const note = serializeCollaborativeNote(responseValue.note, access);
+  return c.json(
+    access.source === 'note_grant'
+      ? { ...responseValue, note: { ...note, folderId: null } }
+      : { ...responseValue, note }
+  );
 });
 
 noteRoutes.delete('/:noteId', async (c) => {

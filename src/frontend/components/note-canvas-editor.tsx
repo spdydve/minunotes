@@ -54,6 +54,7 @@ export function NoteCanvasEditor({
   navigation,
   staleNotice,
   updatedMeta,
+  readOnly = false,
 }: {
   noteId: string;
   title: string;
@@ -66,6 +67,7 @@ export function NoteCanvasEditor({
   navigation?: ReactNode;
   staleNotice?: ReactNode;
   updatedMeta?: ReactNode;
+  readOnly?: boolean;
 }) {
   const titleValue =
     title === 'Untitled canvas' || title === 'Untitled Canvas' || title === 'Untitled mind map' ? '' : title;
@@ -137,6 +139,7 @@ export function NoteCanvasEditor({
               <input
                 className="w-full bg-transparent font-semibold text-base outline-none sm:text-lg"
                 value={titleValue}
+                readOnly={readOnly}
                 onChange={(event) => onTitleChange(event.target.value)}
                 placeholder={isMindMap ? 'Untitled mind map' : 'Untitled canvas'}
                 spellCheck={true}
@@ -160,25 +163,30 @@ export function NoteCanvasEditor({
         ref={canvasFrameRef}
         className="notes-minu-canvas relative min-h-0 flex-1 overflow-hidden bg-[var(--notes-panel)]"
       >
-        <div className="absolute top-4 left-4 z-10">
-          <CanvasToolbar
-            tool={tool}
-            onToolChange={setTool}
-            orientation="vertical"
-            tools={toolsForCanvasProfile(canvasProfile)}
-          />
-        </div>
-        <CanvasStyleToolbar<MinuNotesNodeExtra>
-          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
-          value={value}
-          selection={selection}
-          onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
-        />
+        {!readOnly ? (
+          <>
+            <div className="absolute top-4 left-4 z-10">
+              <CanvasToolbar
+                tool={tool}
+                onToolChange={setTool}
+                orientation="vertical"
+                tools={toolsForCanvasProfile(canvasProfile)}
+              />
+            </div>
+            <CanvasStyleToolbar<MinuNotesNodeExtra>
+              className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
+              value={value}
+              selection={selection}
+              onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
+            />
+          </>
+        ) : null}
         {initialViewport ? (
           <MinuCanvas<MinuNotesNodeExtra>
             ref={canvasRef}
             value={value}
             onChange={(nextValue) => onContentChange(JSON.stringify(nextValue))}
+            readOnly={readOnly}
             canvasTheme="system"
             shapeTheme="outline"
             tool={tool}
@@ -210,6 +218,15 @@ export function NoteCanvasEditor({
             }}
             getNodeContextActions={({ node }) => {
               const link = getMinuNotesNodeLink(node);
+              if (readOnly)
+                return [
+                  {
+                    id: 'open-note',
+                    label: 'Open linked note',
+                    disabled: !link,
+                    onSelect: () => openNote(link?.id),
+                  },
+                ];
               return [
                 {
                   id: 'link-note',
@@ -238,7 +255,7 @@ export function NoteCanvasEditor({
           />
         ) : null}
       </div>
-      {linkPickerNodeId ? (
+      {!readOnly && linkPickerNodeId ? (
         <CanvasNoteLinkPicker
           currentNoteId={noteId}
           onClose={() => setLinkPickerNodeId(null)}

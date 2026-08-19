@@ -4,13 +4,14 @@ import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { expectPrivacySafeCollaborationDto } from './helpers/collaboration-privacy';
 
 const tempDirs: string[] = [];
 
 type ThreadResponse = {
   thread: {
     id: string;
-    createdBy: { type: 'user' | 'agent'; id: string; name: string };
+    createdBy: { type: 'user' | 'agent'; key: string; label: string; displayName: string | null };
     messages: Array<{ id: string }>;
   };
 };
@@ -18,7 +19,7 @@ type ThreadResponse = {
 type MessageResponse = { message: { id: string } };
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 34; index += 1) {
+  for (let index = 0; index <= 35; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -144,6 +145,14 @@ async function setupApp() {
   });
   ownerApp.route('/internal/notes', noteRoutes);
 
+  const collaboratorApp = new Hono();
+  collaboratorApp.use('*', async (c, next) => {
+    c.set('user', otherUser);
+    c.set('session', null);
+    await next();
+  });
+  collaboratorApp.route('/internal/notes', noteRoutes);
+
   const harnessApp = new Hono();
   harnessApp.use('*', async (c, next) => {
     c.set('user', owner);
@@ -154,7 +163,21 @@ async function setupApp() {
   });
   harnessApp.route('/v1/harness', harnessRoutes);
 
-  return { ownerApp, harnessApp, db, schema, owner, folder, note, canvas, otherNote, apiKey, hashMarkdown };
+  return {
+    ownerApp,
+    collaboratorApp,
+    harnessApp,
+    db,
+    schema,
+    owner,
+    otherUser,
+    folder,
+    note,
+    canvas,
+    otherNote,
+    apiKey,
+    hashMarkdown,
+  };
 }
 
 afterEach(async () => {
@@ -182,6 +205,41 @@ function rangeAnchor(documentHash: string, extras: Record<string, unknown> = {})
 }
 
 describe('note comments', () => {
+  it('counts the same reaction once per actor', async () => {
+    const { ownerApp, collaboratorApp, db, schema, owner, otherUser, note, hashMarkdown } = await setupApp();
+    await db.insert(schema.collaborationGrants).values({
+      id: 'collaboration_grant_reactions',
+      ownerUserId: owner.id,
+      granteeUserId: otherUser.id,
+      noteId: note.id,
+      folderId: null,
+      role: 'commenter',
+      createdByUserId: owner.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const created = await ownerApp.request(
+      `/internal/notes/${note.id}/comments`,
+      jsonRequest('POST', { body: 'React here.', anchor: rangeAnchor(hashMarkdown(note.content)) })
+    );
+    const thread = (await created.json()) as ThreadResponse;
+    const messageId = thread.thread.messages[0].id;
+    const reactionPath = `/internal/notes/${note.id}/comments/${thread.thread.id}/messages/${messageId}/reactions`;
+
+    expect((await ownerApp.request(reactionPath, jsonRequest('POST', { emoji: '👍' }))).status).toBe(200);
+    const collaboratorReaction = await collaboratorApp.request(reactionPath, jsonRequest('POST', { emoji: '👍' }));
+    expect(collaboratorReaction.status).toBe(200);
+    await expect(collaboratorReaction.json()).resolves.toEqual({
+      messageId,
+      reactions: [{ emoji: '👍', count: 2, reactedByCurrentActor: true }],
+    });
+
+    const ownerView = await ownerApp.request(`/internal/notes/${note.id}/comments`);
+    await expect(ownerView.json()).resolves.toMatchObject({
+      threads: [{ messages: [{ reactions: [{ emoji: '👍', count: 2, reactedByCurrentActor: true }] }] }],
+    });
+  });
+
   it('supports the owner thread, reply, edit, resolve, reopen, anchor, and delete lifecycle', async () => {
     const { ownerApp, note, hashMarkdown } = await setupApp();
     const initialHash = hashMarkdown(note.content);
@@ -196,8 +254,8 @@ describe('note comments', () => {
       noteId: note.id,
       status: 'open',
       anchor: { from: 6, to: 10, quote: 'beta', documentHash: initialHash, detached: false },
-      createdBy: { type: 'user', id: 'owner', name: 'Note Owner' },
-      messages: [{ body: 'Please clarify this.', author: { id: 'owner' } }],
+      createdBy: { type: 'user', label: 'You', displayName: 'Note Owner' },
+      messages: [{ body: 'Please clarify this.', author: { label: 'You' } }],
     });
     expect(JSON.stringify(createdBody)).not.toContain('user_owner');
     const threadId = createdBody.thread.id as string;
@@ -258,7 +316,7 @@ describe('note comments', () => {
     );
     expect(resolved.status).toBe(200);
     await expect(resolved.json()).resolves.toMatchObject({
-      thread: { status: 'resolved', resolvedBy: { id: 'owner' } },
+      thread: { status: 'resolved', resolvedBy: { label: 'You' } },
     });
 
     const reopened = await ownerApp.request(
@@ -369,6 +427,162 @@ describe('note comments', () => {
     });
   });
 
+  it('enforces collaborator comment roles, authorship, identity, and revocation', async () => {
+    const { ownerApp, collaboratorApp, db, schema, owner, otherUser, note, hashMarkdown } = await setupApp();
+    const now = new Date();
+    await db.insert(schema.collaborationGrants).values({
+      id: 'comment_grant',
+      ownerUserId: owner.id,
+      granteeUserId: otherUser.id,
+      noteId: note.id,
+      folderId: null,
+      role: 'viewer',
+      createdByUserId: owner.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const viewerList = await collaboratorApp.request(`/internal/notes/${note.id}/comments`);
+    expect(viewerList.status).toBe(403);
+
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'commenter', updatedAt: new Date() })
+      .where(eq(schema.collaborationGrants.id, 'comment_grant'));
+    const ownerCreated = await ownerApp.request(
+      `/internal/notes/${note.id}/comments`,
+      jsonRequest('POST', { body: 'Owner review', anchor: rangeAnchor(hashMarkdown(note.content)) })
+    );
+    const ownerThread = (await ownerCreated.json()) as ThreadResponse;
+    const ownerThreadId = ownerThread.thread.id;
+    const ownerMessageId = ownerThread.thread.messages[0].id;
+
+    const readable = await collaboratorApp.request(`/internal/notes/${note.id}/comments`);
+    expect(readable.status).toBe(200);
+    const readableBody = await readable.json();
+    expect(readableBody).toMatchObject({
+      threads: [{ createdBy: { label: owner.name, displayName: owner.name } }],
+    });
+    expectPrivacySafeCollaborationDto(readableBody, {
+      forbiddenValues: [owner.id, otherUser.id, owner.email, otherUser.email, 'comment_grant'],
+    });
+
+    const collaboratorCreated = await collaboratorApp.request(
+      `/internal/notes/${note.id}/comments`,
+      jsonRequest('POST', {
+        body: 'Collaborator review',
+        anchor: rangeAnchor(hashMarkdown(note.content), { from: 11, to: 16, quote: 'gamma' }),
+      })
+    );
+    expect(collaboratorCreated.status).toBe(201);
+    const collaboratorThread = (await collaboratorCreated.json()) as ThreadResponse;
+    expect(collaboratorThread.thread.createdBy).toMatchObject({
+      type: 'user',
+      label: 'You',
+      displayName: otherUser.name,
+    });
+    expect(collaboratorThread.thread.createdBy.key).toMatch(/^user_[a-f0-9]{16}$/);
+    expect(collaboratorThread.thread.createdBy.key).not.toContain(otherUser.id);
+
+    const ownerResolve = await collaboratorApp.request(
+      `/internal/notes/${note.id}/comments/${ownerThreadId}/resolve`,
+      jsonRequest('POST', {})
+    );
+    expect(ownerResolve.status).toBe(403);
+    const ownResolve = await collaboratorApp.request(
+      `/internal/notes/${note.id}/comments/${collaboratorThread.thread.id}/resolve`,
+      jsonRequest('POST', {})
+    );
+    expect(ownResolve.status).toBe(200);
+    const ownerEdit = await collaboratorApp.request(
+      `/internal/notes/${note.id}/comments/${ownerThreadId}/messages/${ownerMessageId}`,
+      jsonRequest('PATCH', { body: 'Overwrite owner' })
+    );
+    expect(ownerEdit.status).toBe(403);
+    const ownerAnchor = await collaboratorApp.request(
+      `/internal/notes/${note.id}/comments/${ownerThreadId}/anchor`,
+      jsonRequest('PATCH', { anchor: rangeAnchor(hashMarkdown(note.content)) })
+    );
+    expect(ownerAnchor.status).toBe(403);
+    const ownerDelete = await collaboratorApp.request(`/internal/notes/${note.id}/comments/${ownerThreadId}`, {
+      method: 'DELETE',
+    });
+    expect(ownerDelete.status).toBe(403);
+
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'editor', updatedAt: new Date() })
+      .where(eq(schema.collaborationGrants.id, 'comment_grant'));
+    const editorResolve = await collaboratorApp.request(
+      `/internal/notes/${note.id}/comments/${ownerThreadId}/resolve`,
+      jsonRequest('POST', {})
+    );
+    expect(editorResolve.status).toBe(200);
+
+    await db.delete(schema.collaborationGrants).where(eq(schema.collaborationGrants.id, 'comment_grant'));
+    const revoked = await collaboratorApp.request(`/internal/notes/${note.id}/comments`);
+    expect(revoked.status).toBe(404);
+  });
+
+  it('serializes OAuth comment actors with the app name and no internal authorization id', async () => {
+    const { db, schema, owner, note, hashMarkdown } = await setupApp();
+    const now = new Date();
+    await db.insert(schema.integrationAuthorizations).values({
+      id: 'oauth_integration_comments',
+      userId: owner.id,
+      canCreateFolders: false,
+      canRead: true,
+      canCreate: false,
+      canEdit: false,
+      canComment: true,
+      accessMode: 'all',
+      sharedAccessMode: 'none',
+      createdAt: now,
+      updatedAt: now,
+      lastUsedAt: null,
+      revokedAt: null,
+    });
+    await db.insert(schema.oauthClients).values({
+      id: 'oauth_client_comments',
+      userId: owner.id,
+      name: 'Review App',
+      description: null,
+      redirectUris: '["https://example.com/callback"]',
+      clientType: 'public',
+      clientSecretHash: null,
+      createdAt: now,
+      updatedAt: now,
+      revokedAt: null,
+    });
+    await db.insert(schema.oauthAuthorizations).values({
+      id: 'oauth_connection_comments',
+      userId: owner.id,
+      integrationAuthorizationId: 'oauth_integration_comments',
+      clientId: 'oauth_client_comments',
+      scope: 'notes.read notes.comment',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { createCommentThread } = await import('../src/api/notes/comments');
+    const result = await createCommentThread({
+      noteId: note.id,
+      userId: owner.id,
+      actor: { type: 'agent', id: 'oauth_connection_comments' },
+      body: 'OAuth review',
+      anchor: rangeAnchor(hashMarkdown(note.content)),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    expect(result.value.thread.createdBy).toMatchObject({
+      type: 'agent',
+      label: 'Review App',
+      displayName: 'Review App',
+    });
+    expect(result.value.thread.createdBy.key).toMatch(/^agent_[a-f0-9]{16}$/);
+    expect(JSON.stringify(result.value)).not.toContain('oauth_connection_comments');
+  });
+
   it('supports explicit comment-only API keys while enforcing scope and authorship', async () => {
     const { ownerApp, harnessApp, note, db, schema, apiKey, hashMarkdown } = await setupApp();
     const currentHash = hashMarkdown(note.content);
@@ -402,7 +616,12 @@ describe('note comments', () => {
     );
     expect(agentCreated.status).toBe(201);
     const agentBody = (await agentCreated.json()) as ThreadResponse;
-    expect(agentBody.thread.createdBy).toEqual({ type: 'agent', id: apiKey.uid, name: apiKey.name });
+    expect(agentBody.thread.createdBy).toMatchObject({
+      type: 'agent',
+      label: apiKey.name,
+      displayName: apiKey.name,
+      isCurrentUser: true,
+    });
     expect(JSON.stringify(agentBody)).not.toContain(apiKey.id);
 
     const agentResolved = await harnessApp.request(

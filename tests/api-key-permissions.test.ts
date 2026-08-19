@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { publicCollaborationAccessKey } from '../src/api/lib/collaboration-identity';
 
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 34; index += 1) {
+  for (let index = 0; index <= 35; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -61,7 +62,7 @@ async function setupApp() {
   });
   app.route('/api-keys', apiKeyRoutes);
 
-  return { app, db, libsql, schema, folder };
+  return { app, db, libsql, schema, folder, user, now };
 }
 
 afterEach(async () => {
@@ -83,6 +84,104 @@ describe('API key Review comments permission', () => {
 
     const list = await app.request('/api-keys');
     await expect(list.json()).resolves.toMatchObject({ keys: [{ canComment: false }] });
+  });
+
+  it('defaults shared access to none and manages specific collaboration selections', async () => {
+    const { app, db, schema, user, now } = await setupApp();
+    await db.insert(schema.user).values({
+      id: 'shared_owner',
+      name: 'Shared Owner',
+      email: 'shared@example.com',
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.folders).values({
+      id: 'shared_folder',
+      userId: 'shared_owner',
+      parentFolderId: null,
+      title: 'Shared',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.notes).values({
+      id: 'shared_note',
+      userId: 'shared_owner',
+      folderId: 'shared_folder',
+      title: 'Shared note',
+      content: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.collaborationGrants).values({
+      id: 'shared_grant',
+      ownerUserId: 'shared_owner',
+      granteeUserId: user.id,
+      noteId: 'shared_note',
+      folderId: null,
+      role: 'viewer',
+      createdByUserId: 'shared_owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const defaultKey = await app.request('/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Default' }),
+    });
+    expect(defaultKey.status).toBe(201);
+    const defaultBody = (await defaultKey.json()) as { apiKey: { id: string } };
+    await expect(app.request('/api-keys').then((response) => response.json())).resolves.toMatchObject({
+      keys: [expect.objectContaining({ sharedAccessMode: 'none', collaborationGrantIds: [] })],
+    });
+
+    const updated = await app.request(`/api-keys/${defaultBody.apiKey.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sharedAccessMode: 'specific',
+        collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+      }),
+    });
+    expect(updated.status).toBe(200);
+    const updatedBody = await updated.json();
+    expect(updatedBody).toMatchObject({
+      apiKey: {
+        sharedAccessMode: 'specific',
+        collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+      },
+    });
+    expect(JSON.stringify(updatedBody)).not.toContain('shared_grant');
+    const listedSpecific = await app.request('/api-keys');
+    expect(JSON.stringify(await listedSpecific.json())).not.toContain('shared_grant');
+    expect(await db.select().from(schema.authorizationCollaborationScopes)).toHaveLength(1);
+
+    const all = await app.request(`/api-keys/${defaultBody.apiKey.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sharedAccessMode: 'all' }),
+    });
+    expect(all.status).toBe(200);
+    expect(await db.select().from(schema.authorizationCollaborationScopes)).toHaveLength(0);
+
+    const emptySpecific = await app.request('/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Empty specific scope', sharedAccessMode: 'specific' }),
+    });
+    expect(emptySpecific.status).toBe(400);
+
+    const invalid = await app.request('/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Invalid scope',
+        sharedAccessMode: 'specific',
+        collaborationGrantIds: ['missing_grant'],
+      }),
+    });
+    expect(invalid.status).toBe(400);
   });
 
   it('stores folder restrictions beneath a global capability ceiling', async () => {

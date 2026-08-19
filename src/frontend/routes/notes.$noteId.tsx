@@ -34,6 +34,10 @@ function NoteView() {
     queryFn: () => api.note(noteId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
+  const accessRole = data?.access?.role ?? 'viewer';
+  const canEdit = accessRole === 'owner' || accessRole === 'editor';
+  const canComment = canEdit || accessRole === 'commenter';
+  const isOwner = accessRole === 'owner';
   const { data: backlinksData, isLoading: backlinksLoading } = useQuery({
     queryKey: ['backlinks', noteId],
     queryFn: () => api.backlinks(noteId),
@@ -42,7 +46,7 @@ function NoteView() {
   const { data: commentsData } = useQuery({
     queryKey: ['note-comments', noteId],
     queryFn: () => api.noteComments(noteId),
-    enabled: Boolean(data?.note && data.note.documentType === 'markdown' && data.note.type === 'note'),
+    enabled: Boolean(canComment && data?.note && data.note.documentType === 'markdown' && data.note.type === 'note'),
   });
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -50,6 +54,9 @@ function NoteView() {
   const [saveError, setSaveError] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
+  const [conflictDraft, setConflictDraft] = useState<{ title: string; content: string } | null>(null);
+  const [conflictDraftOpen, setConflictDraftOpen] = useState(false);
+  const [draftCopyStatus, setDraftCopyStatus] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [commentDialogPosition, setCommentDialogPosition] = useState<CommentDialogPosition | null>(null);
@@ -89,6 +96,9 @@ function NoteView() {
     setSaveError(false);
     setImageUploadError(null);
     setIsStale(false);
+    setConflictDraft(null);
+    setConflictDraftOpen(false);
+    setDraftCopyStatus(null);
     setReviewOpen(false);
     setCommentDialogOpen(false);
     setCommentDialogPosition(null);
@@ -101,7 +111,7 @@ function NoteView() {
     lastKnownHash.current = contentHash;
     setSaveError(false);
     setIsStale(false);
-    qc.setQueryData(['note', noteId], { note, contentHash });
+    qc.setQueryData(['note', noteId], { note, contentHash, access: data?.access });
     qc.invalidateQueries({ queryKey: [note.type === 'template' ? 'templates' : 'notes', note.folderId] });
     qc.invalidateQueries({ queryKey: ['notes', 'recent'] });
     if (note.type === 'template') qc.invalidateQueries({ queryKey: ['templates'] });
@@ -123,6 +133,7 @@ function NoteView() {
       setSaveError(true);
       if (!(error instanceof ApiError) || error.status !== 409) return;
 
+      setConflictDraft(attempted);
       const latest = await api.note(noteId).catch(() => null);
       if (!latest) {
         setIsStale(true);
@@ -133,6 +144,7 @@ function NoteView() {
       qc.setQueryData(['note', noteId], latest);
 
       if (latest.note.title === attempted.title && latest.note.content === attempted.content) {
+        setConflictDraft(null);
         applySavedNote(latest);
         return;
       }
@@ -164,7 +176,7 @@ function NoteView() {
     },
     onSuccess: ({ note, contentHash }) => {
       lastKnownHash.current = contentHash;
-      qc.setQueryData(['note', noteId], { note, contentHash });
+      qc.setQueryData(['note', noteId], { note, contentHash, access: data?.access });
       qc.invalidateQueries({ queryKey: ['note-events', noteId] });
     },
   });
@@ -188,8 +200,29 @@ function NoteView() {
   }, [isDirty, isSaving, saveError]);
 
   const saveNow = () => {
-    if (!isDirty || save.isPending || isStale) return;
+    if (!canEdit || !isDirty || save.isPending || isStale) return;
     save.mutate({ title, content });
+  };
+
+  const updateTitle = (value: string) => {
+    setTitle(value);
+    if (isStale) setConflictDraft((draft) => (draft ? { ...draft, title: value } : { title: value, content }));
+  };
+
+  const updateContent = (value: string) => {
+    setContent(value);
+    if (isStale) setConflictDraft((draft) => (draft ? { ...draft, content: value } : { title, content: value }));
+  };
+
+  const copyConflictDraft = async (field: 'title' | 'content') => {
+    if (!conflictDraft) return;
+    setDraftCopyStatus(null);
+    try {
+      await navigator.clipboard.writeText(conflictDraft[field]);
+      setDraftCopyStatus(field === 'title' ? 'Title copied.' : 'Content copied.');
+    } catch {
+      setDraftCopyStatus('Copy failed. Select the draft text and copy it manually.');
+    }
   };
 
   const uploadImage = async (file: File) => {
@@ -211,10 +244,10 @@ function NoteView() {
   };
 
   useEffect(() => {
-    if (!hydratedNoteId.current || !isDirty || save.isPending || isStale) return;
+    if (!canEdit || !hydratedNoteId.current || !isDirty || save.isPending || isStale) return;
     const timer = window.setTimeout(() => save.mutate({ title, content }), 800);
     return () => window.clearTimeout(timer);
-  }, [title, content, isDirty, isStale, save]);
+  }, [title, content, isDirty, isStale, save, canEdit]);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
@@ -373,7 +406,11 @@ function NoteView() {
           body: thread.messages[0]?.body ?? 'Comment thread',
           status: thread.status,
           anchor,
-          author: thread.createdBy,
+          author: {
+            id: thread.createdBy.key,
+            name: thread.createdBy.label,
+            type: thread.createdBy.type === 'agent' ? 'agent' : 'user',
+          },
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
         };
@@ -496,19 +533,50 @@ function NoteView() {
   const staleNotice = (
     <>
       {isStale ? (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-900 text-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
           <span>This note was updated elsewhere. Reload to view the latest version.</span>
-          <button
-            type="button"
-            className="rounded border border-amber-400 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
-            onClick={reloadLatest}
-          >
-            Reload
-          </button>
+          <div className="flex items-center gap-2">
+            {conflictDraft ? (
+              <button
+                type="button"
+                className="rounded border border-amber-400 px-2 py-1 font-medium text-xs hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
+                onClick={() => setConflictDraftOpen(true)}
+              >
+                Review local draft
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="rounded border border-amber-400 px-2 py-1 font-medium text-xs hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900"
+              onClick={reloadLatest}
+            >
+              Reload
+            </button>
+          </div>
+        </div>
+      ) : conflictDraft ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-blue-900 text-sm dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+          <span>Your conflicting local draft is preserved until you dismiss it.</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded border border-blue-400 px-2 py-1 font-medium text-xs hover:bg-blue-100 dark:border-blue-700 dark:hover:bg-blue-900"
+              onClick={() => setConflictDraftOpen(true)}
+            >
+              Review local draft
+            </button>
+            <button
+              type="button"
+              className="rounded px-2 py-1 font-medium text-xs hover:bg-blue-100 dark:hover:bg-blue-900"
+              onClick={() => setConflictDraft(null)}
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       ) : null}
       {imageUploadError ? (
-        <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+        <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-900 text-sm dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
           {imageUploadError}
         </div>
       ) : null}
@@ -632,6 +700,8 @@ function NoteView() {
         selectedThreadId={selectedThreadId}
         busy={commentMutation.isPending || save.isPending}
         error={commentError}
+        canManageAnyThread={canEdit}
+        canModerate={isOwner}
         onClose={() => setReviewOpen(false)}
         onSelect={selectReviewThread}
         onReply={replyToComment}
@@ -648,6 +718,8 @@ function NoteView() {
         draftAnchor={draftCommentAnchor}
         busy={commentMutation.isPending || save.isPending}
         error={commentError}
+        canManageAnyThread={canEdit}
+        canModerate={isOwner}
         onClose={() => {
           setCommentDialogOpen(false);
           setDraftCommentAnchor(null);
@@ -664,7 +736,7 @@ function NoteView() {
   );
   const actions = (
     <>
-      {data.note.documentType === 'markdown' && data.note.type === 'note' ? (
+      {canComment && data.note.documentType === 'markdown' && data.note.type === 'note' ? (
         <button
           type="button"
           className="rounded-md p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
@@ -680,57 +752,121 @@ function NoteView() {
           <MessageSquare className="h-4 w-4" />
         </button>
       ) : null}
-      <NoteActionsPopover
-        note={data.note}
-        icon="settings"
-        onDelete={() => remove.mutateAsync()}
-        onToggleApiEditable={() => toggleApiEditable.mutate()}
-        onNoteUpdated={applyDetailsUpdate}
-        editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}
-        onEditorModeChange={data.note.documentType === 'markdown' ? setEditorMode : undefined}
-      />
+      {canEdit ? (
+        <NoteActionsPopover
+          note={data.note}
+          icon="settings"
+          onDelete={() => remove.mutateAsync()}
+          onToggleApiEditable={isOwner ? () => toggleApiEditable.mutate() : undefined}
+          onNoteUpdated={applyDetailsUpdate}
+          editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}
+          onEditorModeChange={data.note.documentType === 'markdown' ? setEditorMode : undefined}
+          ownerControls={isOwner}
+        />
+      ) : (
+        <span className="rounded-md border border-[var(--notes-border)] px-2 py-1 text-[var(--notes-muted)] text-xs capitalize">
+          {accessRole}
+        </span>
+      )}
     </>
   );
 
+  const conflictDraftDialog =
+    conflictDraftOpen && conflictDraft ? (
+      <div className="notes-overlay fixed inset-0 z-[110] grid place-items-center p-4">
+        <div
+          className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="conflict-draft-title"
+        >
+          <h2 id="conflict-draft-title" className="font-semibold text-lg">
+            Preserved local draft
+          </h2>
+          <p className="notes-muted mt-1 text-sm">
+            This is the version that conflicted with a newer server copy. Copy anything you need before dismissing it.
+          </p>
+          <label className="mt-4 block font-medium text-sm" htmlFor="conflict-draft-note-title">
+            Title
+          </label>
+          <div className="mt-1 flex gap-2">
+            <input
+              id="conflict-draft-note-title"
+              className="notes-input min-w-0 flex-1 rounded-md px-3 py-2"
+              value={conflictDraft.title}
+              readOnly
+            />
+            <Button onClick={() => void copyConflictDraft('title')}>Copy title</Button>
+          </div>
+          <label className="mt-4 block font-medium text-sm" htmlFor="conflict-draft-content">
+            {data.note.documentType.startsWith('canvas.') ? 'Canvas JSON' : 'Content'}
+          </label>
+          <textarea
+            id="conflict-draft-content"
+            className="notes-input mt-1 min-h-64 w-full resize-y rounded-md px-3 py-2 font-mono text-sm"
+            value={conflictDraft.content}
+            readOnly
+          />
+          {draftCopyStatus ? (
+            <p className="notes-muted mt-2 text-sm" role="status">
+              {draftCopyStatus}
+            </p>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button onClick={() => void copyConflictDraft('content')}>Copy content</Button>
+            <Button onClick={() => setConflictDraftOpen(false)}>Close</Button>
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   if (data.note.documentType.startsWith('canvas.')) {
     return (
-      <NoteCanvasEditor
-        key={noteId}
-        noteId={noteId}
-        title={title}
-        content={content}
-        documentType={data.note.documentType as 'canvas.default' | 'canvas.mindmap'}
-        saveState={saveState}
-        onTitleChange={setTitle}
-        onContentChange={setContent}
-        updatedMeta={updatedMeta}
-        staleNotice={staleNotice}
-        actions={actions}
-      />
+      <>
+        <NoteCanvasEditor
+          key={noteId}
+          noteId={noteId}
+          title={title}
+          content={content}
+          documentType={data.note.documentType as 'canvas.default' | 'canvas.mindmap'}
+          saveState={saveState}
+          onTitleChange={updateTitle}
+          onContentChange={updateContent}
+          updatedMeta={updatedMeta}
+          staleNotice={staleNotice}
+          actions={actions}
+          readOnly={!canEdit}
+        />
+        {conflictDraftDialog}
+      </>
     );
   }
 
   return (
-    <NoteEditor
-      key={noteId}
-      title={title}
-      content={content}
-      saveState={saveState}
-      onTitleChange={setTitle}
-      onContentChange={setContent}
-      initialEditing={!data.note.content.trim()}
-      editorMode={editorMode}
-      updatedMeta={updatedMeta}
-      headerExtra={<BacklinksPanel backlinks={backlinksData?.backlinks} isLoading={backlinksLoading} />}
-      staleNotice={staleNotice}
-      onImageUpload={uploadImage}
-      wikiLinks={wikiLinks}
-      comments={data.note.type === 'note' ? commentsConfig : undefined}
-      reviewPanel={reviewPanel}
-      reviewFocus={reviewFocus}
-      onCommentAnchorPosition={setCommentDialogPosition}
-      actions={actions}
-    />
+    <>
+      <NoteEditor
+        key={noteId}
+        title={title}
+        content={content}
+        saveState={saveState}
+        onTitleChange={updateTitle}
+        onContentChange={updateContent}
+        initialEditing={!data.note.content.trim()}
+        editorMode={editorMode}
+        updatedMeta={updatedMeta}
+        headerExtra={<BacklinksPanel backlinks={backlinksData?.backlinks} isLoading={backlinksLoading} />}
+        staleNotice={staleNotice}
+        onImageUpload={canEdit ? uploadImage : undefined}
+        wikiLinks={wikiLinks}
+        comments={canComment && data.note.type === 'note' ? commentsConfig : undefined}
+        reviewPanel={reviewPanel}
+        reviewFocus={reviewFocus}
+        onCommentAnchorPosition={setCommentDialogPosition}
+        actions={actions}
+        readOnly={!canEdit}
+      />
+      {conflictDraftDialog}
+    </>
   );
 }
 

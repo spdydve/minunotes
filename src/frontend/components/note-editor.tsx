@@ -44,6 +44,7 @@ export function NoteEditor({
   reviewPanel,
   reviewFocus,
   onCommentAnchorPosition,
+  readOnly = false,
 }: {
   title: string;
   content: string;
@@ -62,6 +63,7 @@ export function NoteEditor({
   reviewPanel?: ReactNode;
   reviewFocus?: { from: number; to: number; detached?: boolean; requestId: number } | null;
   onCommentAnchorPosition?: (position: { top: number; left: number; placement: 'above' | 'below' }) => void;
+  readOnly?: boolean;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -234,6 +236,7 @@ export function NoteEditor({
         <input
           className="w-full bg-transparent text-2xl font-semibold outline-none sm:text-3xl"
           value={titleValue}
+          readOnly={readOnly}
           onChange={(e) => onTitleChange(e.target.value)}
           placeholder="Untitled note"
           spellCheck={true}
@@ -250,6 +253,7 @@ export function NoteEditor({
             ref={editorRef}
             value={content}
             onChange={onContentChange}
+            readOnly={readOnly}
             mode={editorMode}
             placeholder="Start typing..."
             minHeight={520}
@@ -456,85 +460,87 @@ export function NoteEditor({
           </div>
         </div>
       ) : null}
-      <div
-        className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4 sm:px-6 md:left-72 md:right-0"
-        style={keyboardOffset ? { bottom: keyboardOffset + 12 } : undefined}
-      >
-        <div className="mx-auto flex max-w-3xl flex-col items-center">
-          {blockMenuOpen ? (
-            <div className="mb-3 rounded-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
-              <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
-                Basic blocks
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {blockItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.label}
-                      type="button"
-                      className="flex items-center gap-3 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-left text-sm font-medium hover:bg-[var(--notes-hover)]"
-                      onPointerDown={(event) => {
-                        event.preventDefault();
-                        insertMarkdown(item.markdown);
-                      }}
-                    >
-                      <Icon className="h-5 w-5 text-[var(--notes-muted)]" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
+      {!readOnly ? (
+        <div
+          className="fixed inset-x-0 bottom-3 z-40 px-3 sm:bottom-4 sm:px-6 md:left-72 md:right-0"
+          style={keyboardOffset ? { bottom: keyboardOffset + 12 } : undefined}
+        >
+          <div className="mx-auto flex max-w-3xl flex-col items-center">
+            {blockMenuOpen ? (
+              <div className="mb-3 rounded-2xl border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
+                <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-[var(--notes-muted)]">
+                  Basic blocks
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {blockItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        className="flex items-center gap-3 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-left text-sm font-medium hover:bg-[var(--notes-hover)]"
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          insertMarkdown(item.markdown);
+                        }}
+                      >
+                        <Icon className="h-5 w-5 text-[var(--notes-muted)]" />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ) : null}
-          <div className="inline-flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 px-2 py-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
-            <button
-              type="button"
-              className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-              aria-label={blockMenuOpen ? 'Close block menu' : 'Open block menu'}
-              onClick={() => setBlockMenuOpen((open) => !open)}
-            >
-              {blockMenuOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-            </button>
-            <button
-              type="button"
-              className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-              aria-label="Undo"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                editorRef.current?.undo();
-              }}
-            >
-              <Undo2 className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-              aria-label="Redo"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                editorRef.current?.redo();
-              }}
-            >
-              <Redo2 className="h-5 w-5" />
-            </button>
-            {onImageUpload ? (
+            ) : null}
+            <div className="inline-flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-[var(--notes-border)] bg-[var(--notes-panel)]/95 px-2 py-1.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-[var(--notes-panel)]/85">
               <button
                 type="button"
-                className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] disabled:opacity-50"
-                aria-label="Insert image"
-                disabled={uploadingImage || !editorReady}
+                className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                aria-label={blockMenuOpen ? 'Close block menu' : 'Open block menu'}
+                onClick={() => setBlockMenuOpen((open) => !open)}
+              >
+                {blockMenuOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+              </button>
+              <button
+                type="button"
+                className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                aria-label="Undo"
                 onPointerDown={(event) => {
                   event.preventDefault();
-                  openImagePicker();
+                  editorRef.current?.undo();
                 }}
               >
-                <Image className="h-5 w-5" />
+                <Undo2 className="h-5 w-5" />
               </button>
-            ) : null}
+              <button
+                type="button"
+                className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                aria-label="Redo"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  editorRef.current?.redo();
+                }}
+              >
+                <Redo2 className="h-5 w-5" />
+              </button>
+              {onImageUpload ? (
+                <button
+                  type="button"
+                  className="rounded-full p-2 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] disabled:opacity-50"
+                  aria-label="Insert image"
+                  disabled={uploadingImage || !editorReady}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    openImagePicker();
+                  }}
+                >
+                  <Image className="h-5 w-5" />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }

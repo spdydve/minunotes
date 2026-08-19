@@ -5,10 +5,11 @@ import path from 'node:path';
 import { createClient } from '@libsql/client';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { publicCollaborationAccessKey } from '../src/api/lib/collaboration-identity';
 
 const tempDirs: string[] = [];
 
-async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, through = 34, from = 0) {
+async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, through = 35, from = 0) {
   for (let index = from; index <= through; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
@@ -317,7 +318,14 @@ describe('oauth foundations', () => {
     const list = await app.request('/api/oauth/authorizations');
     expect(list.status).toBe(200);
     await expect(list.json()).resolves.toMatchObject({
-      authorizations: [{ id: 'oauth_auth_connected', client: { name: 'Client A' } }],
+      authorizations: [
+        {
+          id: 'oauth_auth_connected',
+          sharedAccessMode: 'none',
+          collaborationGrantIds: [],
+          client: { name: 'Client A' },
+        },
+      ],
     });
 
     const revoke = await app.request('/api/oauth/authorizations/oauth_auth_connected', { method: 'DELETE' });
@@ -392,6 +400,77 @@ describe('oauth foundations', () => {
     });
     expect(approve.status).toBe(400);
     await expect(approve.json()).resolves.toMatchObject({ error: 'invalid_scope' });
+  });
+
+  it('stores selected shared collaboration grants during consent', async () => {
+    const { app, db, schema, user } = await setupApp();
+    const owner = {
+      id: 'shared_owner',
+      name: 'Shared Owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      image: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.user).values(owner);
+    await db.insert(schema.folders).values({
+      id: 'shared_folder',
+      userId: owner.id,
+      parentFolderId: null,
+      title: 'Shared folder',
+      isPrivate: false,
+      isAgentReadOnly: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(schema.collaborationGrants).values({
+      id: 'shared_grant',
+      ownerUserId: owner.id,
+      granteeUserId: user.id,
+      folderId: 'shared_folder',
+      role: 'viewer',
+      createdByUserId: owner.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const verifier = 'u'.repeat(64);
+    const approve = await app.request('/api/oauth/authorize/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        responseType: 'code',
+        clientId: 'client_a',
+        redirectUri: 'https://client.example/callback',
+        codeChallenge: pkceChallenge(verifier),
+        codeChallengeMethod: 'S256',
+        scope: 'notes.read',
+        accessMode: 'all',
+        canRead: true,
+        sharedAccessMode: 'specific',
+        collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+      }),
+    });
+    expect(approve.status).toBe(200);
+
+    const [authorization] = await db.select().from(schema.integrationAuthorizations);
+    expect(authorization.sharedAccessMode).toBe('specific');
+    await expect(db.select().from(schema.authorizationCollaborationScopes)).resolves.toMatchObject([
+      { authorizationId: authorization.id, userId: user.id, collaborationGrantId: 'shared_grant' },
+    ]);
+
+    const list = await app.request('/api/oauth/authorizations');
+    const listBody = await list.json();
+    expect(listBody).toMatchObject({
+      authorizations: [
+        {
+          sharedAccessMode: 'specific',
+          collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+        },
+      ],
+    });
+    expect(JSON.stringify(listBody)).not.toContain('shared_grant');
   });
 
   it('stores the approved scope and intersects bearer capabilities with token scope', async () => {

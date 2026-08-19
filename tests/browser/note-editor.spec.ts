@@ -39,10 +39,11 @@ test('detects a clean note changed externally and reloads the latest content', a
   await expect(editor).toContainText('Updated remotely.');
 });
 
-test('preserves a dirty local draft when an external update wins the save race', async ({ page }) => {
+test('preserves and exposes a dirty local draft after an external update wins the save race', async ({ page }) => {
   await page.clock.install();
   const api = await mockBrowserApi(page);
   await page.goto(`/notes/${browserFixture.source.id}`);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
 
   const editor = page.locator('.cm-content');
   await expect(editor).toBeVisible();
@@ -61,8 +62,19 @@ test('preserves a dirty local draft when an external update wins the save race',
     body: { content: 'Start here. Local draft.', baseHash: 'hash_1' },
   });
 
+  await page.getByRole('button', { name: 'Review local draft' }).click();
+  const draftDialog = page.getByRole('dialog', { name: 'Preserved local draft' });
+  await expect(draftDialog.getByLabel('Content')).toHaveValue('Start here. Local draft.');
+  await draftDialog.getByRole('button', { name: 'Close' }).click();
+
   await page.getByRole('button', { name: 'Reload' }).click();
   await expect(editor).toContainText('Updated remotely.');
+  await expect(page.getByText('Your conflicting local draft is preserved until you dismiss it.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Review local draft' }).click();
+  await draftDialog.getByRole('button', { name: 'Copy content' }).click();
+  await expect(draftDialog.getByRole('status')).toHaveText('Content copied.');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Start here. Local draft.');
 });
 
 test('switches between live and source editing and autosaves raw markdown changes', async ({ page }) => {
@@ -113,8 +125,9 @@ test('renders callouts and Mermaid diagrams in live mode', async ({ page }) => {
       .first()
       .evaluate((element) => getComputedStyle(element).fill);
   const darkNodeFill = await nodeFill();
-  await page.getByLabel('Open settings').click();
-  await page.getByLabel('Theme').selectOption('catppuccin-latte');
+  await page.getByLabel('Open account and settings menu').click();
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Theme' }).getByLabel('Theme selection').selectOption('catppuccin-latte');
   await expect(page.locator('html')).toHaveClass(/theme-catppuccin-latte/);
   await expect.poll(nodeFill).not.toBe(darkNodeFill);
 });

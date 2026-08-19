@@ -18,6 +18,7 @@ export function NoteActionsPopover({
   editorMode,
   onEditorModeChange,
   icon = 'more',
+  ownerControls = true,
 }: {
   note: NoteListItem;
   onDelete: () => unknown | Promise<unknown>;
@@ -26,6 +27,7 @@ export function NoteActionsPopover({
   editorMode?: 'live' | 'source';
   onEditorModeChange?: (mode: 'live' | 'source') => void;
   icon?: 'more' | 'settings';
+  ownerControls?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -80,14 +82,16 @@ export function NoteActionsPopover({
           >
             Details
           </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              setShareOpen(true);
-              setOpen(false);
-            }}
-          >
-            Share
-          </ActionMenuButton>
+          {ownerControls ? (
+            <ActionMenuButton
+              onClick={() => {
+                setShareOpen(true);
+                setOpen(false);
+              }}
+            >
+              Share
+            </ActionMenuButton>
+          ) : null}
           {editorMode && onEditorModeChange ? (
             <ActionMenuButton
               onClick={() => {
@@ -98,66 +102,78 @@ export function NoteActionsPopover({
               {editorMode === 'live' ? 'Source mode' : 'Live mode'}
             </ActionMenuButton>
           ) : null}
-          <MoveNoteDialog
-            note={note}
-            onOpenChange={setOpen}
-            trigger={<ActionMenuItemLabel>Move note</ActionMenuItemLabel>}
-          />
-          <ActionMenuButton
-            disabled={duplicate.isPending}
-            onClick={() => {
-              duplicate.mutate();
-              setOpen(false);
-            }}
-          >
-            Duplicate
-          </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              setVersionsOpen(true);
-              setOpen(false);
-            }}
-          >
-            Version history
-          </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              navigate({ to: '/notes/$noteId/activity', params: { noteId: note.id } });
-              setOpen(false);
-            }}
-          >
-            View activity
-          </ActionMenuButton>
-          {onToggleApiEditable ? (
-            <ActionMenuButton
-              onClick={() => {
-                onToggleApiEditable();
-                setOpen(false);
-              }}
-            >
-              {note.isApiEditable ? 'Disable API edits' : 'Enable API edits'}
-            </ActionMenuButton>
+          {ownerControls ? (
+            <>
+              <MoveNoteDialog
+                note={note}
+                onOpenChange={setOpen}
+                trigger={<ActionMenuItemLabel>Move note</ActionMenuItemLabel>}
+              />
+              <ActionMenuButton
+                disabled={duplicate.isPending}
+                onClick={() => {
+                  duplicate.mutate();
+                  setOpen(false);
+                }}
+              >
+                Duplicate
+              </ActionMenuButton>
+              <ActionMenuButton
+                onClick={() => {
+                  setVersionsOpen(true);
+                  setOpen(false);
+                }}
+              >
+                Version history
+              </ActionMenuButton>
+              <ActionMenuButton
+                onClick={() => {
+                  navigate({ to: '/notes/$noteId/activity', params: { noteId: note.id } });
+                  setOpen(false);
+                }}
+              >
+                View activity
+              </ActionMenuButton>
+              {onToggleApiEditable ? (
+                <ActionMenuButton
+                  onClick={() => {
+                    onToggleApiEditable();
+                    setOpen(false);
+                  }}
+                >
+                  {note.isApiEditable ? 'Disable API edits' : 'Enable API edits'}
+                </ActionMenuButton>
+              ) : null}
+              <DeleteConfirmDialog
+                label="note"
+                heading="Move note to Trash?"
+                warning="You can restore this note later from Trash. Public share links will be revoked."
+                actionLabel="Move to Trash"
+                requiresTypedConfirmation={false}
+                onConfirm={onDelete}
+                onOpenChange={setOpen}
+                trigger={<ActionMenuItemLabel destructive>Move to Trash</ActionMenuItemLabel>}
+              />
+            </>
           ) : null}
-          <DeleteConfirmDialog
-            label="note"
-            heading="Move note to Trash?"
-            warning="You can restore this note later from Trash. Public share links will be revoked."
-            actionLabel="Move to Trash"
-            requiresTypedConfirmation={false}
-            onConfirm={onDelete}
-            onOpenChange={setOpen}
-            trigger={<ActionMenuItemLabel destructive>Move to Trash</ActionMenuItemLabel>}
-          />
         </PopoverContent>
       </Popover>
-      <NoteDetailsDialog note={note} open={detailsOpen} onOpenChange={setDetailsOpen} onNoteUpdated={onNoteUpdated} />
-      <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} />
-      <NoteVersionsDialog
+      <NoteDetailsDialog
         note={note}
-        open={versionsOpen}
-        onOpenChange={setVersionsOpen}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
         onNoteUpdated={onNoteUpdated}
+        ownerControls={ownerControls}
       />
+      {ownerControls ? <NoteShareDialog note={note} open={shareOpen} onOpenChange={setShareOpen} /> : null}
+      {ownerControls ? (
+        <NoteVersionsDialog
+          note={note}
+          open={versionsOpen}
+          onOpenChange={setVersionsOpen}
+          onNoteUpdated={onNoteUpdated}
+        />
+      ) : null}
     </>
   );
 }

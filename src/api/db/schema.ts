@@ -165,6 +165,9 @@ export const integrationAuthorizations = sqliteTable(
     canEdit: integer('can_edit', { mode: 'boolean' }).notNull().default(false),
     canComment: integer('can_comment', { mode: 'boolean' }).notNull().default(false),
     canCreateFolders: integer('can_create_folders', { mode: 'boolean' }).notNull().default(false),
+    sharedAccessMode: text('shared_access_mode', { enum: ['none', 'specific', 'all'] })
+      .notNull()
+      .default('none'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
     lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
@@ -179,6 +182,10 @@ export const integrationAuthorizations = sqliteTable(
     check('integration_authorizations_can_edit_check', sql`${table.canEdit} in (0, 1)`),
     check('integration_authorizations_can_comment_check', sql`${table.canComment} in (0, 1)`),
     check('integration_authorizations_can_create_folders_check', sql`${table.canCreateFolders} in (0, 1)`),
+    check(
+      'integration_authorizations_shared_access_mode_check',
+      sql`${table.sharedAccessMode} in ('none', 'specific', 'all')`
+    ),
     check(
       'integration_authorizations_comment_requires_read_check',
       sql`${table.canComment} = 0 or ${table.canRead} = 1`
@@ -381,11 +388,138 @@ export const notes = sqliteTable(
   },
   (table) => [
     index('notes_user_id_idx').on(table.userId),
+    uniqueIndex('notes_id_user_id_idx').on(table.id, table.userId),
     index('notes_folder_id_idx').on(table.folderId),
     index('notes_type_idx').on(table.type),
     index('notes_document_type_idx').on(table.documentType),
     index('notes_user_deleted_at_idx').on(table.userId, table.deletedAt),
     index('notes_trash_batch_id_idx').on(table.trashBatchId),
+  ]
+);
+
+export const collaborationGrants = sqliteTable(
+  'collaboration_grants',
+  {
+    id: text('id').primaryKey(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    granteeUserId: text('grantee_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    noteId: text('note_id'),
+    folderId: text('folder_id'),
+    role: text('role', { enum: ['viewer', 'commenter', 'editor'] }).notNull(),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('collaboration_grants_note_grantee_idx').on(table.noteId, table.granteeUserId),
+    uniqueIndex('collaboration_grants_folder_grantee_idx').on(table.folderId, table.granteeUserId),
+    uniqueIndex('collaboration_grants_id_grantee_idx').on(table.id, table.granteeUserId),
+    index('collaboration_grants_owner_idx').on(table.ownerUserId),
+    index('collaboration_grants_grantee_idx').on(table.granteeUserId),
+    index('collaboration_grants_note_idx').on(table.noteId),
+    index('collaboration_grants_folder_idx').on(table.folderId),
+    foreignKey({
+      columns: [table.noteId, table.ownerUserId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'collaboration_grants_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.folderId, table.ownerUserId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'collaboration_grants_folder_owner_fk',
+    }).onDelete('cascade'),
+    check(
+      'collaboration_grants_one_resource_check',
+      sql`(${table.noteId} is not null and ${table.folderId} is null) or (${table.noteId} is null and ${table.folderId} is not null)`
+    ),
+    check('collaboration_grants_role_check', sql`${table.role} in ('viewer', 'commenter', 'editor')`),
+    check('collaboration_grants_not_self_check', sql`${table.ownerUserId} <> ${table.granteeUserId}`),
+    check('collaboration_grants_creator_owner_check', sql`${table.createdByUserId} = ${table.ownerUserId}`),
+  ]
+);
+
+export const collaborationInvitations = sqliteTable(
+  'collaboration_invitations',
+  {
+    id: text('id').primaryKey(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    invitedEmailKey: text('invited_email_key').notNull(),
+    noteId: text('note_id'),
+    folderId: text('folder_id'),
+    role: text('role', { enum: ['viewer', 'commenter', 'editor'] }).notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    invitedByUserId: text('invited_by_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    acceptedAt: integer('accepted_at', { mode: 'timestamp' }),
+    acceptedByUserId: text('accepted_by_user_id').references(() => user.id, { onDelete: 'set null' }),
+    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('collaboration_invitations_note_email_idx').on(table.noteId, table.invitedEmailKey),
+    uniqueIndex('collaboration_invitations_folder_email_idx').on(table.folderId, table.invitedEmailKey),
+    index('collaboration_invitations_owner_idx').on(table.ownerUserId),
+    index('collaboration_invitations_email_idx').on(table.invitedEmailKey),
+    index('collaboration_invitations_note_idx').on(table.noteId),
+    index('collaboration_invitations_folder_idx').on(table.folderId),
+    index('collaboration_invitations_expires_at_idx').on(table.expiresAt),
+    foreignKey({
+      columns: [table.noteId, table.ownerUserId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'collaboration_invitations_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.folderId, table.ownerUserId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'collaboration_invitations_folder_owner_fk',
+    }).onDelete('cascade'),
+    check(
+      'collaboration_invitations_one_resource_check',
+      sql`(${table.noteId} is not null and ${table.folderId} is null) or (${table.noteId} is null and ${table.folderId} is not null)`
+    ),
+    check('collaboration_invitations_role_check', sql`${table.role} in ('viewer', 'commenter', 'editor')`),
+    check('collaboration_invitations_inviter_owner_check', sql`${table.invitedByUserId} = ${table.ownerUserId}`),
+  ]
+);
+
+export const authorizationCollaborationScopes = sqliteTable(
+  'authorization_collaboration_scopes',
+  {
+    id: text('id').primaryKey(),
+    authorizationId: text('authorization_id').notNull(),
+    userId: text('user_id').notNull(),
+    collaborationGrantId: text('collaboration_grant_id').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('authorization_collaboration_scopes_authorization_grant_idx').on(
+      table.authorizationId,
+      table.collaborationGrantId
+    ),
+    index('authorization_collaboration_scopes_authorization_idx').on(table.authorizationId),
+    index('authorization_collaboration_scopes_grant_idx').on(table.collaborationGrantId),
+    index('authorization_collaboration_scopes_user_idx').on(table.userId),
+    foreignKey({
+      columns: [table.authorizationId, table.userId],
+      foreignColumns: [integrationAuthorizations.id, integrationAuthorizations.userId],
+      name: 'authorization_collaboration_scopes_authorization_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.collaborationGrantId, table.userId],
+      foreignColumns: [collaborationGrants.id, collaborationGrants.granteeUserId],
+      name: 'authorization_collaboration_scopes_grantee_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -755,6 +889,8 @@ export const folderRelations = relations(folders, ({ many, one }) => ({
   attachments: many(attachments),
   templateAssignments: many(templateFolderAssignments),
   shareLinks: many(folderShareLinks),
+  collaborationGrants: many(collaborationGrants),
+  collaborationInvitations: many(collaborationInvitations),
 }));
 
 export const apiKeyRelations = relations(apiKeys, ({ one }) => ({
@@ -812,6 +948,50 @@ export const noteRelations = relations(notes, ({ many, one }) => ({
   incomingLinks: many(noteLinks, { relationName: 'targetNoteLinks' }),
   attachments: many(attachments),
   templateAssignments: many(templateFolderAssignments),
+  collaborationGrants: many(collaborationGrants),
+  collaborationInvitations: many(collaborationInvitations),
+}));
+
+export const collaborationGrantRelations = relations(collaborationGrants, ({ many, one }) => ({
+  owner: one(user, {
+    fields: [collaborationGrants.ownerUserId],
+    references: [user.id],
+    relationName: 'ownedCollaborationGrants',
+  }),
+  grantee: one(user, {
+    fields: [collaborationGrants.granteeUserId],
+    references: [user.id],
+    relationName: 'receivedCollaborationGrants',
+  }),
+  note: one(notes, { fields: [collaborationGrants.noteId], references: [notes.id] }),
+  folder: one(folders, { fields: [collaborationGrants.folderId], references: [folders.id] }),
+  authorizationScopes: many(authorizationCollaborationScopes),
+}));
+
+export const collaborationInvitationRelations = relations(collaborationInvitations, ({ one }) => ({
+  owner: one(user, {
+    fields: [collaborationInvitations.ownerUserId],
+    references: [user.id],
+    relationName: 'ownedCollaborationInvitations',
+  }),
+  acceptedBy: one(user, {
+    fields: [collaborationInvitations.acceptedByUserId],
+    references: [user.id],
+    relationName: 'acceptedCollaborationInvitations',
+  }),
+  note: one(notes, { fields: [collaborationInvitations.noteId], references: [notes.id] }),
+  folder: one(folders, { fields: [collaborationInvitations.folderId], references: [folders.id] }),
+}));
+
+export const authorizationCollaborationScopeRelations = relations(authorizationCollaborationScopes, ({ one }) => ({
+  authorization: one(integrationAuthorizations, {
+    fields: [authorizationCollaborationScopes.authorizationId],
+    references: [integrationAuthorizations.id],
+  }),
+  collaborationGrant: one(collaborationGrants, {
+    fields: [authorizationCollaborationScopes.collaborationGrantId],
+    references: [collaborationGrants.id],
+  }),
 }));
 
 export const templateFolderAssignmentRelations = relations(templateFolderAssignments, ({ one }) => ({
@@ -895,6 +1075,9 @@ export const attachmentRelations = relations(attachments, ({ one }) => ({
 
 export type Folder = typeof folders.$inferSelect;
 export type Note = typeof notes.$inferSelect;
+export type CollaborationGrant = typeof collaborationGrants.$inferSelect;
+export type CollaborationInvitation = typeof collaborationInvitations.$inferSelect;
+export type AuthorizationCollaborationScope = typeof authorizationCollaborationScopes.$inferSelect;
 export type TemplateFolderAssignment = typeof templateFolderAssignments.$inferSelect;
 export type NoteEvent = typeof noteEvents.$inferSelect;
 export type NoteVersion = typeof noteVersions.$inferSelect;

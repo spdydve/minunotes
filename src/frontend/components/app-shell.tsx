@@ -4,7 +4,7 @@ import { PanelLeftOpen } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { authClient } from '../lib/auth-client';
-import { buildAppNavigationModel, noteIdFromNavigationPath } from '../lib/navigation';
+import { buildAppNavigationModel, folderIdFromNavigationPath, noteIdFromNavigationPath } from '../lib/navigation';
 import { getStoredSidebarCollapsed, storeSidebarCollapsed } from '../lib/navigation-preferences';
 import { applyNoteTheme, getStoredTheme } from '../lib/themes';
 import { AppNavigationBar } from './app-navigation-bar';
@@ -16,11 +16,13 @@ export function AppShell() {
   const pathname = location.pathname;
   const session = authClient.useSession();
   const isAuthRoute = pathname === '/auth';
+  const isInvitationRoute = pathname.startsWith('/invite/');
   const isPublicShareRoute = pathname.startsWith('/share/');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(getStoredSidebarCollapsed);
   const navigationNoteId = noteIdFromNavigationPath(pathname);
-  const navigationEnabled = Boolean(session.data?.user && !isAuthRoute && !isPublicShareRoute);
+  const navigationRouteFolderId = folderIdFromNavigationPath(pathname);
+  const navigationEnabled = Boolean(session.data?.user && !isAuthRoute && !isInvitationRoute && !isPublicShareRoute);
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders, enabled: navigationEnabled });
   const navigationNote = useQuery({
     queryKey: ['note', navigationNoteId],
@@ -31,14 +33,28 @@ export function AppShell() {
     enabled: navigationEnabled && Boolean(navigationNoteId),
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   });
+  const navigationContextFolderId =
+    navigationRouteFolderId ??
+    (navigationNote.data?.access?.source === 'folder_grant' ? navigationNote.data.note.folderId : null);
+  const navigationFolder = useQuery({
+    queryKey: ['folder-detail', navigationContextFolderId],
+    queryFn: () => {
+      if (!navigationContextFolderId) throw new Error('Navigation folder ID is required');
+      return api.folderDetail(navigationContextFolderId);
+    },
+    enabled: navigationEnabled && Boolean(navigationContextFolderId),
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
+  });
   const navigation = useMemo(
     () =>
       buildAppNavigationModel({
         pathname,
         folders: folders.data?.folders ?? [],
         note: navigationNote.data?.note ?? null,
+        noteAccess: navigationNote.data?.access ?? null,
+        folderContext: navigationFolder.data ?? null,
       }),
-    [pathname, folders.data?.folders, navigationNote.data?.note]
+    [pathname, folders.data?.folders, navigationNote.data, navigationFolder.data]
   );
 
   useEffect(() => {
@@ -46,7 +62,7 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (isPublicShareRoute) return;
+    if (isPublicShareRoute || isInvitationRoute) return;
     const pageTitle =
       pathname === '/auth'
         ? 'Sign in'
@@ -56,7 +72,7 @@ export function AppShell() {
             ? `${navigationNote.data.note.title} activity`
             : navigation.mobileTitle;
     document.title = `${pageTitle} - MinuNotes`;
-  }, [isPublicShareRoute, navigation.mobileTitle, navigationNote.data?.note, pathname]);
+  }, [isInvitationRoute, isPublicShareRoute, navigation.mobileTitle, navigationNote.data?.note, pathname]);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -66,10 +82,10 @@ export function AppShell() {
     storeSidebarCollapsed(desktopSidebarCollapsed);
   }, [desktopSidebarCollapsed]);
 
-  if (isAuthRoute || isPublicShareRoute) return <Outlet />;
+  if (isAuthRoute || isInvitationRoute || isPublicShareRoute) return <Outlet />;
   if (session.isPending)
     return (
-      <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-sm text-[var(--notes-muted)]">
+      <div className="grid min-h-screen place-items-center bg-[var(--notes-bg)] text-[var(--notes-muted)] text-sm">
         Loading...
       </div>
     );
@@ -79,7 +95,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--notes-bg)] text-[var(--notes-text)]">
+    <div className="notes-app-shell flex h-screen min-h-0 overflow-hidden bg-[var(--notes-bg)] text-[var(--notes-text)]">
       <SearchDialog />
       {desktopSidebarCollapsed ? null : (
         <div className="hidden md:block">
@@ -110,10 +126,10 @@ export function AppShell() {
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {desktopSidebarCollapsed ? (
           <button
-            className="fixed left-4 top-[5px] z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"
+            className="fixed top-[5px] left-4 z-40 hidden rounded-md border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] p-2 text-[var(--notes-muted)] shadow-sm hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)] md:block"
             type="button"
             aria-label="Expand sidebar"
             onClick={() => setDesktopSidebarCollapsed(false)}

@@ -49,6 +49,109 @@ test('uses a static brand and aligns sidebar controls with desktop breadcrumbs',
   expect(Math.abs(collapseBox.y + collapseBox.height / 2 - breadcrumbCenter)).toBeLessThanOrEqual(1);
 });
 
+test('uses vertical primary navigation and groups secondary destinations under More', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/');
+
+  const primary = page.getByRole('navigation', { name: 'Primary' });
+  const home = primary.getByRole('link', { name: 'Home', exact: true });
+  const shared = primary.getByRole('link', { name: 'Shared', exact: true });
+  const templates = primary.getByRole('link', { name: 'Templates', exact: true });
+  const more = primary.getByRole('button', { name: 'More navigation' });
+  const boxes = await Promise.all([
+    home.boundingBox(),
+    shared.boundingBox(),
+    templates.boundingBox(),
+    more.boundingBox(),
+  ]);
+  if (boxes.some((box) => !box)) throw new Error('Primary navigation rows must be visible');
+  expect(new Set(boxes.map((box) => Math.round(box?.x ?? 0))).size).toBe(1);
+  expect(new Set(boxes.map((box) => Math.round(box?.width ?? 0))).size).toBe(1);
+  expect(boxes.every((box) => (box?.height ?? 0) <= 40)).toBe(true);
+  await expect
+    .poll(() => home.evaluate((element) => Number(getComputedStyle(element).fontWeight)))
+    .toBeLessThanOrEqual(500);
+
+  await more.click();
+  await page.getByRole('button', { name: 'Resources', exact: true }).click();
+  await expect(page).toHaveURL('/resources');
+  await expect(more).toHaveAttribute('aria-current', 'page');
+
+  await more.click();
+  await page.getByRole('button', { name: 'Integrations', exact: true }).click();
+  await expect(page).toHaveURL('/integrations');
+  await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  const createKeyBox = await page.getByRole('button', { name: 'Create key' }).boundingBox();
+  const addAppBox = await page.getByRole('button', { name: 'Add App' }).boundingBox();
+  expect(createKeyBox).not.toBeNull();
+  expect(addAppBox).not.toBeNull();
+  expect(
+    Math.abs((createKeyBox?.x ?? 0) + (createKeyBox?.width ?? 0) - ((addAppBox?.x ?? 0) + (addAppBox?.width ?? 0)))
+  ).toBeLessThanOrEqual(1);
+  await expect(more).toHaveAttribute('aria-current', 'page');
+
+  await page.getByRole('button', { name: 'Open account and settings menu' }).click();
+  await expect(page.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Theme', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Logout', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resources', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Integrations', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Trash', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  const themeDialog = page.getByRole('dialog', { name: 'Theme' });
+  await expect(themeDialog.getByLabel('Theme selection')).toBeVisible();
+});
+
+test('edits an optional collaboration display name from the sidebar profile', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/');
+
+  await expect(page.locator('aside').locator('[data-avatar-palette]')).toBeVisible();
+  await expect(page.getByText('browser@example.com', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Open account and settings menu' }).click();
+  await page.getByRole('button', { name: 'Profile', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Profile' });
+  await expect(dialog.getByText('browser@example.com', { exact: true })).toBeVisible();
+  await dialog.getByLabel('Display name').fill('  Updated   Person  ');
+  await dialog.getByRole('button', { name: 'Save profile' }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('aside')).toContainText('Updated Person');
+});
+
+test('uses nested folder lists with accessible expansion and quiet inactive actions', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/');
+
+  const primary = page.getByRole('navigation', { name: 'Primary' });
+  const rootLink = primary.getByRole('link', { name: browserFixture.folder.title, exact: true });
+  const rootItem = rootLink.locator('xpath=../..');
+  const expand = primary.getByRole('button', { name: `Expand ${browserFixture.folder.title}` });
+  await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect(rootItem.locator(':scope > ul')).toHaveCount(0);
+
+  const inactiveActions = primary.getByRole('button', { name: `Actions for ${browserFixture.folder.title}` });
+  await expect.poll(() => inactiveActions.evaluate((element) => getComputedStyle(element).opacity)).toBe('0');
+  await inactiveActions.focus();
+  await expect.poll(() => inactiveActions.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+
+  const childListId = await expand.getAttribute('aria-controls');
+  if (!childListId) throw new Error('Folder expansion must reference its child list');
+  await expand.click();
+  await expect(primary.getByRole('button', { name: `Collapse ${browserFixture.folder.title}` })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  const childList = rootItem.locator(':scope > ul');
+  await expect(childList).toHaveAttribute('id', childListId);
+  await expect(childList.getByRole('link', { name: browserFixture.childFolder.title, exact: true })).toBeVisible();
+
+  await rootLink.click();
+  await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}`);
+  await expect.poll(() => inactiveActions.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+});
+
 test('keeps the narrow sidebar scrollbar unobtrusive without disabling scroll', async ({ page }) => {
   const api = await mockBrowserApi(page);
   for (let index = 0; index < 20; index += 1) {
@@ -62,14 +165,15 @@ test('keeps the narrow sidebar scrollbar unobtrusive without disabling scroll', 
   await page.goto('/');
 
   const primary = page.getByRole('navigation', { name: 'Primary' });
-  const [sidebarBox, primaryBox] = await Promise.all([page.locator('aside').boundingBox(), primary.boundingBox()]);
-  if (!sidebarBox || !primaryBox) throw new Error('Sidebar navigation must be visible');
-  expect(Math.abs(primaryBox.x + primaryBox.width - (sidebarBox.x + sidebarBox.width))).toBeLessThanOrEqual(1);
-  await expect.poll(() => primary.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-  await expect.poll(() => primary.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe('thin');
-  await primary.hover();
+  const scroller = primary.locator('.notes-sidebar-scroll');
+  const [sidebarBox, scrollerBox] = await Promise.all([page.locator('aside').boundingBox(), scroller.boundingBox()]);
+  if (!sidebarBox || !scrollerBox) throw new Error('Sidebar navigation must be visible');
+  expect(Math.abs(scrollerBox.x + scrollerBox.width - (sidebarBox.x + sidebarBox.width))).toBeLessThanOrEqual(1);
+  await expect.poll(() => scroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect.poll(() => scroller.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe('thin');
+  await scroller.hover();
   await page.mouse.wheel(0, 300);
-  await expect.poll(() => primary.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 });
 
 test('supports Home to folder to note navigation with browser history', async ({ page }) => {
@@ -162,6 +266,37 @@ test('opens search with recent notes and restores trigger focus on Escape', asyn
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(searchButton).toBeFocused();
+});
+
+test('scopes unified search and labels shared notes and folders', async ({ page }) => {
+  await mockBrowserApi(page, { includeSharedCollaborations: true });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Search notes' });
+  const scope = dialog.getByRole('group', { name: 'Search scope' });
+  const all = scope.getByRole('button', { name: 'All', exact: true });
+  const mine = scope.getByRole('button', { name: 'Owned by me', exact: true });
+  const shared = scope.getByRole('button', { name: 'Shared with me', exact: true });
+  await expect(all).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
+
+  await mine.click();
+  await expect(mine).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('option', { name: /Source Note/ })).toHaveCount(0);
+  await shared.click();
+  await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
+
+  const input = dialog.getByRole('textbox', { name: 'Search notes or folders' });
+  await input.fill('Browser tests');
+  await expect(dialog.getByRole('option', { name: /Browser tests Shared by Shared Owner · Editor/ })).toBeVisible();
+  await mine.click();
+  await expect(dialog.getByRole('option', { name: /Browser tests Folder/ })).toBeVisible();
+
+  await input.fill('Source');
+  await expect(dialog.getByRole('option', { name: /Source Note/ })).toHaveCount(0);
+  await all.click();
+  await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
 });
 
 test('navigates keyboard-only search while the desktop sidebar is collapsed', async ({ page }) => {
@@ -366,6 +501,15 @@ test('redirects legacy folder template settings before rendering', async ({ page
   await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}/settings`);
   await expect(page.getByText('Opening folder settings...')).toHaveCount(0);
   await expect(page).toHaveTitle(`${browserFixture.folder.title} settings - MinuNotes`);
+});
+
+test('redirects legacy API Access links to Integrations', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/settings/api-access');
+
+  await expect(page).toHaveURL('/integrations');
+  await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  await expect(page).toHaveTitle('Integrations - MinuNotes');
 });
 
 test('sets descriptive titles for authenticated and shared routes', async ({ page }) => {

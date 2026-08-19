@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
 import { attachments, notes } from '../db/schema';
 import type { auth } from '../lib/auth';
+import { collaborationRoleAllows, resolveNoteCollaborationAccess } from '../lib/collaboration-access';
 import { getAttachmentMarkdownUrl, getObjectStorage } from '../storage';
-import { activeAttachmentWhere, activeNoteWhere } from '../trash/policy';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -54,12 +54,16 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: c.req.param('noteId') });
+  if (!access) return c.json({ error: 'Note not found' }, 404);
+  if (!collaborationRoleAllows(access.role, 'edit')) return c.json({ error: 'Forbidden' }, 403);
   const [note] = await db
     .select()
     .from(notes)
-    .where(activeNoteWhere(user.id, eq(notes.id, c.req.param('noteId'))))
+    .where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, access.resourceOwnerUserId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
+  if (access.role !== 'owner' && note.type === 'template') return c.json({ error: 'Forbidden' }, 403);
 
   const body = (await c.req.json().catch(() => null)) as {
     files?: Array<{ filename?: string; mimeType?: string; size?: number }>;
@@ -82,7 +86,12 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
       return c.json({ error: validationError }, validationError === 'Image is too large' ? 413 : 400);
 
     const attachmentId = createAttachmentId();
-    const storageKey = storageKeyFor({ userId: user.id, noteId: note.id, attachmentId, filename });
+    const storageKey = storageKeyFor({
+      userId: access.resourceOwnerUserId,
+      noteId: note.id,
+      attachmentId,
+      filename,
+    });
     const signedUrl = await storage.createSignedUploadUrl({
       key: storageKey,
       contentType: mimeType,
@@ -93,7 +102,7 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
       .insert(attachments)
       .values({
         id: attachmentId,
-        userId: user.id,
+        userId: access.resourceOwnerUserId,
         noteId: note.id,
         folderId: note.folderId,
         provider: storage.provider,
@@ -108,7 +117,7 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
 
     const markdownUrl = getAttachmentMarkdownUrl(attachment.id);
     uploads.push({
-      attachment,
+      attachment: access.source === 'note_grant' ? { ...attachment, folderId: null } : attachment,
       signedUrl,
       method: 'PUT',
       headers: { 'content-type': mimeType },
@@ -127,9 +136,12 @@ attachmentRoutes.post('/:attachmentId/complete', async (c) => {
   const [attachment] = await db
     .select()
     .from(attachments)
-    .where(activeAttachmentWhere(user.id, eq(attachments.id, c.req.param('attachmentId'))))
+    .where(and(eq(attachments.id, c.req.param('attachmentId')), isNull(attachments.deletedAt)))
     .limit(1);
   if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: attachment.noteId });
+  if (!access || access.resourceOwnerUserId !== attachment.userId || !collaborationRoleAllows(access.role, 'edit'))
+    return c.json({ error: access ? 'Forbidden' : 'Attachment not found' }, access ? 403 : 404);
 
   const storage = getObjectStorage();
   if (storage.objectExists) {
@@ -140,25 +152,52 @@ attachmentRoutes.post('/:attachmentId/complete', async (c) => {
   const [updated] = await db
     .update(attachments)
     .set({ status: 'ready', updatedAt: new Date() })
-    .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, user.id)))
+    .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, access.resourceOwnerUserId)))
     .returning();
   return c.json({
-    attachment: updated,
+    attachment: access.source === 'note_grant' ? { ...updated, folderId: null } : updated,
     markdownUrl: getAttachmentMarkdownUrl(updated.id),
     markdown: `![${updated.filename}](${getAttachmentMarkdownUrl(updated.id)})`,
   });
+});
+
+attachmentRoutes.delete('/:attachmentId', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const [attachment] = await db
+    .select()
+    .from(attachments)
+    .where(and(eq(attachments.id, c.req.param('attachmentId')), isNull(attachments.deletedAt)))
+    .limit(1);
+  if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: attachment.noteId });
+  if (!access || access.resourceOwnerUserId !== attachment.userId)
+    return c.json({ error: 'Attachment not found' }, 404);
+  if (!collaborationRoleAllows(access.role, 'edit')) return c.json({ error: 'Forbidden' }, 403);
+
+  await getObjectStorage().deleteObject({ key: attachment.storageKey });
+  await db
+    .update(attachments)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, access.resourceOwnerUserId)));
+  return c.json({ ok: true });
 });
 
 attachmentRoutes.post('/notes/:noteId/images', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: c.req.param('noteId') });
+  if (!access) return c.json({ error: 'Note not found' }, 404);
+  if (!collaborationRoleAllows(access.role, 'edit')) return c.json({ error: 'Forbidden' }, 403);
   const [note] = await db
     .select()
     .from(notes)
-    .where(activeNoteWhere(user.id, eq(notes.id, c.req.param('noteId'))))
+    .where(and(eq(notes.id, c.req.param('noteId')), eq(notes.userId, access.resourceOwnerUserId)))
     .limit(1);
   if (!note) return c.json({ error: 'Note not found' }, 404);
+  if (access.role !== 'owner' && note.type === 'template') return c.json({ error: 'Forbidden' }, 403);
 
   const body = await c.req.parseBody().catch(() => null);
   const file = body?.image;
@@ -169,21 +208,26 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const attachmentId = createAttachmentId();
   const filename = safeFilename(file.name || 'image');
-  const storageKey = storageKeyFor({ userId: user.id, noteId: note.id, attachmentId, filename });
+  const storageKey = storageKeyFor({
+    userId: access.resourceOwnerUserId,
+    noteId: note.id,
+    attachmentId,
+    filename,
+  });
   const storage = getObjectStorage();
 
   await storage.putObject({
     key: storageKey,
     body: bytes,
     contentType: file.type,
-    metadata: { userId: user.id, noteId: note.id, attachmentId, filename },
+    metadata: { userId: access.resourceOwnerUserId, noteId: note.id, attachmentId, filename },
   });
 
   const [attachment] = await db
     .insert(attachments)
     .values({
       id: attachmentId,
-      userId: user.id,
+      userId: access.resourceOwnerUserId,
       noteId: note.id,
       folderId: note.folderId,
       provider: storage.provider,
@@ -198,7 +242,7 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
 
   return c.json(
     {
-      attachment,
+      attachment: access.source === 'note_grant' ? { ...attachment, folderId: null } : attachment,
       markdownUrl: getAttachmentMarkdownUrl(attachment.id),
       markdown: `![${filename}](${getAttachmentMarkdownUrl(attachment.id)})`,
     },
@@ -233,9 +277,12 @@ attachmentRoutes.get('/:attachmentId/content', async (c) => {
   const [attachment] = await db
     .select()
     .from(attachments)
-    .where(activeAttachmentWhere(user.id, eq(attachments.id, c.req.param('attachmentId'))))
+    .where(and(eq(attachments.id, c.req.param('attachmentId')), isNull(attachments.deletedAt)))
     .limit(1);
-  if (!attachment || attachment.deletedAt) return c.json({ error: 'Attachment not found' }, 404);
+  if (!attachment) return c.json({ error: 'Attachment not found' }, 404);
+  const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: attachment.noteId });
+  if (!access || access.resourceOwnerUserId !== attachment.userId || !collaborationRoleAllows(access.role, 'read'))
+    return c.json({ error: 'Attachment not found' }, 404);
   if (attachment.status !== 'ready') return c.json({ error: 'Attachment is not ready' }, 404);
 
   const object = await getObjectStorage().getObject({ key: attachment.storageKey });

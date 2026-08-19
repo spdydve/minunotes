@@ -23,8 +23,12 @@ export function NoteCommentsPanel({
   onDeleteMessage,
   onDeleteThread,
   onToggleReaction,
+  canManageAnyThread,
+  canModerate,
 }: {
   open: boolean;
+  canManageAnyThread: boolean;
+  canModerate: boolean;
   threads: CommentThread[];
   selectedThreadId: string | null;
   busy: boolean;
@@ -88,6 +92,8 @@ export function NoteCommentsPanel({
 
           {threads.map((thread) => {
             const selected = thread.id === selectedThreadId;
+            const canChangeStatus = canManageAnyThread || thread.authoredByCurrentActor;
+            const canDeleteThread = canModerate || thread.authoredByCurrentActor;
             return (
               <section
                 key={thread.id}
@@ -99,53 +105,59 @@ export function NoteCommentsPanel({
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <button type="button" className="min-w-0 text-left" onClick={() => onSelect(thread)}>
-                    <span className="block truncate font-semibold text-xs">{thread.createdBy.name}</span>
+                    <span className="block truncate font-semibold text-xs">{thread.createdBy.label}</span>
                     <span className="block text-[11px] text-[var(--notes-muted)]">
                       {thread.anchor.detached ? 'Detached' : thread.status === 'resolved' ? 'Resolved' : 'Open'} ·{' '}
                       {formatCommentTime(thread.updatedAt)}
                     </span>
                   </button>
-                  <div className="flex shrink-0 gap-0.5">
-                    <QuickTooltip label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}>
-                      <button
-                        type="button"
-                        className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
-                        onClick={() => void onStatusChange(thread).catch(() => undefined)}
-                        aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
-                      >
-                        {thread.status === 'resolved' ? (
-                          <RotateCcw className="h-3.5 w-3.5" />
-                        ) : (
-                          <Check className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                    </QuickTooltip>
-                    <Popover>
-                      <QuickTooltip label="More discussion actions">
-                        <PopoverTrigger asChild>
+                  {canChangeStatus || canDeleteThread ? (
+                    <div className="flex shrink-0 gap-0.5">
+                      {canChangeStatus ? (
+                        <QuickTooltip label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}>
                           <button
                             type="button"
                             className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
-                            aria-label="More discussion actions"
+                            onClick={() => void onStatusChange(thread).catch(() => undefined)}
+                            aria-label={thread.status === 'resolved' ? 'Reopen comment' : 'Resolve comment'}
                           >
-                            <MoreHorizontal className="h-3.5 w-3.5" />
+                            {thread.status === 'resolved' ? (
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
                           </button>
-                        </PopoverTrigger>
-                      </QuickTooltip>
-                      <PopoverContent align="end" className="w-44">
-                        <PopoverClose asChild>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[var(--notes-button-destructive-text)] text-sm hover:bg-[var(--notes-button-destructive-soft-hover)]"
-                            onClick={() => void onDeleteThread(thread.id).catch(() => undefined)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete discussion
-                          </button>
-                        </PopoverClose>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                        </QuickTooltip>
+                      ) : null}
+                      {canDeleteThread ? (
+                        <Popover>
+                          <QuickTooltip label="More discussion actions">
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="rounded p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-panel)] hover:text-[var(--notes-text)]"
+                                aria-label="More discussion actions"
+                              >
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                          </QuickTooltip>
+                          <PopoverContent align="end" className="w-44">
+                            <PopoverClose asChild>
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[var(--notes-button-destructive-text)] text-sm hover:bg-[var(--notes-button-destructive-soft-hover)]"
+                                onClick={() => void onDeleteThread(thread.id).catch(() => undefined)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete discussion
+                              </button>
+                            </PopoverClose>
+                          </PopoverContent>
+                        </Popover>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 {thread.anchor.detached ? (
@@ -164,6 +176,7 @@ export function NoteCommentsPanel({
                   onEditMessage={onEditMessage}
                   onDeleteMessage={onDeleteMessage}
                   onToggleReaction={onToggleReaction}
+                  canModerate={canModerate}
                 />
 
                 {selected && thread.status === 'open' ? (

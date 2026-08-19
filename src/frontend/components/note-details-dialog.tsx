@@ -34,11 +34,13 @@ export function NoteDetailsDialog({
   open,
   onOpenChange,
   onNoteUpdated,
+  ownerControls = true,
 }: {
   note: NoteListItem;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNoteUpdated?: (response: { note: Note; contentHash: string }) => void;
+  ownerControls?: boolean;
 }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState(note.title);
@@ -47,7 +49,11 @@ export function NoteDetailsDialog({
   const [tagNames, setTagNames] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState('');
   const [tagInputFocused, setTagInputFocused] = useState(false);
-  const { data: foldersData } = useQuery({ queryKey: ['folders'], queryFn: api.folders, enabled: open });
+  const { data: foldersData } = useQuery({
+    queryKey: ['folders'],
+    queryFn: api.folders,
+    enabled: open && ownerControls,
+  });
   const { data: allTagsData } = useQuery({ queryKey: ['tags'], queryFn: api.tags, enabled: open });
   const { data: tagsData, isLoading } = useQuery({
     queryKey: ['note-tags', note.id],
@@ -83,8 +89,14 @@ export function NoteDetailsDialog({
       let response: { note: Note; contentHash: string } | null = null;
       const nextTitle = title.trim() || 'Untitled note';
       const nextCreatedAt = fromDatetimeLocalValue(createdAt);
-      if (nextTitle !== note.title || isApiEditable !== note.isApiEditable || nextCreatedAt !== note.createdAt) {
-        response = await api.saveNote(note.id, { title: nextTitle, isApiEditable, createdAt: nextCreatedAt });
+      if (
+        nextTitle !== note.title ||
+        (ownerControls && (isApiEditable !== note.isApiEditable || nextCreatedAt !== note.createdAt))
+      ) {
+        response = await api.saveNote(note.id, {
+          title: nextTitle,
+          ...(ownerControls ? { isApiEditable, createdAt: nextCreatedAt } : {}),
+        });
       }
       const draft = normalizeTagName(tagDraft);
       if (draft && !tagNames.includes(draft)) {
@@ -143,7 +155,7 @@ export function NoteDetailsDialog({
         <div className="flex items-center justify-between gap-3 border-b border-[var(--notes-border)] px-5 py-4">
           <div>
             <h2 className="text-lg font-semibold">Note details</h2>
-            <p className="notes-muted text-sm">Built-in metadata and tags</p>
+            <p className="notes-muted text-sm">{ownerControls ? 'Built-in metadata and tags' : 'Name and tags'}</p>
           </div>
           <button
             type="button"
@@ -165,34 +177,38 @@ export function NoteDetailsDialog({
                 onChange={(event) => setTitle(event.target.value)}
               />
             </dd>
-            <dt className="notes-muted">Folder</dt>
-            <dd>{folderTitle}</dd>
-            <dt className="notes-muted">Type</dt>
-            <dd>{note.type === 'template' ? 'Template' : 'Note'}</dd>
-            <dt className="notes-muted self-center">Created</dt>
-            <dd>
-              <input
-                className="w-full rounded-md border border-[var(--notes-border)] bg-[var(--notes-bg)] px-2 py-1.5 outline-none focus:border-[var(--notes-blue)]"
-                type="datetime-local"
-                value={createdAt}
-                onChange={(event) => setCreatedAt(event.target.value)}
-              />
-            </dd>
-            <dt className="notes-muted">Updated</dt>
-            <dd>{formatDate(note.updatedAt)}</dd>
-            <dt className="notes-muted">Updated by</dt>
-            <dd>{updatedBy}</dd>
-            <dt className="notes-muted self-center">API editable</dt>
-            <dd>
-              <label className="inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={isApiEditable}
-                  onChange={(event) => setIsApiEditable(event.target.checked)}
-                />{' '}
-                <span>{isApiEditable ? 'Enabled' : 'Disabled'}</span>
-              </label>
-            </dd>
+            {ownerControls ? (
+              <>
+                <dt className="notes-muted">Folder</dt>
+                <dd>{folderTitle}</dd>
+                <dt className="notes-muted">Type</dt>
+                <dd>{note.type === 'template' ? 'Template' : 'Note'}</dd>
+                <dt className="notes-muted self-center">Created</dt>
+                <dd>
+                  <input
+                    className="w-full rounded-md border border-[var(--notes-border)] bg-[var(--notes-bg)] px-2 py-1.5 outline-none focus:border-[var(--notes-blue)]"
+                    type="datetime-local"
+                    value={createdAt}
+                    onChange={(event) => setCreatedAt(event.target.value)}
+                  />
+                </dd>
+                <dt className="notes-muted">Updated</dt>
+                <dd>{formatDate(note.updatedAt)}</dd>
+                <dt className="notes-muted">Updated by</dt>
+                <dd>{updatedBy}</dd>
+                <dt className="notes-muted self-center">API editable</dt>
+                <dd>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isApiEditable}
+                      onChange={(event) => setIsApiEditable(event.target.checked)}
+                    />{' '}
+                    <span>{isApiEditable ? 'Enabled' : 'Disabled'}</span>
+                  </label>
+                </dd>
+              </>
+            ) : null}
           </dl>
 
           <section className="space-y-2 border-t border-[var(--notes-border)] pt-5">

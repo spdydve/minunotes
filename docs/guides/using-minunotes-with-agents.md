@@ -56,6 +56,18 @@ API keys and OAuth connected apps share the same authorization model. Global cap
 
 Effective access also applies OAuth scope when present and always enforces folder safety policy. Private and trashed folders are unavailable. Agent-read-only folders continue to deny writes regardless of the credential's edit capability.
 
+### Shared folders and notes
+
+Agent access to authenticated collaboration is opt-in and separate from owned-folder scope:
+
+- `none` — default; no shared content.
+- `specific` — only user-selected active note/folder collaboration grants.
+- `all` — current and future grants after the user accepts an explicit warning.
+
+The connection cannot exceed the collaborator's Viewer, Commenter, or Editor role. Credential capability, OAuth scope, owner safety policy, and note API-editability remain additional ceilings. Downgrades and revocations take effect on the next request.
+
+Full note reads return privacy-safe role/source context. Discovery stays compact, and direct-note grants intentionally use `folderId: null`; clients must not infer or probe for the containing folder. Notes and canvases created in a shared folder belong to that folder owner. Shared-resource structure, resharing, public links, moves, and Trash remain owner-only. A `404` can mean inaccessible, revoked, or trashed and does not prove deletion.
+
 Hosted OAuth supports these scopes:
 
 - `notes.read`
@@ -149,7 +161,10 @@ For any edit task, the agent should:
 5. Make the smallest practical edit.
 6. Send `baseHash: contentHash` with the edit request.
 7. Read the note again.
-8. Report the note ID, changed section, and final markdown or summary.
+8. If a permission response indicates downgrade or revocation, stop and report it without retrying elsewhere.
+9. Report the note ID, changed section, and final markdown or summary.
+
+For shared notes, use risk-based collaboration rather than requiring approval for every mutation. An explicit narrow edit can proceed after a fresh read and should end with a concise changed-section summary. Feedback requests should use Review comments. Broad rewrites, substantial deletion, structural reorganization, and ambiguous changes should receive a proposed plan or diff and explicit approval first. On a `409`, re-read and rebase rather than overwriting; request approval if the rebased diff is materially different. Show a full diff when requested or when a broad change required approval.
 
 For organization tasks, agents can also read/update note tags through the harness API. Tags are lightweight labels, normalized to lowercase words with optional dashes, for example `plan` or `release-notes`.
 

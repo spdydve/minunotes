@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createRoute, Link } from '@tanstack/react-router';
+import { Avatar } from '../components/ui/avatar';
 import { ApiError, api } from '../lib/api';
 import { rootRoute } from './__root';
 
@@ -64,24 +65,29 @@ function NoteActivityView() {
         {(activity.data?.events ?? []).length > 0 ? (
           <ul className="space-y-3">
             {activity.data?.events.map((event) => (
-              <li key={event.id} className="rounded-md border border-slate-200 px-3 py-2 dark:border-slate-800">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                  <span className="font-medium">{event.summary}</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-                    {event.eventType}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {event.actorType}
-                    {event.actorId ? ` · ${event.actorId}` : ''}
-                  </span>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-                  <span>{new Date(event.createdAt).toLocaleString()}</span>
-                  {event.beforeHash || event.afterHash ? (
-                    <span>
-                      hash {event.beforeHash?.slice(0, 8) ?? '-'} → {event.afterHash?.slice(0, 8) ?? '-'}
+              <li
+                key={event.id}
+                className="flex gap-2 rounded-md border border-slate-200 px-3 py-2 dark:border-slate-800"
+              >
+                <Avatar identity={event.actor} size="sm" decorative />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                    <span className="font-medium">{event.summary}</span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                      {event.eventType}
                     </span>
-                  ) : null}
+                    <span className="text-xs text-slate-500">
+                      {event.actor.label} · {event.actor.type}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                    <span>{new Date(event.createdAt).toLocaleString()}</span>
+                    {event.beforeHash || event.afterHash ? (
+                      <span>
+                        hash {event.beforeHash?.slice(0, 8) ?? '-'} → {event.afterHash?.slice(0, 8) ?? '-'}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </li>
             ))}

@@ -55,6 +55,58 @@ describe('app navigation model', () => {
     expect(activity.parent?.label).toBe('Findings');
   });
 
+  it('derives shared note and folder context from current authorization', () => {
+    const directNote = buildAppNavigationModel({
+      pathname: '/notes/note_direct',
+      folders,
+      note: { id: 'note_direct', folderId: null, title: 'Direct note', type: 'note' },
+      noteAccess: { role: 'commenter', source: 'note_grant' },
+    });
+    expect(directNote.section).toBe('shared-with-me');
+    expect(directNote.activeFolderId).toBeNull();
+    expect(directNote.breadcrumbs.map((item) => item.label)).toEqual(['Shared with me', 'Direct note']);
+
+    const folderContext = {
+      folder: folders[1],
+      ancestors: [folders[0]],
+      access: { role: 'editor' as const, source: 'folder_grant' as const },
+    };
+    const inheritedNote = buildAppNavigationModel({
+      pathname: '/notes/note_inherited',
+      folders: [],
+      note: { id: 'note_inherited', folderId: 'folder_child', title: 'Inherited note', type: 'note' },
+      noteAccess: { role: 'editor', source: 'folder_grant' },
+      folderContext,
+    });
+    expect(inheritedNote.breadcrumbs.map((item) => item.label)).toEqual([
+      'Shared with me',
+      'Projects',
+      'Research',
+      'Inherited note',
+    ]);
+    expect(inheritedNote.parent?.label).toBe('Research');
+
+    const sharedFolder = buildAppNavigationModel({
+      pathname: '/folders/folder_child',
+      folders: [],
+      folderContext,
+    });
+    expect(sharedFolder.section).toBe('shared-with-me');
+    expect(sharedFolder.activeFolderId).toBeNull();
+    expect(sharedFolder.breadcrumbs.map((item) => item.label)).toEqual(['Shared with me', 'Projects', 'Research']);
+  });
+
+  it('keeps owned resources in Home context even when opened from Shared by me', () => {
+    const model = buildAppNavigationModel({
+      pathname: '/notes/note_owned',
+      folders,
+      note: { id: 'note_owned', folderId: 'folder_child', title: 'Owned note', type: 'note' },
+      noteAccess: { role: 'owner', source: 'owner' },
+    });
+    expect(model.section).toBe('folders');
+    expect(model.breadcrumbs.map((item) => item.label)).toEqual(['Home', 'Projects', 'Research', 'Owned note']);
+  });
+
   it('uses Templates as the structural parent for templates', () => {
     const note = { id: 'note_template', folderId: 'folder_root', title: 'Weekly plan', type: 'template' as const };
     const model = buildAppNavigationModel({ pathname: '/notes/note_template', folders, note });
@@ -76,7 +128,7 @@ describe('app navigation model', () => {
     expect(trash.mobileTitle).toBe('Trash');
     expect(trash.parent?.label).toBe('Home');
     expect(trash.breadcrumbs.map((item) => item.label)).toEqual(['Home', 'Trash']);
-    expect(labels('/settings/api-access')).toEqual(['Home', 'API Access']);
+    expect(labels('/integrations')).toEqual(['Home', 'Integrations']);
     expect(labels('/resources/wikilinks-backlinks')).toEqual(['Home', 'Resources', 'Wikilinks Backlinks']);
   });
 });

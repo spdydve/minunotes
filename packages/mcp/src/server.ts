@@ -132,7 +132,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'List folders',
       description:
-        'List cursor-paginated compact folder metadata available to the authorized MinuNotes connection. Continue with pageInfo.nextCursor when hasMore is true. Trashed folder subtrees are excluded.',
+        'List cursor-paginated owned and explicitly scoped shared folders. Inaccessible ancestry, owner/grant ids, and Trash are excluded. Continue with pageInfo.nextCursor when hasMore is true.',
       inputSchema: {
         limit: z.number().int().positive().max(100).optional(),
         cursor: z.string().min(1).optional(),
@@ -148,7 +148,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Create folder',
       description:
-        'Create a folder or subfolder if the authorized MinuNotes connection has folder creation permission. The new folder is automatically scoped to this connection.',
+        'Create an owned folder or subfolder if the connection has folder creation permission. Shared-folder structure is owner-only; do not retry a denial against another folder.',
       inputSchema: { title: z.string(), parentFolderId: z.string().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -161,7 +161,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Search notes',
       description:
-        'Search active notes visible to the authorized MinuNotes connection. Returns cursor-paginated compact metadata without full note content. Continue with pageInfo.nextCursor when hasMore is true; use notes_get_note, notes_read_lines, or notes_read_section to expand a result. Trashed content is excluded.',
+        'Search active owned and explicitly scoped shared notes. Results include privacy-safe role/source context without content; direct-note grants have null folder context. Expand selected results only. Continue with pageInfo.nextCursor when hasMore is true.',
       inputSchema: {
         query: z.string(),
         tag: z.string().optional(),
@@ -178,7 +178,8 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_get_note',
     {
       title: 'Get note',
-      description: 'Read an active note by id. Trashed content returns not found.',
+      description:
+        'Read an active owned or explicitly scoped shared note when its content is needed. Do not read solely to inspect permissions. Direct-note grants have null folder context. Not found may mean inaccessible, revoked, or trashed; do not infer existence.',
       inputSchema: { noteId: z.string() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -312,7 +313,8 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_create_note',
     {
       title: 'Create note',
-      description: 'Create a note in a folder. Permissions are enforced by the authorized MinuNotes connection.',
+      description:
+        'Create a note in an owned or explicitly scoped shared folder. Content created in a shared folder belongs to that folder owner. For net-new content, resolve the folder from folder metadata and create directly without reading unrelated notes.',
       inputSchema: { folderId: z.string(), title: z.string().optional(), content: z.string().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -434,7 +436,8 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_edit_note',
     {
       title: 'Edit note',
-      description: 'Patch a note with structured edits. Use baseHash from notes_get_note when available.',
+      description:
+        'Patch an authorized note with structured edits. Read the note because its content and current baseHash are required, then apply the smallest relevant edit. Report permission failures without probing.',
       inputSchema: {
         noteId: z.string(),
         baseHash: z.string().optional(),
@@ -459,7 +462,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Move notes',
       description:
-        'Move one or more notes to a target folder. Requires edit access to every source folder and create access to the target folder. The move is all-or-nothing and limited to 100 notes.',
+        'Move up to 100 owned notes atomically. Shared-resource structure is owner-only, so shared notes cannot be moved even when their content is editable.',
       inputSchema: { noteIds: z.array(z.string()).min(1).max(100), targetFolderId: z.string() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -472,7 +475,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Search note lines',
       description:
-        'Search cursor-paginated matching lines across notes visible to the authorized MinuNotes connection. Continue with pageInfo.nextCursor when hasMore is true.',
+        'Search cursor-paginated matching lines across owned and explicitly scoped shared notes. Results hide direct-note folder ancestry. Continue with pageInfo.nextCursor when hasMore is true.',
       inputSchema: {
         query: z.string(),
         folderId: z.string().optional(),
@@ -492,7 +495,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_read_lines',
     {
       title: 'Read note lines',
-      description: 'Read numbered lines from a note.',
+      description: 'Read numbered lines from a selected note when that content is needed.',
       inputSchema: { noteId: z.string(), from: z.number().optional(), to: z.number().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -504,7 +507,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_search_note_lines',
     {
       title: 'Search lines in note',
-      description: 'Search matching lines within a single note.',
+      description: 'Search matching lines within one selected note when its content is relevant to the task.',
       inputSchema: {
         noteId: z.string(),
         query: z.string(),
