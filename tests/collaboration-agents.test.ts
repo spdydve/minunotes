@@ -214,7 +214,7 @@ async function setup() {
   });
   app.route('/harness', harnessRoutes);
 
-  return { app, db, libsql, schema, apiKey, now };
+  return { app, db, libsql, schema, apiKey, now, collaborator, harnessRoutes };
 }
 
 afterEach(async () => {
@@ -223,6 +223,101 @@ afterEach(async () => {
 });
 
 describe('collaborator agent access', () => {
+  it('applies the same shared-role ceilings to OAuth-backed Harness and hosted MCP operations', async () => {
+    const { db, libsql, schema, now, collaborator, harnessRoutes } = await setup();
+    const oauthAuthorization = {
+      id: 'oauth_connection',
+      userId: collaborator.id,
+      integrationAuthorizationId: 'authorization',
+      clientId: 'oauth_client',
+      scope: 'notes.read notes.edit',
+      accessMode: 'all' as const,
+      canRead: true,
+      canCreate: false,
+      canEdit: true,
+      canComment: false,
+      canCreateFolders: false,
+      sharedAccessMode: 'none' as 'none' | 'specific' | 'all',
+      createdAt: now,
+      updatedAt: now,
+      lastUsedAt: null,
+      revokedAt: null,
+    };
+    const oauthApp = new Hono();
+    oauthApp.use('*', async (c, next) => {
+      c.set('user', collaborator);
+      c.set('session', null);
+      c.set('apiKey', null);
+      c.set('oauthAuthorization', oauthAuthorization);
+      await next();
+    });
+    oauthApp.route('/harness', harnessRoutes);
+
+    expect((await oauthApp.request('/harness/notes/shared_note')).status).toBe(404);
+    oauthAuthorization.sharedAccessMode = 'specific';
+    expect((await oauthApp.request('/harness/notes/shared_note')).status).toBe(404);
+    await db.insert(schema.authorizationCollaborationScopes).values({
+      id: 'oauth_scope',
+      authorizationId: 'authorization',
+      userId: collaborator.id,
+      collaborationGrantId: 'shared_grant',
+      createdAt: now,
+    });
+    const selected = await oauthApp.request('/harness/notes/shared_note');
+    expect(selected.status).toBe(200);
+    const selectedBody = (await selected.json()) as { contentHash: string };
+    expect(
+      (
+        await oauthApp.request('/harness/notes/shared_note/edit', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            baseHash: selectedBody.contentHash,
+            edits: [{ type: 'append', text: ' blocked by viewer role' }],
+          }),
+        })
+      ).status
+    ).toBe(404);
+
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'editor', updatedAt: new Date() })
+      .where(eq(schema.collaborationGrants.id, 'shared_grant'));
+    const editable = (await (await oauthApp.request('/harness/notes/shared_note')).json()) as { contentHash: string };
+    expect(
+      (
+        await oauthApp.request('/harness/notes/shared_note/edit', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            baseHash: editable.contentHash,
+            edits: [{ type: 'append', text: ' OAuth edit' }],
+          }),
+        })
+      ).status
+    ).toBe(200);
+
+    oauthAuthorization.canEdit = false;
+    expect(
+      (
+        await oauthApp.request('/harness/notes/shared_note/edit', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ edits: [{ type: 'append', text: ' capability blocked' }] }),
+        })
+      ).status
+    ).toBe(404);
+    oauthAuthorization.canEdit = true;
+    await db
+      .delete(schema.authorizationCollaborationScopes)
+      .where(eq(schema.authorizationCollaborationScopes.id, 'oauth_scope'));
+    oauthAuthorization.sharedAccessMode = 'all';
+    expect((await oauthApp.request('/harness/notes/shared_note')).status).toBe(200);
+    await db.delete(schema.collaborationGrants).where(eq(schema.collaborationGrants.id, 'shared_grant'));
+    expect((await oauthApp.request('/harness/notes/shared_note')).status).toBe(404);
+    libsql.close();
+  });
+
   it('enforces none, specific, all, revocation, capability, and owner safety for Harness reads', async () => {
     const { app, db, libsql, schema, apiKey, now } = await setup();
 
