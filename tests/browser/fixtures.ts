@@ -11,11 +11,20 @@ type BrowserCommentAnchor = {
   detached: boolean;
 };
 
+type BrowserIdentity = {
+  key: string;
+  type: 'user' | 'agent' | 'former' | 'system';
+  displayName: string | null;
+  maskedEmail: string | null;
+  label: string;
+  isCurrentUser: boolean;
+};
+
 type BrowserCommentMessage = {
   id: string;
   threadId: string;
   body: string;
-  author: { type: 'user' | 'agent'; id: string; name: string };
+  author: BrowserIdentity;
   createdAt: string;
   updatedAt: string;
   reactions: Array<{ emoji: string; count: number; reactedByCurrentActor: boolean }>;
@@ -27,8 +36,8 @@ type BrowserCommentThread = {
   noteId: string;
   status: 'open' | 'resolved';
   anchor: BrowserCommentAnchor;
-  createdBy: { type: 'user' | 'agent'; id: string; name: string };
-  resolvedBy: { type: 'user' | 'agent'; id: string; name: string } | null;
+  createdBy: BrowserIdentity;
+  resolvedBy: BrowserIdentity | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -278,6 +287,14 @@ export async function mockBrowserApi(
     [browserFixture.target.id, { ...browserFixture.target }],
     [browserFixture.child.id, { ...browserFixture.child }],
   ]);
+  const browserUserIdentity: BrowserIdentity = {
+    key: 'user_browsercurrent',
+    type: 'user',
+    displayName: 'Browser Test User',
+    maskedEmail: 'b•••@e•••.com',
+    label: 'You',
+    isCurrentUser: true,
+  };
   const sharedOwnerIdentity = {
     key: 'user_collaborationowner',
     type: 'user' as const,
@@ -925,7 +942,7 @@ export async function mockBrowserApi(
           id: `comment_message_${++commentId}`,
           threadId,
           body: (body as { body?: string }).body ?? '',
-          author: { type: 'user', id: 'owner', name: 'Browser Test User' },
+          author: browserUserIdentity,
           createdAt: now,
           updatedAt: now,
           reactions: [],
@@ -941,7 +958,7 @@ export async function mockBrowserApi(
       }
       if (action === 'resolve' || action === 'reopen') {
         thread.status = action === 'resolve' ? 'resolved' : 'open';
-        thread.resolvedBy = action === 'resolve' ? { type: 'user', id: 'owner', name: 'Browser Test User' } : null;
+        thread.resolvedBy = action === 'resolve' ? browserUserIdentity : null;
         thread.resolvedAt = action === 'resolve' ? now : null;
         return json({ thread });
       }
@@ -979,7 +996,7 @@ export async function mockBrowserApi(
           noteId,
           status: 'open',
           anchor: { ...body.anchor, detached: body.anchor.detached ?? false },
-          createdBy: { type: 'user', id: 'owner', name: 'Browser Test User' },
+          createdBy: browserUserIdentity,
           resolvedBy: null,
           resolvedAt: null,
           createdAt: now,
@@ -990,7 +1007,7 @@ export async function mockBrowserApi(
               id: `comment_message_${++commentId}`,
               threadId,
               body: body.body,
-              author: { type: 'user', id: 'owner', name: 'Browser Test User' },
+              author: browserUserIdentity,
               createdAt: now,
               updatedAt: now,
               reactions: [],

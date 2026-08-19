@@ -440,8 +440,8 @@ describe('collaborator agent access', () => {
     expect(comment.status).toBe(201);
     await expect(comment.json()).resolves.toMatchObject({
       thread: {
-        createdBy: { type: 'agent', id: 'COLLAB01', name: 'Collaborator key' },
-        messages: [{ author: { id: 'COLLAB01' } }],
+        createdBy: { type: 'agent', label: 'Collaborator key', isCurrentUser: true },
+        messages: [{ author: { label: 'Collaborator key', isCurrentUser: true } }],
       },
     });
     await db.update(schema.folders).set({ isAgentReadOnly: true }).where(eq(schema.folders.id, 'shared_folder'));

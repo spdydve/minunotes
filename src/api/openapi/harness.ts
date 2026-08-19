@@ -878,12 +878,15 @@ export const harnessOpenApiSpec = {
       DeleteResponse: { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean', const: true } } },
       CommentActor: {
         type: 'object',
-        required: ['type', 'id', 'name'],
-        description: 'Safe actor identity. Internal user, API-key, and OAuth database ids are not exposed.',
+        required: ['key', 'type', 'displayName', 'maskedEmail', 'label', 'isCurrentUser'],
+        description: 'Safe actor identity. Internal user, API-key, OAuth, and raw email values are not exposed.',
         properties: {
-          type: { type: 'string', enum: ['user', 'agent'] },
-          id: { type: 'string', description: 'owner, a public API-key UID, or integration.' },
-          name: { type: 'string' },
+          key: { type: 'string', description: 'Opaque stable presentation key.' },
+          type: { type: 'string', enum: ['user', 'agent', 'former', 'system'] },
+          displayName: { type: ['string', 'null'] },
+          maskedEmail: { type: ['string', 'null'] },
+          label: { type: 'string' },
+          isCurrentUser: { type: 'boolean' },
         },
       },
       CommentAnchor: {
@@ -1378,9 +1381,7 @@ export const harnessOpenApiSpec = {
         properties: {
           id: { type: 'string' },
           noteId: { type: 'string' },
-          userId: { type: 'string' },
-          actorType: { type: 'string' },
-          actorId: { type: ['string', 'null'] },
+          actor: { $ref: '#/components/schemas/CommentActor' },
           eventType: { type: 'string' },
           summary: { type: 'string' },
           beforeHash: { type: ['string', 'null'] },

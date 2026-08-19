@@ -52,8 +52,14 @@ describe('harness OpenAPI spec', () => {
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/comments/{threadId}/messages/{messageId}');
     expect(spec.components.schemas).toHaveProperty('CommentThread');
     expect(spec.components.schemas).toHaveProperty('CommentMessage');
+    expect(spec.components.schemas.CommentActor?.properties).toHaveProperty('key');
+    expect(spec.components.schemas.CommentActor?.properties).toHaveProperty('label');
+    expect(spec.components.schemas.CommentActor?.properties).not.toHaveProperty('id');
+    expect(spec.components.schemas.CommentActor?.properties).not.toHaveProperty('name');
     expect(spec.components.schemas.CommentActor?.properties).not.toHaveProperty('userId');
     expect(spec.components.schemas.CommentActor?.properties).not.toHaveProperty('actorId');
+    expect(spec.components.schemas.NoteEvent?.properties).not.toHaveProperty('userId');
+    expect(spec.components.schemas.NoteEvent?.properties).not.toHaveProperty('actorId');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/sections/{sectionId}');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link-note');
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link');

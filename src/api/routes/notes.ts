@@ -20,6 +20,7 @@ import {
   resolveNoteCollaborationAccess,
   serializeCollaborationAccess,
 } from '../lib/collaboration-access';
+import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
 import { serializeCollaborationUserIdentity } from '../lib/collaboration-identity';
 import { createId } from '../lib/id';
 import { pageRows, parsePageRequest } from '../lib/pagination';
@@ -698,7 +699,23 @@ noteRoutes.get('/:noteId/events', async (c) => {
     limit: Number.isFinite(limit) && limit > 0 ? limit : undefined,
   });
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json(result.value);
+  const serializeActor = await createCollaborationActorSerializer({
+    references: result.value.events.map((event) => ({
+      type: event.actorType as 'user' | 'agent' | 'system',
+      id: event.actorId ?? (event.actorType === 'user' ? event.userId : null),
+    })),
+    currentActor: { type: 'user', id: user.id },
+  });
+  return c.json({
+    noteId: result.value.noteId,
+    events: result.value.events.map(({ userId: _ownerUserId, actorId, actorType, ...event }) => ({
+      ...event,
+      actor: serializeActor({
+        type: actorType as 'user' | 'agent' | 'system',
+        id: actorId ?? (actorType === 'user' ? _ownerUserId : null),
+      }),
+    })),
+  });
 });
 
 noteRoutes.get('/:noteId/outline', async (c) => {

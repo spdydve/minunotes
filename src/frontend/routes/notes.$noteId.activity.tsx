@@ -71,8 +71,7 @@ function NoteActivityView() {
                     {event.eventType}
                   </span>
                   <span className="text-xs text-slate-500">
-                    {event.actorType}
-                    {event.actorId ? ` · ${event.actorId}` : ''}
+                    {event.actor.label} · {event.actor.type}
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">

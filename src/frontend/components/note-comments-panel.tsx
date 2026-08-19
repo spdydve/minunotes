@@ -105,7 +105,7 @@ export function NoteCommentsPanel({
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <button type="button" className="min-w-0 text-left" onClick={() => onSelect(thread)}>
-                    <span className="block truncate font-semibold text-xs">{thread.createdBy.name}</span>
+                    <span className="block truncate font-semibold text-xs">{thread.createdBy.label}</span>
                     <span className="block text-[11px] text-[var(--notes-muted)]">
                       {thread.anchor.detached ? 'Detached' : thread.status === 'resolved' ? 'Resolved' : 'Open'} ·{' '}
                       {formatCommentTime(thread.updatedAt)}

@@ -10,7 +10,7 @@ const tempDirs: string[] = [];
 type ThreadResponse = {
   thread: {
     id: string;
-    createdBy: { type: 'user' | 'agent'; id: string; name: string };
+    createdBy: { type: 'user' | 'agent'; key: string; label: string; displayName: string | null };
     messages: Array<{ id: string }>;
   };
 };
@@ -253,8 +253,8 @@ describe('note comments', () => {
       noteId: note.id,
       status: 'open',
       anchor: { from: 6, to: 10, quote: 'beta', documentHash: initialHash, detached: false },
-      createdBy: { type: 'user', id: 'owner', name: 'Note Owner' },
-      messages: [{ body: 'Please clarify this.', author: { id: 'owner' } }],
+      createdBy: { type: 'user', label: 'You', displayName: 'Note Owner' },
+      messages: [{ body: 'Please clarify this.', author: { label: 'You' } }],
     });
     expect(JSON.stringify(createdBody)).not.toContain('user_owner');
     const threadId = createdBody.thread.id as string;
@@ -315,7 +315,7 @@ describe('note comments', () => {
     );
     expect(resolved.status).toBe(200);
     await expect(resolved.json()).resolves.toMatchObject({
-      thread: { status: 'resolved', resolvedBy: { id: 'owner' } },
+      thread: { status: 'resolved', resolvedBy: { label: 'You' } },
     });
 
     const reopened = await ownerApp.request(
@@ -459,7 +459,7 @@ describe('note comments', () => {
     const readable = await collaboratorApp.request(`/internal/notes/${note.id}/comments`);
     expect(readable.status).toBe(200);
     await expect(readable.json()).resolves.toMatchObject({
-      threads: [{ createdBy: { id: 'owner', name: owner.name } }],
+      threads: [{ createdBy: { label: owner.name, displayName: owner.name } }],
     });
 
     const collaboratorCreated = await collaboratorApp.request(
@@ -471,9 +471,13 @@ describe('note comments', () => {
     );
     expect(collaboratorCreated.status).toBe(201);
     const collaboratorThread = (await collaboratorCreated.json()) as ThreadResponse;
-    expect(collaboratorThread.thread.createdBy).toMatchObject({ type: 'user', name: otherUser.name });
-    expect(collaboratorThread.thread.createdBy.id).toMatch(/^user_[a-f0-9]{16}$/);
-    expect(collaboratorThread.thread.createdBy.id).not.toContain(otherUser.id);
+    expect(collaboratorThread.thread.createdBy).toMatchObject({
+      type: 'user',
+      label: 'You',
+      displayName: otherUser.name,
+    });
+    expect(collaboratorThread.thread.createdBy.key).toMatch(/^user_[a-f0-9]{16}$/);
+    expect(collaboratorThread.thread.createdBy.key).not.toContain(otherUser.id);
 
     const ownerResolve = await collaboratorApp.request(
       `/internal/notes/${note.id}/comments/${ownerThreadId}/resolve`,
@@ -565,8 +569,12 @@ describe('note comments', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.error);
-    expect(result.value.thread.createdBy).toMatchObject({ type: 'agent', name: 'Review App' });
-    expect(result.value.thread.createdBy.id).toMatch(/^agent_[a-f0-9]{16}$/);
+    expect(result.value.thread.createdBy).toMatchObject({
+      type: 'agent',
+      label: 'Review App',
+      displayName: 'Review App',
+    });
+    expect(result.value.thread.createdBy.key).toMatch(/^agent_[a-f0-9]{16}$/);
     expect(JSON.stringify(result.value)).not.toContain('oauth_connection_comments');
   });
 
@@ -603,7 +611,12 @@ describe('note comments', () => {
     );
     expect(agentCreated.status).toBe(201);
     const agentBody = (await agentCreated.json()) as ThreadResponse;
-    expect(agentBody.thread.createdBy).toEqual({ type: 'agent', id: apiKey.uid, name: apiKey.name });
+    expect(agentBody.thread.createdBy).toMatchObject({
+      type: 'agent',
+      label: apiKey.name,
+      displayName: apiKey.name,
+      isCurrentUser: true,
+    });
     expect(JSON.stringify(agentBody)).not.toContain(apiKey.id);
 
     const agentResolved = await harnessApp.request(

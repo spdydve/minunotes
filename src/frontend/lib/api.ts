@@ -146,7 +146,7 @@ export type CollaborationAccess = {
 export type NoteResponse = { note: Note; contentHash: string; access?: CollaborationAccess };
 export type MoveNotesResponse = { notes: NoteResponse[] };
 export type NoteStatus = { noteId: string; contentHash: string; updatedAt: string };
-export type CommentActor = { type: 'user' | 'agent'; id: string; name: string };
+export type CommentActor = CollaborationIdentity;
 export type CommentAnchor = {
   anchorType: 'range' | 'line';
   from: number;
@@ -202,7 +202,7 @@ export type NoteShareLink = {
 export type CollaborationRole = 'viewer' | 'commenter' | 'editor';
 export type CollaborationIdentity = {
   key: string;
-  type: 'user' | 'agent' | 'former';
+  type: 'user' | 'agent' | 'former' | 'system';
   displayName: string | null;
   maskedEmail: string | null;
   label: string;
@@ -284,9 +284,7 @@ export type SharedFolderChild = { id: string; parentFolderId: string | null; tit
 export type NoteEvent = {
   id: string;
   noteId: string;
-  userId: string;
-  actorType: 'user' | 'agent' | 'system';
-  actorId: string | null;
+  actor: CollaborationIdentity;
   eventType:
     | 'create'
     | 'update'

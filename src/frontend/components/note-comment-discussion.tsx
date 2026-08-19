@@ -87,12 +87,12 @@ export function NoteCommentDiscussion({
               <span className="absolute top-7 bottom-0 left-3 w-px bg-[var(--notes-border)]" aria-hidden="true" />
             ) : null}
             <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--notes-panel-muted)] font-medium text-[10px] text-[var(--notes-muted)]">
-              {initials(message.author.name)}
+              {initials(message.author.label)}
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex min-h-6 items-start justify-between gap-2">
                 <p className="min-w-0 text-xs">
-                  <span className="font-semibold text-[var(--notes-text)]">{message.author.name}</span>{' '}
+                  <span className="font-semibold text-[var(--notes-text)]">{message.author.label}</span>{' '}
                   <span className="text-[var(--notes-muted)]">
                     {formatCommentTime(message.updatedAt)}
                     {isEdited(message) ? ' (edited)' : ''}

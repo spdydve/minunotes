@@ -406,7 +406,11 @@ function NoteView() {
           body: thread.messages[0]?.body ?? 'Comment thread',
           status: thread.status,
           anchor,
-          author: thread.createdBy,
+          author: {
+            id: thread.createdBy.key,
+            name: thread.createdBy.label,
+            type: thread.createdBy.type === 'agent' ? 'agent' : 'user',
+          },
           createdAt: thread.createdAt,
           updatedAt: thread.updatedAt,
         };

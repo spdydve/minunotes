@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { getPublicSuffix } from 'tldts';
 
-export type CollaborationIdentityType = 'user' | 'agent' | 'former';
+export type CollaborationIdentityType = 'user' | 'agent' | 'former' | 'system';
 
 export type CollaborationIdentity = {
   key: string;
@@ -32,7 +32,7 @@ function publicOpaqueKey(prefix: string, internalId: string) {
   return `${prefix}_${createHash('sha256').update(internalId).digest('hex').slice(0, 16)}`;
 }
 
-export function publicIdentityKey(type: Exclude<CollaborationIdentityType, 'former'>, internalId: string) {
+export function publicIdentityKey(type: 'user' | 'agent', internalId: string) {
   return publicOpaqueKey(type, internalId);
 }
 

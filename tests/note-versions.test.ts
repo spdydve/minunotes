@@ -109,12 +109,20 @@ describe('note versions', () => {
     const events = await app.request(`/api/notes/${created.note.id}/events`);
     expect(events.status).toBe(200);
     const eventsBody = (await events.json()) as {
-      events: Array<{ eventType: string; beforeHash: string | null; afterHash: string | null }>;
+      events: Array<{
+        eventType: string;
+        beforeHash: string | null;
+        afterHash: string | null;
+        actor: { key: string; label: string; type: string };
+      }>;
     };
     expect(eventsBody.events.map((event) => event.eventType).sort()).toEqual(['create', 'update']);
     const updateEvent = eventsBody.events.find((event) => event.eventType === 'update');
     expect(updateEvent?.beforeHash).toBe(initialBody.contentHash);
     expect(updateEvent?.afterHash).toBeTruthy();
+    expect(updateEvent?.actor).toMatchObject({ type: 'user', label: 'You' });
+    expect(JSON.stringify(eventsBody)).not.toContain('actorId');
+    expect(JSON.stringify(eventsBody)).not.toContain('userId');
   });
 
   it('rejects a stale user save without overwriting the current note', async () => {
