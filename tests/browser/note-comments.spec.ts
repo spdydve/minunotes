@@ -150,7 +150,8 @@ test('creates a whole-line comment from a simple themed gutter icon', async ({ p
   await expect(page.locator('.me-comment-anchor')).toContainText('Start here.');
 
   await page.getByLabel('Open account and settings menu').click();
-  await page.getByLabel('Theme').selectOption('catppuccin-latte');
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Theme' }).getByLabel('Theme selection').selectOption('catppuccin-latte');
   await expect(page.locator('html')).toHaveClass(/theme-catppuccin-latte/);
   const existingCommentButton = page.locator('.me-comment-gutter-badge').first();
   await expect

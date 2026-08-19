@@ -24,7 +24,7 @@ import { AccountProfileDialog } from './account-profile-dialog';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { FolderActionsPopover } from './folder-actions-popover';
 import { openSearchDialog, searchShortcutLabel } from './search-dialog';
-import { ThemeSelect } from './theme-select';
+import { ThemeDialog } from './theme-dialog';
 import { ActionMenuButton, ActionMenuIconButton } from './ui/action-menu';
 import { Avatar } from './ui/avatar';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -140,6 +140,7 @@ export function FolderSidebar({
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
   const [expandedFolderIds, setExpandedFolderIds] = useState(getStoredExpandedFolderIds);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
 
   useEffect(() => {
     const ancestorIds = getAncestorIds(currentFolderId, folders);
@@ -397,12 +398,15 @@ export function FolderSidebar({
               <PopoverClose asChild>
                 <ActionMenuButton onClick={() => setProfileOpen(true)}>Profile</ActionMenuButton>
               </PopoverClose>
-              <ThemeSelect />
+              <PopoverClose asChild>
+                <ActionMenuButton onClick={() => setThemeOpen(true)}>Theme</ActionMenuButton>
+              </PopoverClose>
               <ActionMenuButton onClick={() => authClient.signOut()}>Logout</ActionMenuButton>
             </PopoverContent>
           </Popover>
         </div>
         <AccountProfileDialog email={userEmail} open={profileOpen} onOpenChange={setProfileOpen} />
+        <ThemeDialog open={themeOpen} onOpenChange={setThemeOpen} />
       </div>
     </aside>
   );

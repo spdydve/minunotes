@@ -79,11 +79,15 @@ test('uses vertical primary navigation and groups secondary destinations under M
 
   await page.getByRole('button', { name: 'Open account and settings menu' }).click();
   await expect(page.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Theme')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Theme', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Logout', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Resources', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'API Access', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Trash', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  const themeDialog = page.getByRole('dialog', { name: 'Theme' });
+  await expect(themeDialog.getByLabel('Theme selection')).toBeVisible();
 });
 
 test('edits an optional collaboration display name from the sidebar profile', async ({ page }) => {
