@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db, libsql } from '../db/client';
 import {
@@ -14,6 +14,7 @@ import {
   oauthTokens,
 } from '../db/schema';
 import type { auth } from '../lib/auth';
+import { publicCollaborationAccessKey } from '../lib/collaboration-identity';
 import { getApiRuntimeConfig } from '../lib/env';
 import { filterSelectablePermissionRows } from '../lib/folder-access';
 import { createId } from '../lib/id';
@@ -350,7 +351,7 @@ oauthRoutes.get('/authorizations', async (c) => {
         .map((permission) => ({ ...permission, authorizationId: row.connection.id })),
       collaborationGrantIds: collaborationScopes
         .filter((scope) => scope.authorizationId === row.authorization.id)
-        .map((scope) => scope.collaborationGrantId),
+        .map((scope) => publicCollaborationAccessKey(scope.collaborationGrantId)),
     })),
   });
 });
@@ -490,22 +491,26 @@ oauthRoutes.post('/authorize/approve', async (c) => {
       !body.collaborationGrantIds.every((collaborationGrantId) => typeof collaborationGrantId === 'string'))
   )
     return c.json({ error: 'Collaboration grant ids must be an array of strings' }, 400);
-  const collaborationGrantIds = [...new Set(body.collaborationGrantIds ?? [])];
-  if (collaborationGrantIds.length > 100)
+  const collaborationGrantKeys = [...new Set(body.collaborationGrantIds ?? [])];
+  if (collaborationGrantKeys.length > 100)
     return c.json({ error: 'No more than 100 collaboration grants may be selected' }, 400);
-  if (sharedAccessMode !== 'specific' && collaborationGrantIds.length > 0)
+  if (sharedAccessMode !== 'specific' && collaborationGrantKeys.length > 0)
     return c.json({ error: 'Collaboration grant selections require specific shared access mode' }, 400);
-  if (sharedAccessMode === 'specific' && collaborationGrantIds.length === 0)
+  if (sharedAccessMode === 'specific' && collaborationGrantKeys.length === 0)
     return c.json({ error: 'At least one collaboration grant is required for specific shared access' }, 400);
-  if (collaborationGrantIds.length > 0) {
+  let collaborationGrantIds: string[] = [];
+  if (collaborationGrantKeys.length > 0) {
     const validGrants = await db
       .select({ id: collaborationGrants.id })
       .from(collaborationGrants)
-      .where(
-        and(eq(collaborationGrants.granteeUserId, user.id), inArray(collaborationGrants.id, collaborationGrantIds))
-      );
-    if (validGrants.length !== collaborationGrantIds.length)
+      .where(eq(collaborationGrants.granteeUserId, user.id));
+    const internalIdByPublicKey = new Map(
+      validGrants.map((grant) => [publicCollaborationAccessKey(grant.id), grant.id])
+    );
+    const resolvedIds = collaborationGrantKeys.map((key) => internalIdByPublicKey.get(key));
+    if (!resolvedIds.every((id): id is string => Boolean(id)))
       return c.json({ error: 'One or more collaboration grants are invalid' }, 400);
+    collaborationGrantIds = resolvedIds;
   }
   const folderIds = [...new Set(body.folderIds ?? [])];
   if (accessMode !== 'all' && folderIds.length === 0) return c.json({ error: 'At least one folder is required' }, 400);

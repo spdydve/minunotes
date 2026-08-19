@@ -410,7 +410,7 @@ export async function mockBrowserApi(
         ? [
             {
               type: 'note' as const,
-              grantId: 'grant_shared_note',
+              grantId: 'access_shared_note',
               role: options.noteAccessRole === 'owner' ? 'viewer' : (options.noteAccessRole ?? 'viewer'),
               owner: sharedOwnerIdentity,
               note: {
@@ -422,7 +422,7 @@ export async function mockBrowserApi(
             },
             {
               type: 'folder' as const,
-              grantId: 'grant_shared_folder',
+              grantId: 'access_shared_folder',
               role: 'editor' as const,
               owner: sharedOwnerIdentity,
               folder: {

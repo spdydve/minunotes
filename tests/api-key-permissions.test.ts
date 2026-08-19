@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { publicCollaborationAccessKey } from '../src/api/lib/collaboration-identity';
 
 const tempDirs: string[] = [];
 
@@ -138,12 +139,22 @@ describe('API key Review comments permission', () => {
     const updated = await app.request(`/api-keys/${defaultBody.apiKey.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sharedAccessMode: 'specific', collaborationGrantIds: ['shared_grant'] }),
+      body: JSON.stringify({
+        sharedAccessMode: 'specific',
+        collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+      }),
     });
     expect(updated.status).toBe(200);
-    await expect(updated.json()).resolves.toMatchObject({
-      apiKey: { sharedAccessMode: 'specific', collaborationGrantIds: ['shared_grant'] },
+    const updatedBody = await updated.json();
+    expect(updatedBody).toMatchObject({
+      apiKey: {
+        sharedAccessMode: 'specific',
+        collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+      },
     });
+    expect(JSON.stringify(updatedBody)).not.toContain('shared_grant');
+    const listedSpecific = await app.request('/api-keys');
+    expect(JSON.stringify(await listedSpecific.json())).not.toContain('shared_grant');
     expect(await db.select().from(schema.authorizationCollaborationScopes)).toHaveLength(1);
 
     const all = await app.request(`/api-keys/${defaultBody.apiKey.id}`, {

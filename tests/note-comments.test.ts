@@ -4,6 +4,7 @@ import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { expectPrivacySafeCollaborationDto } from './helpers/collaboration-privacy';
 
 const tempDirs: string[] = [];
 
@@ -458,8 +459,12 @@ describe('note comments', () => {
 
     const readable = await collaboratorApp.request(`/internal/notes/${note.id}/comments`);
     expect(readable.status).toBe(200);
-    await expect(readable.json()).resolves.toMatchObject({
+    const readableBody = await readable.json();
+    expect(readableBody).toMatchObject({
       threads: [{ createdBy: { label: owner.name, displayName: owner.name } }],
+    });
+    expectPrivacySafeCollaborationDto(readableBody, {
+      forbiddenValues: [owner.id, otherUser.id, owner.email, otherUser.email, 'comment_grant'],
     });
 
     const collaboratorCreated = await collaboratorApp.request(

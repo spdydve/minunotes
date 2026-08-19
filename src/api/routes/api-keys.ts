@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../db/schema';
 import { generateApiKey, hashApiKey } from '../lib/api-keys';
 import type { auth } from '../lib/auth';
+import { publicCollaborationAccessKey } from '../lib/collaboration-identity';
 import { filterSelectablePermissionRows } from '../lib/folder-access';
 import { createId } from '../lib/id';
 
@@ -46,7 +47,7 @@ function parseSharedAccessMode(value: unknown): SharedAccessMode | undefined {
   return value === 'none' || value === 'specific' || value === 'all' ? value : undefined;
 }
 
-async function validateCollaborationGrantIds(userId: string, values: unknown) {
+async function resolveCollaborationGrantKeys(userId: string, values: unknown) {
   if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) return null;
   const ids = [...new Set(values)];
   if (ids.length > 100) return null;
@@ -54,8 +55,10 @@ async function validateCollaborationGrantIds(userId: string, values: unknown) {
   const rows = await db
     .select({ id: collaborationGrants.id })
     .from(collaborationGrants)
-    .where(and(eq(collaborationGrants.granteeUserId, userId), inArray(collaborationGrants.id, ids)));
-  return rows.length === ids.length ? ids : null;
+    .where(eq(collaborationGrants.granteeUserId, userId));
+  const internalIdByPublicKey = new Map(rows.map((row) => [publicCollaborationAccessKey(row.id), row.id]));
+  const resolvedIds = ids.map((id) => internalIdByPublicKey.get(id));
+  return resolvedIds.every((id): id is string => Boolean(id)) ? resolvedIds : null;
 }
 
 function permissionValue(
@@ -137,7 +140,7 @@ apiKeyRoutes.get('/', async (c) => {
       permissions: permissions.filter((rule) => rule.authorizationId === authorization.id).map(apiPermission),
       collaborationGrantIds: collaborationScopes
         .filter((scope) => scope.authorizationId === authorization.id)
-        .map((scope) => scope.collaborationGrantId),
+        .map((scope) => publicCollaborationAccessKey(scope.collaborationGrantId)),
     })),
   });
 });
@@ -163,7 +166,7 @@ apiKeyRoutes.post('/', async (c) => {
 
   const accessMode = parseAccessMode(body?.accessMode) ?? 'all';
   const sharedAccessMode = parseSharedAccessMode(body?.sharedAccessMode) ?? 'none';
-  const collaborationGrantIds = await validateCollaborationGrantIds(user.id, body?.collaborationGrantIds ?? []);
+  const collaborationGrantIds = await resolveCollaborationGrantKeys(user.id, body?.collaborationGrantIds ?? []);
   if (!collaborationGrantIds) return c.json({ error: 'One or more collaboration grants are invalid' }, 400);
   if (sharedAccessMode !== 'specific' && collaborationGrantIds.length > 0)
     return c.json({ error: 'Collaboration grant selections require specific shared access mode' }, 400);
@@ -243,7 +246,7 @@ apiKeyRoutes.post('/', async (c) => {
         ...credential,
         ...authorization,
         permissions: rules.map(apiPermission),
-        collaborationGrantIds,
+        collaborationGrantIds: collaborationGrantIds.map(publicCollaborationAccessKey),
       },
     },
     201
@@ -292,7 +295,7 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
   const effectiveSharedAccessMode = sharedAccessMode ?? existing.authorization.sharedAccessMode;
   const collaborationGrantIds =
     body.collaborationGrantIds !== undefined
-      ? await validateCollaborationGrantIds(user.id, body.collaborationGrantIds)
+      ? await resolveCollaborationGrantKeys(user.id, body.collaborationGrantIds)
       : undefined;
   if (body.collaborationGrantIds !== undefined && !collaborationGrantIds)
     return c.json({ error: 'One or more collaboration grants are invalid' }, 400);
@@ -424,7 +427,9 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
       ...updated.credential,
       ...updated.authorization,
       permissions: permissions.map(apiPermission),
-      collaborationGrantIds: collaborationScopes.map((scope) => scope.collaborationGrantId),
+      collaborationGrantIds: collaborationScopes.map((scope) =>
+        publicCollaborationAccessKey(scope.collaborationGrantId)
+      ),
     },
   });
 });

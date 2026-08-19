@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createClient } from '@libsql/client';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { publicCollaborationAccessKey } from '../src/api/lib/collaboration-identity';
 
 const tempDirs: string[] = [];
 
@@ -448,7 +449,7 @@ describe('oauth foundations', () => {
         accessMode: 'all',
         canRead: true,
         sharedAccessMode: 'specific',
-        collaborationGrantIds: ['shared_grant'],
+        collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
       }),
     });
     expect(approve.status).toBe(200);
@@ -460,9 +461,16 @@ describe('oauth foundations', () => {
     ]);
 
     const list = await app.request('/api/oauth/authorizations');
-    await expect(list.json()).resolves.toMatchObject({
-      authorizations: [{ sharedAccessMode: 'specific', collaborationGrantIds: ['shared_grant'] }],
+    const listBody = await list.json();
+    expect(listBody).toMatchObject({
+      authorizations: [
+        {
+          sharedAccessMode: 'specific',
+          collaborationGrantIds: [publicCollaborationAccessKey('shared_grant')],
+        },
+      ],
     });
+    expect(JSON.stringify(listBody)).not.toContain('shared_grant');
   });
 
   it('stores the approved scope and intersects bearer capabilities with token scope', async () => {

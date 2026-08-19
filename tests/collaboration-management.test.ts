@@ -4,6 +4,7 @@ import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { expectPrivacySafeCollaborationDto } from './helpers/collaboration-privacy';
 
 const tempDirs: string[] = [];
 
@@ -215,13 +216,18 @@ describe('collaborator management', () => {
     expect(collaboratorReadBody.note).not.toHaveProperty('userId');
     expect(collaboratorReadBody.access).not.toHaveProperty('resourceOwnerUserId');
     expect(collaboratorReadBody.access).not.toHaveProperty('actorUserId');
+    expectPrivacySafeCollaborationDto(collaboratorReadBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email],
+    });
 
     const search = await app.request('/notes/search?q=Note', {
       headers: { 'x-test-user': collaborator.id },
     });
     expect(search.status).toBe(200);
-    expect(await search.json()).toMatchObject({
-      notes: [{ id: 'note', folderId: null, folderTitle: null }],
+    const searchBody = await search.json();
+    expect(searchBody).toMatchObject({ notes: [{ id: 'note', folderId: null, folderTitle: null }] });
+    expectPrivacySafeCollaborationDto(searchBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email],
     });
     const hiddenSearch = await app.request('/notes/search?q=private%20sibling', {
       headers: { 'x-test-user': collaborator.id },
@@ -229,10 +235,18 @@ describe('collaborator management', () => {
     expect(await hiddenSearch.json()).toMatchObject({ notes: [] });
     const recent = await app.request('/notes/recent', { headers: { 'x-test-user': collaborator.id } });
     expect(recent.status).toBe(200);
-    expect(await recent.json()).toMatchObject({ notes: [{ id: 'note', folderId: null }] });
+    const recentBody = await recent.json();
+    expect(recentBody).toMatchObject({ notes: [{ id: 'note', folderId: null }] });
+    expectPrivacySafeCollaborationDto(recentBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email],
+    });
     const orphans = await app.request('/notes/orphans', { headers: { 'x-test-user': collaborator.id } });
     expect(orphans.status).toBe(200);
-    expect(await orphans.json()).toMatchObject({ notes: [{ id: 'note', folderId: null }] });
+    const orphansBody = await orphans.json();
+    expect(orphansBody).toMatchObject({ notes: [{ id: 'note', folderId: null }] });
+    expectPrivacySafeCollaborationDto(orphansBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email],
+    });
 
     const tags = await app.request('/notes/note/tags', { headers: { 'x-test-user': collaborator.id } });
     expect(tags.status).toBe(200);
@@ -307,6 +321,7 @@ describe('collaborator management', () => {
       collaborations: [
         {
           type: 'note',
+          grantId: createdBody.grant.key,
           role: 'commenter',
           owner: {
             key: expect.stringMatching(/^user_[a-f0-9]{16}$/),
@@ -318,6 +333,12 @@ describe('collaborator management', () => {
         },
       ],
     });
+    expect(sharedWithMeBody.collaborations[0].grantId).toMatch(/^access_[a-f0-9]{16}$/);
+    const [storedGrant] = await db.select().from(schema.collaborationGrants);
+    expectPrivacySafeCollaborationDto(sharedWithMeBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email, storedGrant.id],
+    });
+    expect(JSON.stringify(sharedWithMeBody)).not.toContain('grant_');
     expect(sharedWithMeBody.collaborations[0].owner).not.toHaveProperty('id');
 
     const listed = await app.request('/notes/note/collaborators');
@@ -334,6 +355,9 @@ describe('collaborator management', () => {
       invitations: [],
     });
     expect(listedBody).not.toHaveProperty('owner');
+    expectPrivacySafeCollaborationDto(listedBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email, storedGrant.id],
+    });
     expect(JSON.stringify(listedBody)).not.toContain(collaborator.email);
     expect(JSON.stringify(listedBody)).not.toContain(collaborator.id);
 
@@ -686,6 +710,10 @@ describe('collaborator management', () => {
       collaborations: Array<{ type: 'note' | 'folder'; role: string }>;
     };
     expect(body.collaborations).toHaveLength(3);
+    const storedGrantIds = (
+      await db.select({ id: schema.collaborationGrants.id }).from(schema.collaborationGrants)
+    ).map((row) => row.id);
+    expectPrivacySafeCollaborationDto(body, { forbiddenValues: storedGrantIds });
     expect(body.collaborations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'folder', role: 'editor' }),
@@ -703,6 +731,8 @@ describe('collaborator management', () => {
     };
     expect(firstPageBody.collaborations).toHaveLength(1);
     expect(firstPageBody.pageInfo).toMatchObject({ hasMore: true, nextCursor: expect.any(String) });
+    const decodedCursor = Buffer.from(firstPageBody.pageInfo.nextCursor ?? '', 'base64url').toString('utf8');
+    for (const storedGrantId of storedGrantIds) expect(decodedCursor).not.toContain(storedGrantId);
     const secondPage = await app.request(
       `/collaborations/shared-with-me?type=note&limit=1&cursor=${encodeURIComponent(firstPageBody.pageInfo.nextCursor ?? '')}`,
       { headers: { 'x-test-user': collaborator.id } }
@@ -1060,7 +1090,7 @@ describe('collaborator management', () => {
   });
 
   it('previews and atomically accepts an invitation with the matching verified account', async () => {
-    const { app, db, libsql, schema, collaborator } = await setup();
+    const { app, db, libsql, schema, owner, collaborator } = await setup();
     const created = await app.request('/notes/note/collaborators', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1080,6 +1110,9 @@ describe('collaborator management', () => {
       status: 'pending',
     });
     expect(previewBody.owner).not.toHaveProperty('id');
+    expectPrivacySafeCollaborationDto(previewBody, {
+      forbiddenValues: [owner.id, collaborator.id, owner.email, collaborator.email, 'invitee@example.com', token],
+    });
 
     const mismatch = await app.request(`/collaboration-invitations/${token}/accept`, {
       method: 'POST',

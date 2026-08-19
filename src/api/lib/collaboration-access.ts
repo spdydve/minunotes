@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, or, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { authorizationCollaborationScopes, collaborationGrants, folders, notes, user } from '../db/schema';
-import { serializeCollaborationUserIdentity } from './collaboration-identity';
+import { publicCollaborationAccessKey, serializeCollaborationUserIdentity } from './collaboration-identity';
 import { isDescendantOrSelf, loadFolderAccessTree } from './folder-access';
 
 export type CollaborationRole = 'viewer' | 'commenter' | 'editor';
@@ -479,7 +479,7 @@ export async function listDirectCollaborations(actorUserId: string) {
         if (!access) return null;
         return {
           type: 'note' as const,
-          grantId: row.grant.id,
+          grantId: publicCollaborationAccessKey(row.grant.id),
           role: access.role,
           owner: ownerIdentity,
           note: {
@@ -503,7 +503,7 @@ export async function listDirectCollaborations(actorUserId: string) {
         if (!access) return null;
         return {
           type: 'folder' as const,
-          grantId: row.grant.id,
+          grantId: publicCollaborationAccessKey(row.grant.id),
           role: access.role,
           owner: ownerIdentity,
           folder: { id: targetFolder.id, title: targetFolder.title, updatedAt: targetFolder.updatedAt },

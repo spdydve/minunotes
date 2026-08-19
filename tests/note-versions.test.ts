@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { expectPrivacySafeCollaborationDto } from './helpers/collaboration-privacy';
 
 const tempDirs: string[] = [];
 
@@ -121,6 +122,7 @@ describe('note versions', () => {
     expect(updateEvent?.beforeHash).toBe(initialBody.contentHash);
     expect(updateEvent?.afterHash).toBeTruthy();
     expect(updateEvent?.actor).toMatchObject({ type: 'user', label: 'You' });
+    expectPrivacySafeCollaborationDto(eventsBody, { forbiddenValues: ['user_a', 'a@example.com'] });
     expect(JSON.stringify(eventsBody)).not.toContain('actorId');
     expect(JSON.stringify(eventsBody)).not.toContain('userId');
   });
