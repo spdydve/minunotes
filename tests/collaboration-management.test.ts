@@ -128,10 +128,12 @@ describe('collaborator management', () => {
       body: JSON.stringify({ email: 'COLLABORATOR@example.com ', role: 'commenter' }),
     });
     expect(created.status).toBe(201);
-    expect(await created.json()).toMatchObject({
+    const createdBody = (await created.json()) as { grant: { key: string; role: string } };
+    expect(createdBody).toMatchObject({
       kind: 'grant',
-      grant: { granteeUserId: collaborator.id, role: 'commenter' },
+      grant: { key: expect.stringMatching(/^access_[a-f0-9]{16}$/), role: 'commenter' },
     });
+    expect(JSON.stringify(createdBody)).not.toContain(collaborator.id);
 
     await db.insert(schema.notes).values({
       id: 'note_secret123',
@@ -320,11 +322,20 @@ describe('collaborator management', () => {
 
     const listed = await app.request('/notes/note/collaborators');
     expect(listed.status).toBe(200);
-    expect(await listed.json()).toMatchObject({
-      owner: { id: 'owner', email: 'owner@example.com' },
-      grants: [{ role: 'commenter', user: { id: collaborator.id, email: collaborator.email } }],
+    const listedBody = await listed.json();
+    expect(listedBody).toMatchObject({
+      grants: [
+        {
+          key: createdBody.grant.key,
+          role: 'commenter',
+          user: { label: collaborator.name, maskedEmail: 'c•••@e•••.com' },
+        },
+      ],
       invitations: [],
     });
+    expect(listedBody).not.toHaveProperty('owner');
+    expect(JSON.stringify(listedBody)).not.toContain(collaborator.email);
+    expect(JSON.stringify(listedBody)).not.toContain(collaborator.id);
 
     const commenterEdit = await app.request('/notes/note', {
       method: 'PATCH',
@@ -349,7 +360,7 @@ describe('collaborator management', () => {
     });
     expect(commenterDelete.status).toBe(403);
 
-    const updated = await app.request(`/notes/note/collaborators/${collaborator.id}`, {
+    const updated = await app.request(`/notes/note/collaborators/${createdBody.grant.key}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ role: 'editor' }),
@@ -508,7 +519,7 @@ describe('collaborator management', () => {
       collaborationGrantId: grant.id,
     });
 
-    const removed = await app.request(`/notes/note/collaborators/${collaborator.id}`, { method: 'DELETE' });
+    const removed = await app.request(`/notes/note/collaborators/${createdBody.grant.key}`, { method: 'DELETE' });
     expect(removed.status).toBe(200);
     expect(await db.select().from(schema.collaborationGrants)).toHaveLength(0);
     expect(await db.select().from(schema.authorizationCollaborationScopes)).toHaveLength(0);
@@ -523,6 +534,7 @@ describe('collaborator management', () => {
       body: JSON.stringify({ email: collaborator.email, role: 'viewer' }),
     });
     expect(grant.status).toBe(201);
+    const grantBody = (await grant.json()) as { grant: { key: string } };
 
     const listed = await app.request('/folders/folder/notes', {
       headers: { 'x-test-user': collaborator.id },
@@ -557,7 +569,7 @@ describe('collaborator management', () => {
     });
     expect(viewerCreate.status).toBe(403);
 
-    const upgraded = await app.request(`/folders/folder/collaborators/${collaborator.id}`, {
+    const upgraded = await app.request(`/folders/folder/collaborators/${grantBody.grant.key}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ role: 'editor' }),
@@ -772,9 +784,13 @@ describe('collaborator management', () => {
     expect((await app.request('/notes/search?q=Scope&scope=invalid')).status).toBe(400);
     expect((await app.request('/notes/recent?scope=invalid')).status).toBe(400);
 
+    const directAccessList = await app.request('/notes/note_scope_direct/collaborators', {
+      headers: { 'x-test-user': otherOwner.id },
+    });
+    const directAccessBody = (await directAccessList.json()) as { grants: Array<{ key: string }> };
     expect(
       (
-        await app.request('/notes/note_scope_direct/collaborators/owner', {
+        await app.request(`/notes/note_scope_direct/collaborators/${directAccessBody.grants[0]?.key}`, {
           method: 'DELETE',
           headers: { 'x-test-user': otherOwner.id },
         })
@@ -972,7 +988,7 @@ describe('collaborator management', () => {
       .where(eq(schema.collaborationInvitations.id, before.id));
     const expiredList = await app.request('/folders/folder/collaborators');
     await expect(expiredList.json()).resolves.toMatchObject({
-      invitations: [{ id: before.id, email: 'new@example.com' }],
+      invitations: [{ id: before.id, email: 'n•••@e•••.com' }],
     });
 
     const resent = await app.request(`/collaboration-invitations/${before.id}/resend`, { method: 'POST' });
@@ -1023,7 +1039,7 @@ describe('collaborator management', () => {
       resource: { type: 'note', id: 'note', title: 'Note' },
       owner: { name: 'Owner' },
       role: 'viewer',
-      invitedEmail: 'i***@example.com',
+      invitedEmail: 'i•••@e•••.com',
       status: 'pending',
     });
     expect(previewBody.owner).not.toHaveProperty('id');

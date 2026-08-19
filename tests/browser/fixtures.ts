@@ -493,20 +493,26 @@ export async function mockBrowserApi(
     if (/^\/(notes|folders)\/[^/]+\/collaborators$/.test(path) && method === 'GET')
       return json({
         resource: { id: path.split('/')[2], title: 'Shared resource' },
-        owner: { id: 'user_browser', name: 'Browser Test User', email: 'browser@example.com' },
         grants: [
           {
-            id: 'grant_browser_active',
+            key: 'access_browseractive',
             role: 'viewer',
             createdAt: now,
             updatedAt: now,
-            user: { id: 'user_active', name: 'Active Collaborator', email: 'active@example.com' },
+            user: {
+              key: 'user_browseractive',
+              type: 'user',
+              displayName: 'Active Collaborator',
+              maskedEmail: 'a•••@e•••.com',
+              label: 'Active Collaborator',
+              isCurrentUser: false,
+            },
           },
         ],
         invitations: [
           {
             id: 'invitation_browser_pending',
-            email: 'pending@example.com',
+            email: 'p•••@e•••.com',
             role: 'commenter',
             expiresAt: '2099-01-01T00:00:00.000Z',
             createdAt: now,
@@ -514,7 +520,7 @@ export async function mockBrowserApi(
           },
           {
             id: 'invitation_browser_expired',
-            email: 'expired@example.com',
+            email: 'e•••@e•••.com',
             role: 'editor',
             expiresAt: '2000-01-01T00:00:00.000Z',
             createdAt: now,

@@ -28,8 +28,16 @@ function maskPart(value: string) {
   return first ? `${first}•••` : null;
 }
 
+function publicOpaqueKey(prefix: string, internalId: string) {
+  return `${prefix}_${createHash('sha256').update(internalId).digest('hex').slice(0, 16)}`;
+}
+
 export function publicIdentityKey(type: Exclude<CollaborationIdentityType, 'former'>, internalId: string) {
-  return `${type}_${createHash('sha256').update(internalId).digest('hex').slice(0, 16)}`;
+  return publicOpaqueKey(type, internalId);
+}
+
+export function publicCollaborationAccessKey(internalGrantId: string) {
+  return publicOpaqueKey('access', internalGrantId);
 }
 
 export function normalizeCollaborationDisplayName(value: string | null | undefined) {

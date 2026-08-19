@@ -2,6 +2,7 @@ import { type Context, Hono } from 'hono';
 import type { auth } from '../lib/auth';
 import { listDirectCollaborations, listDirectCollaborationsPage } from '../lib/collaboration-access';
 import { sendCollaborationGrantedEmail, sendCollaborationInvitationEmail } from '../lib/collaboration-email';
+import { publicCollaborationAccessKey } from '../lib/collaboration-identity';
 import {
   acceptCollaborationInvitation,
   addResourceCollaborator,
@@ -69,8 +70,7 @@ async function addCollaborator(c: CollaborationContext, target: CollaborationTar
         kind: 'grant',
         emailDelivery,
         grant: {
-          id: result.value.grant.id,
-          granteeUserId: result.value.grant.granteeUserId,
+          key: publicCollaborationAccessKey(result.value.grant.id),
           role: result.value.grant.role,
           createdAt: result.value.grant.createdAt,
           updatedAt: result.value.grant.updatedAt,
@@ -109,27 +109,34 @@ async function updateCollaborator(c: CollaborationContext, target: Collaboration
   const body = (await c.req.json().catch(() => null)) as { role?: unknown } | null;
   if (!body) return c.json({ error: 'Invalid JSON' }, 400);
   if (!isCollaborationRole(body.role)) return c.json({ error: 'Role must be viewer, commenter, or editor' }, 400);
-  const granteeUserId = c.req.param('userId');
-  if (!granteeUserId) return c.json({ error: 'Collaborator is required' }, 400);
+  const accessKey = c.req.param('accessKey');
+  if (!accessKey) return c.json({ error: 'Collaborator is required' }, 400);
   const result = await updateResourceCollaborator({
     ownerUserId: user.id,
     target,
-    granteeUserId,
+    accessKey,
     role: body.role,
   });
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json({ grant: result.value.grant });
+  return c.json({
+    grant: {
+      key: publicCollaborationAccessKey(result.value.grant.id),
+      role: result.value.grant.role,
+      createdAt: result.value.grant.createdAt,
+      updatedAt: result.value.grant.updatedAt,
+    },
+  });
 }
 
 async function removeCollaborator(c: CollaborationContext, target: CollaborationTarget) {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
-  const granteeUserId = c.req.param('userId');
-  if (!granteeUserId) return c.json({ error: 'Collaborator is required' }, 400);
+  const accessKey = c.req.param('accessKey');
+  if (!accessKey) return c.json({ error: 'Collaborator is required' }, 400);
   const result = await removeResourceCollaborator({
     ownerUserId: user.id,
     target,
-    granteeUserId,
+    accessKey,
   });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json(result.value);
@@ -239,10 +246,10 @@ collaborationRoutes.get('/collaborations/shared-by-me', async (c) => {
 
 collaborationRoutes.get('/notes/:noteId/collaborators', (c) => listCollaborators(c, { noteId: c.req.param('noteId') }));
 collaborationRoutes.post('/notes/:noteId/collaborators', (c) => addCollaborator(c, { noteId: c.req.param('noteId') }));
-collaborationRoutes.patch('/notes/:noteId/collaborators/:userId', (c) =>
+collaborationRoutes.patch('/notes/:noteId/collaborators/:accessKey', (c) =>
   updateCollaborator(c, { noteId: c.req.param('noteId') })
 );
-collaborationRoutes.delete('/notes/:noteId/collaborators/:userId', (c) =>
+collaborationRoutes.delete('/notes/:noteId/collaborators/:accessKey', (c) =>
   removeCollaborator(c, { noteId: c.req.param('noteId') })
 );
 
@@ -252,9 +259,9 @@ collaborationRoutes.get('/folders/:folderId/collaborators', (c) =>
 collaborationRoutes.post('/folders/:folderId/collaborators', (c) =>
   addCollaborator(c, { folderId: c.req.param('folderId') })
 );
-collaborationRoutes.patch('/folders/:folderId/collaborators/:userId', (c) =>
+collaborationRoutes.patch('/folders/:folderId/collaborators/:accessKey', (c) =>
   updateCollaborator(c, { folderId: c.req.param('folderId') })
 );
-collaborationRoutes.delete('/folders/:folderId/collaborators/:userId', (c) =>
+collaborationRoutes.delete('/folders/:folderId/collaborators/:accessKey', (c) =>
   removeCollaborator(c, { folderId: c.req.param('folderId') })
 );

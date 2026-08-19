@@ -250,13 +250,12 @@ export type CollaborationInvitationPreview = {
 };
 export type CollaborationManagementResponse = {
   resource: { id: string; title: string };
-  owner: { id: string; name: string; email: string } | null;
   grants: Array<{
-    id: string;
+    key: string;
     role: CollaborationRole;
     createdAt: string;
     updatedAt: string;
-    user: { id: string; name: string; email: string };
+    user: CollaborationIdentity;
   }>;
   invitations: Array<{
     id: string;
@@ -568,7 +567,7 @@ export const api = {
       | {
           kind: 'grant';
           emailDelivery: 'sent' | 'disabled' | 'failed';
-          grant: { id: string; granteeUserId: string; role: CollaborationRole };
+          grant: { key: string; role: CollaborationRole };
         }
       | {
           kind: 'invitation';
@@ -588,15 +587,15 @@ export const api = {
   updateResourceCollaborator: (
     resourceType: CollaborationResourceType,
     resourceId: string,
-    userId: string,
+    accessKey: string,
     role: CollaborationRole
   ) =>
-    request<{ grant: { id: string; role: CollaborationRole } }>(
-      `/${resourceType}s/${resourceId}/collaborators/${userId}`,
+    request<{ grant: { key: string; role: CollaborationRole } }>(
+      `/${resourceType}s/${resourceId}/collaborators/${accessKey}`,
       { method: 'PATCH', body: JSON.stringify({ role }) }
     ),
-  removeResourceCollaborator: (resourceType: CollaborationResourceType, resourceId: string, userId: string) =>
-    request<{ ok: true }>(`/${resourceType}s/${resourceId}/collaborators/${userId}`, { method: 'DELETE' }),
+  removeResourceCollaborator: (resourceType: CollaborationResourceType, resourceId: string, accessKey: string) =>
+    request<{ ok: true }>(`/${resourceType}s/${resourceId}/collaborators/${accessKey}`, { method: 'DELETE' }),
   collaborationInvitationPreview: (token: string) =>
     request<CollaborationInvitationPreview>(`/collaboration-invitations/${encodeURIComponent(token)}/preview`),
   acceptCollaborationInvitation: (token: string) =>

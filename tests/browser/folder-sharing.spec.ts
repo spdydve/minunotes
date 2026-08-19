@@ -25,7 +25,7 @@ test('enables and copies a read-only folder share link', async ({ context, page 
     })
   );
   expect(Math.max(...statusPositions) - Math.min(...statusPositions)).toBeLessThan(2);
-  await expect(shareDialog.getByRole('button', { name: 'Resend invitation for expired@example.com' })).toBeVisible();
+  await expect(shareDialog.getByRole('button', { name: 'Resend invitation for e•••@e•••.com' })).toBeVisible();
 
   const publicLinkSection = shareDialog.getByRole('heading', { name: 'Public link' }).locator('..');
   await expect(publicLinkSection.getByRole('button', { name: 'Copy public link' })).toHaveCount(0);

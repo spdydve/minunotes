@@ -45,12 +45,12 @@ export function CollaboratorAccessList({
     },
   });
   const update = useMutation({
-    mutationFn: ({ userId, nextRole }: { userId: string; nextRole: CollaborationRole }) =>
-      api.updateResourceCollaborator(resourceType, resourceId, userId, nextRole),
+    mutationFn: ({ accessKey, nextRole }: { accessKey: string; nextRole: CollaborationRole }) =>
+      api.updateResourceCollaborator(resourceType, resourceId, accessKey, nextRole),
     onSuccess: () => void refresh(),
   });
   const remove = useMutation({
-    mutationFn: (userId: string) => api.removeResourceCollaborator(resourceType, resourceId, userId),
+    mutationFn: (accessKey: string) => api.removeResourceCollaborator(resourceType, resourceId, accessKey),
     onSuccess: () => void refresh(),
   });
   const resendInvitation = useMutation({
@@ -146,9 +146,9 @@ export function CollaboratorAccessList({
         <div className="space-y-2">
           {data.grants.map((grant) => (
             <AccessRow
-              key={grant.id}
-              title={grant.user.name || grant.user.email}
-              subtitle={grant.user.email}
+              key={grant.key}
+              title={grant.user.label}
+              subtitle={grant.user.displayName ? (grant.user.maskedEmail ?? 'Email hidden') : 'Active collaborator'}
               trailing={
                 <AccessControls>
                   <StatusBadge status="Active" />
@@ -157,9 +157,9 @@ export function CollaboratorAccessList({
                     value={grant.role}
                     disabled={update.isPending || remove.isPending}
                     onChange={(event) =>
-                      update.mutate({ userId: grant.user.id, nextRole: event.target.value as CollaborationRole })
+                      update.mutate({ accessKey: grant.key, nextRole: event.target.value as CollaborationRole })
                     }
-                    aria-label={`Role for ${grant.user.email}`}
+                    aria-label={`Role for ${grant.user.label}`}
                   >
                     {Object.entries(ROLE_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>
@@ -171,8 +171,8 @@ export function CollaboratorAccessList({
                     <button
                       type="button"
                       className="rounded-md p-1.5 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-red-600"
-                      onClick={() => remove.mutate(grant.user.id)}
-                      aria-label={`Remove ${grant.user.email}`}
+                      onClick={() => remove.mutate(grant.key)}
+                      aria-label={`Remove ${grant.user.label}`}
                     >
                       <X className="h-4 w-4" />
                     </button>

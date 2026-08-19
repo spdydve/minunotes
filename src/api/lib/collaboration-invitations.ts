@@ -4,6 +4,11 @@ import { db } from '../db/client';
 import { collaborationGrants, collaborationInvitations, folders, notes, user } from '../db/schema';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
 import type { CollaborationRole } from './collaboration-access';
+import {
+  maskCollaborationEmail,
+  publicCollaborationAccessKey,
+  serializeCollaborationUserIdentity,
+} from './collaboration-identity';
 import { isValidEmailAddress } from './email';
 import { getApiRuntimeConfig } from './env';
 import { createId } from './id';
@@ -75,12 +80,7 @@ export async function listResourceCollaborators(input: { ownerUserId: string; ta
   if (!resource)
     return { ok: false, status: 404, error: `${'noteId' in input.target ? 'Note' : 'Folder'} not found` } as const;
 
-  const [owner] = await db
-    .select({ id: user.id, name: user.name, email: user.email })
-    .from(user)
-    .where(eq(user.id, input.ownerUserId))
-    .limit(1);
-  const grants = await db
+  const grantRows = await db
     .select({
       id: collaborationGrants.id,
       role: collaborationGrants.role,
@@ -112,7 +112,24 @@ export async function listResourceCollaborators(input: { ownerUserId: string; ta
     )
     .orderBy(collaborationInvitations.invitedEmailKey);
 
-  return { ok: true, value: { resource, owner: owner ?? null, grants, invitations } } as const;
+  const grants = grantRows.map((grant) => ({
+    key: publicCollaborationAccessKey(grant.id),
+    role: grant.role,
+    createdAt: grant.createdAt,
+    updatedAt: grant.updatedAt,
+    user: serializeCollaborationUserIdentity({ ...grant.user, currentUserId: input.ownerUserId }),
+  }));
+  return {
+    ok: true,
+    value: {
+      resource,
+      grants,
+      invitations: invitations.map((invitation) => ({
+        ...invitation,
+        email: maskCollaborationEmail(invitation.email),
+      })),
+    },
+  } as const;
 }
 
 export async function regenerateCollaborationInvitation(input: { ownerUserId: string; invitationId: string }) {
@@ -299,33 +316,42 @@ export async function addResourceCollaborator(input: {
   };
 }
 
+async function resolveCollaborationGrantId(input: {
+  ownerUserId: string;
+  target: CollaborationTarget;
+  accessKey: string;
+}) {
+  const grants = await db
+    .select({ id: collaborationGrants.id })
+    .from(collaborationGrants)
+    .where(and(eq(collaborationGrants.ownerUserId, input.ownerUserId), grantTargetWhere(input.target)));
+  return grants.find((grant) => publicCollaborationAccessKey(grant.id) === input.accessKey)?.id ?? null;
+}
+
 export async function updateResourceCollaborator(input: {
   ownerUserId: string;
   target: CollaborationTarget;
-  granteeUserId: string;
+  accessKey: string;
   role: CollaborationRole;
 }) {
   const resource = await loadOwnedTarget(input.ownerUserId, input.target);
   if (!resource)
     return { ok: false, status: 404, error: `${'noteId' in input.target ? 'Note' : 'Folder'} not found` } as const;
+  const grantId = await resolveCollaborationGrantId(input);
+  if (!grantId) return { ok: false, status: 404, error: 'Collaborator not found' } as const;
   const [grant] = await db
     .update(collaborationGrants)
     .set({ role: input.role, updatedAt: new Date() })
     .where(
       and(
+        eq(collaborationGrants.id, grantId),
         eq(collaborationGrants.ownerUserId, input.ownerUserId),
-        eq(collaborationGrants.granteeUserId, input.granteeUserId),
         grantTargetWhere(input.target)
       )
     )
     .returning();
   if (!grant) return { ok: false, status: 404, error: 'Collaborator not found' } as const;
   return { ok: true, value: { grant } } as const;
-}
-
-function maskEmail(email: string) {
-  const [local = '', domain = ''] = email.split('@');
-  return `${local.slice(0, 1) || '*'}***@${domain}`;
 }
 
 function invitationDestination(target: CollaborationTarget) {
@@ -357,7 +383,7 @@ export async function previewCollaborationInvitation(token: string) {
       resource,
       owner,
       role: invitation.role,
-      invitedEmail: maskEmail(invitation.invitedEmailKey),
+      invitedEmail: maskCollaborationEmail(invitation.invitedEmailKey),
       expiresAt: invitation.expiresAt,
       status: invitation.acceptedAt ? ('accepted' as const) : ('pending' as const),
     },
@@ -455,17 +481,19 @@ export async function acceptCollaborationInvitation(input: { token: string; acto
 export async function removeResourceCollaborator(input: {
   ownerUserId: string;
   target: CollaborationTarget;
-  granteeUserId: string;
+  accessKey: string;
 }) {
   const resource = await loadOwnedTarget(input.ownerUserId, input.target);
   if (!resource)
     return { ok: false, status: 404, error: `${'noteId' in input.target ? 'Note' : 'Folder'} not found` } as const;
+  const grantId = await resolveCollaborationGrantId(input);
+  if (!grantId) return { ok: false, status: 404, error: 'Collaborator not found' } as const;
   const deleted = await db
     .delete(collaborationGrants)
     .where(
       and(
+        eq(collaborationGrants.id, grantId),
         eq(collaborationGrants.ownerUserId, input.ownerUserId),
-        eq(collaborationGrants.granteeUserId, input.granteeUserId),
         grantTargetWhere(input.target)
       )
     )

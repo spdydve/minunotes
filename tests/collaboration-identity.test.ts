@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   maskCollaborationEmail,
   normalizeCollaborationDisplayName,
+  publicCollaborationAccessKey,
   publicIdentityKey,
   serializeCollaborationUserIdentity,
 } from '../src/api/lib/collaboration-identity';
@@ -15,6 +16,8 @@ describe('collaboration identity', () => {
     expect(first).toMatch(/^user_[a-f0-9]{16}$/);
     expect(first).not.toContain('internal-user-id');
     expect(publicIdentityKey('agent', 'internal-user-id')).toMatch(/^agent_[a-f0-9]{16}$/);
+    expect(publicCollaborationAccessKey('internal-grant-id')).toMatch(/^access_[a-f0-9]{16}$/);
+    expect(publicCollaborationAccessKey('internal-grant-id')).not.toContain('internal-grant-id');
   });
 
   it.each([
