@@ -161,54 +161,73 @@ export function FolderSidebar({
     });
   };
 
-  const renderFolderRows = (nodes: FolderNode[]): ReactNode[] =>
-    nodes.flatMap((folder) => {
-      const hasChildren = folder.children.length > 0;
-      const expanded = expandedFolderIds.has(folder.id);
-      const isCurrent = currentFolderId === folder.id;
-      const row = (
-        <div
-          key={folder.id}
-          className={`flex items-center gap-1 rounded-md ${isCurrent ? 'bg-[var(--notes-hover)] text-[var(--notes-text)]' : 'hover:bg-[var(--notes-hover)]'}`}
-          style={{ paddingLeft: `${folder.depth * 0.75}rem` }}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              className="rounded-md p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
-              aria-label={expanded ? `Collapse ${folder.title}` : `Expand ${folder.title}`}
-              onClick={() => toggleExpanded(folder.id)}
+  const renderFolderList = (nodes: FolderNode[], id?: string): ReactNode => (
+    <ul id={id} className="space-y-1">
+      {nodes.map((folder) => {
+        const hasChildren = folder.children.length > 0;
+        const expanded = expandedFolderIds.has(folder.id);
+        const isCurrent = currentFolderId === folder.id;
+        const childListId = `sidebar-folder-children-${folder.id}`;
+        return (
+          <li key={folder.id}>
+            <div
+              className={`group flex items-center gap-1 rounded-md ${isCurrent ? 'bg-[var(--notes-hover)] text-[var(--notes-text)]' : 'hover:bg-[var(--notes-hover)]'}`}
+              style={{ paddingLeft: `${folder.depth * 0.75}rem` }}
             >
-              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            </button>
-          ) : (
-            <span className="w-5 shrink-0" />
-          )}
-          <Link
-            to="/folders/$folderId"
-            params={{ folderId: folder.id }}
-            className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-sm ${isCurrent ? 'font-semibold' : ''}`}
-            aria-current={isCurrent ? 'location' : undefined}
-            onClick={onNavigate}
-          >
-            <span className="truncate">{folder.title}</span>
-            {folder.effectivePrivate ? (
-              <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" />
-            ) : null}
-            {!folder.effectivePrivate && folder.effectiveAgentReadOnly ? (
-              <span
-                className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] text-amber-600 uppercase tracking-wide"
-                title="Read-only for agents"
+              {hasChildren ? (
+                <button
+                  type="button"
+                  className="rounded-md p-1 text-[var(--notes-muted)] hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+                  aria-label={expanded ? `Collapse ${folder.title}` : `Expand ${folder.title}`}
+                  aria-expanded={expanded}
+                  aria-controls={childListId}
+                  onClick={() => toggleExpanded(folder.id)}
+                >
+                  {expanded ? (
+                    <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                </button>
+              ) : (
+                <span className="w-5 shrink-0" aria-hidden="true" />
+              )}
+              <Link
+                to="/folders/$folderId"
+                params={{ folderId: folder.id }}
+                className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-sm ${isCurrent ? 'font-semibold' : ''}`}
+                aria-current={isCurrent ? 'location' : undefined}
+                onClick={onNavigate}
               >
-                RO
-              </span>
-            ) : null}
-          </Link>
-          <FolderActionsPopover folder={folder} depth={folder.depth} />
-        </div>
-      );
-      return expanded ? [row, ...renderFolderRows(folder.children)] : [row];
-    });
+                <span className="truncate">{folder.title}</span>
+                {folder.effectivePrivate ? (
+                  <Lock className="h-3 w-3 shrink-0 text-[var(--notes-muted)]" aria-label="Private folder" />
+                ) : null}
+                {!folder.effectivePrivate && folder.effectiveAgentReadOnly ? (
+                  <span
+                    className="shrink-0 rounded border border-amber-500/50 px-1 py-0.5 text-[9px] text-amber-600 uppercase tracking-wide"
+                    title="Read-only for agents"
+                  >
+                    RO
+                  </span>
+                ) : null}
+              </Link>
+              <FolderActionsPopover
+                folder={folder}
+                depth={folder.depth}
+                triggerClassName={
+                  isCurrent
+                    ? 'shrink-0'
+                    : 'shrink-0 transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100 focus:opacity-100'
+                }
+              />
+            </div>
+            {hasChildren && expanded ? renderFolderList(folder.children, childListId) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col border-[var(--notes-border)] border-r bg-[var(--notes-panel-muted)] p-4 md:h-screen md:w-72">
@@ -357,7 +376,7 @@ export function FolderSidebar({
           {!isLoading && folderTree.length === 0 ? (
             <p className="px-2 py-3 text-[var(--notes-muted)] text-xs">No folders yet. Use + to create one.</p>
           ) : null}
-          {renderFolderRows(folderTree)}
+          {renderFolderList(folderTree)}
         </div>
       </nav>
       <div className="shrink-0 border-[var(--notes-border)] border-t pt-4 pb-[env(safe-area-inset-bottom,0px)]">

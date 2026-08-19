@@ -16,10 +16,12 @@ export function FolderActionsPopover({
   folder,
   depth = 0,
   icon = 'more',
+  triggerClassName,
 }: {
   folder: Folder;
   depth?: number;
   icon?: 'more' | 'settings';
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -44,7 +46,7 @@ export function FolderActionsPopover({
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <ActionMenuIconButton icon={icon} aria-label={`Actions for ${folder.title}`} />
+          <ActionMenuIconButton icon={icon} aria-label={`Actions for ${folder.title}`} className={triggerClassName} />
         </PopoverTrigger>
         <PopoverContent align="end" className="w-48 p-1">
           {depth < 4 && !folder.isPrivate ? (
@@ -103,7 +105,7 @@ export function FolderActionsPopover({
             requiresTypedConfirmation={false}
             onConfirm={() => remove.mutateAsync()}
             trigger={
-              <span className="block w-full rounded-md px-3 py-2 text-left text-sm text-[var(--notes-button-destructive-text)] transition-colors hover:bg-[var(--notes-button-destructive-soft-hover)]">
+              <span className="block w-full rounded-md px-3 py-2 text-left text-[var(--notes-button-destructive-text)] text-sm transition-colors hover:bg-[var(--notes-button-destructive-soft-hover)]">
                 Move to Trash
               </span>
             }

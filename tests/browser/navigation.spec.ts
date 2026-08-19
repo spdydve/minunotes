@@ -107,6 +107,38 @@ test('edits an optional collaboration display name from the sidebar profile', as
   await expect(page.locator('aside')).toContainText('Updated Person');
 });
 
+test('uses nested folder lists with accessible expansion and quiet inactive actions', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/');
+
+  const primary = page.getByRole('navigation', { name: 'Primary' });
+  const rootLink = primary.getByRole('link', { name: browserFixture.folder.title, exact: true });
+  const rootItem = rootLink.locator('xpath=../..');
+  const expand = primary.getByRole('button', { name: `Expand ${browserFixture.folder.title}` });
+  await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect(rootItem.locator(':scope > ul')).toHaveCount(0);
+
+  const inactiveActions = primary.getByRole('button', { name: `Actions for ${browserFixture.folder.title}` });
+  await expect.poll(() => inactiveActions.evaluate((element) => getComputedStyle(element).opacity)).toBe('0');
+  await inactiveActions.focus();
+  await expect.poll(() => inactiveActions.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+
+  const childListId = await expand.getAttribute('aria-controls');
+  if (!childListId) throw new Error('Folder expansion must reference its child list');
+  await expand.click();
+  await expect(primary.getByRole('button', { name: `Collapse ${browserFixture.folder.title}` })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  const childList = rootItem.locator(':scope > ul');
+  await expect(childList).toHaveAttribute('id', childListId);
+  await expect(childList.getByRole('link', { name: browserFixture.childFolder.title, exact: true })).toBeVisible();
+
+  await rootLink.click();
+  await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}`);
+  await expect.poll(() => inactiveActions.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
+});
+
 test('keeps the narrow sidebar scrollbar unobtrusive without disabling scroll', async ({ page }) => {
   const api = await mockBrowserApi(page);
   for (let index = 0; index < 20; index += 1) {
