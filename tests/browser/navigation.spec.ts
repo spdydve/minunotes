@@ -78,6 +78,7 @@ test('uses vertical primary navigation and groups secondary destinations under M
   await expect(more).toHaveAttribute('aria-current', 'page');
 
   await page.getByRole('button', { name: 'Open account and settings menu' }).click();
+  await expect(page.getByRole('button', { name: 'Profile', exact: true })).toBeVisible();
   await expect(page.getByLabel('Theme')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Logout', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Resources', exact: true })).toHaveCount(0);
@@ -89,15 +90,17 @@ test('edits an optional collaboration display name from the sidebar profile', as
   await mockBrowserApi(page);
   await page.goto('/');
 
-  await expect(page.getByRole('button', { name: 'Edit profile' }).locator('[data-avatar-palette]')).toBeVisible();
-  await page.getByRole('button', { name: 'Edit profile' }).click();
+  await expect(page.locator('aside').locator('[data-avatar-palette]')).toBeVisible();
+  await expect(page.getByText('browser@example.com', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Open account and settings menu' }).click();
+  await page.getByRole('button', { name: 'Profile', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Profile' });
   await expect(dialog.getByText('browser@example.com', { exact: true })).toBeVisible();
   await dialog.getByLabel('Display name').fill('  Updated   Person  ');
   await dialog.getByRole('button', { name: 'Save profile' }).click();
 
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Edit profile' })).toContainText('Updated Person');
+  await expect(page.locator('aside')).toContainText('Updated Person');
 });
 
 test('keeps the narrow sidebar scrollbar unobtrusive without disabling scroll', async ({ page }) => {

@@ -1,17 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserRound, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { authClient } from '../lib/auth-client';
-import { Avatar } from './ui/avatar';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
-export function AccountProfileDialog({ email }: { email?: string | null }) {
+export function AccountProfileDialog({
+  email,
+  open,
+  onOpenChange,
+}: {
+  email?: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const profile = useQuery({ queryKey: ['account-profile'], queryFn: api.accountProfile });
-  const identity = profile.data?.profile.identity;
   const accountEmail = profile.data?.profile.email ?? email ?? 'Email unavailable';
 
   useEffect(() => {
@@ -25,7 +30,7 @@ export function AccountProfileDialog({ email }: { email?: string | null }) {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['account-profile'] });
-      setOpen(false);
+      onOpenChange(false);
     },
   });
 
@@ -35,30 +40,7 @@ export function AccountProfileDialog({ email }: { email?: string | null }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left hover:bg-[var(--notes-hover)]"
-          aria-label="Edit profile"
-        >
-          {identity ? (
-            <Avatar identity={identity} imageUrl={profile.data?.profile.imageUrl} size="sm" decorative />
-          ) : (
-            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--notes-border)] text-[var(--notes-muted)]">
-              <UserRound className="h-4 w-4" aria-hidden="true" />
-            </span>
-          )}
-          <span className="min-w-0">
-            {identity?.displayName ? <span className="block truncate text-sm">{identity.displayName}</span> : null}
-            <span
-              className={`block truncate ${identity?.displayName ? 'text-[var(--notes-muted)] text-xs' : 'text-sm'}`}
-            >
-              {accountEmail}
-            </span>
-          </span>
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="top-1/2 left-1/2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4">
           <div>

@@ -12,6 +12,7 @@ import {
   Search,
   Share2,
   Trash2,
+  UserRound,
   X,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -25,6 +26,7 @@ import { FolderActionsPopover } from './folder-actions-popover';
 import { openSearchDialog, searchShortcutLabel } from './search-dialog';
 import { ThemeSelect } from './theme-select';
 import { ActionMenuButton, ActionMenuIconButton } from './ui/action-menu';
+import { Avatar } from './ui/avatar';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 
 type FolderNode = Folder & {
@@ -131,11 +133,13 @@ export function FolderSidebar({
     queryKey: ['folders'],
     queryFn: api.folders,
   });
+  const accountProfile = useQuery({ queryKey: ['account-profile'], queryFn: api.accountProfile });
   const nav = useNavigate();
   const currentFolderId = navigation.activeFolderId;
   const folders = data?.folders ?? [];
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
   const [expandedFolderIds, setExpandedFolderIds] = useState(getStoredExpandedFolderIds);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const ancestorIds = getAncestorIds(currentFolderId, folders);
@@ -357,7 +361,30 @@ export function FolderSidebar({
       </nav>
       <div className="shrink-0 border-[var(--notes-border)] border-t pt-4 pb-[env(safe-area-inset-bottom,0px)]">
         <div className="flex items-center justify-between gap-2">
-          <AccountProfileDialog email={userEmail} />
+          <div className="flex min-w-0 flex-1 items-center gap-2 p-1">
+            {accountProfile.data?.profile.identity ? (
+              <Avatar
+                identity={accountProfile.data.profile.identity}
+                imageUrl={accountProfile.data.profile.imageUrl}
+                size="sm"
+                decorative
+              />
+            ) : (
+              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--notes-border)] text-[var(--notes-muted)]">
+                <UserRound className="h-4 w-4" aria-hidden="true" />
+              </span>
+            )}
+            <span className="min-w-0">
+              {accountProfile.data?.profile.identity.displayName ? (
+                <span className="block truncate text-sm">{accountProfile.data.profile.identity.displayName}</span>
+              ) : null}
+              <span
+                className={`block truncate ${accountProfile.data?.profile.identity.displayName ? 'text-[var(--notes-muted)] text-xs' : 'text-sm'}`}
+              >
+                {accountProfile.data?.profile.email ?? userEmail ?? 'Email unavailable'}
+              </span>
+            </span>
+          </div>
           <Popover>
             <PopoverTrigger asChild>
               <ActionMenuIconButton
@@ -367,11 +394,15 @@ export function FolderSidebar({
               />
             </PopoverTrigger>
             <PopoverContent align="end" className="w-56 p-1">
+              <PopoverClose asChild>
+                <ActionMenuButton onClick={() => setProfileOpen(true)}>Profile</ActionMenuButton>
+              </PopoverClose>
               <ThemeSelect />
               <ActionMenuButton onClick={() => authClient.signOut()}>Logout</ActionMenuButton>
             </PopoverContent>
           </Popover>
         </div>
+        <AccountProfileDialog email={userEmail} open={profileOpen} onOpenChange={setProfileOpen} />
       </div>
     </aside>
   );
