@@ -81,6 +81,13 @@ test('uses vertical primary navigation and groups secondary destinations under M
   await page.getByRole('button', { name: 'Integrations', exact: true }).click();
   await expect(page).toHaveURL('/integrations');
   await expect(page.getByRole('heading', { name: 'Integrations' })).toBeVisible();
+  const createKeyBox = await page.getByRole('button', { name: 'Create key' }).boundingBox();
+  const addAppBox = await page.getByRole('button', { name: 'Add App' }).boundingBox();
+  expect(createKeyBox).not.toBeNull();
+  expect(addAppBox).not.toBeNull();
+  expect(
+    Math.abs((createKeyBox?.x ?? 0) + (createKeyBox?.width ?? 0) - ((addAppBox?.x ?? 0) + (addAppBox?.width ?? 0)))
+  ).toBeLessThanOrEqual(1);
   await expect(more).toHaveAttribute('aria-current', 'page');
 
   await page.getByRole('button', { name: 'Open account and settings menu' }).click();
