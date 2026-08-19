@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, RefreshCw, UserPlus, X } from 'lucide-react';
 import { type FormEvent, type ReactNode, useState } from 'react';
-import { api, type CollaborationResourceType, type CollaborationRole } from '../lib/api';
+import { api, type CollaborationIdentity, type CollaborationResourceType, type CollaborationRole } from '../lib/api';
+import { Avatar } from './ui/avatar';
 
 const ROLE_LABELS: Record<CollaborationRole, string> = {
   viewer: 'Viewer',
@@ -147,6 +148,7 @@ export function CollaboratorAccessList({
           {data.grants.map((grant) => (
             <AccessRow
               key={grant.key}
+              identity={grant.user}
               title={grant.user.label}
               subtitle={grant.user.displayName ? (grant.user.maskedEmail ?? 'Email hidden') : 'Active collaborator'}
               trailing={
@@ -237,12 +239,25 @@ function StatusBadge({ status }: { status: 'Active' | 'Pending' | 'Expired' }) {
   return <span className={`rounded-full border px-2 py-0.5 text-center font-medium text-xs ${color}`}>{status}</span>;
 }
 
-function AccessRow({ title, subtitle, trailing }: { title: string; subtitle: string; trailing: ReactNode }) {
+function AccessRow({
+  identity,
+  title,
+  subtitle,
+  trailing,
+}: {
+  identity?: CollaborationIdentity;
+  title: string;
+  subtitle: string;
+  trailing: ReactNode;
+}) {
   return (
     <div className="flex flex-col items-stretch gap-3 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{title}</p>
-        <p className="notes-muted truncate text-xs">{subtitle}</p>
+      <div className="flex min-w-0 items-center gap-2">
+        {identity ? <Avatar identity={identity} size="sm" decorative /> : null}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{title}</p>
+          <p className="notes-muted truncate text-xs">{subtitle}</p>
+        </div>
       </div>
       <div className="w-full shrink-0 text-sm text-[var(--notes-muted)] sm:w-auto">{trailing}</div>
     </div>

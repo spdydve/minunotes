@@ -62,6 +62,7 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   await expect(drawer).toBeVisible();
   await expect(drawer.getByText('Please review this opening carefully.')).toBeVisible();
   await expect(drawer.getByRole('button', { name: '🎉 reaction, 1' })).toBeVisible();
+  await expect(drawer.locator('[data-avatar-palette]').first()).toBeVisible();
   await drawer.getByText('You', { exact: true }).first().click();
   await drawer.getByPlaceholder('Reply…').fill('Owner follow-up.');
   await drawer.getByRole('button', { name: 'Reply', exact: true }).click();

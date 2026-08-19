@@ -6,6 +6,7 @@ import {
   type CommentThread,
   QUICK_COMMENT_REACTIONS,
 } from '../lib/api';
+import { Avatar } from './ui/avatar';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from './ui/popover';
 import { QuickTooltip } from './ui/tooltip';
 
@@ -28,16 +29,6 @@ export function formatCommentTime(value: string) {
 
 function isEdited(message: CommentMessage) {
   return new Date(message.updatedAt).getTime() > new Date(message.createdAt).getTime();
-}
-
-function initials(name: string) {
-  const value = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
-  return value || '?';
 }
 
 export function NoteCommentDiscussion({
@@ -86,9 +77,7 @@ export function NoteCommentDiscussion({
             {index < thread.messages.length - 1 ? (
               <span className="absolute top-7 bottom-0 left-3 w-px bg-[var(--notes-border)]" aria-hidden="true" />
             ) : null}
-            <span className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--notes-panel-muted)] font-medium text-[10px] text-[var(--notes-muted)]">
-              {initials(message.author.label)}
-            </span>
+            <Avatar identity={message.author} size="sm" className="relative" decorative />
             <div className="min-w-0 flex-1">
               <div className="flex min-h-6 items-start justify-between gap-2">
                 <p className="min-w-0 text-xs">

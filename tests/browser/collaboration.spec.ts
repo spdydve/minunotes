@@ -14,6 +14,11 @@ test('lists direct shared roots without exposing owner identifiers', async ({ pa
   await expect(page.getByRole('heading', { name: 'Folders' })).toBeVisible();
   await expect(page.getByRole('row', { name: /Source Note Shared Owner Commenter/ })).toBeVisible();
   await expect(page.getByRole('row', { name: /Browser tests Shared Owner Editor/ })).toBeVisible();
+  const ownerAvatars = page.locator('[data-avatar-palette]');
+  await expect(ownerAvatars).toHaveCount(2);
+  expect(await ownerAvatars.nth(0).getAttribute('data-avatar-palette')).toBe(
+    await ownerAvatars.nth(1).getAttribute('data-avatar-palette')
+  );
   await expect(page.getByText('collaboration_owner_browser')).toHaveCount(0);
 });
 

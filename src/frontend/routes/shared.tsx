@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { SharingPageTabs } from '../components/sharing-page-tabs';
+import { Avatar } from '../components/ui/avatar';
 import { EmptyState } from '../components/ui/empty-state';
 import { api, type CollaborationResourceType, type SharedCollaboration } from '../lib/api';
 import { rootRoute } from './__root';
@@ -114,7 +115,12 @@ function SharedResourceRow({ item }: { item: SharedCollaboration }) {
   return (
     <tr className="border-t border-[var(--notes-border)] hover:bg-[var(--notes-hover)]">
       <td className="max-w-sm px-4 py-3">{link}</td>
-      <td className="px-4 py-3">{item.owner.label}</td>
+      <td className="px-4 py-3">
+        <span className="flex items-center gap-2">
+          <Avatar identity={item.owner} size="sm" decorative />
+          <span>{item.owner.label}</span>
+        </span>
+      </td>
       <td className="px-4 py-3">{ROLE_LABEL[item.role]}</td>
       <td className="px-4 py-3 text-[var(--notes-muted)]">{new Date(resource.updatedAt).toLocaleDateString()}</td>
     </tr>

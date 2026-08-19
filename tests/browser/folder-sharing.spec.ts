@@ -15,6 +15,8 @@ test('enables and copies a read-only folder share link', async ({ context, page 
   await expect(shareDialog.getByText('browser@example.com')).toHaveCount(0);
   await expect(shareDialog.getByRole('heading', { level: 3 })).toHaveText(['Public link', 'People with access']);
   await expect(shareDialog.getByText('Active', { exact: true })).toBeVisible();
+  await expect(shareDialog.locator('[data-avatar-palette]').first()).toBeVisible();
+  await expect(shareDialog.getByText('a•••@e•••.com')).toBeVisible();
   await expect(shareDialog.getByText('Pending', { exact: true })).toBeVisible();
   await expect(shareDialog.getByText('Expired', { exact: true })).toBeVisible();
   const statusPositions = await Promise.all(
