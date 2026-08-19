@@ -5,6 +5,7 @@ import {
   publicCollaborationAccessKey,
   publicIdentityKey,
   serializeCollaborationUserIdentity,
+  validateCollaborationDisplayName,
 } from '../src/api/lib/collaboration-identity';
 
 describe('collaboration identity', () => {
@@ -48,6 +49,14 @@ describe('collaboration identity', () => {
     expect(normalizeCollaborationDisplayName('Taylor\u202eKennedy')).toBeNull();
     expect(normalizeCollaborationDisplayName('a'.repeat(61))).toBeNull();
     expect(normalizeCollaborationDisplayName('   ')).toBeNull();
+  });
+
+  it('validates optional profile display names without silently accepting unsafe values', () => {
+    expect(validateCollaborationDisplayName('  Taylor   Kennedy  ')).toEqual({ valid: true, value: 'Taylor Kennedy' });
+    expect(validateCollaborationDisplayName('   ')).toEqual({ valid: true, value: '' });
+    expect(validateCollaborationDisplayName(null)).toMatchObject({ valid: false });
+    expect(validateCollaborationDisplayName('Taylor\u202eKennedy')).toMatchObject({ valid: false });
+    expect(validateCollaborationDisplayName('a'.repeat(61))).toMatchObject({ valid: false });
   });
 
   it('uses display name, masked email, and current-user labels without raw identity fields', () => {

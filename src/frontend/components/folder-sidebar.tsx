@@ -19,6 +19,7 @@ import { api, type Folder } from '../lib/api';
 import { authClient } from '../lib/auth-client';
 import type { AppNavigationModel } from '../lib/navigation';
 import { getStoredExpandedFolderIds, storeExpandedFolderIds } from '../lib/navigation-preferences';
+import { AccountProfileDialog } from './account-profile-dialog';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { FolderActionsPopover } from './folder-actions-popover';
 import { openSearchDialog, searchShortcutLabel } from './search-dialog';
@@ -355,10 +356,8 @@ export function FolderSidebar({
         </div>
       </nav>
       <div className="shrink-0 border-[var(--notes-border)] border-t pt-4 pb-[env(safe-area-inset-bottom,0px)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm">{userEmail}</p>
-          </div>
+        <div className="flex items-center justify-between gap-2">
+          <AccountProfileDialog email={userEmail} />
           <Popover>
             <PopoverTrigger asChild>
               <ActionMenuIconButton

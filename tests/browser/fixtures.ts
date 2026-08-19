@@ -353,13 +353,24 @@ export async function mockBrowserApi(
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
+    if (path === '/account/profile' && method === 'GET') {
+      const sessionEmail = options.sessionEmail === undefined ? 'browser@example.com' : options.sessionEmail;
+      return json({ profile: { identity: browserUserIdentity, email: sessionEmail, imageUrl: null } });
+    }
+
+    if (path === '/auth/update-user' && method === 'POST') {
+      const body = request.postDataJSON() as { name?: string };
+      browserUserIdentity.displayName = body.name?.trim().replace(/\s+/g, ' ') || null;
+      return json({ status: true });
+    }
+
     if (path === '/auth/get-session') {
       const sessionEmail = options.sessionEmail === undefined ? 'browser@example.com' : options.sessionEmail;
       if (!sessionEmail) return json(null);
       return json({
         user: {
           id: 'user_browser',
-          name: 'Browser Test User',
+          name: browserUserIdentity.displayName ?? '',
           email: sessionEmail,
           emailVerified: true,
           image: null,

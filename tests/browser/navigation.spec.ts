@@ -85,6 +85,21 @@ test('uses vertical primary navigation and groups secondary destinations under M
   await expect(page.getByRole('button', { name: 'Trash', exact: true })).toHaveCount(0);
 });
 
+test('edits an optional collaboration display name from the sidebar profile', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: 'Edit profile' }).locator('[data-avatar-palette]')).toBeVisible();
+  await page.getByRole('button', { name: 'Edit profile' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Profile' });
+  await expect(dialog.getByText('browser@example.com', { exact: true })).toBeVisible();
+  await dialog.getByLabel('Display name').fill('  Updated   Person  ');
+  await dialog.getByRole('button', { name: 'Save profile' }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Edit profile' })).toContainText('Updated Person');
+});
+
 test('keeps the narrow sidebar scrollbar unobtrusive without disabling scroll', async ({ page }) => {
   const api = await mockBrowserApi(page);
   for (let index = 0; index < 20; index += 1) {

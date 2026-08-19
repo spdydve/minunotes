@@ -208,6 +208,11 @@ export type CollaborationIdentity = {
   label: string;
   isCurrentUser: boolean;
 };
+export type AccountProfile = {
+  identity: CollaborationIdentity;
+  email: string;
+  imageUrl: string | null;
+};
 export type CollaborationResourceType = 'note' | 'folder';
 export type SharedCollaboration =
   | {
@@ -455,6 +460,7 @@ async function fetchAllTemplates() {
 }
 
 export const api = {
+  accountProfile: () => request<{ profile: AccountProfile }>('/account/profile'),
   apiKeys: () => request<{ keys: ApiKey[] }>('/api-keys'),
   oauthClients: () => request<{ clients: OAuthClient[] }>('/oauth/clients'),
   createOAuthClient: (data: { name: string; description?: string | null; redirectUris: string[] }) =>

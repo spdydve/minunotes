@@ -48,6 +48,17 @@ export function normalizeCollaborationDisplayName(value: string | null | undefin
   return normalized;
 }
 
+export function validateCollaborationDisplayName(
+  value: unknown
+): { valid: true; value: string } | { valid: false; error: string } {
+  if (typeof value !== 'string') return { valid: false, error: 'Display name must be a string' };
+  const normalized = normalizeCollaborationDisplayName(value);
+  if (value.trim() && !normalized) {
+    return { valid: false, error: 'Display name must contain at most 60 characters and no control characters' };
+  }
+  return { valid: true, value: normalized ?? '' };
+}
+
 export function maskCollaborationEmail(value: string | null | undefined) {
   if (!value || DANGEROUS_DISPLAY_CHARACTERS.test(value)) return 'Email hidden';
   const normalized = value.normalize('NFKC').trim();
