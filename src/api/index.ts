@@ -205,7 +205,9 @@ app.use('/internal/collaboration-invitations/:token/preview', invitationPreviewR
 app.use('/internal/collaboration-invitations/:token/accept', invitationAcceptanceRateLimit);
 app.use('/internal/collaboration-invitations/:invitationId/resend', invitationResendRateLimit);
 app.use('/internal/notes/:noteId/collaborators', collaboratorManagementRateLimit);
+app.use('/internal/notes/:noteId/collaborators/:accessKey', collaboratorManagementRateLimit);
 app.use('/internal/folders/:folderId/collaborators', collaboratorManagementRateLimit);
+app.use('/internal/folders/:folderId/collaborators/:accessKey', collaboratorManagementRateLimit);
 app.use('/internal/api-keys', apiKeyRateLimit);
 app.use('/internal/api-keys/*', apiKeyRateLimit);
 app.use('/v1/harness/*', harnessRateLimit);

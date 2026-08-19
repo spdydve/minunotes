@@ -742,6 +742,11 @@ describe('collaborator management', () => {
     expect(secondPageBody.collaborations).toHaveLength(1);
     expect(secondPageBody.collaborations[0]?.grantId).not.toBe(firstPageBody.collaborations[0]?.grantId);
     expect(secondPageBody.pageInfo).toEqual({ hasMore: false, nextCursor: null });
+    const invalidCursor = await app.request('/collaborations/shared-with-me?type=note&cursor=invalid', {
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(invalidCursor.status).toBe(400);
+    await expect(invalidCursor.json()).resolves.toEqual({ error: 'Invalid collaboration cursor' });
     libsql.close();
   });
 

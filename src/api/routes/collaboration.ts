@@ -1,6 +1,10 @@
 import { type Context, Hono } from 'hono';
 import type { auth } from '../lib/auth';
-import { listDirectCollaborations, listDirectCollaborationsPage } from '../lib/collaboration-access';
+import {
+  InvalidDirectCollaborationCursorError,
+  listDirectCollaborations,
+  listDirectCollaborationsPage,
+} from '../lib/collaboration-access';
 import { sendCollaborationGrantedEmail, sendCollaborationInvitationEmail } from '../lib/collaboration-email';
 import { publicCollaborationAccessKey } from '../lib/collaboration-identity';
 import {
@@ -214,8 +218,10 @@ collaborationRoutes.get('/collaborations/shared-with-me', async (c) => {
       cursor: c.req.query('cursor'),
     });
     return c.json({ collaborations: page.items, pageInfo: page.pageInfo });
-  } catch {
-    return c.json({ error: 'Invalid collaboration cursor' }, 400);
+  } catch (error) {
+    if (error instanceof InvalidDirectCollaborationCursorError)
+      return c.json({ error: 'Invalid collaboration cursor' }, 400);
+    throw error;
   }
 });
 

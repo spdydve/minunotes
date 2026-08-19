@@ -241,7 +241,7 @@ export async function searchAllDocumentLines(input: {
           actorUserId: input.userId,
           authorizationId: input.integrationAccess.authorizationId,
           sharedAccessMode: input.integrationAccess.sharedAccessMode,
-          ownedFolderIds: input.folderIds,
+          ownedFolderIds: input.folderIds ?? new Set(),
         },
         input.folderId ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId)) : undefined,
         searchMatch
@@ -441,7 +441,7 @@ export async function searchDocuments(input: {
               actorUserId: input.userId,
               authorizationId: input.integrationAccess.authorizationId,
               sharedAccessMode: input.integrationAccess.sharedAccessMode,
-              ownedFolderIds: input.folderIds,
+              ownedFolderIds: input.folderIds ?? new Set(),
             })
           : input.discoveryScope === 'shared'
             ? collaborationAccessibleNoteWhere(input.userId, 'read', sql`${notes.userId} <> ${input.userId}`)

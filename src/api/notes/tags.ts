@@ -68,7 +68,7 @@ export async function listIntegrationAccessibleTags(input: {
   actorUserId: string;
   authorizationId: string;
   sharedAccessMode: SharedAccessMode;
-  ownedFolderIds?: ReadonlySet<string> | null;
+  ownedFolderIds: ReadonlySet<string>;
 }) {
   return db
     .select({

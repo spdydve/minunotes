@@ -91,7 +91,7 @@ export function integrationAccessibleNoteWhere(
     authorizationId: string;
     sharedAccessMode: SharedAccessMode;
     capability?: CollaborationCapability;
-    ownedFolderIds?: ReadonlySet<string> | null;
+    ownedFolderIds: ReadonlySet<string>;
   },
   ...conditions: Array<SQL | undefined>
 ) {
@@ -115,10 +115,10 @@ export function integrationAccessibleNoteWhere(
             and folder_scope.collaboration_grant_id = integration_folder_grant.id
         )`
       : sql``;
-  const ownedFolderIds = input.ownedFolderIds ? [...input.ownedFolderIds] : null;
+  const ownedFolderIds = [...input.ownedFolderIds];
   const ownedAccess = and(
     eq(notes.userId, input.actorUserId),
-    ownedFolderIds ? (ownedFolderIds.length > 0 ? inArray(notes.folderId, ownedFolderIds) : sql`0`) : undefined
+    ownedFolderIds.length > 0 ? inArray(notes.folderId, ownedFolderIds) : sql`0`
   );
   const sharedAccess =
     input.sharedAccessMode === 'none'
@@ -185,7 +185,7 @@ export function integrationAccessibleFolderWhere(
     authorizationId: string;
     sharedAccessMode: SharedAccessMode;
     capability?: CollaborationCapability;
-    ownedFolderIds?: ReadonlySet<string> | null;
+    ownedFolderIds: ReadonlySet<string>;
   },
   ...conditions: Array<SQL | undefined>
 ) {
@@ -199,10 +199,10 @@ export function integrationAccessibleFolderWhere(
             and folder_scope.collaboration_grant_id = integration_folder_grant.id
         )`
       : sql``;
-  const ownedFolderIds = input.ownedFolderIds ? [...input.ownedFolderIds] : null;
+  const ownedFolderIds = [...input.ownedFolderIds];
   const ownedAccess = and(
     eq(folders.userId, input.actorUserId),
-    ownedFolderIds ? (ownedFolderIds.length > 0 ? inArray(folders.id, ownedFolderIds) : sql`0`) : undefined
+    ownedFolderIds.length > 0 ? inArray(folders.id, ownedFolderIds) : sql`0`
   );
   const sharedAccess =
     input.sharedAccessMode === 'none'
@@ -376,6 +376,27 @@ export async function resolveFolderCollaborationAccess(input: {
   return accessFromGrants({ actorUserId: input.actorUserId, resourceOwnerUserId: folder.userId, grants });
 }
 
+export class InvalidDirectCollaborationCursorError extends Error {}
+
+function decodeDirectCollaborationCursor(value: string) {
+  try {
+    const decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as {
+      grantId?: unknown;
+      updatedAt?: unknown;
+    };
+    if (
+      typeof decoded.grantId !== 'string' ||
+      typeof decoded.updatedAt !== 'number' ||
+      !Number.isFinite(decoded.updatedAt)
+    )
+      throw new InvalidDirectCollaborationCursorError();
+    return { grantId: decoded.grantId, updatedAt: decoded.updatedAt };
+  } catch (error) {
+    if (error instanceof InvalidDirectCollaborationCursorError) throw error;
+    throw new InvalidDirectCollaborationCursorError();
+  }
+}
+
 export async function listDirectCollaborationsPage(input: {
   actorUserId: string;
   type: 'note' | 'folder';
@@ -392,16 +413,7 @@ export async function listDirectCollaborationsPage(input: {
     });
   let start = 0;
   if (input.cursor) {
-    const decoded = JSON.parse(Buffer.from(input.cursor, 'base64url').toString('utf8')) as {
-      grantId?: unknown;
-      updatedAt?: unknown;
-    };
-    if (
-      typeof decoded.grantId !== 'string' ||
-      typeof decoded.updatedAt !== 'number' ||
-      !Number.isFinite(decoded.updatedAt)
-    )
-      throw new Error('Invalid collaboration cursor');
+    const decoded = decodeDirectCollaborationCursor(input.cursor);
     const cursorGrantId = decoded.grantId;
     const cursorUpdatedAt = decoded.updatedAt;
     const nextIndex = collaborations.findIndex((item) => {

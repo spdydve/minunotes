@@ -92,6 +92,14 @@ describe('mounted collaboration rate limits', () => {
       throw new Error('Expected a pending invitation');
     const invitationId = invitationResult.value.invitation.id;
     const invitationToken = invitationResult.value.invitationUrl.split('/').at(-1) ?? '';
+    const grantResult = await addResourceCollaborator({
+      ownerUserId: owner.id,
+      target: { noteId: 'note_rate_limit' },
+      email: collaborator.email,
+      role: 'viewer',
+    });
+    if (!grantResult.ok || grantResult.value.kind !== 'grant') throw new Error('Expected a direct grant');
+    const accessKey = grantResult.value.grant.key;
 
     const sessionAuthentication = createMiddleware(async (c, next) => {
       const user = usersById.get(c.req.header('x-test-user') ?? '') ?? null;
@@ -178,6 +186,42 @@ describe('mounted collaboration rate limits', () => {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-test-user': owner.id },
           body: JSON.stringify({ email: 'invalid', role: 'viewer' }),
+        })
+      ).status
+    ).toBe(429);
+
+    resetRateLimitStore();
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = await request(`/internal/notes/note_rate_limit/collaborators/${accessKey}`, '203.0.113.14', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', 'x-test-user': owner.id },
+        body: JSON.stringify({ role: 'invalid' }),
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(
+      (
+        await request(`/internal/notes/note_rate_limit/collaborators/${accessKey}`, '203.0.113.14', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', 'x-test-user': owner.id },
+          body: JSON.stringify({ role: 'invalid' }),
+        })
+      ).status
+    ).toBe(429);
+
+    resetRateLimitStore();
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = await request('/internal/notes/note_rate_limit/collaborators/access_missing', '203.0.113.15', {
+        method: 'DELETE',
+        headers: { 'x-test-user': owner.id },
+      });
+      expect(response.status).toBe(404);
+    }
+    expect(
+      (
+        await request('/internal/notes/note_rate_limit/collaborators/access_missing', '203.0.113.15', {
+          method: 'DELETE',
+          headers: { 'x-test-user': owner.id },
         })
       ).status
     ).toBe(429);

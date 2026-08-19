@@ -360,7 +360,7 @@ harnessRoutes.get('/tags', async (c) => {
       actorUserId: user.id,
       authorizationId: integration.authorizationId,
       sharedAccessMode: integration.sharedAccessMode,
-      ownedFolderIds: readableFolderIds,
+      ownedFolderIds: readableFolderIds ?? new Set(),
     });
     visibleTags.sort((left, right) =>
       compareTitleIdPositions({ title: left.name, id: left.id }, { title: right.name, id: right.id })
@@ -412,7 +412,7 @@ harnessRoutes.get('/folders', async (c) => {
           actorUserId: user.id,
           authorizationId: integration.authorizationId,
           sharedAccessMode: integration.sharedAccessMode,
-          ownedFolderIds: readableFolderIds,
+          ownedFolderIds: readableFolderIds ?? new Set(),
         })
       );
     const accessibleIds = new Set(accessibleFolders.map((folder) => folder.id));
@@ -752,7 +752,7 @@ harnessRoutes.get('/notes/orphans', async (c) => {
       ? {
           authorizationId: integration.authorizationId,
           sharedAccessMode: integration.sharedAccessMode,
-          ownedFolderIds: readableFolderIds,
+          ownedFolderIds: readableFolderIds ?? new Set(),
         }
       : undefined;
   const rows = await listOrphanNotes({ userId: user.id, integrationAccess });

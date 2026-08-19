@@ -306,7 +306,7 @@ export async function listOrphanNotes(input: {
   integrationAccess?: {
     authorizationId: string;
     sharedAccessMode: SharedAccessMode;
-    ownedFolderIds?: ReadonlySet<string> | null;
+    ownedFolderIds: ReadonlySet<string>;
   };
 }) {
   const candidates = await db
