@@ -130,15 +130,29 @@ function OwnedResourceTable({
       {!result.isLoading && !result.error ? (
         <div className="overflow-x-auto rounded-lg border border-[var(--notes-border)]">
           <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-            <thead className="bg-[var(--notes-panel-muted)] text-[var(--notes-muted)]">
+            <thead className="bg-[var(--notes-table-header-bg)]">
               <tr>
-                <th className="px-4 py-3 font-medium">Title</th>
-                <th className="px-4 py-3 text-center font-medium">Active</th>
-                <th className="px-4 py-3 text-center font-medium">Pending</th>
-                <th className="px-4 py-3 text-center font-medium">Expired</th>
-                <th className="px-4 py-3 font-medium">Public link</th>
-                <th className="px-4 py-3 font-medium">Updated</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Title
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-center font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Active
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-center font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Pending
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-center font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Expired
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Public link
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Updated
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-right font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>

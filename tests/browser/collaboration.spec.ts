@@ -16,6 +16,11 @@ test('lists direct shared roots without exposing owner identifiers', async ({ pa
   );
   await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Folders' })).toBeVisible();
+  const headerTransforms = await page
+    .locator('table th')
+    .evaluateAll((headers) => headers.map((header) => getComputedStyle(header).textTransform));
+  expect(headerTransforms.length).toBeGreaterThan(0);
+  expect(new Set(headerTransforms)).toEqual(new Set(['uppercase']));
   await expect(page.getByRole('row', { name: /Source Note Shared Owner Commenter/ })).toBeVisible();
   await expect(page.getByRole('row', { name: /Browser tests Shared Owner Editor/ })).toBeVisible();
   const ownerAvatars = page.locator('table [data-avatar-palette]');
@@ -81,6 +86,12 @@ test('manages owner-shared notes and folders with search and independent paginat
   const tabs = page.getByRole('navigation', { name: 'Sharing views' });
   await expect(tabs.getByRole('link', { name: 'Shared with me' })).toBeVisible();
   await expect(tabs.getByRole('link', { name: 'Shared by me' })).toHaveAttribute('aria-current', 'page');
+
+  const headerTransforms = await page
+    .locator('table th')
+    .evaluateAll((headers) => headers.map((header) => getComputedStyle(header).textTransform));
+  expect(headerTransforms.length).toBeGreaterThan(0);
+  expect(new Set(headerTransforms)).toEqual(new Set(['uppercase']));
 
   const notesSection = page.getByRole('region', { name: 'Notes' });
   const foldersSection = page.getByRole('region', { name: 'Folders' });

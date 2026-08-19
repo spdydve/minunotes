@@ -66,12 +66,20 @@ function SharedResourceTable({ type }: { type: CollaborationResourceType }) {
       {!query.isLoading && !query.error ? (
         <div className="overflow-x-auto rounded-lg border border-[var(--notes-border)]">
           <table className="w-full min-w-[680px] border-collapse text-left text-sm">
-            <thead className="bg-[var(--notes-panel-muted)] text-[var(--notes-muted)]">
+            <thead className="bg-[var(--notes-table-header-bg)]">
               <tr>
-                <th className="px-4 py-3 font-medium">Title</th>
-                <th className="px-4 py-3 font-medium">Shared by</th>
-                <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Updated</th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Title
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Shared by
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Role
+                </th>
+                <th className="border-[var(--notes-border)] border-b px-4 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
+                  Updated
+                </th>
               </tr>
             </thead>
             <tbody>
