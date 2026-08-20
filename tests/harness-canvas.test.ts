@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 35; index += 1) {
+  for (let index = 0; index <= 36; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -243,6 +243,92 @@ describe('harness canvas operations', () => {
     expect(JSON.parse(readUnlinkedBody.note.content).nodes[0].minunotes.link).toBeUndefined();
   });
 
+  it('hides out-of-scope canvas links and prevents mutations from deleting them', async () => {
+    const { app, db, schema, folder } = await setupHarnessApp();
+    const now = new Date();
+    const hiddenFolder = {
+      id: 'folder_hidden',
+      userId: 'user_test',
+      parentFolderId: null,
+      title: 'Hidden',
+      isPrivate: true,
+      isAgentReadOnly: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const hiddenTarget = {
+      id: 'note_hiddentarget',
+      userId: 'user_test',
+      folderId: hiddenFolder.id,
+      title: 'Hidden target',
+      content: 'secret',
+      documentType: 'markdown' as const,
+      type: 'note' as const,
+      isApiEditable: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const rawCanvas = JSON.stringify({
+      nodes: [
+        {
+          id: 'node_hidden',
+          type: 'text',
+          text: 'Visible node',
+          minunotes: { status: 'keep', link: { type: 'note', id: hiddenTarget.id } },
+        },
+      ],
+      edges: [],
+    });
+    const canvas = {
+      id: 'note_canvas_hidden_link',
+      userId: 'user_test',
+      folderId: folder.id,
+      title: 'Canvas with hidden link',
+      content: rawCanvas,
+      documentType: 'canvas.default' as const,
+      type: 'note' as const,
+      isApiEditable: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.insert(schema.folders).values(hiddenFolder);
+    await db.insert(schema.notes).values([hiddenTarget, canvas]);
+
+    const read = await app.request(`/api/harness/notes/${canvas.id}`);
+    expect(read.status).toBe(200);
+    const readBody = (await read.json()) as { note: { content: string }; contentHash: string };
+    expect(readBody).not.toHaveProperty('hiddenCanvasLinkCount');
+    expect(readBody).not.toHaveProperty('rawContentHash');
+    expect(readBody.note.content).not.toContain(hiddenTarget.id);
+    expect(JSON.parse(readBody.note.content).nodes[0]).toMatchObject({ minunotes: { status: 'keep' } });
+
+    const replace = await app.request(`/api/harness/notes/${canvas.id}/canvas`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        baseHash: readBody.contentHash,
+        canvas: { nodes: [{ id: 'replacement', type: 'text', text: 'Replacement' }], edges: [] },
+      }),
+    });
+    expect(replace.status).toBe(403);
+
+    const unlink = await app.request(
+      `/api/harness/notes/${canvas.id}/canvas/nodes/node_hidden/link?baseHash=${readBody.contentHash}`,
+      { method: 'DELETE' }
+    );
+    expect(unlink.status).toBe(403);
+
+    const createWithHiddenLink = await app.request('/api/harness/canvases', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ folderId: folder.id, canvas: JSON.parse(rawCanvas) }),
+    });
+    expect(createWithHiddenLink.status).toBe(403);
+
+    const [stored] = await db.select().from(schema.notes).where(eq(schema.notes.id, canvas.id));
+    expect(stored.content).toBe(rawCanvas);
+  });
+
   it('validates canvas node link targets, node ids, document types, editability, and content hashes', async () => {
     const { app, db, schema, folder } = await setupHarnessApp();
     const targetResponse = await app.request('/api/harness/notes', {
@@ -350,20 +436,12 @@ describe('harness canvas operations', () => {
         },
       }),
     });
-    expect(replace.status).toBe(200);
+    expect(replace.status).toBe(403);
+    await expect(replace.json()).resolves.toEqual({ error: 'Canvas contains inaccessible note links' });
 
     const links = await app.request(`/api/harness/notes/${canvas.note.id}/links`);
     expect(links.status).toBe(200);
-    await expect(links.json()).resolves.toMatchObject({
-      links: [
-        expect.objectContaining({
-          targetNoteId: null,
-          targetTitle: 'Known label',
-          label: 'Known label',
-          linkType: 'canvas-note',
-        }),
-      ],
-    });
+    await expect(links.json()).resolves.toMatchObject({ links: [] });
   });
 
   it('replaces a canvas note from diagram syntax and rejects markdown patch edits', async () => {

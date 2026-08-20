@@ -14,6 +14,7 @@ const DRIZZLE_TABLE = '__drizzle_migrations';
 const BREAKPOINT = '--> statement-breakpoint';
 const PERMISSION_MIGRATION_START = 28;
 const PERMISSION_MIGRATION_END = 34;
+const TENANT_INTEGRITY_MIGRATION = 36;
 
 function loadEnvFile(filePath: string) {
   if (!existsSync(filePath)) return;
@@ -92,14 +93,14 @@ async function tableExists(client: ReturnType<typeof createClient>, name: string
   return result.rows.length > 0;
 }
 
-function runPermissionPreflight() {
-  console.log('\nRunning permission migration preflight...');
-  const result = spawnSync('pnpm', ['exec', 'tsx', 'scripts/verify-permission-migration.ts'], {
+function runPreflight(label: string, script: string) {
+  console.log(`\nRunning ${label}...`);
+  const result = spawnSync('pnpm', ['exec', 'tsx', script], {
     stdio: 'inherit',
     shell: false,
     env: process.env,
   });
-  if (result.status !== 0) throw new Error('Permission migration preflight failed');
+  if (result.status !== 0) throw new Error(`${label} failed`);
 }
 
 const environment = process.env.ENVIRONMENT ?? 'local';
@@ -141,8 +142,18 @@ try {
     const hasPendingPermissionMigration = pending.some(
       (migration) => migration.idx >= PERMISSION_MIGRATION_START && migration.idx <= PERMISSION_MIGRATION_END
     );
-    if (hasPendingPermissionMigration && (await tableExists(client, 'folders'))) runPermissionPreflight();
+    const hasExistingFolders = await tableExists(client, 'folders');
+    if (hasPendingPermissionMigration && hasExistingFolders)
+      runPreflight('permission migration preflight', 'scripts/verify-permission-migration.ts');
     else if (hasPendingPermissionMigration) console.log('Skipping permission preflight for a fresh database.');
+
+    const hasPendingTenantIntegrityMigration = pending.some(
+      (migration) => migration.idx === TENANT_INTEGRITY_MIGRATION
+    );
+    if (hasPendingTenantIntegrityMigration && hasExistingFolders)
+      runPreflight('tenant-integrity migration preflight', 'scripts/verify-tenant-integrity.ts');
+    else if (hasPendingTenantIntegrityMigration)
+      console.log('Skipping tenant-integrity preflight for a fresh database.');
 
     for (const migration of pending) {
       console.log(`\n→ ${migration.tag}`);

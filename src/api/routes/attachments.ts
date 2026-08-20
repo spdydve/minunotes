@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES, validateImageBytes } from '../attachments/image-validation';
 import { db } from '../db/client';
 import { attachments, notes } from '../db/schema';
 import type { auth } from '../lib/auth';
 import { collaborationRoleAllows, resolveNoteCollaborationAccess } from '../lib/collaboration-access';
+import { omitCollaborationInternalFields } from '../lib/collaboration-serialization';
 import { getAttachmentMarkdownUrl, getObjectStorage } from '../storage';
 
 type Variables = {
@@ -12,8 +14,7 @@ type Variables = {
   session: typeof auth.$Infer.Session.session | null;
 };
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']);
+const SIGNED_UPLOAD_EXPIRY_SECONDS = 300;
 
 export const attachmentRoutes = new Hono<{ Variables: Variables }>();
 
@@ -41,6 +42,11 @@ function hashBytes(bytes: Uint8Array) {
 
 function storageKeyFor(input: { userId: string; noteId: string; attachmentId: string; filename: string }) {
   return `users/${input.userId}/notes/${input.noteId}/attachments/${input.attachmentId}-${input.filename}`;
+}
+
+function serializeAttachment<T extends object>(attachment: T, source: 'owner' | 'note_grant' | 'folder_grant') {
+  const safe = omitCollaborationInternalFields(attachment);
+  return source === 'note_grant' ? { ...safe, folderId: null } : safe;
 }
 
 function validateImageMetadata(file: { mimeType: string; size: number }) {
@@ -95,7 +101,7 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
     const signedUrl = await storage.createSignedUploadUrl({
       key: storageKey,
       contentType: mimeType,
-      expiresInSeconds: 900,
+      expiresInSeconds: SIGNED_UPLOAD_EXPIRY_SECONDS,
     });
 
     const [attachment] = await db
@@ -117,7 +123,7 @@ attachmentRoutes.post('/notes/:noteId/image-uploads', async (c) => {
 
     const markdownUrl = getAttachmentMarkdownUrl(attachment.id);
     uploads.push({
-      attachment: access.source === 'note_grant' ? { ...attachment, folderId: null } : attachment,
+      attachment: serializeAttachment(attachment, access.source),
       signedUrl,
       method: 'PUT',
       headers: { 'content-type': mimeType },
@@ -144,18 +150,39 @@ attachmentRoutes.post('/:attachmentId/complete', async (c) => {
     return c.json({ error: access ? 'Forbidden' : 'Attachment not found' }, access ? 403 : 404);
 
   const storage = getObjectStorage();
-  if (storage.objectExists) {
-    const exists = await storage.objectExists({ key: attachment.storageKey });
-    if (!exists) return c.json({ error: 'Attachment upload not found' }, 404);
-  }
+  const rejectStoredUpload = async (error: string) => {
+    await storage.deleteObject({ key: attachment.storageKey });
+    await db
+      .update(attachments)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, access.resourceOwnerUserId)));
+    return c.json({ error }, error === 'Image is too large' ? 413 : 400);
+  };
+  const metadata = storage.getObjectMetadata
+    ? await storage.getObjectMetadata({ key: attachment.storageKey })
+    : undefined;
+  if (metadata === null) return c.json({ error: 'Attachment upload not found' }, 404);
+  if (metadata && metadata.size > MAX_IMAGE_BYTES) return rejectStoredUpload('Image is too large');
+  if (metadata && metadata.size <= 0) return rejectStoredUpload('Image is empty');
+
+  const object = await storage.getObject({ key: attachment.storageKey });
+  if (!object) return c.json({ error: 'Attachment upload not found' }, 404);
+  const validation = validateImageBytes({ bytes: object.body, claimedMimeType: attachment.mimeType });
+  if (!validation.ok) return rejectStoredUpload(validation.error);
 
   const [updated] = await db
     .update(attachments)
-    .set({ status: 'ready', updatedAt: new Date() })
+    .set({
+      status: 'ready',
+      size: validation.size,
+      contentHash: hashBytes(object.body),
+      mimeType: validation.detectedMimeType,
+      updatedAt: new Date(),
+    })
     .where(and(eq(attachments.id, attachment.id), eq(attachments.userId, access.resourceOwnerUserId)))
     .returning();
   return c.json({
-    attachment: access.source === 'note_grant' ? { ...updated, folderId: null } : updated,
+    attachment: serializeAttachment(updated, access.source),
     markdownUrl: getAttachmentMarkdownUrl(updated.id),
     markdown: `![${updated.filename}](${getAttachmentMarkdownUrl(updated.id)})`,
   });
@@ -206,6 +233,8 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
   if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'Image is too large' }, 413);
 
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const validation = validateImageBytes({ bytes, claimedMimeType: file.type });
+  if (!validation.ok) return c.json({ error: validation.error }, validation.error === 'Image is too large' ? 413 : 400);
   const attachmentId = createAttachmentId();
   const filename = safeFilename(file.name || 'image');
   const storageKey = storageKeyFor({
@@ -232,8 +261,8 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
       folderId: note.folderId,
       provider: storage.provider,
       filename,
-      mimeType: file.type,
-      size: file.size,
+      mimeType: validation.detectedMimeType,
+      size: validation.size,
       contentHash: hashBytes(bytes),
       storageKey,
       status: 'ready',
@@ -242,7 +271,7 @@ attachmentRoutes.post('/notes/:noteId/images', async (c) => {
 
   return c.json(
     {
-      attachment: access.source === 'note_grant' ? { ...attachment, folderId: null } : attachment,
+      attachment: serializeAttachment(attachment, access.source),
       markdownUrl: getAttachmentMarkdownUrl(attachment.id),
       markdown: `![${filename}](${getAttachmentMarkdownUrl(attachment.id)})`,
     },
@@ -267,6 +296,7 @@ export function attachmentContentResponse(input: {
     'x-content-type-options': 'nosniff',
   };
   if (input.sandbox) headers['content-security-policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'";
+  if (input.contentType === 'image/svg+xml') headers['content-disposition'] = 'attachment';
   return new Response(body, { headers });
 }
 
@@ -290,7 +320,8 @@ attachmentRoutes.get('/:attachmentId/content', async (c) => {
 
   return attachmentContentResponse({
     body: object.body,
-    contentType: object.contentType ?? attachment.mimeType,
+    contentType: attachment.mimeType,
     cacheControl: 'private, max-age=3600',
+    sandbox: true,
   });
 });

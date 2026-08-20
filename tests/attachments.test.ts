@@ -2,6 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { detectRasterImageType, validateImageBytes } from '../src/api/attachments/image-validation';
+import { attachmentContentResponse } from '../src/api/routes/attachments';
 import { getAttachmentMarkdownUrl, getObjectStorage, resetObjectStorageForTests } from '../src/api/storage';
 import { FilesystemObjectStorage } from '../src/api/storage/filesystem-storage';
 import type { ObjectStorage } from '../src/api/storage/object-storage';
@@ -13,6 +15,37 @@ afterEach(async () => {
   resetObjectStorageForTests();
   vi.unstubAllEnvs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+describe('attachment image validation', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  it('accepts matching raster signatures and rejects spoofed or active content', () => {
+    expect(detectRasterImageType(png)).toBe('image/png');
+    expect(validateImageBytes({ bytes: png, claimedMimeType: 'image/png' })).toMatchObject({
+      detectedMimeType: 'image/png',
+      size: png.byteLength,
+    });
+    expect(validateImageBytes({ bytes: png, claimedMimeType: 'image/jpeg' })).toEqual({
+      ok: false,
+      error: 'Image content does not match its declared type',
+    });
+    expect(
+      validateImageBytes({ bytes: new TextEncoder().encode('<svg><script/></svg>'), claimedMimeType: 'image/svg+xml' })
+    ).toEqual({ ok: false, error: 'Unsupported image type' });
+  });
+
+  it('sandboxes authenticated content and forces legacy SVG downloads', async () => {
+    const response = attachmentContentResponse({
+      body: new TextEncoder().encode('<svg/>'),
+      contentType: 'image/svg+xml',
+      cacheControl: 'private, max-age=3600',
+      sandbox: true,
+    });
+    expect(response.headers.get('content-security-policy')).toContain('sandbox');
+    expect(response.headers.get('content-disposition')).toBe('attachment');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  });
 });
 
 describe('FilesystemObjectStorage', () => {
@@ -27,9 +60,14 @@ describe('FilesystemObjectStorage', () => {
       contentType: 'image/png',
     });
 
-    const object = await storage.getObject({ key: 'users/user_1/notes/note_1/attachments/att_1-test.png' });
+    const key = 'users/user_1/notes/note_1/attachments/att_1-test.png';
+    const object = await storage.getObject({ key });
     expect(object?.contentType).toBe('image/png');
     expect(new TextDecoder().decode(object?.body)).toBe('image-bytes');
+    await expect(storage.getObjectMetadata({ key })).resolves.toEqual({
+      size: new TextEncoder().encode('image-bytes').byteLength,
+      contentType: 'image/png',
+    });
 
     await storage.deleteObject({ key: 'users/user_1/notes/note_1/attachments/att_1-test.png' });
     await expect(

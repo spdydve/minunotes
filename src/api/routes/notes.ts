@@ -22,6 +22,7 @@ import {
 } from '../lib/collaboration-access';
 import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
 import { serializeCollaborationUserIdentity } from '../lib/collaboration-identity';
+import { omitCollaborationInternalFields } from '../lib/collaboration-serialization';
 import { createId } from '../lib/id';
 import { pageRows, parsePageRequest } from '../lib/pagination';
 import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
@@ -88,11 +89,15 @@ async function serializeDiscoveryNotes<T extends { id: string; folderId: string 
   const ownerIdentities = new Map(
     ownerRows.map((owner) => [owner.id, serializeCollaborationUserIdentity({ ...owner, currentUserId: actorUserId })])
   );
-  return visible.map(({ note, access }) => ({
-    ...(access.source === 'note_grant' ? { ...note, folderId: null, folderTitle: null } : note),
-    access: serializeCollaborationAccess(access),
-    owner: access.role === 'owner' ? null : (ownerIdentities.get(access.resourceOwnerUserId) ?? null),
-  }));
+  return visible.map(({ note, access }) => {
+    const safeNote =
+      access.role === 'owner' ? note : { ...omitCollaborationInternalFields(note), updatedByActorId: null };
+    return {
+      ...(access.source === 'note_grant' ? { ...safeNote, folderId: null, folderTitle: null } : safeNote),
+      access: serializeCollaborationAccess(access),
+      owner: access.role === 'owner' ? null : (ownerIdentities.get(access.resourceOwnerUserId) ?? null),
+    };
+  });
 }
 
 async function readCollaborativeDocument(actorUserId: string, noteId: string) {
@@ -111,13 +116,8 @@ async function readCollaborativeDocument(actorUserId: string, noteId: string) {
   };
 }
 
-function serializeCollaborativeNote<T extends { userId: string; updatedByActorId: string | null }>(
-  note: T,
-  access: CollaborationAccess
-) {
-  if (access.role === 'owner') return note;
-  const { userId: _userId, ...safeNote } = note;
-  return { ...safeNote, updatedByActorId: null };
+function serializeCollaborativeNote<T extends object>(note: T, access: CollaborationAccess) {
+  return access.role === 'owner' ? note : { ...omitCollaborationInternalFields(note), updatedByActorId: null };
 }
 
 async function withPublicActorUid<
@@ -344,8 +344,8 @@ noteRoutes.get('/:noteId', async (c) => {
   const noteWithActor = await withPublicActorUid(result.note);
   const note = serializeCollaborativeNote(noteWithActor, result.access);
   return c.json({
-    ...result,
     note: result.access.source === 'note_grant' ? { ...note, folderId: null } : note,
+    contentHash: result.contentHash,
     access: serializeCollaborationAccess(result.access),
   });
 });

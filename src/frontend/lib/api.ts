@@ -331,15 +331,13 @@ export type LinksResponse = { noteId: string; links: NoteLink[] };
 export type Tag = { id: string; name: string; normalizedName: string; noteCount?: number };
 export type Attachment = {
   id: string;
-  userId: string;
   noteId: string;
-  folderId: string;
+  folderId: string | null;
   provider: string;
   filename: string;
   mimeType: string;
   size: number;
   contentHash: string;
-  storageKey: string;
   status: 'pending' | 'ready';
   createdAt: string;
   updatedAt: string;

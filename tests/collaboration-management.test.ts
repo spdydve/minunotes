@@ -9,7 +9,7 @@ import { expectPrivacySafeCollaborationDto } from './helpers/collaboration-priva
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 35; index += 1) {
+  for (let index = 0; index <= 36; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -443,7 +443,12 @@ describe('collaborator management', () => {
     expect(collaborativeTag.userId).toBe('owner');
 
     const imageBody = new FormData();
-    imageBody.set('image', new File([new Uint8Array([1, 2, 3])], 'shared.png', { type: 'image/png' }));
+    imageBody.set(
+      'image',
+      new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], 'shared.png', {
+        type: 'image/png',
+      })
+    );
     const editorUpload = await app.request('/attachments/notes/note/images', {
       method: 'POST',
       headers: { 'x-test-user': collaborator.id },
@@ -451,9 +456,11 @@ describe('collaborator management', () => {
     });
     expect(editorUpload.status).toBe(201);
     const editorUploadBody = (await editorUpload.json()) as {
-      attachment: { id: string; userId: string; folderId: string | null };
+      attachment: { id: string; folderId: string | null };
     };
-    expect(editorUploadBody.attachment).toMatchObject({ userId: 'owner', folderId: null });
+    expect(editorUploadBody.attachment).toMatchObject({ folderId: null });
+    expect(editorUploadBody.attachment).not.toHaveProperty('userId');
+    expect(editorUploadBody.attachment).not.toHaveProperty('storageKey');
     const [storedUpload] = await db
       .select()
       .from(schema.attachments)

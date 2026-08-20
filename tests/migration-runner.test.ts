@@ -72,6 +72,42 @@ describe('migration runner', () => {
     client.close();
   });
 
+  it('blocks tenant-integrity migration until cross-tenant rows are repaired', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'notes-tenant-migration-runner-'));
+    tempDirs.push(dir);
+    const url = `file:${path.join(dir, 'test.db')}`;
+    const initial = runMigrations(url, '0035');
+    expect(initial.status, `${initial.stdout}\n${initial.stderr}`).toBe(0);
+
+    const client = createClient({ url });
+    const now = Math.floor(Date.now() / 1000);
+    await client.executeMultiple(`
+      INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES
+        ('owner_a', 'Owner A', 'owner-a@example.com', 1, ${now}, ${now}),
+        ('owner_b', 'Owner B', 'owner-b@example.com', 1, ${now}, ${now});
+      INSERT INTO folders (id, user_id, parent_folder_id, title, is_private, is_agent_read_only, created_at, updated_at)
+        VALUES ('folder_a', 'owner_a', NULL, 'Folder A', 0, 0, ${now}, ${now});
+      INSERT INTO notes (id, folder_id, user_id, title, content, created_at, updated_at)
+        VALUES ('note_a', 'folder_a', 'owner_a', 'Note A', '', ${now}, ${now});
+      INSERT INTO note_events (id, note_id, user_id, actor_type, event_type, summary, created_at)
+        VALUES ('event_cross', 'note_a', 'owner_b', 'user', 'edit', 'Cross tenant', ${now});
+    `);
+
+    const audit = runScript(url, 'scripts/verify-tenant-integrity.ts');
+    expect(audit.status).not.toBe(0);
+    expect(`${audit.stdout}\n${audit.stderr}`).toContain('eventNoteOwner');
+
+    const blocked = runMigrations(url, '0036');
+    expect(blocked.status).not.toBe(0);
+    expect(`${blocked.stdout}\n${blocked.stderr}`).toContain('tenant-integrity migration preflight failed');
+
+    await client.execute("DELETE FROM note_events WHERE id = 'event_cross'");
+    const migrated = runMigrations(url, '0036');
+    expect(migrated.status, `${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+    expect((await client.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
+    client.close();
+  }, 30_000);
+
   it('enforces preflight and can stop after the expand migration range', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'notes-migration-range-'));
     tempDirs.push(dir);

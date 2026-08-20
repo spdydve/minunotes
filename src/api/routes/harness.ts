@@ -24,6 +24,7 @@ import {
   serializeCanvasDocument,
   unlinkCanvasNode,
 } from '../harness/commands';
+import { hashMarkdown } from '../harness/hash';
 import {
   compareTitleIdPositions,
   decodeCursor,
@@ -62,7 +63,13 @@ import {
   updateCommentAnchor,
   updateCommentMessage,
 } from '../notes/comments';
-import { listBacklinks, listOrphanNotes, listOutgoingLinks, sanitizeCanvasNoteLinksForActor } from '../notes/links';
+import {
+  listBacklinks,
+  listOrphanNotes,
+  listOutgoingLinks,
+  parseCanvasNoteLinks,
+  sanitizeCanvasNoteLinksForVisibleTargets,
+} from '../notes/links';
 import { listIntegrationAccessibleTags, listNoteTags, listUserTags, setNoteTags } from '../notes/tags';
 
 type Variables = {
@@ -98,6 +105,42 @@ function getIntegrationAuthorization(c: Context<{ Variables: Variables }>) {
   return null;
 }
 
+async function canReadHarnessCanvasTarget(c: Context<{ Variables: Variables }>, noteId: string) {
+  const user = getUser(c);
+  if (!user) return false;
+  const integration = getIntegrationAuthorization(c);
+  if (!integration || !capabilitiesAllow(integration.actor, 'read')) return false;
+  const owned = await readDocument({ documentId: noteId, userId: user.id });
+  if (owned.ok) return hasFolderPermission(c, owned.value.note.folderId, 'read');
+  if (!integration.authorizationId) return false;
+  return Boolean(
+    await resolveIntegrationNoteAccess({
+      actorUserId: user.id,
+      authorizationId: integration.authorizationId,
+      sharedAccessMode: integration.sharedAccessMode,
+      noteId,
+      capability: 'read',
+    })
+  );
+}
+
+async function sanitizeHarnessCanvasContent(c: Context<{ Variables: Variables }>, content: string) {
+  const targetIds = [
+    ...new Set(
+      parseCanvasNoteLinks(content)
+        .map((link) => link.targetNoteId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const visibility = await Promise.all(
+    targetIds.map(async (targetId) => [targetId, await canReadHarnessCanvasTarget(c, targetId)] as const)
+  );
+  return sanitizeCanvasNoteLinksForVisibleTargets({
+    content,
+    visibleTargetIds: new Set(visibility.filter(([, visible]) => visible).map(([targetId]) => targetId)),
+  });
+}
+
 async function readHarnessDocument(
   c: Context<{ Variables: Variables }>,
   noteId: string,
@@ -111,7 +154,19 @@ async function readHarnessDocument(
   const owned = await readDocument({ documentId: noteId, userId: user.id });
   if (owned.ok) {
     if (!(await hasFolderPermission(c, owned.value.note.folderId, capability))) return null;
-    return { ...owned.value, resourceOwnerUserId: user.id, role: 'owner' as const, source: 'owner' as const };
+    const sanitized = owned.value.note.documentType.startsWith('canvas.')
+      ? await sanitizeHarnessCanvasContent(c, owned.value.note.content)
+      : { content: owned.value.note.content, hiddenLinkCount: 0 };
+    return {
+      ...owned.value,
+      note: { ...owned.value.note, content: sanitized.content },
+      contentHash: hashMarkdown(sanitized.content),
+      rawContentHash: owned.value.contentHash,
+      hiddenCanvasLinkCount: sanitized.hiddenLinkCount,
+      resourceOwnerUserId: user.id,
+      role: 'owner' as const,
+      source: 'owner' as const,
+    };
   }
   if (!integration?.authorizationId) return null;
   const access = await resolveIntegrationNoteAccess({
@@ -124,14 +179,16 @@ async function readHarnessDocument(
   if (!access || access.source === 'owner') return null;
   const shared = await readDocument({ documentId: noteId, userId: access.resourceOwnerUserId });
   if (!shared.ok) return null;
-  let note = shared.value.note;
-  if (note.documentType.startsWith('canvas.')) {
-    const sanitized = await sanitizeCanvasNoteLinksForActor({ actorUserId: user.id, content: note.content });
-    note = { ...note, content: sanitized.content };
-  }
+  const sanitized = shared.value.note.documentType.startsWith('canvas.')
+    ? await sanitizeHarnessCanvasContent(c, shared.value.note.content)
+    : { content: shared.value.note.content, hiddenLinkCount: 0 };
+  const note = { ...shared.value.note, content: sanitized.content };
   return {
     ...shared.value,
     note: access.source === 'note_grant' ? { ...note, folderId: null } : note,
+    contentHash: hashMarkdown(sanitized.content),
+    rawContentHash: shared.value.contentHash,
+    hiddenCanvasLinkCount: sanitized.hiddenLinkCount,
     resourceOwnerUserId: access.resourceOwnerUserId,
     role: access.role,
     source: access.source,
@@ -254,8 +311,8 @@ function isLineSearchCursor(value: unknown): value is LineSearchCursor {
 
 function summarizeHarnessDocumentResult<T extends { note: SummarizableNote; contentHash: string }>(result: T) {
   return {
-    ...result,
     note: summarizeHarnessNote(result.note),
+    contentHash: result.contentHash,
   };
 }
 
@@ -464,7 +521,7 @@ harnessRoutes.post('/folders', async (c) => {
 
   const parent = await validateFolderParent({ userId: user.id, parentFolderId: body?.parentFolderId ?? null });
   if (!parent.ok) return c.json({ error: parent.error }, parent.status);
-  if (key && body?.parentFolderId && !(await hasFolderPermission(c, body.parentFolderId, 'create')))
+  if (body?.parentFolderId && !(await hasFolderPermission(c, body.parentFolderId, 'create')))
     return c.json({ error: 'Forbidden' }, 403);
 
   const folder = {
@@ -561,11 +618,12 @@ harnessRoutes.get('/notes/search', async (c) => {
         noteId: note.id,
         capability: 'read',
       });
-      return access?.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized;
+      if (!access) return null;
+      return access.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized;
     })
   );
   return c.json({
-    notes: visibleDocuments,
+    notes: visibleDocuments.filter((note): note is NonNullable<typeof note> => note !== null),
     pageInfo: result.value.pageInfo,
   });
 });
@@ -628,10 +686,14 @@ harnessRoutes.get('/notes/search-lines', async (c) => {
         noteId: match.noteId,
         capability: 'read',
       });
-      return access?.source === 'note_grant' ? { ...match, folderId: null } : match;
+      if (!access) return null;
+      return access.source === 'note_grant' ? { ...match, folderId: null } : match;
     })
   );
-  return c.json({ ...result.value, matches });
+  return c.json({
+    ...result.value,
+    matches: matches.filter((match): match is NonNullable<typeof match> => match !== null),
+  });
 });
 
 harnessRoutes.post('/notes', async (c) => {
@@ -683,6 +745,8 @@ harnessRoutes.post('/canvases', async (c) => {
   const content = body.canvas === undefined ? undefined : serializeCanvasDocument(body.canvas);
   if (body.canvas !== undefined && !content)
     return c.json({ error: 'Canvas content must include nodes and edges arrays' }, 400);
+  if (content && (await sanitizeHarnessCanvasContent(c, content)).hiddenLinkCount > 0)
+    return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
 
   const actor = getActor(c);
   const result = await createDocument({
@@ -717,6 +781,8 @@ harnessRoutes.post('/canvases/from-syntax', async (c) => {
 
   const compiled = canvasDocumentFromSyntax({ syntax: body.syntax, documentType: body.documentType });
   if (!compiled.ok) return c.json({ error: 'Diagram syntax has errors', diagnostics: compiled.errors }, 400);
+  if ((await sanitizeHarnessCanvasContent(c, JSON.stringify(compiled.canvas))).hiddenLinkCount > 0)
+    return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
 
   const actor = getActor(c);
   const result = await createDocument({
@@ -790,10 +856,14 @@ harnessRoutes.get('/notes/orphans', async (c) => {
           noteId: note.id,
           capability: 'read',
         });
-        return access?.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized;
+        if (!access) return null;
+        return access.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized;
       })
     );
-    return c.json({ notes, pageInfo: page.pageInfo });
+    return c.json({
+      notes: notes.filter((note): note is NonNullable<typeof note> => note !== null),
+      pageInfo: page.pageInfo,
+    });
   } catch (error) {
     if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);
     throw error;
@@ -1228,6 +1298,9 @@ harnessRoutes.put('/notes/:noteId/canvas', async (c) => {
 
   const current = await readHarnessDocument(c, c.req.param('noteId'), 'edit');
   if (!current) return c.json({ error: 'Note not found' }, 404);
+  if (current.hiddenCanvasLinkCount > 0) return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
+  if ((await sanitizeHarnessCanvasContent(c, canvas)).hiddenLinkCount > 0)
+    return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
 
   const actor = getActor(c);
   const result = await replaceCanvasDocument({
@@ -1236,7 +1309,7 @@ harnessRoutes.put('/notes/:noteId/canvas', async (c) => {
     title: body.title,
     canvas: JSON.parse(canvas),
     documentType: body.documentType,
-    baseHash: body.baseHash,
+    baseHash: body.baseHash ?? current.rawContentHash,
     actorType: actor.actorType,
     actorId: actor.actorId,
   });
@@ -1259,6 +1332,7 @@ harnessRoutes.post('/notes/:noteId/canvas/nodes/:nodeId/link-note', async (c) =>
 
   const current = await readHarnessDocument(c, c.req.param('noteId'), 'edit');
   if (!current) return c.json({ error: 'Note not found' }, 404);
+  if (current.hiddenCanvasLinkCount > 0) return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
   const target = await readHarnessDocument(c, body.targetNoteId, 'read');
   if (target?.note.type !== 'note' || target.resourceOwnerUserId !== current.resourceOwnerUserId)
     return c.json({ error: 'Target note not found' }, 404);
@@ -1269,7 +1343,7 @@ harnessRoutes.post('/notes/:noteId/canvas/nodes/:nodeId/link-note', async (c) =>
     userId: current.resourceOwnerUserId,
     nodeId: c.req.param('nodeId'),
     targetNoteId: target.note.id,
-    baseHash: body.baseHash,
+    baseHash: body.baseHash ?? current.rawContentHash,
     actorType: actor.actorType,
     actorId: actor.actorId,
   });
@@ -1288,13 +1362,14 @@ harnessRoutes.delete('/notes/:noteId/canvas/nodes/:nodeId/link', async (c) => {
 
   const current = await readHarnessDocument(c, c.req.param('noteId'), 'edit');
   if (!current) return c.json({ error: 'Note not found' }, 404);
+  if (current.hiddenCanvasLinkCount > 0) return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
 
   const actor = getActor(c);
   const result = await unlinkCanvasNode({
     documentId: c.req.param('noteId'),
     userId: current.resourceOwnerUserId,
     nodeId: c.req.param('nodeId'),
-    baseHash: c.req.query('baseHash'),
+    baseHash: c.req.query('baseHash') ?? current.rawContentHash,
     actorType: actor.actorType,
     actorId: actor.actorId,
   });
@@ -1322,9 +1397,12 @@ harnessRoutes.put('/notes/:noteId/canvas/from-syntax', async (c) => {
 
   const current = await readHarnessDocument(c, c.req.param('noteId'), 'edit');
   if (!current) return c.json({ error: 'Note not found' }, 404);
+  if (current.hiddenCanvasLinkCount > 0) return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
 
   const compiled = canvasDocumentFromSyntax({ syntax: body.syntax, documentType: body.documentType });
   if (!compiled.ok) return c.json({ error: 'Diagram syntax has errors', diagnostics: compiled.errors }, 400);
+  if ((await sanitizeHarnessCanvasContent(c, JSON.stringify(compiled.canvas))).hiddenLinkCount > 0)
+    return c.json({ error: 'Canvas contains inaccessible note links' }, 403);
 
   const actor = getActor(c);
   const result = await replaceCanvasDocument({
@@ -1333,7 +1411,7 @@ harnessRoutes.put('/notes/:noteId/canvas/from-syntax', async (c) => {
     title: body.title ?? compiled.title,
     canvas: compiled.canvas,
     documentType: compiled.documentType as 'canvas.default' | 'canvas.mindmap',
-    baseHash: body.baseHash,
+    baseHash: body.baseHash ?? current.rawContentHash,
     actorType: actor.actorType,
     actorId: actor.actorId,
   });

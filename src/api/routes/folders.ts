@@ -9,6 +9,7 @@ import {
   resolveFolderCollaborationAccess,
   serializeCollaborationAccess,
 } from '../lib/collaboration-access';
+import { omitCollaborationInternalFields } from '../lib/collaboration-serialization';
 import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { parsePageRequest } from '../lib/pagination';
@@ -294,7 +295,13 @@ folderRoutes.get('/:folderId/notes', async (c) => {
     limit: page.limit,
   });
   return c.json({
-    notes: result.value.documents,
+    notes:
+      access.role === 'owner'
+        ? result.value.documents
+        : result.value.documents.map((note) => ({
+            ...omitCollaborationInternalFields(note),
+            updatedByActorId: null,
+          })),
     access: serializeCollaborationAccess(access),
     page: page.page,
     limit: page.limit,
@@ -357,8 +364,7 @@ folderRoutes.post('/:folderId/notes', async (c) => {
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
   if (access.role === 'owner') return c.json({ note: result.value.note }, 201);
-  const { userId: _userId, updatedByActorId: _updatedByActorId, ...note } = result.value.note;
-  return c.json({ note: { ...note, updatedByActorId: null } }, 201);
+  return c.json({ note: { ...omitCollaborationInternalFields(result.value.note), updatedByActorId: null } }, 201);
 });
 
 folderRoutes.delete('/:folderId', async (c) => {

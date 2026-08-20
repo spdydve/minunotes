@@ -253,6 +253,13 @@
       "when": 1786910756512,
       "tag": "0035_lame_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1787189706744,
+      "tag": "0036_blushing_goblin_queen",
+      "breakpoints": true
     }
   ]
 }

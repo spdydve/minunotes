@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 35; index += 1) {
+  for (let index = 0; index <= 36; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -251,6 +251,110 @@ describe('collaboration access resolution', () => {
     await db.delete(schema.collaborationGrants).where(eq(schema.collaborationGrants.id, 'editor_grant'));
     await expect(resolve('all')).resolves.toBeNull();
     await expect(db.select().from(schema.authorizationCollaborationScopes)).resolves.toHaveLength(0);
+    libsql.close();
+  });
+
+  it('calculates specific integration access from selected grants only', async () => {
+    const { db, libsql, schema, access, now } = await setup();
+    await db.insert(schema.collaborationGrants).values([
+      {
+        id: 'root_viewer',
+        ownerUserId: 'owner',
+        granteeUserId: 'collaborator',
+        noteId: null,
+        folderId: 'root',
+        role: 'viewer',
+        createdByUserId: 'owner',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'direct_editor',
+        ownerUserId: 'owner',
+        granteeUserId: 'collaborator',
+        noteId: 'child_note',
+        folderId: null,
+        role: 'editor',
+        createdByUserId: 'owner',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'child_editor',
+        ownerUserId: 'owner',
+        granteeUserId: 'collaborator',
+        noteId: null,
+        folderId: 'child',
+        role: 'editor',
+        createdByUserId: 'owner',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await db.insert(schema.integrationAuthorizations).values({
+      id: 'authorization',
+      userId: 'collaborator',
+      sharedAccessMode: 'specific',
+    });
+    await db.insert(schema.authorizationCollaborationScopes).values({
+      id: 'selected_scope',
+      authorizationId: 'authorization',
+      userId: 'collaborator',
+      collaborationGrantId: 'root_viewer',
+    });
+
+    const noteInput = (capability: 'read' | 'edit') => ({
+      actorUserId: 'collaborator',
+      authorizationId: 'authorization',
+      sharedAccessMode: 'specific' as const,
+      noteId: 'child_note',
+      capability,
+    });
+    const folderInput = (capability: 'read' | 'create') => ({
+      actorUserId: 'collaborator',
+      authorizationId: 'authorization',
+      sharedAccessMode: 'specific' as const,
+      folderId: 'child',
+      capability,
+    });
+
+    await expect(access.resolveIntegrationNoteAccess(noteInput('read'))).resolves.toMatchObject({
+      role: 'viewer',
+      source: 'folder_grant',
+      applicableGrantIds: ['root_viewer'],
+    });
+    await expect(access.resolveIntegrationNoteAccess(noteInput('edit'))).resolves.toBeNull();
+    await expect(access.resolveIntegrationFolderAccess(folderInput('read'))).resolves.toMatchObject({
+      role: 'viewer',
+      applicableGrantIds: ['root_viewer'],
+    });
+    await expect(access.resolveIntegrationFolderAccess(folderInput('create'))).resolves.toBeNull();
+
+    await db
+      .delete(schema.authorizationCollaborationScopes)
+      .where(eq(schema.authorizationCollaborationScopes.id, 'selected_scope'));
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'editor' })
+      .where(eq(schema.collaborationGrants.id, 'root_viewer'));
+    await db
+      .update(schema.collaborationGrants)
+      .set({ role: 'viewer' })
+      .where(eq(schema.collaborationGrants.id, 'direct_editor'));
+    await db.insert(schema.authorizationCollaborationScopes).values({
+      id: 'selected_direct_scope',
+      authorizationId: 'authorization',
+      userId: 'collaborator',
+      collaborationGrantId: 'direct_editor',
+    });
+
+    await expect(access.resolveIntegrationNoteAccess(noteInput('read'))).resolves.toMatchObject({
+      role: 'viewer',
+      source: 'note_grant',
+      applicableGrantIds: ['direct_editor'],
+    });
+    await expect(access.resolveIntegrationNoteAccess(noteInput('edit'))).resolves.toBeNull();
+    await expect(access.resolveIntegrationFolderAccess(folderInput('read'))).resolves.toBeNull();
     libsql.close();
   });
 

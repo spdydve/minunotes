@@ -6,7 +6,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { ObjectStorage, PutObjectInput, StoredObject } from './object-storage';
+import type { ObjectStorage, PutObjectInput, StoredObject, StoredObjectMetadata } from './object-storage';
 
 export type S3ObjectStorageOptions = {
   bucket: string;
@@ -64,6 +64,27 @@ export class S3ObjectStorage implements ObjectStorage {
     }
   }
 
+  async getObjectMetadata(input: { key: string }): Promise<StoredObjectMetadata | null> {
+    try {
+      const result = await this.client.send(
+        new HeadObjectCommand({
+          Bucket: this.options.bucket,
+          Key: input.key,
+        })
+      );
+      return { size: result.ContentLength ?? 0, contentType: result.ContentType };
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'name' in error &&
+        (error.name === 'NoSuchKey' || error.name === 'NotFound' || error.name === 'NotFoundError')
+      )
+        return null;
+      throw error;
+    }
+  }
+
   async deleteObject(input: { key: string }): Promise<void> {
     await this.client.send(
       new DeleteObjectCommand({
@@ -86,23 +107,6 @@ export class S3ObjectStorage implements ObjectStorage {
   }
 
   async objectExists(input: { key: string }): Promise<boolean> {
-    try {
-      await this.client.send(
-        new HeadObjectCommand({
-          Bucket: this.options.bucket,
-          Key: input.key,
-        })
-      );
-      return true;
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'name' in error &&
-        (error.name === 'NoSuchKey' || error.name === 'NotFound' || error.name === 'NotFoundError')
-      )
-        return false;
-      throw error;
-    }
+    return (await this.getObjectMetadata(input)) !== null;
   }
 }
