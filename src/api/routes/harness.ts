@@ -3,7 +3,6 @@ import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
 import { type ApiKey, authorizationFolderRules, folders, type Note, type OAuthAuthorization } from '../db/schema';
 import {
-  type ActorType,
   canvasDocumentFromSyntax,
   createDocument,
   type DocumentEdit,
@@ -43,6 +42,12 @@ import {
   resolveIntegrationNoteAccess,
 } from '../lib/collaboration-access';
 import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
+import { omitResourceCreator } from '../lib/collaboration-serialization';
+import {
+  resolveFolderTrashEligibility,
+  resolveNoteTrashEligibility,
+  trashEligibilityStatus,
+} from '../lib/collaboration-trash';
 import {
   canIntegrationAccessFolder,
   getIntegrationAccessibleFolderIds,
@@ -71,6 +76,7 @@ import {
   sanitizeCanvasNoteLinksForVisibleTargets,
 } from '../notes/links';
 import { listIntegrationAccessibleTags, listNoteTags, listUserTags, setNoteTags } from '../notes/tags';
+import { trashFolder, trashNote } from '../trash/operations';
 
 type Variables = {
   user: typeof auth.$Infer.Session.user | null;
@@ -228,7 +234,7 @@ async function harnessDocumentDeniedStatus(userId: string, noteId: string) {
   return (await readDocument({ documentId: noteId, userId })).ok ? (403 as const) : (404 as const);
 }
 
-function getActor(c: Context<{ Variables: Variables }>): { actorType: ActorType; actorId?: string } {
+function getActor(c: Context<{ Variables: Variables }>): { actorType: 'user' | 'agent'; actorId?: string } {
   const key = c.get('apiKey');
   const oauthAuthorization = c.get('oauthAuthorization');
   return key
@@ -519,15 +525,21 @@ harnessRoutes.post('/folders', async (c) => {
   const title = body?.title?.trim();
   if (!title) return c.json({ error: 'Folder title is required' }, 400);
 
-  const parent = await validateFolderParent({ userId: user.id, parentFolderId: body?.parentFolderId ?? null });
+  const parentFolderId = body?.parentFolderId ?? null;
+  let resourceOwnerUserId = user.id;
+  if (parentFolderId) {
+    const access = await resolveHarnessFolder(c, parentFolderId, 'create');
+    if (!access) return c.json({ error: 'Forbidden' }, 403);
+    resourceOwnerUserId = access.resourceOwnerUserId;
+  }
+  const parent = await validateFolderParent({ userId: resourceOwnerUserId, parentFolderId });
   if (!parent.ok) return c.json({ error: parent.error }, parent.status);
-  if (body?.parentFolderId && !(await hasFolderPermission(c, body.parentFolderId, 'create')))
-    return c.json({ error: 'Forbidden' }, 403);
 
   const folder = {
     id: createId('folder'),
-    userId: user.id,
-    parentFolderId: body?.parentFolderId ?? null,
+    userId: resourceOwnerUserId,
+    createdByUserId: user.id,
+    parentFolderId,
     title,
     isPrivate: false,
     isAgentReadOnly: false,
@@ -539,7 +551,7 @@ harnessRoutes.post('/folders', async (c) => {
 
     const actor = key ?? oauthAuthorization;
     const integrationAuthorizationId = key?.authorizationId ?? oauthAuthorization?.integrationAuthorizationId;
-    if (actor?.accessMode === 'specific' && integrationAuthorizationId) {
+    if (resourceOwnerUserId === user.id && actor?.accessMode === 'specific' && integrationAuthorizationId) {
       await tx
         .insert(authorizationFolderRules)
         .values({
@@ -715,6 +727,7 @@ harnessRoutes.post('/notes', async (c) => {
   const actor = getActor(c);
   const result = await createDocument({
     userId: access.resourceOwnerUserId,
+    creatorUserId: user.id,
     folderId: body.folderId,
     title: body.title,
     markdown: body.content,
@@ -751,6 +764,7 @@ harnessRoutes.post('/canvases', async (c) => {
   const actor = getActor(c);
   const result = await createDocument({
     userId: access.resourceOwnerUserId,
+    creatorUserId: user.id,
     folderId: body.folderId,
     title: body.title,
     markdown: content ?? undefined,
@@ -787,6 +801,7 @@ harnessRoutes.post('/canvases/from-syntax', async (c) => {
   const actor = getActor(c);
   const result = await createDocument({
     userId: access.resourceOwnerUserId,
+    creatorUserId: user.id,
     folderId: body.folderId,
     title: body.title ?? compiled.title,
     markdown: JSON.stringify(compiled.canvas),
@@ -946,12 +961,77 @@ harnessRoutes.get('/notes/:noteId', async (c) => {
     const status = await harnessDocumentDeniedStatus(user.id, noteId);
     return c.json({ error: status === 403 ? 'Forbidden' : 'Note not found' }, status);
   }
-  const { userId: _resourceOwnerUserId, ...note } = result.note;
+  const { userId: _resourceOwnerUserId, ...note } = omitResourceCreator(result.note);
   return c.json({
     note,
     contentHash: result.contentHash,
     access: summarizeHarnessAccess(result),
   });
+});
+
+harnessRoutes.post('/notes/:noteId/trash', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const noteId = c.req.param('noteId');
+  const current = await readHarnessDocument(c, noteId, 'edit');
+  if (!current) return c.json({ error: 'Note not found' }, 404);
+  if (!current.note.isApiEditable) return c.json({ error: 'Document is not editable through the API' }, 403);
+  const eligibility = await resolveNoteTrashEligibility({
+    actorUserId: user.id,
+    noteId,
+    access: {
+      actorUserId: user.id,
+      resourceOwnerUserId: current.resourceOwnerUserId,
+      role: current.role,
+      source: current.source,
+      applicableGrantIds: [],
+    },
+  });
+  if (!eligibility.allowed) {
+    const error = trashEligibilityStatus(eligibility);
+    return c.json({ error: error?.error ?? 'Forbidden' }, error?.status ?? 403);
+  }
+  const actor = getActor(c);
+  const result = await trashNote({
+    userId: eligibility.resourceOwnerUserId,
+    noteId,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ ok: true, ...result.value });
+});
+
+harnessRoutes.post('/folders/:folderId/trash', async (c) => {
+  const user = getUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+  const folderId = c.req.param('folderId');
+  const access = await resolveHarnessFolder(c, folderId, 'edit');
+  if (!access) return c.json({ error: 'Folder not found' }, 404);
+  const eligibility = await resolveFolderTrashEligibility({
+    actorUserId: user.id,
+    folderId,
+    access: {
+      actorUserId: user.id,
+      resourceOwnerUserId: access.resourceOwnerUserId,
+      role: access.role,
+      source: access.source,
+      applicableGrantIds: [],
+    },
+  });
+  if (!eligibility.allowed) {
+    const error = trashEligibilityStatus(eligibility);
+    return c.json({ error: error?.error ?? 'Forbidden' }, error?.status ?? 403);
+  }
+  const actor = getActor(c);
+  const result = await trashFolder({
+    userId: eligibility.resourceOwnerUserId,
+    folderId,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+  });
+  if (!result.ok) return c.json({ error: result.error }, result.status);
+  return c.json({ ok: true, ...result.value });
 });
 
 harnessRoutes.get('/notes/:noteId/comments', async (c) => {

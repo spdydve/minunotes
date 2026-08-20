@@ -9,7 +9,12 @@ import {
   resolveFolderCollaborationAccess,
   serializeCollaborationAccess,
 } from '../lib/collaboration-access';
-import { omitCollaborationInternalFields } from '../lib/collaboration-serialization';
+import { omitCollaborationInternalFields, omitResourceCreator } from '../lib/collaboration-serialization';
+import {
+  listTrashableNoteIds,
+  resolveFolderTrashEligibility,
+  trashEligibilityStatus,
+} from '../lib/collaboration-trash';
 import { loadFolderAccessTree, validateFolderMove, validateFolderParent } from '../lib/folder-access';
 import { createId } from '../lib/id';
 import { parsePageRequest } from '../lib/pagination';
@@ -66,7 +71,7 @@ folderRoutes.get('/', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const result = await listFolders({ userId: user.id });
-  return c.json(result.value);
+  return c.json({ folders: result.value.folders.map(omitResourceCreator) });
 });
 
 folderRoutes.post('/', async (c) => {
@@ -77,13 +82,22 @@ folderRoutes.post('/', async (c) => {
   const title = body?.title?.trim();
   if (!title) return c.json({ error: 'Folder title is required' }, 400);
 
-  const parent = await validateFolderParent({ userId: user.id, parentFolderId: body?.parentFolderId ?? null });
+  const parentFolderId = body?.parentFolderId ?? null;
+  let resourceOwnerUserId = user.id;
+  if (parentFolderId) {
+    const access = await resolveFolderCollaborationAccess({ actorUserId: user.id, folderId: parentFolderId });
+    if (!access) return c.json({ error: 'Folder not found' }, 404);
+    if (!collaborationRoleAllows(access.role, 'create')) return c.json({ error: 'Forbidden' }, 403);
+    resourceOwnerUserId = access.resourceOwnerUserId;
+  }
+  const parent = await validateFolderParent({ userId: resourceOwnerUserId, parentFolderId });
   if (!parent.ok) return c.json({ error: parent.error }, parent.status);
 
   const folder = {
     id: createId('folder'),
-    userId: user.id,
-    parentFolderId: body?.parentFolderId ?? null,
+    userId: resourceOwnerUserId,
+    createdByUserId: user.id,
+    parentFolderId,
     title,
     isPrivate: false,
     isAgentReadOnly: false,
@@ -91,7 +105,12 @@ folderRoutes.post('/', async (c) => {
     updatedAt: new Date(),
   };
   await db.insert(folders).values(folder);
-  return c.json({ folder }, 201);
+  return c.json(
+    {
+      folder: resourceOwnerUserId === user.id ? omitResourceCreator(folder) : omitCollaborationInternalFields(folder),
+    },
+    201
+  );
 });
 
 folderRoutes.patch('/:folderId', async (c) => {
@@ -137,7 +156,7 @@ folderRoutes.patch('/:folderId', async (c) => {
     .returning();
 
   if (!folder) return c.json({ error: 'Folder not found' }, 404);
-  return c.json({ folder });
+  return c.json({ folder: omitResourceCreator(folder) });
 });
 
 folderRoutes.get('/:folderId/share-link', async (c) => {
@@ -254,10 +273,21 @@ folderRoutes.get('/:folderId/detail', async (c) => {
     .select()
     .from(folders)
     .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.parentFolderId, folderId)));
-  const serializeFolder = ({ userId: _userId, ...value }: typeof folders.$inferSelect) => value;
+  const folderEligibilities = new Map(
+    await Promise.all(
+      [folder, ...childFolders].map(
+        async (candidate) =>
+          [candidate.id, await resolveFolderTrashEligibility({ actorUserId: user.id, folderId: candidate.id })] as const
+      )
+    )
+  );
+  const serializeFolder = (value: typeof folders.$inferSelect) => ({
+    ...omitCollaborationInternalFields(value),
+    canTrash: folderEligibilities.get(value.id)?.allowed ?? false,
+  });
   return c.json({
     folder: serializeFolder(ancestors.length > 0 ? folder : { ...folder, parentFolderId: null }),
-    ancestors: ancestors.map(serializeFolder),
+    ancestors: ancestors.map((ancestor) => ({ ...omitCollaborationInternalFields(ancestor), canTrash: false })),
     childFolders: childFolders.map(serializeFolder),
     access: serializeCollaborationAccess(access),
   });
@@ -294,14 +324,20 @@ folderRoutes.get('/:folderId/notes', async (c) => {
     offset: page.offset,
     limit: page.limit,
   });
-  return c.json({
-    notes:
+  const trashableNoteIds = await listTrashableNoteIds({
+    actorUserId: user.id,
+    noteIds: result.value.documents.map((note) => note.id),
+    access,
+  });
+  const serializedNotes = result.value.documents.map((note) => {
+    const safeNote =
       access.role === 'owner'
-        ? result.value.documents
-        : result.value.documents.map((note) => ({
-            ...omitCollaborationInternalFields(note),
-            updatedByActorId: null,
-          })),
+        ? omitResourceCreator(note)
+        : { ...omitCollaborationInternalFields(note), updatedByActorId: null };
+    return { ...safeNote, canTrash: trashableNoteIds.has(note.id) };
+  });
+  return c.json({
+    notes: serializedNotes,
     access: serializeCollaborationAccess(access),
     page: page.page,
     limit: page.limit,
@@ -353,6 +389,7 @@ folderRoutes.post('/:folderId/notes', async (c) => {
     return c.json({ error: 'Templates must be markdown documents' }, 400);
   const result = await createDocument({
     userId: access.resourceOwnerUserId,
+    creatorUserId: user.id,
     folderId: c.req.param('folderId'),
     title: body.title,
     markdown: body.content,
@@ -363,7 +400,7 @@ folderRoutes.post('/:folderId/notes', async (c) => {
   });
 
   if (!result.ok) return c.json({ error: result.error }, result.status);
-  if (access.role === 'owner') return c.json({ note: result.value.note }, 201);
+  if (access.role === 'owner') return c.json({ note: omitResourceCreator(result.value.note) }, 201);
   return c.json({ note: { ...omitCollaborationInternalFields(result.value.note), updatedByActorId: null } }, 201);
 });
 
@@ -371,7 +408,21 @@ folderRoutes.delete('/:folderId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const result = await trashFolder({ userId: user.id, folderId: c.req.param('folderId') });
+  const folderId = c.req.param('folderId');
+  const eligibility = await resolveFolderTrashEligibility({ actorUserId: user.id, folderId });
+  if (!eligibility.allowed) {
+    const error = trashEligibilityStatus(eligibility);
+    return c.json(
+      { error: error?.status === 404 ? 'Folder not found' : (error?.error ?? 'Forbidden') },
+      error?.status ?? 403
+    );
+  }
+  const result = await trashFolder({
+    userId: eligibility.resourceOwnerUserId,
+    folderId,
+    actorType: 'user',
+    actorId: user.id,
+  });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json({ ok: true, ...result.value });
 });

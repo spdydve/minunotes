@@ -90,6 +90,7 @@ function createHostedMcpClient(authState: {
       list: (input = {}) => request(`/folders${toQueryString(input)}`),
       create: ({ title, parentFolderId }) =>
         request('/folders', { method: 'POST', body: JSON.stringify({ title, parentFolderId }) }),
+      trash: (folderId) => request(`/folders/${encodeURIComponent(folderId)}/trash`, { method: 'POST' }),
     },
     notes: {
       search: (input) =>
@@ -112,6 +113,7 @@ function createHostedMcpClient(authState: {
           method: 'POST',
           body: JSON.stringify({ noteIds: input.noteIds, targetFolderId: input.targetFolderId }),
         }),
+      trash: (noteId) => request(`/notes/${encodeURIComponent(noteId)}/trash`, { method: 'POST' }),
       searchLines: (input) =>
         request(
           `/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive, cursor: input.cursor })}`

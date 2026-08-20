@@ -46,10 +46,12 @@ Folders and notes:
 
 - `notes_list_folders`
 - `notes_create_folder`
+- `notes_trash_folder` (destructive; requires `confirm: true`)
 - `notes_search`
 - `notes_get_note`
 - `notes_create_note`
 - `notes_edit_note`
+- `notes_trash_note` (destructive; requires `confirm: true`)
 - `notes_move_notes`
 
 Structured reads:
@@ -82,7 +84,7 @@ Tool discovery is handled by the MCP protocol. Clients call `tools/list`; MinuNo
 
 Hosted and local MCP can use authenticated collaboration only when the connection owner explicitly enables `specific` selected grants or `all` current and future grants. The default is `none`. Human role, connection capabilities, OAuth scope, owner safety policy, and note API-editability all remain ceilings.
 
-Full note reads return privacy-safe role/source context. Discovery stays compact, and direct-note grants omit folder context. Content created in shared folders belongs to the folder owner. Shared structure, resharing, moves, public-link administration, and Trash are owner-only. Revoked or downgraded access fails immediately; clients should report the boundary rather than probe or retry unrelated resources.
+Full note reads return privacy-safe role/source context. Discovery stays compact, and direct-note grants omit folder context. Content created in shared folders belongs to the folder owner and is attributed to the authorizing user. Shared moves, resharing, public-link administration, restore, permanent deletion, and general Trash management remain owner-only. Edit-capable integrations may move only eligible creator-owned content to the owner’s Trash. Revoked or downgraded access fails immediately; clients should report the boundary rather than probe or retry unrelated resources.
 
 For net-new content, resolve the target folder from folder metadata and create directly. Do not read unrelated notes merely to confirm the folder or inspect permissions.
 
@@ -109,6 +111,6 @@ Canvas replacement and node-link mutations require a current `baseHash`. Setting
 
 ## Current MCP boundary
 
-Hosted and local MCP expose active content only. Trashed notes, templates, and folder subtrees disappear from list, search, read, metadata, and attachment operations. MCP does not provide tools to list Trash or trash, restore, or permanently delete content; those owner-only actions remain in the authenticated MinuNotes web interface.
+Hosted and local MCP expose active content only. Trashed notes, templates, and folder subtrees disappear from list, search, read, metadata, and attachment operations. MCP provides explicitly confirmed destructive tools to move eligible creator-owned notes and folders to the owner’s Trash. MCP cannot list Trash, restore, or permanently delete content; those owner-only actions remain in the authenticated MinuNotes web interface.
 
 Tag operations are exposed because tags already have user-facing Note Details behavior. Broader graph tools for outgoing links, backlinks, and orphan discovery remain deferred until their product and UI semantics are established.

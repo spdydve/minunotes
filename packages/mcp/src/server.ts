@@ -44,6 +44,7 @@ export type NotesMcpClient = {
   folders: {
     list: (input?: { limit?: number; cursor?: string }) => Promise<unknown>;
     create: (input: { title: string; parentFolderId?: string }) => Promise<unknown>;
+    trash: (folderId: string) => Promise<unknown>;
   };
   notes: {
     search: (input: { query: string; tag?: string; limit?: number; cursor?: string }) => Promise<unknown>;
@@ -51,6 +52,7 @@ export type NotesMcpClient = {
     create: (folderId: string, input: { title?: string; content?: string }) => Promise<unknown>;
     edit: (noteId: string, edits: DocumentEdit[], baseHash?: string) => Promise<unknown>;
     move: (input: { noteIds: string[]; targetFolderId: string }) => Promise<unknown>;
+    trash: (noteId: string) => Promise<unknown>;
     searchLines: (input: {
       query: string;
       folderId?: string;
@@ -148,12 +150,25 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Create folder',
       description:
-        'Create an owned folder or subfolder if the connection has folder creation permission. Shared-folder structure is owner-only; do not retry a denial against another folder.',
+        'Create an owned folder or a subfolder within an editable shared folder when the connection has folder creation permission. The resource remains in the owner corpus and is attributed to the authorizing user.',
       inputSchema: { title: z.string(), parentFolderId: z.string().optional() },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ title, parentFolderId }) => toolResult(await client.folders.create({ title, parentFolderId }))
+  );
+
+  server.registerTool(
+    'notes_trash_folder',
+    {
+      title: 'Move folder to Trash',
+      description:
+        'Destructive: move a folder and its subtree to the owner’s Trash. A shared-folder Editor may do this only when the authorizing user created the entire subtree and the owner has not attached sharing configuration. Restore and permanent deletion remain owner-only. Use only after explicit user approval for this deletion.',
+      inputSchema: { folderId: z.string(), confirm: z.literal(true) },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ folderId }) => toolResult(await client.folders.trash(folderId))
   );
 
   server.registerTool(
@@ -172,6 +187,19 @@ export function createNotesMcpServer(client: NotesMcpClient) {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ query, tag, limit, cursor }) => toolResult(await client.notes.search({ query, tag, limit, cursor }))
+  );
+
+  server.registerTool(
+    'notes_trash_note',
+    {
+      title: 'Move note to Trash',
+      description:
+        'Destructive: move a note to the owner’s Trash. A shared-folder Editor may do this only when the authorizing user created the note and the owner has not attached sharing configuration. Direct-note grants cannot delete the shared note. Restore and permanent deletion remain owner-only. Use only after explicit user approval for this deletion.',
+      inputSchema: { noteId: z.string(), confirm: z.literal(true) },
+      outputSchema: jsonObjectSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ noteId }) => toolResult(await client.notes.trash(noteId))
   );
 
   server.registerTool(

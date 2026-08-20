@@ -20,7 +20,7 @@ async function createDatabase() {
   const dir = await mkdtemp(path.join(tmpdir(), 'notes-collaboration-schema-'));
   tempDirs.push(dir);
   const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
-  await runMigrations(client, 0, 36);
+  await runMigrations(client, 0, 37);
   return client;
 }
 
@@ -104,6 +104,43 @@ describe('direct collaboration schema', () => {
       const result = await client.execute(`SELECT count(*) AS count FROM ${table}`);
       expect(result.rows[0]?.count).toBe(0);
     }
+    client.close();
+  });
+
+  it('backfills creator principals and detaches them when a collaborator account is deleted', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'notes-creator-attribution-migration-'));
+    tempDirs.push(dir);
+    const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
+    await runMigrations(client, 0, 36);
+    const now = Math.floor(Date.now() / 1000);
+    await client.executeMultiple(`
+      INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES
+        ('creator_owner', 'Owner', 'creator-owner@example.com', 1, ${now}, ${now}),
+        ('creator_collaborator', 'Collaborator', 'creator-collaborator@example.com', 1, ${now}, ${now});
+      INSERT INTO folders (id, user_id, parent_folder_id, title, is_private, is_agent_read_only, created_at, updated_at)
+        VALUES ('creator_folder', 'creator_owner', NULL, 'Folder', 0, 0, ${now}, ${now});
+      INSERT INTO notes (id, folder_id, user_id, title, content, created_at, updated_at)
+        VALUES ('creator_note', 'creator_folder', 'creator_owner', 'Note', '', ${now}, ${now});
+    `);
+
+    await runMigrations(client, 37, 37);
+    expect(
+      (await client.execute("SELECT created_by_user_id FROM folders WHERE id = 'creator_folder'")).rows[0]
+    ).toMatchObject({ created_by_user_id: 'creator_owner' });
+    expect(
+      (await client.execute("SELECT created_by_user_id FROM notes WHERE id = 'creator_note'")).rows[0]
+    ).toMatchObject({ created_by_user_id: 'creator_owner' });
+
+    await client.execute("UPDATE folders SET created_by_user_id = 'creator_collaborator' WHERE id = 'creator_folder'");
+    await client.execute("UPDATE notes SET created_by_user_id = 'creator_collaborator' WHERE id = 'creator_note'");
+    await client.execute("DELETE FROM user WHERE id = 'creator_collaborator'");
+    expect(
+      (await client.execute("SELECT user_id, created_by_user_id FROM folders WHERE id = 'creator_folder'")).rows[0]
+    ).toMatchObject({ user_id: 'creator_owner', created_by_user_id: null });
+    expect(
+      (await client.execute("SELECT user_id, created_by_user_id FROM notes WHERE id = 'creator_note'")).rows[0]
+    ).toMatchObject({ user_id: 'creator_owner', created_by_user_id: null });
+    expect((await client.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
     client.close();
   });
 

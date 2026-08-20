@@ -124,6 +124,7 @@ export const folders = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     parentFolderId: text('parent_folder_id'),
+    createdByUserId: text('created_by_user_id').references(() => user.id, { onDelete: 'set null' }),
     title: text('title').notNull(),
     isPrivate: integer('is_private', { mode: 'boolean' }).notNull().default(false),
     isAgentReadOnly: integer('is_agent_read_only', { mode: 'boolean' }).notNull().default(false),
@@ -136,6 +137,7 @@ export const folders = sqliteTable(
     index('folders_user_id_idx').on(table.userId),
     uniqueIndex('folders_id_user_id_idx').on(table.id, table.userId),
     index('folders_parent_folder_id_idx').on(table.parentFolderId),
+    index('folders_created_by_user_id_idx').on(table.createdByUserId),
     index('folders_user_deleted_at_idx').on(table.userId, table.deletedAt),
     index('folders_trash_batch_id_idx').on(table.trashBatchId),
     foreignKey({
@@ -370,6 +372,7 @@ export const notes = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    createdByUserId: text('created_by_user_id').references(() => user.id, { onDelete: 'set null' }),
     title: text('title').notNull().default('Untitled note'),
     content: text('content').notNull().default(''),
     documentType: text('document_type', { enum: ['markdown', 'canvas.default', 'canvas.mindmap'] })
@@ -390,6 +393,7 @@ export const notes = sqliteTable(
     index('notes_user_id_idx').on(table.userId),
     uniqueIndex('notes_id_user_id_idx').on(table.id, table.userId),
     index('notes_folder_id_idx').on(table.folderId),
+    index('notes_created_by_user_id_idx').on(table.createdByUserId),
     index('notes_type_idx').on(table.type),
     index('notes_document_type_idx').on(table.documentType),
     index('notes_user_deleted_at_idx').on(table.userId, table.deletedAt),

@@ -32,7 +32,9 @@ Use dedicated staging resources, disposable owner/collaborator accounts, and tes
 - [ ] Editor can edit API-editable notes when credential capability and owner safety policy allow it.
 - [ ] Editor cannot edit a non-API-editable note or write through an agent-read-only/private folder.
 - [ ] Editor can create a note/canvas in a shared folder when permitted; the stored resource belongs to the folder owner and retains agent attribution.
-- [ ] Shared notes cannot be moved, trashed, reshared, or used to change folder structure/public-link policy.
+- [ ] Shared notes cannot be moved, reshared, or used to change folder structure/public-link policy. Direct-note grants cannot Trash the shared note.
+- [ ] A shared-folder Editor may move only resources created by that authorizing user to the owner’s Trash; shared roots, mixed-creator subtrees, and owner-managed sharing configuration are denied.
+- [ ] Viewer/Commenter agents and edit-disabled credentials cannot Trash; edit-capable agents remain bounded by human role, selected shared scope, API editability, and agent-read-only policy.
 
 ## Collaborative editing behavior
 

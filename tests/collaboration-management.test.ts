@@ -9,7 +9,7 @@ import { expectPrivacySafeCollaborationDto } from './helpers/collaboration-priva
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 36; index += 1) {
+  for (let index = 0; index <= 37; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -1155,6 +1155,222 @@ describe('collaborator management', () => {
     const note = await app.request('/notes/note', { headers: { 'x-test-user': 'invitee' } });
     expect(note.status).toBe(200);
     expect(await note.json()).toMatchObject({ access: { role: 'viewer', source: 'note_grant' } });
+    libsql.close();
+  });
+
+  it('allows Editors to Trash only resources they created under a shared folder', async () => {
+    const { app, db, libsql, schema, owner, collaborator, otherOwner } = await setup();
+    const now = new Date();
+    await db.insert(schema.collaborationGrants).values({
+      id: 'grant_editor_folder',
+      ownerUserId: owner.id,
+      granteeUserId: collaborator.id,
+      noteId: null,
+      folderId: 'folder',
+      role: 'editor',
+      createdByUserId: owner.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const createdNote = await app.request('/folders/folder/notes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': collaborator.id },
+      body: JSON.stringify({ title: 'Collaborator note' }),
+    });
+    expect(createdNote.status).toBe(201);
+    const createdNoteBody = (await createdNote.json()) as { note: { id: string } };
+    const [storedCreatedNote] = await db
+      .select()
+      .from(schema.notes)
+      .where(eq(schema.notes.id, createdNoteBody.note.id));
+    expect(storedCreatedNote).toMatchObject({ userId: owner.id, createdByUserId: collaborator.id });
+    expectPrivacySafeCollaborationDto(createdNoteBody, { forbiddenValues: [owner.id, collaborator.id] });
+
+    const createdFolder = await app.request('/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': collaborator.id },
+      body: JSON.stringify({ title: 'Collaborator folder', parentFolderId: 'folder' }),
+    });
+    expect(createdFolder.status).toBe(201);
+    const createdFolderBody = (await createdFolder.json()) as { folder: { id: string } };
+    const [storedCreatedFolder] = await db
+      .select()
+      .from(schema.folders)
+      .where(eq(schema.folders.id, createdFolderBody.folder.id));
+    expect(storedCreatedFolder).toMatchObject({ userId: owner.id, createdByUserId: collaborator.id });
+    expectPrivacySafeCollaborationDto(createdFolderBody, { forbiddenValues: [owner.id, collaborator.id] });
+
+    const readableCreatedNote = await app.request(`/notes/${createdNoteBody.note.id}`, {
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(readableCreatedNote.status).toBe(200);
+    const readableCreatedNoteBody = await readableCreatedNote.json();
+    expect(readableCreatedNoteBody).toMatchObject({ access: { role: 'editor', canTrash: true } });
+    expectPrivacySafeCollaborationDto(readableCreatedNoteBody, { forbiddenValues: [owner.id, collaborator.id] });
+
+    const folderDetail = await app.request('/folders/folder/detail', {
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(folderDetail.status).toBe(200);
+    const folderDetailBody = (await folderDetail.json()) as {
+      folder: { id: string; canTrash: boolean };
+      childFolders: Array<{ id: string; canTrash: boolean }>;
+    };
+    expect(folderDetailBody.folder).toMatchObject({ id: 'folder', canTrash: false });
+    expect(folderDetailBody.childFolders).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: createdFolderBody.folder.id, canTrash: true })])
+    );
+    expectPrivacySafeCollaborationDto(folderDetailBody, { forbiddenValues: [owner.id, collaborator.id] });
+
+    const nestedNote = await app.request(`/folders/${createdFolderBody.folder.id}/notes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': collaborator.id },
+      body: JSON.stringify({ title: 'Nested collaborator note' }),
+    });
+    expect(nestedNote.status).toBe(201);
+
+    await db.insert(schema.folders).values({
+      id: 'direct_only_folder',
+      userId: owner.id,
+      createdByUserId: owner.id,
+      parentFolderId: null,
+      title: 'Direct only',
+      isPrivate: false,
+      isAgentReadOnly: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.notes).values({
+      id: 'direct_only_note',
+      userId: owner.id,
+      createdByUserId: collaborator.id,
+      folderId: 'direct_only_folder',
+      title: 'Direct only note',
+      content: '',
+      documentType: 'markdown',
+      type: 'note',
+      isApiEditable: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.collaborationGrants).values({
+      id: 'grant_direct_only_note',
+      ownerUserId: owner.id,
+      granteeUserId: collaborator.id,
+      noteId: 'direct_only_note',
+      folderId: null,
+      role: 'editor',
+      createdByUserId: owner.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const directNoteDenied = await app.request('/notes/direct_only_note', {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(directNoteDenied.status).toBe(403);
+
+    const ownerNoteDenied = await app.request('/notes/note', {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(ownerNoteDenied.status).toBe(403);
+    const sharedRootDenied = await app.request('/folders/folder', {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(sharedRootDenied.status).toBe(403);
+
+    const mixedBatch = await app.request('/notes/trash', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-test-user': collaborator.id },
+      body: JSON.stringify({ noteIds: [createdNoteBody.note.id, 'note'] }),
+    });
+    expect(mixedBatch.status).toBe(403);
+    const [stillActive] = await db
+      .select({ deletedAt: schema.notes.deletedAt })
+      .from(schema.notes)
+      .where(eq(schema.notes.id, createdNoteBody.note.id));
+    expect(stillActive.deletedAt).toBeNull();
+
+    await db.insert(schema.collaborationGrants).values({
+      id: 'grant_created_note_to_other',
+      ownerUserId: owner.id,
+      granteeUserId: otherOwner.id,
+      noteId: createdNoteBody.note.id,
+      folderId: null,
+      role: 'viewer',
+      createdByUserId: owner.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const sharingConflict = await app.request(`/notes/${createdNoteBody.note.id}`, {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(sharingConflict.status).toBe(409);
+    await db.delete(schema.collaborationGrants).where(eq(schema.collaborationGrants.id, 'grant_created_note_to_other'));
+
+    const trashedNote = await app.request(`/notes/${createdNoteBody.note.id}`, {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(trashedNote.status).toBe(200);
+    const [storedTrashedNote] = await db
+      .select()
+      .from(schema.notes)
+      .where(eq(schema.notes.id, createdNoteBody.note.id));
+    expect(storedTrashedNote).toMatchObject({ userId: owner.id, deletedAt: expect.any(Date) });
+
+    await db.insert(schema.collaborationGrants).values({
+      id: 'grant_created_folder_to_other',
+      ownerUserId: owner.id,
+      granteeUserId: otherOwner.id,
+      noteId: null,
+      folderId: createdFolderBody.folder.id,
+      role: 'viewer',
+      createdByUserId: owner.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const folderSharingConflict = await app.request(`/folders/${createdFolderBody.folder.id}`, {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(folderSharingConflict.status).toBe(409);
+    await db
+      .delete(schema.collaborationGrants)
+      .where(eq(schema.collaborationGrants.id, 'grant_created_folder_to_other'));
+
+    await db.insert(schema.folders).values({
+      id: 'owner_child_in_collaborator_folder',
+      userId: owner.id,
+      createdByUserId: owner.id,
+      parentFolderId: createdFolderBody.folder.id,
+      title: 'Owner child',
+      isPrivate: false,
+      isAgentReadOnly: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const mixedCreatorFolder = await app.request(`/folders/${createdFolderBody.folder.id}`, {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(mixedCreatorFolder.status).toBe(403);
+    await db.delete(schema.folders).where(eq(schema.folders.id, 'owner_child_in_collaborator_folder'));
+
+    const trashedFolder = await app.request(`/folders/${createdFolderBody.folder.id}`, {
+      method: 'DELETE',
+      headers: { 'x-test-user': collaborator.id },
+    });
+    expect(trashedFolder.status).toBe(200);
+    const [storedTrashedFolder] = await db
+      .select()
+      .from(schema.folders)
+      .where(eq(schema.folders.id, createdFolderBody.folder.id));
+    expect(storedTrashedFolder).toMatchObject({ userId: owner.id, deletedAt: expect.any(Date) });
     libsql.close();
   });
 

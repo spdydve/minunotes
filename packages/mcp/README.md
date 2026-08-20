@@ -56,10 +56,12 @@ Folders and notes:
 
 - `notes_list_folders`
 - `notes_create_folder` (supports optional `parentFolderId` for subfolders)
+- `notes_trash_folder` (destructive; requires `confirm: true`)
 - `notes_search`
 - `notes_get_note`
 - `notes_create_note`
 - `notes_edit_note`
+- `notes_trash_note` (destructive; requires `confirm: true`)
 - `notes_move_notes` (all-or-nothing, up to 100 notes)
 
 Review comments:
@@ -130,11 +132,11 @@ Canvas replacement and node-link mutations require a current `baseHash`. Setting
 
 MCP tools expose owned content plus authenticated collaboration explicitly enabled by the connection owner. Shared access defaults to `none`; `specific` selects active grants and `all` includes current and future grants after an explicit warning. Effective permissions also intersect the collaborator's current role, credential capabilities, OAuth scope, owner safety policy, and note API-editability.
 
-Full note reads return privacy-safe role/source context. Discovery remains compact, and direct-note grants use null folder context. Content created in a shared folder belongs to that folder owner. Shared structure, resharing, moves, public-link administration, and Trash remain owner-only. Downgrade and revocation apply immediately; not found may mean inaccessible or revoked and must not be used to infer existence.
+Full note reads return privacy-safe role/source context. Discovery remains compact, and direct-note grants use null folder context. Content created in a shared folder belongs to that folder owner and is attributed to the authorizing user. Shared moves, resharing, public-link administration, restore, permanent deletion, and general Trash management remain owner-only. Edit-capable integrations may move only eligible creator-owned content to the owner’s Trash. Downgrade and revocation apply immediately; not found may mean inaccessible or revoked and must not be used to infer existence.
 
 For net-new content, resolve the target folder from folder metadata and create directly. Do not search or read unrelated notes to verify the folder or inspect permissions.
 
-MCP tools expose active content only. Trashed notes, templates, and folder subtrees are omitted from lists and search and return not found on direct reads. Hosted and local MCP intentionally provide no tools to list Trash or trash, restore, or permanently delete content. Owners perform those operations through the authenticated MinuNotes web interface.
+MCP tools expose active content only. Trashed notes, templates, and folder subtrees are omitted from lists and search and return not found on direct reads. Hosted and local MCP provide destructive, explicitly confirmed tools to move eligible notes and folders to the owner’s Trash. They do not list Trash, restore, or permanently delete content. Owners perform those lifecycle operations through the authenticated MinuNotes web interface.
 
 Review comments are available only on active Markdown notes. Every comment operation requires explicit **Review comments** permission plus folder read access; note edit permission and API editability are not required. Existing and new credentials have Review comments disabled until explicitly granted. Message edits/deletes are author-only, reactions are actor-specific toggles accepting one standard Unicode emoji, and anchor creation or remapping requires the current note content hash.
 

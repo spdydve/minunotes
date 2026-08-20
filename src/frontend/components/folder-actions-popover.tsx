@@ -17,11 +17,17 @@ export function FolderActionsPopover({
   depth = 0,
   icon = 'more',
   triggerClassName,
+  ownerControls = true,
+  canCreateSubfolder = ownerControls,
+  canTrash = ownerControls,
 }: {
   folder: Folder;
   depth?: number;
   icon?: 'more' | 'settings';
   triggerClassName?: string;
+  ownerControls?: boolean;
+  canCreateSubfolder?: boolean;
+  canTrash?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -34,11 +40,16 @@ export function FolderActionsPopover({
     mutationFn: () => api.deleteFolder(folder.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['folders'] });
+      if (folder.parentFolderId) qc.invalidateQueries({ queryKey: ['folder-detail', folder.parentFolderId] });
       qc.invalidateQueries({ queryKey: ['notes'] });
       qc.invalidateQueries({ queryKey: ['templates'] });
       qc.invalidateQueries({ queryKey: ['folder-templates'] });
       qc.removeQueries({ queryKey: ['note'] });
-      return nav({ to: '/' });
+      return nav(
+        !ownerControls && folder.parentFolderId
+          ? { to: '/folders/$folderId', params: { folderId: folder.parentFolderId } }
+          : { to: '/' }
+      );
     },
   });
 
@@ -49,7 +60,7 @@ export function FolderActionsPopover({
           <ActionMenuIconButton icon={icon} aria-label={`Actions for ${folder.title}`} className={triggerClassName} />
         </PopoverTrigger>
         <PopoverContent align="end" className="w-48 p-1">
-          {depth < 4 && !folder.isPrivate ? (
+          {canCreateSubfolder && depth < 4 && !folder.isPrivate ? (
             <ActionMenuButton
               onClick={() => {
                 setOpen(false);
@@ -62,54 +73,64 @@ export function FolderActionsPopover({
               </span>
             </ActionMenuButton>
           ) : null}
-          <ActionMenuButton
-            onClick={() => {
-              setOpen(false);
-              nav({
-                to: '/folders/$folderId/settings',
-                params: { folderId: folder.id },
-              });
-            }}
-          >
-            Settings
-          </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              setOpen(false);
-              setShareOpen(true);
-            }}
-          >
-            Share
-          </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              setOpen(false);
-              setRenameOpen(true);
-            }}
-          >
-            Rename
-          </ActionMenuButton>
-          <ActionMenuButton
-            onClick={() => {
-              setOpen(false);
-              setMoveOpen(true);
-            }}
-          >
-            Move
-          </ActionMenuButton>
-          <DeleteConfirmDialog
-            label="folder"
-            heading="Move folder to Trash?"
-            warning="This folder, its subfolders, and their notes will move to Trash. Public share links will be revoked."
-            actionLabel="Move to Trash"
-            requiresTypedConfirmation={false}
-            onConfirm={() => remove.mutateAsync()}
-            trigger={
-              <span className="block w-full rounded-md px-3 py-2 text-left text-[var(--notes-button-destructive-text)] text-sm transition-colors hover:bg-[var(--notes-button-destructive-soft-hover)]">
-                Move to Trash
-              </span>
-            }
-          />
+          {ownerControls ? (
+            <>
+              <ActionMenuButton
+                onClick={() => {
+                  setOpen(false);
+                  nav({
+                    to: '/folders/$folderId/settings',
+                    params: { folderId: folder.id },
+                  });
+                }}
+              >
+                Settings
+              </ActionMenuButton>
+              <ActionMenuButton
+                onClick={() => {
+                  setOpen(false);
+                  setShareOpen(true);
+                }}
+              >
+                Share
+              </ActionMenuButton>
+              <ActionMenuButton
+                onClick={() => {
+                  setOpen(false);
+                  setRenameOpen(true);
+                }}
+              >
+                Rename
+              </ActionMenuButton>
+              <ActionMenuButton
+                onClick={() => {
+                  setOpen(false);
+                  setMoveOpen(true);
+                }}
+              >
+                Move
+              </ActionMenuButton>
+            </>
+          ) : null}
+          {canTrash ? (
+            <DeleteConfirmDialog
+              label="folder"
+              heading="Move folder to Trash?"
+              warning={
+                ownerControls
+                  ? 'This folder, its subfolders, and their notes will move to Trash. Public share links will be revoked.'
+                  : 'This folder and its contents will move to the owner’s Trash. Only the owner can restore or permanently delete them.'
+              }
+              actionLabel="Move to Trash"
+              requiresTypedConfirmation={false}
+              onConfirm={() => remove.mutateAsync()}
+              trigger={
+                <span className="block w-full rounded-md px-3 py-2 text-left text-[var(--notes-button-destructive-text)] text-sm transition-colors hover:bg-[var(--notes-button-destructive-soft-hover)]">
+                  Move to Trash
+                </span>
+              }
+            />
+          ) : null}
         </PopoverContent>
       </Popover>
       <CreateFolderDialog parentFolder={folder} open={createOpen} onOpenChange={setCreateOpen} />

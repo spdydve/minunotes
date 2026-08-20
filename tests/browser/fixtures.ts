@@ -270,6 +270,7 @@ export async function mockBrowserApi(
     noteAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
     noteAccessSource?: 'note_grant' | 'folder_grant';
     folderAccessRole?: 'owner' | 'viewer' | 'commenter' | 'editor';
+    creatorTrashAccess?: boolean;
     includeSharedCollaborations?: boolean;
     includeSharedByMe?: boolean;
     sharedByMeLoadFails?: boolean;
@@ -648,6 +649,7 @@ export async function mockBrowserApi(
         id: `folder_created_${folders.length + 1}`,
         parentFolderId: body.parentFolderId ?? null,
         title: body.title ?? 'Untitled folder',
+        canTrash: options.creatorTrashAccess === true,
       };
       folders.push(folder);
       return json({ folder }, 201);
@@ -660,9 +662,11 @@ export async function mockBrowserApi(
       const folderAccessRole = options.folderAccessRole ?? 'owner';
       const ancestors = folders.filter((candidate) => candidate.id === folder.parentFolderId);
       return json({
-        folder,
+        folder: { ...folder, canTrash: false },
         ancestors,
-        childFolders: folders.filter((candidate) => candidate.parentFolderId === folder.id),
+        childFolders: folders
+          .filter((candidate) => candidate.parentFolderId === folder.id)
+          .map((candidate) => ({ ...candidate, canTrash: options.creatorTrashAccess === true })),
         access: {
           role: folderAccessRole,
           source: folderAccessRole === 'owner' ? 'owner' : 'folder_grant',
@@ -696,9 +700,15 @@ export async function mockBrowserApi(
     if (folderNotesMatch && method === 'GET') {
       if (!folders.some((folder) => folder.id === folderNotesMatch[1])) return json({ error: 'Folder not found' }, 404);
       const type = url.searchParams.get('type') === 'template' ? 'template' : 'note';
+      const folderAccessRole = options.folderAccessRole ?? 'owner';
       return json({
-        notes: [...notes.values()].filter((note) => note.folderId === folderNotesMatch[1] && note.type === type),
-        access: { role: 'owner', source: 'owner' },
+        notes: [...notes.values()]
+          .filter((note) => note.folderId === folderNotesMatch[1] && note.type === type)
+          .map((note) => ({ ...note, canTrash: options.creatorTrashAccess === true })),
+        access: {
+          role: folderAccessRole,
+          source: folderAccessRole === 'owner' ? 'owner' : 'folder_grant',
+        },
       });
     }
 
@@ -1054,6 +1064,7 @@ export async function mockBrowserApi(
           access: {
             role: noteAccessRole,
             source: noteAccessRole === 'owner' ? 'owner' : (options.noteAccessSource ?? 'note_grant'),
+            canTrash: options.creatorTrashAccess === true,
           },
         });
       }

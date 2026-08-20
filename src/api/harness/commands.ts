@@ -604,6 +604,7 @@ async function insertNoteEvent(input: {
 
 export async function createDocument(input: {
   userId: string;
+  creatorUserId: string;
   folderId: string;
   title?: string;
   markdown?: string;
@@ -642,6 +643,7 @@ export async function createDocument(input: {
     id: createId('note'),
     folderId: input.folderId,
     userId: input.userId,
+    createdByUserId: input.creatorUserId,
     title,
     content,
     documentType,

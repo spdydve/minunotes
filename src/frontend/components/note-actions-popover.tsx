@@ -19,6 +19,7 @@ export function NoteActionsPopover({
   onEditorModeChange,
   icon = 'more',
   ownerControls = true,
+  canTrash = ownerControls,
 }: {
   note: NoteListItem;
   onDelete: () => unknown | Promise<unknown>;
@@ -28,6 +29,7 @@ export function NoteActionsPopover({
   onEditorModeChange?: (mode: 'live' | 'source') => void;
   icon?: 'more' | 'settings';
   ownerControls?: boolean;
+  canTrash?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -144,17 +146,23 @@ export function NoteActionsPopover({
                   {note.isApiEditable ? 'Disable API edits' : 'Enable API edits'}
                 </ActionMenuButton>
               ) : null}
-              <DeleteConfirmDialog
-                label="note"
-                heading="Move note to Trash?"
-                warning="You can restore this note later from Trash. Public share links will be revoked."
-                actionLabel="Move to Trash"
-                requiresTypedConfirmation={false}
-                onConfirm={onDelete}
-                onOpenChange={setOpen}
-                trigger={<ActionMenuItemLabel destructive>Move to Trash</ActionMenuItemLabel>}
-              />
             </>
+          ) : null}
+          {canTrash ? (
+            <DeleteConfirmDialog
+              label="note"
+              heading="Move note to Trash?"
+              warning={
+                ownerControls
+                  ? 'You can restore this note later from Trash. Public share links will be revoked.'
+                  : 'This note will move to the owner’s Trash. Only the owner can restore or permanently delete it.'
+              }
+              actionLabel="Move to Trash"
+              requiresTypedConfirmation={false}
+              onConfirm={onDelete}
+              onOpenChange={setOpen}
+              trigger={<ActionMenuItemLabel destructive>Move to Trash</ActionMenuItemLabel>}
+            />
           ) : null}
         </PopoverContent>
       </Popover>

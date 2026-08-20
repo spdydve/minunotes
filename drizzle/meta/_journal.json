@@ -260,6 +260,13 @@
       "when": 1787189706744,
       "tag": "0036_blushing_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1787256439362,
+      "tag": "0037_rare_serpent_society",
+      "breakpoints": true
     }
   ]
 }

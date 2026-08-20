@@ -13,7 +13,7 @@ Global integration capabilities are a maximum ceiling. Folder rules may restrict
 
 Authenticated collaboration is a separate scope. Existing and new connections default to `sharedAccessMode: none`; the user must explicitly select active grants with `specific` or accept the current-and-future warning for `all`. Effective shared access is the intersection of the human Viewer/Commenter/Editor role, connection capabilities, selected shared mode, owner safety policy, and note API-editability. Revocation or downgrade applies immediately.
 
-A full note read may include privacy-safe role/source context, but never read a note solely to inspect permissions. A direct-note grant has `folderId: null`; do not infer, search for, or reconstruct its containing folder. Content created in a shared folder belongs to that folder owner. Shared-resource structure, resharing, public links, moves, and Trash remain owner-only. Report `403`/`404` permission boundaries rather than retrying against unrelated content or treating not found as proof of deletion.
+A full note read may include privacy-safe role/source context, but never read a note solely to inspect permissions. A direct-note grant has `folderId: null`; do not infer, search for, or reconstruct its containing folder. Content created in a shared folder belongs to that folder owner and is attributed to the authorizing user. Shared-resource moves, resharing, public links, restore, permanent deletion, and general Trash management remain owner-only. An edit-capable integration may move only eligible resources created by its authorizing user to the owner’s Trash. Report `403`/`404` permission boundaries rather than retrying against unrelated content or treating not found as proof of deletion.
 
 ## Tool usage patterns
 
@@ -120,7 +120,8 @@ Review tools require explicit Review comments permission plus read scope for eve
 
 - Folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only. Folder, tag, search, line-search, and orphan discovery lists are cursor-paginated; compact folder/note discovery records omit owner fields and full note content.
 - A trashed note, template, or folder subtree is unavailable through harness tools and normally returns not found when addressed by ID.
-- Harness tools cannot list Trash or trash, restore, or permanently delete content. Those owner-only operations require the authenticated MinuNotes web interface.
+- Harness tools cannot list Trash, restore, or permanently delete content. Focused note/folder Trash commands may move creator-owned content to the owner’s Trash when the authorizing human is an Editor, the credential has edit capability and shared scope, and owner policy permits it. Direct-note grants, shared roots, mixed-creator subtrees, and resources with owner-managed sharing configuration are denied.
+- Moving content to Trash is destructive. Proceed only when the user explicitly requested that deletion or approved the exact destructive change; otherwise present the plan and obtain approval first.
 - Do not interpret a not-found response as proof that content was permanently deleted; it may be outside the connection's scope or recoverable in the owner's Trash.
 
 ## Safety rules

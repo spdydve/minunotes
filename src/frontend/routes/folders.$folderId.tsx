@@ -88,18 +88,22 @@ function FolderContentsTable({
   queryKey,
   onDeleteNote,
   canManage,
+  canCreateSubfolder,
 }: {
   items: ContentItem[];
   allFolders: Folder[];
   queryKey: unknown[];
   onDeleteNote: (note: NoteListItem) => unknown | Promise<unknown>;
   canManage: boolean;
+  canCreateSubfolder: boolean;
 }) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
   const visibleNotes = items.flatMap((item) => (item.kind === 'note' ? [item.note] : []));
-  const selectedNotes = visibleNotes.filter((note) => selectedNoteIds.has(note.id));
-  const allVisibleNotesSelected = visibleNotes.length > 0 && visibleNotes.every((note) => selectedNoteIds.has(note.id));
-  const someVisibleNotesSelected = visibleNotes.some((note) => selectedNoteIds.has(note.id));
+  const actionableNotes = visibleNotes.filter((note) => canManage || note.canTrash === true);
+  const selectedNotes = actionableNotes.filter((note) => selectedNoteIds.has(note.id));
+  const allVisibleNotesSelected =
+    actionableNotes.length > 0 && actionableNotes.every((note) => selectedNoteIds.has(note.id));
+  const someVisibleNotesSelected = actionableNotes.some((note) => selectedNoteIds.has(note.id));
 
   const toggleNote = (noteId: string, checked: boolean) => {
     setSelectedNoteIds((current) => {
@@ -113,7 +117,7 @@ function FolderContentsTable({
   const toggleAllVisibleNotes = (checked: boolean) => {
     setSelectedNoteIds((current) => {
       const next = new Set(current);
-      for (const note of visibleNotes) {
+      for (const note of actionableNotes) {
         if (checked) next.add(note.id);
         else next.delete(note.id);
       }
@@ -122,7 +126,7 @@ function FolderContentsTable({
   };
 
   const bulkActions =
-    canManage && selectedNotes.length > 0 ? (
+    selectedNotes.length > 0 ? (
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel-muted)] px-3 py-2 text-sm">
         <span className="text-[var(--notes-muted)]">
           {selectedNotes.length} {selectedNotes.length === 1 ? 'note' : 'notes'} selected
@@ -131,7 +135,7 @@ function FolderContentsTable({
           <Button type="button" onClick={() => setSelectedNoteIds(new Set())}>
             Clear
           </Button>
-          <MoveNotesDialog notes={selectedNotes} onMoved={() => setSelectedNoteIds(new Set())} />
+          {canManage ? <MoveNotesDialog notes={selectedNotes} onMoved={() => setSelectedNoteIds(new Set())} /> : null}
           <TrashNotesDialog notes={selectedNotes} queryKey={queryKey} onTrashed={() => setSelectedNoteIds(new Set())} />
         </div>
       </div>
@@ -174,8 +178,15 @@ function FolderContentsTable({
                     </span>
                   </span>
                 </Link>
-                {canManage ? (
-                  <FolderActionsPopover folder={item.folder} depth={folderDepth(item.folder, allFolders)} icon="more" />
+                {canManage || canCreateSubfolder || item.folder.canTrash ? (
+                  <FolderActionsPopover
+                    folder={item.folder}
+                    depth={folderDepth(item.folder, allFolders)}
+                    icon="more"
+                    ownerControls={canManage}
+                    canCreateSubfolder={canCreateSubfolder}
+                    canTrash={canManage || item.folder.canTrash === true}
+                  />
                 ) : null}
               </div>
             </div>
@@ -186,7 +197,7 @@ function FolderContentsTable({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  {canManage ? (
+                  {canManage || item.note.canTrash ? (
                     <input
                       type="checkbox"
                       className="mt-3"
@@ -222,7 +233,14 @@ function FolderContentsTable({
                     </span>
                   </Link>
                 </div>
-                {canManage ? <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} /> : null}
+                {canManage || item.note.canTrash ? (
+                  <NoteActionsPopover
+                    note={item.note}
+                    onDelete={() => onDeleteNote(item.note)}
+                    ownerControls={canManage}
+                    canTrash={canManage || item.note.canTrash === true}
+                  />
+                ) : null}
               </div>
             </div>
           )
@@ -234,7 +252,7 @@ function FolderContentsTable({
           <thead className="bg-[var(--notes-table-header-bg)]">
             <tr>
               <th className="border-[var(--notes-border)] border-b px-5 py-2.5 text-left font-medium text-[var(--notes-muted)] text-xs uppercase tracking-wide">
-                {canManage ? (
+                {actionableNotes.length > 0 ? (
                   <input
                     type="checkbox"
                     aria-label="Select all notes"
@@ -267,7 +285,7 @@ function FolderContentsTable({
                 className="transition-colors hover:bg-[var(--notes-table-row-hover)]"
               >
                 <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 align-middle">
-                  {canManage && item.kind === 'note' ? (
+                  {item.kind === 'note' && (canManage || item.note.canTrash) ? (
                     <input
                       type="checkbox"
                       aria-label={`Select ${item.note.title}`}
@@ -324,14 +342,22 @@ function FolderContentsTable({
                 </td>
                 <td className="border-[var(--notes-table-row-border)] border-b px-5 py-3 text-right align-middle">
                   <div className="flex justify-end">
-                    {canManage && item.kind === 'folder' ? (
+                    {item.kind === 'folder' && (canManage || canCreateSubfolder || item.folder.canTrash) ? (
                       <FolderActionsPopover
                         folder={item.folder}
                         depth={folderDepth(item.folder, allFolders)}
                         icon="more"
+                        ownerControls={canManage}
+                        canCreateSubfolder={canCreateSubfolder}
+                        canTrash={canManage || item.folder.canTrash === true}
                       />
-                    ) : canManage && item.kind === 'note' ? (
-                      <NoteActionsPopover note={item.note} onDelete={() => onDeleteNote(item.note)} />
+                    ) : item.kind === 'note' && (canManage || item.note.canTrash) ? (
+                      <NoteActionsPopover
+                        note={item.note}
+                        onDelete={() => onDeleteNote(item.note)}
+                        ownerControls={canManage}
+                        canTrash={canManage || item.note.canTrash === true}
+                      />
                     ) : null}
                   </div>
                 </td>
@@ -492,8 +518,15 @@ function FolderView() {
               {accessRole}
             </span>
           )}
-          {isOwner && folder ? (
-            <FolderActionsPopover folder={folder} depth={folderDepth(folder, allFolders)} icon="settings" />
+          {folder && (isOwner || canCreate || folder.canTrash) ? (
+            <FolderActionsPopover
+              folder={folder}
+              depth={folderDepth(folder, allFolders)}
+              icon="settings"
+              ownerControls={isOwner}
+              canCreateSubfolder={canCreate}
+              canTrash={isOwner || folder.canTrash === true}
+            />
           ) : null}
         </div>
       </div>
@@ -505,6 +538,7 @@ function FolderView() {
           queryKey={['notes', folderId]}
           onDeleteNote={(note) => remove.mutateAsync({ noteId: note.id })}
           canManage={isOwner}
+          canCreateSubfolder={canCreate}
         />
       ) : (
         <EmptyState>No folders or notes yet.</EmptyState>

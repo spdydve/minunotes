@@ -67,6 +67,7 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
       list: (input = {}) => request(`/harness/folders${toQueryString(input)}`),
       create: ({ title, parentFolderId }) =>
         request('/harness/folders', { method: 'POST', body: JSON.stringify({ title, parentFolderId }) }),
+      trash: (folderId) => request(`/harness/folders/${encodeURIComponent(folderId)}/trash`, { method: 'POST' }),
     },
     notes: {
       search: (input) =>
@@ -89,6 +90,7 @@ export function createClient(env: NodeJS.ProcessEnv = process.env): NotesMcpClie
           method: 'POST',
           body: JSON.stringify({ noteIds: input.noteIds, targetFolderId: input.targetFolderId }),
         }),
+      trash: (noteId) => request(`/harness/notes/${encodeURIComponent(noteId)}/trash`, { method: 'POST' }),
       searchLines: (input) =>
         request(
           `/harness/notes/search-lines${toQueryString({ q: input.query, folderId: input.folderId, context: input.context, limit: input.limit, caseSensitive: input.caseSensitive, cursor: input.cursor })}`

@@ -21,3 +21,9 @@ export function omitCollaborationInternalFields<T extends object>(value: T): Omi
   for (const field of INTERNAL_COLLABORATION_FIELDS) delete safe[field];
   return safe as Omit<T, InternalCollaborationField>;
 }
+
+export function omitResourceCreator<T extends object>(value: T): Omit<T, 'createdByUserId'> {
+  const safe = { ...value } as Record<string, unknown>;
+  delete safe.createdByUserId;
+  return safe as Omit<T, 'createdByUserId'>;
+}

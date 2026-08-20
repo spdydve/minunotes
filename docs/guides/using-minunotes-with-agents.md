@@ -66,7 +66,7 @@ Agent access to authenticated collaboration is opt-in and separate from owned-fo
 
 The connection cannot exceed the collaborator's Viewer, Commenter, or Editor role. Credential capability, OAuth scope, owner safety policy, and note API-editability remain additional ceilings. Downgrades and revocations take effect on the next request.
 
-Full note reads return privacy-safe role/source context. Discovery stays compact, and direct-note grants intentionally use `folderId: null`; clients must not infer or probe for the containing folder. Notes and canvases created in a shared folder belong to that folder owner. Shared-resource structure, resharing, public links, moves, and Trash remain owner-only. A `404` can mean inaccessible, revoked, or trashed and does not prove deletion.
+Full note reads return privacy-safe role/source context. Discovery stays compact, and direct-note grants intentionally use `folderId: null`; clients must not infer or probe for the containing folder. Notes, canvases, and folders created in a shared folder belong to that folder owner and are attributed to the authorizing user. Shared-resource moves, resharing, public links, restore, permanent deletion, and general Trash management remain owner-only. An edit-capable agent may move only resources created by its authorizing user to the owner’s Trash; direct-note grants, shared roots, mixed-creator subtrees, and owner-managed sharing configuration are denied. A `404` can mean inaccessible, revoked, or trashed and does not prove deletion.
 
 Hosted OAuth supports these scopes:
 
@@ -198,7 +198,7 @@ Useful graph and organization endpoints include:
 
 Harness, OpenAPI, and MCP operations expose active content only. Trashed notes, templates, and folder subtrees disappear from folder lists, search, direct reads, metadata, graph results, and attachment access. A direct request for a trashed item returns not found.
 
-Agents cannot list Trash or trash, restore, or permanently delete content. Owners must use the authenticated MinuNotes web interface for those operations. A not-found response does not prove permanent deletion because the item may be outside the integration's scope or recoverable in Trash.
+Agents cannot list Trash, restore content, or permanently delete content. With explicit user approval, an edit-capable agent may move an eligible note or folder it created for the authorizing user to the owner’s Trash. Human role, credential edit capability, selected shared scope, API editability, and owner policy all remain required. Owners use the authenticated MinuNotes web interface for restoration and permanent deletion. A not-found response does not prove permanent deletion because the item may be outside the integration's scope or recoverable in Trash.
 
 ## Best practices
 

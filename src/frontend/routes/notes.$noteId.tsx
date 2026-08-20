@@ -762,6 +762,7 @@ function NoteView() {
           editorMode={data.note.documentType === 'markdown' ? editorMode : undefined}
           onEditorModeChange={data.note.documentType === 'markdown' ? setEditorMode : undefined}
           ownerControls={isOwner}
+          canTrash={isOwner || data.access?.canTrash === true}
         />
       ) : (
         <span className="rounded-md border border-[var(--notes-border)] px-2 py-1 text-[var(--notes-muted)] text-xs capitalize">

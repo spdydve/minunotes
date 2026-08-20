@@ -255,6 +255,44 @@ test('role downgrade and revocation take effect on the next note load', async ({
   await expect(page.getByText('This note does not exist or you do not have access to it.')).toBeVisible();
 });
 
+test('shared-folder Editor can Trash creator-owned notes and folders without owner controls', async ({ page }) => {
+  await mockBrowserApi(page, {
+    noteAccessRole: 'editor',
+    noteAccessSource: 'folder_grant',
+    folderAccessRole: 'editor',
+    creatorTrashAccess: true,
+  });
+  await page.goto(`/notes/${browserFixture.source.id}`);
+
+  await page.getByRole('button', { name: 'Open note actions' }).click();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toHaveCount(0);
+  await page.getByText('Move to Trash', { exact: true }).click();
+  const noteTrashDialog = page.getByRole('alertdialog', { name: 'Move note to Trash?' });
+  await expect(noteTrashDialog).toContainText('owner’s Trash');
+  await noteTrashDialog.getByRole('button', { name: 'Move to Trash' }).click();
+  await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}`);
+  await expect(page.getByRole('link', { name: browserFixture.source.title, exact: true })).toHaveCount(0);
+
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: `Actions for ${browserFixture.folder.title}` })
+    .click();
+  await page.getByRole('button', { name: 'Add subfolder' }).click();
+  const createDialog = page.getByRole('dialog', { name: 'Create subfolder' });
+  await createDialog.getByLabel('Folder name').fill('Editor folder');
+  await createDialog.getByRole('button', { name: 'Create folder' }).click();
+  await expect(page.getByRole('link', { name: 'Editor folder', exact: true })).toBeVisible();
+
+  await page.getByRole('main').getByRole('button', { name: 'Actions for Editor folder' }).click();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toHaveCount(0);
+  await page.getByText('Move to Trash', { exact: true }).click();
+  const folderTrashDialog = page.getByRole('alertdialog', { name: 'Move folder to Trash?' });
+  await expect(folderTrashDialog).toContainText('owner’s Trash');
+  await folderTrashDialog.getByRole('button', { name: 'Move to Trash' }).click();
+  await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}`);
+  await expect(page.getByRole('link', { name: 'Editor folder', exact: true })).toHaveCount(0);
+});
+
 test('editor can save content while owner-only note actions remain hidden', async ({ page }) => {
   const api = await mockBrowserApi(page, { noteAccessRole: 'editor' });
   await page.goto(`/notes/${browserFixture.source.id}`);
