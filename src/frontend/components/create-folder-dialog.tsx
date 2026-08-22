@@ -4,6 +4,7 @@ import { type ReactNode, useState } from 'react';
 import { api, type Folder } from '../lib/api';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ModalCloseButton } from './ui/modal-close-button';
 
 export function CreateFolderDialog({
   parentFolder,
@@ -57,12 +58,17 @@ export function CreateFolderDialog({
     >
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="inset-x-0 bottom-0 rounded-t-xl p-4 sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[min(28rem,calc(100vw-2rem))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-5">
-        <DialogTitle className="font-semibold text-lg">
-          {parentFolder ? 'Create subfolder' : 'Create top-level folder'}
-        </DialogTitle>
-        <DialogDescription className="mt-1 text-[var(--notes-muted)] text-sm">
-          {parentFolder ? `Add a folder under ${parentFolder.title}.` : 'Add a folder at the workspace root.'}
-        </DialogDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <DialogTitle className="font-semibold text-lg">
+              {parentFolder ? 'Create subfolder' : 'Create top-level folder'}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-[var(--notes-muted)] text-sm">
+              {parentFolder ? `Add a folder under ${parentFolder.title}.` : 'Add a folder at the workspace root.'}
+            </DialogDescription>
+          </div>
+          <ModalCloseButton label="Close folder dialog" disabled={mutation.isPending} onClick={close} />
+        </div>
         <form
           className="mt-4"
           onSubmit={(event) => {

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { ApiError, api, type Folder } from '../lib/api';
 import { FolderDestinationPicker, type FolderNode } from './folder-destination-picker';
 import { Button } from './ui/button';
+import { ModalCloseButton } from './ui/modal-close-button';
 
 function isDescendantOrSelf(folderId: string, rootFolderId: string, folders: Folder[]) {
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
@@ -113,9 +114,14 @@ export function MoveFolderDialog({
 
   return createPortal(
     <div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
-      <div className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
-        <h2 className="text-lg font-semibold">Move folder</h2>
-        <p className="mt-1 text-sm text-[var(--notes-muted)]">Navigate to a destination, then choose Move here.</p>
+      <div className="notes-card notes-modal-scroll max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Move folder</h2>
+            <p className="mt-1 text-sm text-[var(--notes-muted)]">Navigate to a destination, then choose Move here.</p>
+          </div>
+          <ModalCloseButton label="Close move folder" disabled={move.isPending} onClick={close} />
+        </div>
         {error ? (
           <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
             {error}

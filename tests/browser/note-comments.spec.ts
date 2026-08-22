@@ -20,6 +20,13 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   const dialogBox = await createDialog.boundingBox();
   if (!editorBox || !dialogBox) throw new Error('Expected editor and comment dialog bounds');
   expect(dialogBox.y).toBeGreaterThanOrEqual(editorBox.y - 20);
+  expect(dialogBox.width).toBeCloseTo(448, -1);
+  await createDialog.getByPlaceholder('Leave a comment…').fill('Please review this opening.');
+  await page.getByRole('textbox', { name: 'Untitled note' }).click();
+  await expect(createDialog).toBeHidden();
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.getByRole('button', { name: 'Comment', exact: true }).click();
   await createDialog.evaluate((element) => {
     element.dataset.dialogInstance = 'preserved';
   });
@@ -100,7 +107,9 @@ test('uses an anchored dialog for creation and viewing, with full discussion in 
   await expect
     .poll(() => api.commentRequests.filter((request) => request.path.endsWith('/anchor')).at(-1)?.body)
     .toMatchObject({ anchor: { quote: 'Start here.', detached: true, documentHash: 'hash_3' } });
-  await expect(threadDialog.getByText('The original text could not be reattached.')).toBeVisible();
+  await expect(threadDialog).toBeHidden();
+  await page.getByRole('button', { name: 'Open Review' }).click();
+  await expect(page.getByRole('dialog', { name: 'Review' }).getByText(/could not be reattached/)).toBeVisible();
 });
 
 test('creates a whole-line comment from a simple themed gutter icon', async ({ page }) => {
@@ -212,7 +221,7 @@ test('opens Review with the same responsive drawer geometry as Backlinks', async
   await expect(desktopDrawer).toBeVisible();
   await expect(desktopDrawer).toHaveCSS('position', 'fixed');
   const desktopBox = await desktopDrawer.boundingBox();
-  expect(desktopBox?.width).toBeCloseTo(384, -1);
+  expect(desktopBox?.width).toBeCloseTo(448, -1);
   expect(desktopBox?.x).toBeGreaterThan(800);
   await desktopDrawer.getByRole('button', { name: 'Close Review' }).click();
 

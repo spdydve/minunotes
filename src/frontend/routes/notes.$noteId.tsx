@@ -1,7 +1,7 @@
 import type { EditorComment, EditorCommentAnchor, EditorCommentsConfig } from '@dpklabs/minueditor';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createRoute, useBlocker, useNavigate } from '@tanstack/react-router';
-import { MessageSquare } from 'lucide-react';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BacklinksPanel } from '../components/backlinks-panel';
 import { NoteActionsPopover } from '../components/note-actions-popover';
@@ -11,6 +11,7 @@ import { NoteCommentsPanel } from '../components/note-comments-panel';
 import { NoteEditor } from '../components/note-editor';
 import { Button } from '../components/ui/button';
 import { EmptyState } from '../components/ui/empty-state';
+import { ModalCloseButton } from '../components/ui/modal-close-button';
 import {
   ApiError,
   api,
@@ -776,17 +777,23 @@ function NoteView() {
     conflictDraftOpen && conflictDraft ? (
       <div className="notes-overlay fixed inset-0 z-[110] grid place-items-center p-4">
         <div
-          className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
+          className="notes-card notes-modal-scroll max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-labelledby="conflict-draft-title"
         >
-          <h2 id="conflict-draft-title" className="font-semibold text-lg">
-            Preserved local draft
-          </h2>
-          <p className="notes-muted mt-1 text-sm">
-            This is the version that conflicted with a newer server copy. Copy anything you need before dismissing it.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 id="conflict-draft-title" className="font-semibold text-lg">
+                Preserved local draft
+              </h2>
+              <p className="notes-muted mt-1 text-sm">
+                This is the version that conflicted with a newer server copy. Copy anything you need before dismissing
+                it.
+              </p>
+            </div>
+            <ModalCloseButton label="Close preserved draft" onClick={() => setConflictDraftOpen(false)} />
+          </div>
           <label className="mt-4 block font-medium text-sm" htmlFor="conflict-draft-note-title">
             Title
           </label>
@@ -815,13 +822,35 @@ function NoteView() {
           ) : null}
           <div className="mt-4 flex justify-end gap-2">
             <Button onClick={() => void copyConflictDraft('content')}>Copy content</Button>
-            <Button onClick={() => setConflictDraftOpen(false)}>Close</Button>
           </div>
         </div>
       </div>
     ) : null;
 
   if (data.note.documentType.startsWith('canvas.')) {
+    const returnToNotes = () => {
+      if (data.access?.source === 'note_grant') {
+        void nav({ to: '/shared' });
+        return;
+      }
+      if (data.note.folderId) {
+        void nav({ to: '/folders/$folderId', params: { folderId: data.note.folderId } });
+        return;
+      }
+      void nav({ to: '/' });
+    };
+    const canvasNavigation = (
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 text-[var(--notes-muted)] text-xs hover:bg-[var(--notes-hover)] hover:text-[var(--notes-text)]"
+        onClick={returnToNotes}
+        aria-label="Back to notes"
+        title="Back to notes"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Notes</span>
+      </button>
+    );
     return (
       <>
         <NoteCanvasEditor
@@ -835,6 +864,7 @@ function NoteView() {
           onContentChange={updateContent}
           updatedMeta={updatedMeta}
           staleNotice={staleNotice}
+          navigation={canvasNavigation}
           actions={actions}
           readOnly={!canEdit}
         />

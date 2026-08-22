@@ -82,7 +82,7 @@ export function FolderShareDialog({
           </div>
         </div>
 
-        <div className="max-h-[75vh] space-y-6 overflow-y-auto px-5 py-5">
+        <div className="notes-modal-scroll max-h-[75vh] space-y-6 overflow-y-auto px-5 py-5">
           <section>
             <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--notes-muted)]">Public link</h3>
             <div className="mt-3 space-y-3">

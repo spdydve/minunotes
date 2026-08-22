@@ -238,7 +238,7 @@ export function SearchDialog() {
           id="search-results"
           role="listbox"
           aria-label={trimmed ? 'Search results' : 'Recent notes'}
-          className="mt-4 max-h-[min(28rem,60dvh)] space-y-2 overflow-y-auto"
+          className="notes-modal-scroll mt-4 max-h-[min(28rem,60dvh)] space-y-2 overflow-y-auto"
         >
           <p className="notes-muted px-1 font-medium text-xs uppercase tracking-wide">
             {trimmed ? 'Results' : 'Recent notes'}

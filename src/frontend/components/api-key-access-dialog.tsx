@@ -10,8 +10,12 @@ import {
 } from '../lib/api';
 import { SharedIntegrationAccess } from './shared-integration-access';
 import { Button } from './ui/button';
+import { ModalCloseButton } from './ui/modal-close-button';
 
 type PermissionValue = { canRead: boolean; canCreate: boolean; canEdit: boolean; canComment: boolean };
+type PermissionKey = keyof PermissionValue;
+
+const PERMISSION_ORDER: PermissionKey[] = ['canRead', 'canCreate', 'canComment', 'canEdit'];
 
 const defaultPermission: PermissionValue = {
   canRead: true,
@@ -19,6 +23,68 @@ const defaultPermission: PermissionValue = {
   canEdit: false,
   canComment: false,
 };
+
+export function applyCommentPermissionToFolders(
+  current: Map<string, PermissionValue>,
+  folderIds: Iterable<string>,
+  enabled: boolean
+) {
+  return applyPermissionToFolders(current, folderIds, 'canComment', enabled);
+}
+
+export function applyFolderPermission(
+  current: Map<string, PermissionValue>,
+  folderId: string,
+  permission: PermissionKey,
+  enabled: boolean,
+  fallback: PermissionValue = defaultPermission
+) {
+  const next = new Map(current);
+  const value = next.get(folderId) ?? fallback;
+  if (permission === 'canComment' && enabled) next.set(folderId, { ...value, canRead: true, canComment: true });
+  else if (permission === 'canRead' && !enabled) next.set(folderId, { ...value, canRead: false, canComment: false });
+  else next.set(folderId, { ...value, [permission]: enabled });
+  return next;
+}
+
+export function applyPermissionToFolders(
+  current: Map<string, PermissionValue>,
+  folderIds: Iterable<string>,
+  permission: PermissionKey,
+  enabled: boolean,
+  fallback: PermissionValue = defaultPermission
+) {
+  let next = new Map(current);
+  for (const folderId of folderIds) next = applyFolderPermission(next, folderId, permission, enabled, fallback);
+  return next;
+}
+
+export function derivePermissionCeiling(permissions: Iterable<PermissionValue>): PermissionValue {
+  const ceiling = { canRead: false, canCreate: false, canEdit: false, canComment: false };
+  for (const permission of permissions) {
+    ceiling.canRead ||= permission.canRead;
+    ceiling.canCreate ||= permission.canCreate;
+    ceiling.canEdit ||= permission.canEdit;
+    ceiling.canComment ||= permission.canComment;
+  }
+  if (ceiling.canComment) ceiling.canRead = true;
+  return ceiling;
+}
+
+export function permissionSelectionState(permissions: PermissionValue[], permission: PermissionKey) {
+  const enabledCount = permissions.filter((value) => value[permission]).length;
+  return {
+    checked: permissions.length > 0 && enabledCount === permissions.length,
+    mixed: enabledCount > 0 && enabledCount < permissions.length,
+  };
+}
+
+function permissionLabel(permission: PermissionKey) {
+  if (permission === 'canRead') return 'Read';
+  if (permission === 'canCreate') return 'Create';
+  if (permission === 'canComment') return 'Comment';
+  return 'Edit';
+}
 
 function isEffectivelyPrivate(folder: Folder, folders: Folder[]) {
   const byId = new Map(folders.map((item) => [item.id, item]));
@@ -108,6 +174,7 @@ export function ApiKeyAccessDialog({
         ? selectableFolders.filter((folder) => folder.parentFolderId === null)
         : selectableFolders;
     const q = query.trim().toLowerCase();
+    if (!q) return [];
     return candidates
       .filter((folder) => !selectedFolderIds.has(folder.id))
       .filter(
@@ -124,6 +191,12 @@ export function ApiKeyAccessDialog({
         .sort((a, b) => folderPath(a, folders).localeCompare(folderPath(b, folders))),
     [folders, selectableFolders, selectedFolderIds]
   );
+  const restrictedScope = accessMode !== 'all';
+  const folderPermissionFallback = restrictedScope ? defaultPermission : keyPermission;
+  const selectedPermissionValues = [...selectedFolderIds].map(
+    (folderId) => folderPermissions.get(folderId) ?? folderPermissionFallback
+  );
+  const effectiveKeyPermission = restrictedScope ? derivePermissionCeiling(selectedPermissionValues) : keyPermission;
 
   useEffect(() => {
     if (!open) return;
@@ -164,7 +237,7 @@ export function ApiKeyAccessDialog({
   const close = () => setOpen(false);
   const addFolder = (folder: Folder) => {
     setSelectedFolderIds((current) => new Set(current).add(folder.id));
-    setFolderPermissions((current) => new Map(current).set(folder.id, { ...keyPermission }));
+    setFolderPermissions((current) => new Map(current).set(folder.id, { ...folderPermissionFallback }));
     setQuery('');
   };
   const removeFolder = (folderId: string) =>
@@ -181,20 +254,14 @@ export function ApiKeyAccessDialog({
       return next;
     });
   };
-  const updateFolderPermission = (folderId: string, permission: keyof PermissionValue, enabled: boolean) =>
-    setFolderPermissions((current) => {
-      const next = new Map(current);
-      const value = next.get(folderId) ?? { ...keyPermission };
-      if (permission === 'canComment' && enabled) next.set(folderId, { ...value, canRead: true, canComment: true });
-      else if (permission === 'canRead' && !enabled)
-        next.set(folderId, { ...value, canRead: false, canComment: false });
-      else next.set(folderId, { ...value, [permission]: enabled });
-      return next;
-    });
+  const updateFolderPermission = (folderId: string, permission: PermissionKey, enabled: boolean) =>
+    setFolderPermissions((current) =>
+      applyFolderPermission(current, folderId, permission, enabled, folderPermissionFallback)
+    );
   const selectedPermissions = () =>
     [...selectedFolderIds].map((folderId) => ({
       folderId,
-      ...(folderPermissions.get(folderId) ?? keyPermission),
+      ...(folderPermissions.get(folderId) ?? folderPermissionFallback),
       appliesTo: accessMode === 'top_level' ? ('subtree' as const) : ('exact' as const),
     }));
 
@@ -207,7 +274,7 @@ export function ApiKeyAccessDialog({
         canCreateFolders,
         sharedAccessMode,
         collaborationGrantIds: sharedAccessMode === 'specific' ? [...selectedGrantIds] : [],
-        ...keyPermission,
+        ...effectiveKeyPermission,
         permissions: selectedPermissions(),
       };
       if (apiKey) {
@@ -234,13 +301,13 @@ export function ApiKeyAccessDialog({
       {trigger(() => setOpen(true))}
       {open ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:p-5">
+          <div className="notes-modal-scroll max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 sm:p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">{isEditing ? 'Edit API key' : 'Create API key'}</h2>
                 <p className="mt-1 text-sm text-slate-500">Choose a scope, then set what this key can do there.</p>
               </div>
-              <Button onClick={close}>Close</Button>
+              <ModalCloseButton label="Close API key access" disabled={saving} onClick={close} />
             </div>
 
             {createdKey ? (
@@ -294,7 +361,7 @@ export function ApiKeyAccessDialog({
                               ? 'All except private/read-only limits.'
                               : mode === 'top_level'
                                 ? 'Selected roots include subfolders.'
-                                : 'Exact folder exceptions.'}
+                                : 'Exact folder access.'}
                           </span>
                         </span>
                       </label>
@@ -303,35 +370,52 @@ export function ApiKeyAccessDialog({
                 </div>
 
                 <div className="mt-4 rounded-md border border-slate-200 p-3 dark:border-slate-800">
-                  <p className="text-sm font-medium">Global maximum permissions</p>
+                  <p className="text-sm font-medium">
+                    {restrictedScope ? 'Permissions for all selected folders' : 'Global maximum permissions'}
+                  </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Folder rules can restrict these permissions but can never exceed them.
+                    {restrictedScope
+                      ? 'Use these as bulk controls, then adjust individual folders below.'
+                      : 'Folder rules can restrict these permissions but can never exceed them.'}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-3">
-                    {(['canRead', 'canCreate', 'canEdit', 'canComment'] as const).map((key) => (
-                      <label key={key} className="flex items-center gap-1 text-xs text-slate-500">
-                        <input
-                          type="checkbox"
-                          checked={keyPermission[key]}
-                          onChange={(event) =>
-                            setKeyPermission((current) => {
-                              if (key === 'canComment' && event.target.checked)
-                                return { ...current, canRead: true, canComment: true };
-                              if (key === 'canRead' && !event.target.checked)
-                                return { ...current, canRead: false, canComment: false };
-                              return { ...current, [key]: event.target.checked };
-                            })
-                          }
-                        />
-                        {key === 'canRead'
-                          ? 'Read'
-                          : key === 'canCreate'
-                            ? 'Create'
-                            : key === 'canEdit'
-                              ? 'Edit'
-                              : 'Review comments'}
-                      </label>
-                    ))}
+                    {PERMISSION_ORDER.map((key) => {
+                      const selection = permissionSelectionState(selectedPermissionValues, key);
+                      return (
+                        <label key={key} className="flex items-center gap-1 text-xs text-slate-500">
+                          <input
+                            ref={(input) => {
+                              if (input) input.indeterminate = restrictedScope && selection.mixed;
+                            }}
+                            type="checkbox"
+                            checked={restrictedScope ? selection.checked : keyPermission[key]}
+                            disabled={restrictedScope && selectedFolderIds.size === 0}
+                            onChange={(event) => {
+                              const enabled = event.target.checked;
+                              if (restrictedScope) {
+                                setFolderPermissions((current) =>
+                                  applyPermissionToFolders(current, selectedFolderIds, key, enabled, defaultPermission)
+                                );
+                                return;
+                              }
+                              setKeyPermission((current) => {
+                                if (key === 'canComment' && enabled)
+                                  return { ...current, canRead: true, canComment: true };
+                                if (key === 'canRead' && !enabled)
+                                  return { ...current, canRead: false, canComment: false };
+                                return { ...current, [key]: enabled };
+                              });
+                              if (key === 'canComment') {
+                                setFolderPermissions((current) =>
+                                  applyCommentPermissionToFolders(current, selectedFolderIds, enabled)
+                                );
+                              }
+                            }}
+                          />
+                          {permissionLabel(key)}
+                        </label>
+                      );
+                    })}
                   </div>
                   <label className="mt-4 flex items-start gap-3 text-sm">
                     <input
@@ -394,7 +478,7 @@ export function ApiKeyAccessDialog({
                   ) : null}
                   <div className="mt-3 space-y-2">
                     {selectedFolders.map((folder) => {
-                      const value = folderPermissions.get(folder.id) ?? keyPermission;
+                      const value = folderPermissions.get(folder.id) ?? folderPermissionFallback;
                       return (
                         <div
                           key={folder.id}
@@ -423,23 +507,19 @@ export function ApiKeyAccessDialog({
                             </button>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-3 border-slate-200 border-t pt-2 dark:border-slate-800">
-                            {(['canRead', 'canCreate', 'canEdit', 'canComment'] as const).map((permission) => (
+                            {PERMISSION_ORDER.map((permission) => (
                               <label key={permission} className="flex items-center gap-1 text-xs text-slate-500">
                                 <input
                                   type="checkbox"
-                                  checked={value[permission] && keyPermission[permission]}
-                                  disabled={!keyPermission[permission]}
+                                  checked={
+                                    restrictedScope ? value[permission] : value[permission] && keyPermission[permission]
+                                  }
+                                  disabled={!restrictedScope && !keyPermission[permission]}
                                   onChange={(event) =>
                                     updateFolderPermission(folder.id, permission, event.target.checked)
                                   }
                                 />
-                                {permission === 'canRead'
-                                  ? 'Read'
-                                  : permission === 'canCreate'
-                                    ? 'Create'
-                                    : permission === 'canEdit'
-                                      ? 'Edit'
-                                      : 'Review comments'}
+                                {permissionLabel(permission)}
                               </label>
                             ))}
                           </div>
@@ -472,10 +552,10 @@ export function ApiKeyAccessDialog({
                       (accessMode !== 'all' && selectedFolderIds.size === 0) ||
                       (sharedAccessMode === 'specific' && selectedGrantIds.size === 0) ||
                       !(
-                        keyPermission.canRead ||
-                        keyPermission.canCreate ||
-                        keyPermission.canEdit ||
-                        keyPermission.canComment
+                        effectiveKeyPermission.canRead ||
+                        effectiveKeyPermission.canCreate ||
+                        effectiveKeyPermission.canEdit ||
+                        effectiveKeyPermission.canComment
                       )
                     }
                     onClick={submit}

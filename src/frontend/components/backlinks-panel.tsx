@@ -52,7 +52,7 @@ export function BacklinksPanel({ backlinks, isLoading }: { backlinks?: Backlink[
           </DialogClose>
         </div>
 
-        <div className="max-h-[calc(82dvh-4.5rem)] overflow-y-auto p-3 md:max-h-[calc(100dvh-4.5rem)]">
+        <div className="notes-modal-scroll max-h-[calc(82dvh-4.5rem)] overflow-y-auto p-3 md:max-h-[calc(100dvh-4.5rem)]">
           <div className="space-y-2">
             {backlinks.map((backlink) => (
               <Link

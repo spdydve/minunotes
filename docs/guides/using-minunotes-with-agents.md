@@ -54,6 +54,8 @@ Hosted MCP uses OAuth bearer authentication for connected apps. Direct harness A
 
 API keys and OAuth connected apps share the same authorization model. Global capabilities are a maximum ceiling; folder rules can only restrict that ceiling. For `all` access, folders without a rule inherit the global capabilities. For `top_level` and `specific` access, a matching rule is required. Rules apply to either one exact folder or a subtree, and the nearest applicable rule wins.
 
+In the API-key UI, restricted `top_level` and `specific` scopes are configured directly through folder rules. The permission row above the selected folders is a bulk control, and the persisted global ceiling is derived from the union of those rules. This keeps the ceiling invariant without requiring users to grant the same permission to every selected folder.
+
 Effective access also applies OAuth scope when present and always enforces folder safety policy. Private and trashed folders are unavailable. Agent-read-only folders continue to deny writes regardless of the credential's edit capability.
 
 ### Shared folders and notes

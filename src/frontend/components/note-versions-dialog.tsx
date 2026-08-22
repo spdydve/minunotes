@@ -100,7 +100,7 @@ export function NoteVersionsDialog({
         </div>
 
         <div className="grid min-h-0 flex-1 gap-4 p-4 md:grid-cols-[18rem_1fr]">
-          <div className="max-h-[65vh] overflow-y-auto rounded-lg border border-[var(--notes-border)]">
+          <div className="notes-modal-scroll max-h-[65vh] overflow-y-auto rounded-lg border border-[var(--notes-border)]">
             {versionsQuery.isLoading ? <p className="notes-muted p-3 text-sm">Loading versions...</p> : null}
             {!versionsQuery.isLoading && versions.length === 0 ? (
               <p className="notes-muted p-3 text-sm">No versions yet.</p>
@@ -141,7 +141,7 @@ export function NoteVersionsDialog({
               </div>
             ) : null}
 
-            <div className="max-h-[58vh] overflow-y-auto p-4">
+            <div className="notes-modal-scroll max-h-[58vh] overflow-y-auto p-4">
               {selectedVersion.isLoading ? <p className="notes-muted text-sm">Loading version...</p> : null}
               {selectedVersion.data?.version ? (
                 <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-6 text-[var(--notes-text)]">

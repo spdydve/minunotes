@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api, type Folder, type TrashedFolder, type TrashedFolderContents, type TrashedNote } from '../lib/api';
 import { DeleteConfirmDialog } from './delete-confirm-dialog';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { EmptyState } from './ui/empty-state';
+import { ModalCloseButton } from './ui/modal-close-button';
 
 function deletedAtLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
@@ -96,6 +97,7 @@ export function TrashTable({
   const nav = useNavigate();
   const qc = useQueryClient();
   const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null);
+  const restoreDestinationRef = useRef<HTMLSelectElement | null>(null);
   const [contentsFolderId, setContentsFolderId] = useState<string | null>(null);
   const folderContents = useQuery({
     queryKey: ['trash', 'folders', contentsFolderId, 'contents'],
@@ -321,15 +323,31 @@ export function TrashTable({
           }
         }}
       >
-        <DialogContent className="left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg p-5">
-          <DialogTitle className="font-semibold text-lg">Choose a restore destination</DialogTitle>
-          <DialogDescription className="notes-muted mt-2 text-sm">
-            The original folder for {restoreTarget?.note.title} is unavailable. Choose an active folder instead.
-          </DialogDescription>
+        <DialogContent
+          className="left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg p-5"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            window.requestAnimationFrame(() => restoreDestinationRef.current?.focus());
+          }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <DialogTitle className="font-semibold text-lg">Choose a restore destination</DialogTitle>
+              <DialogDescription className="notes-muted mt-2 text-sm">
+                The original folder for {restoreTarget?.note.title} is unavailable. Choose an active folder instead.
+              </DialogDescription>
+            </div>
+            <ModalCloseButton
+              label="Close restore destination"
+              disabled={restore.isPending}
+              onClick={() => setRestoreTarget(null)}
+            />
+          </div>
           {activeFolders.length > 0 ? (
             <label className="mt-4 block text-sm">
               Destination folder
               <select
+                ref={restoreDestinationRef}
                 className="notes-input mt-2 w-full rounded-md px-3 py-2"
                 value={restoreTarget?.folderId ?? ''}
                 disabled={restore.isPending}

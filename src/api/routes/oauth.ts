@@ -472,7 +472,7 @@ oauthRoutes.post('/authorize/approve', async (c) => {
   const approvedCapabilities = { canRead, canCreate, canEdit, canComment, canCreateFolders };
   if (!canRead && !canCreate && !canEdit && !canComment && !canCreateFolders)
     return c.json({ error: 'At least one permission is required' }, 400);
-  if (canComment && !canRead) return c.json({ error: 'Review comments permission requires read permission' }, 400);
+  if (canComment && !canRead) return c.json({ error: 'Comment permission requires read permission' }, 400);
   if (!oauthCapabilitiesFitScope(approvedCapabilities, requestedScope.scopes))
     return c.json(oauthError('invalid_scope', 'Approved permissions exceed the requested OAuth scope'), 400);
   const approvedScope = oauthScopeForCapabilities(approvedCapabilities);

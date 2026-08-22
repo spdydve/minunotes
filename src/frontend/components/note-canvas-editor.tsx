@@ -292,7 +292,7 @@ function CanvasNoteLinkPicker({
   return (
     <div className="notes-overlay fixed inset-0 z-[100] grid place-items-center p-4">
       <div
-        className="notes-card max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
+        className="notes-card notes-modal-scroll max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
         role="dialog"
         aria-modal="true"
         aria-labelledby="canvas-note-link-title"
@@ -323,7 +323,7 @@ function CanvasNoteLinkPicker({
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <div className="mt-4 max-h-[min(24rem,calc(100dvh-13rem))] space-y-2 overflow-auto">
+        <div className="notes-modal-scroll mt-4 max-h-[min(24rem,calc(100dvh-13rem))] space-y-2 overflow-auto">
           {isFetching ? <p className="notes-muted text-sm">Searching...</p> : null}
           {!isFetching && trimmed && notes.length === 0 ? <p className="notes-muted text-sm">No notes found.</p> : null}
           {notes.map((note) => (

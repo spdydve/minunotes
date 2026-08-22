@@ -275,7 +275,7 @@ export const harnessOpenApiSpec = {
         operationId: 'listCommentThreads',
         summary: 'List anchored comment threads',
         description:
-          'Lists Review threads on an active markdown note. Explicit Review comments permission and read access to the note folder are required.',
+          'Lists Review threads on an active markdown note. Explicit Comment permission and read access to the note folder are required.',
         parameters: [{ $ref: '#/components/parameters/NoteId' }],
         responses: {
           '200': {
@@ -293,7 +293,7 @@ export const harnessOpenApiSpec = {
         operationId: 'createCommentThread',
         summary: 'Create an anchored comment thread',
         description:
-          'Creates a thread and first message. Explicit Review comments permission, read access, a current document hash, and an exact markdown anchor are required. Note edit permission is not required.',
+          'Creates a thread and first message. Explicit Comment permission, read access, a current document hash, and an exact markdown anchor are required. Note edit permission is not required.',
         parameters: [{ $ref: '#/components/parameters/NoteId' }],
         requestBody: {
           required: true,
@@ -459,7 +459,7 @@ export const harnessOpenApiSpec = {
         operationId: 'toggleCommentReaction',
         summary: 'Toggle a reaction on a comment message',
         description:
-          'Adds the selected reaction for the current actor, or removes it when already present. Requires read and explicit Review comments permission.',
+          'Adds the selected reaction for the current actor, or removes it when already present. Requires read and explicit Comment permission.',
         parameters: [
           { $ref: '#/components/parameters/NoteId' },
           { $ref: '#/components/parameters/ThreadId' },

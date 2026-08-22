@@ -127,7 +127,7 @@ test('requires typed confirmation, traps focus, and permanently deletes an item'
   await expect(input).toBeFocused();
   await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeDisabled();
   await page.keyboard.press('Shift+Tab');
-  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: `Close delete ${browserFixture.trashedNote.title}` })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(input).toBeFocused();
   await page.keyboard.press('Escape');
@@ -180,6 +180,7 @@ test('keeps stale restore and permanent-delete errors actionable', async ({ page
     .getByRole('button', { name: `Restore ${browserFixture.trashedTemplate.title}` })
     .click();
   const restoreDialog = page.getByRole('dialog', { name: 'Choose a restore destination' });
+  await expect(restoreDialog.getByRole('button', { name: 'Close restore destination' })).toBeVisible();
   await restoreDialog.getByRole('button', { name: 'Restore', exact: true }).click();
   await expect(restoreDialog.getByRole('alert')).toHaveText('Trashed note not found');
   await expect(restoreDialog).toBeVisible();

@@ -232,7 +232,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Create note comment',
       description:
-        'Create an anchored Review thread and first message. Use the current contentHash and exact markdown offsets from notes_get_note.',
+        'Create an anchored Review thread with a plain-text first message. Use the current contentHash and exact markdown offsets from notes_get_note.',
       inputSchema: { noteId: z.string(), body: z.string().min(1).max(10_000), anchor: commentAnchorSchema },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -244,7 +244,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_reply_to_comment',
     {
       title: 'Reply to note comment',
-      description: 'Add a message to an existing Review thread.',
+      description: 'Add a plain-text message to an existing Review thread.',
       inputSchema: { noteId: z.string(), threadId: z.string(), body: z.string().min(1).max(10_000) },
       outputSchema: jsonObjectSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -280,7 +280,7 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     'notes_edit_comment_message',
     {
       title: 'Edit comment message',
-      description: 'Edit a Review message authored by this connection.',
+      description: 'Edit a plain-text Review message authored by this connection.',
       inputSchema: {
         noteId: z.string(),
         threadId: z.string(),

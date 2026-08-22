@@ -48,7 +48,7 @@ Do not read every search result automatically. Rank candidates by title, folder,
 - Canvas replacement: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
 - Canvas note link: `minunotes_read_note` → `minunotes_link_canvas_node_to_note` or `minunotes_unlink_canvas_node` with the latest `contentHash` as `baseHash`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
-- Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. List a thread before editing its messages; message edits/deletes are author-only, and reactions are actor-specific toggles.
+- Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. Comment message bodies are plain text, not Markdown. List a thread before editing its messages; message edits/deletes are author-only, and reactions are actor-specific toggles.
 
 ## Shared-note editing protocol
 
@@ -68,10 +68,10 @@ Treat canonical edits and Review comments as different collaboration modes:
 1. Read the active Markdown note and capture `contentHash`.
 2. Compute an exact range or whole-line anchor in the returned Markdown.
 3. Create a thread with the quote, offsets, context, and current hash.
-4. Use replies for discussion and resolve/reopen for lifecycle state.
+4. Use plain-text replies for discussion and resolve/reopen for lifecycle state.
 5. If the note changes, list comments again and respect `detached: true`; never move an ambiguous anchor speculatively.
 
-Review tools require explicit Review comments permission plus read scope for every operation. Note edit permission and API editability are not required. Comments are unavailable on canvases, templates, Trash, and public shares.
+Review tools require explicit Comment permission plus read scope for every operation. Note edit permission and API editability are not required. Comments are unavailable on canvases, templates, Trash, and public shares.
 
 ## Available tools
 

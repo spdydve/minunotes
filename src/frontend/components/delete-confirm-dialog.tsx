@@ -1,6 +1,7 @@
 import { type ReactNode, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ModalCloseButton } from './ui/modal-close-button';
 
 export function DeleteConfirmDialog({
   label,
@@ -25,6 +26,8 @@ export function DeleteConfirmDialog({
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLButtonElement | null>(null);
+  const confirmationInputRef = useRef<HTMLInputElement | null>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [pending, setPending] = useState(false);
@@ -74,7 +77,13 @@ export function DeleteConfirmDialog({
       )}
       <DialogContent
         role="alertdialog"
-        className="left-1/2 top-1/2 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg p-4 sm:p-5"
+        className="left-1/2 top-1/2 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg notes-modal-scroll p-4 sm:p-5"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          window.requestAnimationFrame(() =>
+            (requiresTypedConfirmation ? confirmationInputRef.current : cancelButtonRef.current)?.focus()
+          );
+        }}
         onCloseAutoFocus={(event) => {
           if (previousFocusRef.current) {
             event.preventDefault();
@@ -88,14 +97,20 @@ export function DeleteConfirmDialog({
           if (pending) event.preventDefault();
         }}
       >
-        <DialogTitle className="font-semibold text-lg">{heading ?? `Delete ${label}`}</DialogTitle>
-        <DialogDescription className="notes-muted mt-2 text-sm">{warning}</DialogDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <DialogTitle className="font-semibold text-lg">{heading ?? `Delete ${label}`}</DialogTitle>
+            <DialogDescription className="notes-muted mt-2 text-sm">{warning}</DialogDescription>
+          </div>
+          <ModalCloseButton label={`Close delete ${label}`} disabled={pending} onClick={() => changeOpen(false)} />
+        </div>
         {requiresTypedConfirmation ? (
           <>
             <p className="mt-4 text-sm">
               Type <strong>delete</strong> to confirm.
             </p>
             <input
+              ref={confirmationInputRef}
               className="notes-input mt-2 w-full rounded-md px-3 py-2"
               value={value}
               disabled={pending}
@@ -110,7 +125,7 @@ export function DeleteConfirmDialog({
           </p>
         ) : null}
         <div className="mt-4 flex justify-end gap-2">
-          <Button disabled={pending} onClick={() => changeOpen(false)}>
+          <Button ref={cancelButtonRef} disabled={pending} onClick={() => changeOpen(false)}>
             Cancel
           </Button>
           <Button

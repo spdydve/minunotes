@@ -69,7 +69,7 @@ export function SharedIntegrationAccess({
       ) : null}
 
       {mode === 'specific' ? (
-        <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+        <div className="notes-modal-scroll mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
           {collaborations.map((item) => (
             <label
               key={item.grantId}

@@ -44,6 +44,7 @@ export function NoteCommentDialog({
   onToggleReaction: (threadId: string, messageId: string, emoji: CommentReactionEmoji) => Promise<void>;
 }) {
   const [body, setBody] = useState('');
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => setBody(''), [draftAnchor, thread?.id]);
@@ -57,8 +58,18 @@ export function NoteCommentDialog({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
+    const closeOnClickAway = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || dialogRef.current?.contains(target)) return;
+      if (target.closest('[data-radix-popper-content-wrapper], .me-comment-anchor, .me-comment-gutter-badge')) return;
+      onClose();
+    };
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOnClickAway);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOnClickAway);
+    };
   }, [onClose, open]);
 
   if (!open || (!draftAnchor && !thread)) return null;
@@ -87,10 +98,11 @@ export function NoteCommentDialog({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="false"
       aria-label={draftAnchor ? 'Add comment' : 'Comment thread'}
-      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(70dvh,34rem)] flex-col overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:inset-x-auto sm:bottom-auto sm:w-[22rem]"
+      className="fixed inset-x-3 bottom-3 z-50 flex max-h-[min(70dvh,34rem)] flex-col overflow-hidden rounded-lg border border-[var(--notes-border)] bg-[var(--notes-panel)] text-[var(--notes-text)] shadow-2xl sm:inset-x-auto sm:bottom-auto sm:w-[28rem]"
       style={anchoredStyle}
     >
       <header className="flex items-center justify-between border-[var(--notes-border)] border-b px-3 py-2.5">
@@ -110,7 +122,7 @@ export function NoteCommentDialog({
         </QuickTooltip>
       </header>
 
-      <div className="space-y-3 overflow-y-auto p-3">
+      <div className="notes-modal-scroll space-y-3 overflow-y-auto p-3">
         <blockquote className="line-clamp-3 whitespace-pre-line border-[var(--notes-border)] border-l-2 pl-2 text-[var(--notes-muted)] text-xs">
           <CommentMarkdownPreview value={quote} />
         </blockquote>

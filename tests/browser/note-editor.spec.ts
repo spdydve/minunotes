@@ -65,7 +65,7 @@ test('preserves and exposes a dirty local draft after an external update wins th
   await page.getByRole('button', { name: 'Review local draft' }).click();
   const draftDialog = page.getByRole('dialog', { name: 'Preserved local draft' });
   await expect(draftDialog.getByLabel('Content')).toHaveValue('Start here. Local draft.');
-  await draftDialog.getByRole('button', { name: 'Close' }).click();
+  await draftDialog.getByRole('button', { name: 'Close preserved draft' }).click();
 
   await page.getByRole('button', { name: 'Reload' }).click();
   await expect(editor).toContainText('Updated remotely.');
@@ -202,6 +202,27 @@ test('inserts a heading through the slash-command menu', async ({ page }) => {
   await page.keyboard.press('Backspace');
   await page.keyboard.type('/');
 
+  const slashMenu = page.locator('.cm-tooltip-autocomplete');
+  await expect(slashMenu).toBeVisible();
+  const slashCursorX = await page
+    .locator('.cm-line')
+    .first()
+    .evaluate((line) => {
+      const range = document.createRange();
+      const text = line.firstChild;
+      if (!text) throw new Error('Expected slash command text');
+      range.setStart(text, 1);
+      range.setEnd(text, 1);
+      return range.getBoundingClientRect().left;
+    });
+  await expect
+    .poll(async () => {
+      const slashMenuBox = await slashMenu.boundingBox();
+      if (!slashMenuBox) return Number.POSITIVE_INFINITY;
+      return Math.abs(slashMenuBox.x - slashCursorX);
+    })
+    .toBeLessThan(24);
+
   await page.getByText('Heading 1', { exact: true }).click();
   await page.keyboard.type('Browser heading');
   await api.expectSavedContent('# Browser heading');
@@ -250,6 +271,14 @@ test('keeps the editor open and reports an app-owned image upload failure', asyn
 
   await expect(page.getByText('Attachment storage unavailable').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Add an image' })).toBeVisible();
+});
+
+test('returns from a canvas to its notes folder', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto(`/notes/${browserFixture.canvas.id}`);
+
+  await page.getByRole('button', { name: 'Back to notes' }).click();
+  await expect(page).toHaveURL(`/folders/${browserFixture.folder.id}`);
 });
 
 test('persists a canvas edit through reload', async ({ page }) => {

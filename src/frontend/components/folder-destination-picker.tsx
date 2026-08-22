@@ -117,7 +117,7 @@ export function FolderDestinationPicker({
         />
       </div>
 
-      <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-[var(--notes-border)] p-1">
+      <div className="notes-modal-scroll max-h-72 space-y-1 overflow-y-auto rounded-md border border-[var(--notes-border)] p-1">
         {visibleRows.length ? (
           visibleRows.map((folder) => {
             const disabledReason = getDisabledReason?.(folder) ?? null;

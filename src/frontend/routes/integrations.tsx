@@ -223,8 +223,8 @@ function IntegrationsView() {
                 [
                   authorization.canRead ? 'Read' : null,
                   authorization.canCreate ? 'Create' : null,
+                  authorization.canComment ? 'Comment' : null,
                   authorization.canEdit ? 'Edit' : null,
-                  authorization.canComment ? 'Review comments' : null,
                   authorization.canCreateFolders ? 'Create folders' : null,
                 ]
                   .filter(Boolean)

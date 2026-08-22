@@ -37,7 +37,7 @@ Actor records retain internal ownership IDs for authorization. API responses ser
 - Integrations need explicit `canComment` plus note-folder read access for every comment operation.
 - Review-only integrations do not need note edit permission, and `isApiEditable` controls canonical note edits rather than comments.
 - `canEdit` does not imply `canComment`, and `canComment` does not imply `canEdit`.
-- Existing and newly created credentials default `canComment` to false until the owner grants **Review comments** access.
+- Existing and newly created credentials default `canComment` to false until the owner grants **Comment** access.
 - Message edits and deletes are author-only.
 - The note owner or thread creator can resolve, reopen, or delete a thread.
 - Templates, canvases, trashed notes, inaccessible folders, and public shares expose no comment surface.

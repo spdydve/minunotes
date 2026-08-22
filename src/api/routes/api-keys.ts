@@ -174,7 +174,7 @@ apiKeyRoutes.post('/', async (c) => {
     return c.json({ error: 'At least one collaboration grant is required for specific shared access' }, 400);
   const capabilities = permissionValue(body);
   if (capabilities.canComment && !capabilities.canRead)
-    return c.json({ error: 'Review comments permission requires read permission' }, 400);
+    return c.json({ error: 'Comment permission requires read permission' }, 400);
 
   const { key, uid } = generateApiKey();
   const { hash, salt } = hashApiKey(key);
@@ -322,7 +322,7 @@ apiKeyRoutes.patch('/:keyId', async (c) => {
     canComment: body.canComment ?? existing.authorization.canComment,
   };
   if (nextCapabilities.canComment && !nextCapabilities.canRead)
-    return c.json({ error: 'Review comments permission requires read permission' }, 400);
+    return c.json({ error: 'Comment permission requires read permission' }, 400);
 
   const shouldUpdateAuthorization =
     body.canCreateFolders !== undefined ||

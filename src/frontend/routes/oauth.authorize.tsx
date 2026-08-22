@@ -222,15 +222,6 @@ function OAuthAuthorizeView() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={approvedPermissions.canEdit}
-                disabled={!scopeAllows.edit}
-                onChange={(e) => setCanEdit(e.target.checked)}
-              />
-              Edit notes
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
                 checked={approvedPermissions.canComment}
                 disabled={!scopeAllows.comment}
                 onChange={(event) => {
@@ -238,7 +229,16 @@ function OAuthAuthorizeView() {
                   if (event.target.checked) setCanRead(true);
                 }}
               />
-              Review comments
+              Comment
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={approvedPermissions.canEdit}
+                disabled={!scopeAllows.edit}
+                onChange={(e) => setCanEdit(e.target.checked)}
+              />
+              Edit notes
             </label>
           </div>
           <label className="mt-3 flex items-start gap-2 text-sm">

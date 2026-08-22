@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { rootRoute } from './__root';
 
 function Index() {
-  const { data, isLoading } = useQuery({ queryKey: ['notes', 'recent'], queryFn: () => api.recentNotes(10) });
+  const { data, isLoading } = useQuery({ queryKey: ['notes', 'recent'], queryFn: () => api.recentNotes(25) });
   const folders = useQuery({ queryKey: ['folders'], queryFn: api.folders });
   const folderTitles = Object.fromEntries((folders.data?.folders ?? []).map((folder) => [folder.id, folder.title]));
 

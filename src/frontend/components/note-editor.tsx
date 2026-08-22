@@ -131,7 +131,7 @@ export function NoteEditor({
     const containerLeft = Math.max(12, containerRect.left);
     const containerRight = Math.min(window.innerWidth - 12, containerRect.right);
     const containerWidth = Math.max(0, containerRight - containerLeft);
-    const dialogWidth = Math.min(352, containerWidth);
+    const dialogWidth = Math.min(448, containerWidth);
     const left = containerLeft + (containerWidth - dialogWidth) / 2;
 
     const margin = 12;
@@ -284,6 +284,26 @@ export function NoteEditor({
               setEditorReady(true);
               editorViewRef.current = view;
               editorKeydownCleanupRef.current?.();
+              let autocompleteFrame = 0;
+              const positionAutocompleteAtCursor = () => {
+                window.cancelAnimationFrame(autocompleteFrame);
+                autocompleteFrame = window.requestAnimationFrame(() => {
+                  autocompleteFrame = window.requestAnimationFrame(() => {
+                    const tooltip = view.dom.querySelector<HTMLElement>('.cm-tooltip-autocomplete');
+                    const cursor = view.coordsAtPos(view.state.selection.main.head, -1);
+                    if (!tooltip || !cursor) return;
+                    const width = tooltip.getBoundingClientRect().width;
+                    const left = Math.max(12, Math.min(cursor.left, window.innerWidth - width - 12));
+                    tooltip.style.left = `${left}px`;
+                  });
+                });
+              };
+              const autocompleteObserver = new MutationObserver(positionAutocompleteAtCursor);
+              autocompleteObserver.observe(view.dom, { childList: true, subtree: true });
+              view.dom.addEventListener('keyup', positionAutocompleteAtCursor);
+              window.addEventListener('resize', positionAutocompleteAtCursor);
+              window.addEventListener('scroll', positionAutocompleteAtCursor, true);
+
               const handlePartialTaskEnter = (event: KeyboardEvent) => {
                 if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 
@@ -351,6 +371,11 @@ export function NoteEditor({
               view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
               view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
               editorKeydownCleanupRef.current = () => {
+                window.cancelAnimationFrame(autocompleteFrame);
+                autocompleteObserver.disconnect();
+                view.dom.removeEventListener('keyup', positionAutocompleteAtCursor);
+                window.removeEventListener('resize', positionAutocompleteAtCursor);
+                window.removeEventListener('scroll', positionAutocompleteAtCursor, true);
                 view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
                 view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
                 if (editorViewRef.current === view) editorViewRef.current = null;
@@ -399,7 +424,7 @@ export function NoteEditor({
                 Link
               </button>
             </div>
-            <div className="max-h-[calc(min(82vh,42rem)-6rem)] space-y-3 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+            <div className="notes-modal-scroll max-h-[calc(min(82vh,42rem)-6rem)] space-y-3 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
               <input
                 className="w-full rounded-lg border border-[var(--notes-border)] bg-[var(--notes-bg)] px-3 py-3 text-base outline-none focus:border-[var(--notes-blue)] sm:py-2 sm:text-sm"
                 placeholder="Alt text optional"

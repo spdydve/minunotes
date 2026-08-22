@@ -49,7 +49,7 @@ export function NoteCommentsPanel({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
-        className="inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-2xl md:inset-y-0 md:right-0 md:left-auto md:h-full md:max-h-none md:w-96 md:rounded-none md:border-y-0 md:border-r-0"
+        className="inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-2xl md:inset-y-0 md:right-0 md:left-auto md:h-full md:max-h-none md:w-[28rem] md:rounded-none md:border-y-0 md:border-r-0"
         aria-label="Review comments"
       >
         <div className="flex items-start justify-between gap-3 border-[var(--notes-border)] border-b px-4 py-4">
@@ -75,7 +75,7 @@ export function NoteCommentsPanel({
           </QuickTooltip>
         </div>
 
-        <div className="max-h-[calc(82dvh-4.5rem)] space-y-3 overflow-y-auto p-3 md:max-h-[calc(100dvh-4.5rem)]">
+        <div className="notes-modal-scroll max-h-[calc(82dvh-4.5rem)] space-y-3 overflow-y-auto p-3 md:max-h-[calc(100dvh-4.5rem)]">
           {error ? (
             <p className="rounded-md border border-[var(--notes-button-destructive-border)] bg-[var(--notes-button-destructive-bg)] px-2 py-1.5 text-[var(--notes-button-destructive-text)] text-xs">
               {error}

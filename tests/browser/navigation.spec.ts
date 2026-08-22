@@ -555,3 +555,57 @@ test('shows note context on the activity route', async ({ page }) => {
   await page.getByRole('link', { name: 'Back to note' }).click();
   await expect(page).toHaveURL(`/notes/${browserFixture.source.id}`);
 });
+
+test('searches before showing API key folders and scopes Comment globally or individually', async ({ page }) => {
+  await mockBrowserApi(page);
+  await page.goto('/integrations');
+  await page.getByRole('button', { name: 'Create key' }).click();
+
+  const dialog = page
+    .getByRole('heading', { name: 'Create API key' })
+    .locator('xpath=ancestor::div[contains(@class, "max-w-2xl")]');
+  await expect(dialog.getByRole('button', { name: 'Close API key access' })).toBeVisible();
+  await expect(dialog).toHaveClass(/notes-modal-scroll/);
+  await expect.poll(() => dialog.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect.poll(() => dialog.evaluate((element) => getComputedStyle(element).scrollbarWidth)).toBe('thin');
+  await dialog.getByText('Specific folders', { exact: true }).click();
+  await expect(dialog.getByRole('button', { name: new RegExp(browserFixture.folder.title) })).toHaveCount(0);
+
+  const search = dialog.getByPlaceholder('Search folders...');
+  await search.fill(browserFixture.folder.title);
+  await dialog
+    .getByRole('button', { name: `${browserFixture.folder.title} ${browserFixture.folder.title}`, exact: true })
+    .click();
+  await search.fill(browserFixture.childFolder.title);
+  await dialog
+    .getByRole('button', {
+      name: `${browserFixture.childFolder.title} ${browserFixture.folder.title} / ${browserFixture.childFolder.title}`,
+      exact: true,
+    })
+    .click();
+
+  const commentPermissions = dialog.getByLabel('Comment', { exact: true });
+  await expect(commentPermissions).toHaveCount(3);
+
+  await commentPermissions.nth(1).check();
+  await expect(commentPermissions.nth(1)).toBeChecked();
+  await expect(commentPermissions.nth(2)).not.toBeChecked();
+  await expect
+    .poll(() => commentPermissions.first().evaluate((input: HTMLInputElement) => input.indeterminate))
+    .toBe(true);
+
+  await commentPermissions.nth(1).uncheck();
+  await commentPermissions.first().check();
+  for (const checkbox of await commentPermissions.all()) await expect(checkbox).toBeChecked();
+
+  await commentPermissions.nth(1).uncheck();
+  await expect(commentPermissions.first()).not.toBeChecked();
+  await expect
+    .poll(() => commentPermissions.first().evaluate((input: HTMLInputElement) => input.indeterminate))
+    .toBe(true);
+  await expect(commentPermissions.nth(1)).not.toBeChecked();
+  await expect(commentPermissions.nth(2)).toBeChecked();
+
+  await dialog.getByRole('button', { name: 'Close API key access' }).click();
+  await expect(dialog).toBeHidden();
+});
