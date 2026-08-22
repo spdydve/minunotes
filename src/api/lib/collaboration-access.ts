@@ -341,6 +341,7 @@ function ownerAccess(actorUserId: string): CollaborationAccess {
 export async function resolveFolderCollaborationAccess(input: {
   actorUserId: string;
   folderId: string;
+  allowedGrantIds?: readonly string[];
 }): Promise<CollaborationAccess | null> {
   const [folder] = await db
     .select()
@@ -369,7 +370,8 @@ export async function resolveFolderCollaborationAccess(input: {
       and(
         eq(collaborationGrants.granteeUserId, input.actorUserId),
         eq(collaborationGrants.ownerUserId, folder.userId),
-        inArray(collaborationGrants.folderId, ancestorIds)
+        inArray(collaborationGrants.folderId, ancestorIds),
+        input.allowedGrantIds ? inArray(collaborationGrants.id, [...input.allowedGrantIds]) : undefined
       )
     );
 
@@ -528,28 +530,17 @@ export async function listDirectCollaborations(actorUserId: string) {
   return resolved.filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
-async function integrationScopeAllows(input: {
-  authorizationId: string;
-  actorUserId: string;
-  sharedAccessMode: SharedAccessMode;
-  access: CollaborationAccess;
-}) {
-  if (input.access.source === 'owner') return true;
-  if (input.sharedAccessMode === 'none') return false;
-  if (input.sharedAccessMode === 'all') return true;
-  if (input.access.applicableGrantIds.length === 0) return false;
-  const [selected] = await db
-    .select({ id: authorizationCollaborationScopes.id })
+async function selectedIntegrationGrantIds(input: { authorizationId: string; actorUserId: string }) {
+  const selected = await db
+    .select({ grantId: authorizationCollaborationScopes.collaborationGrantId })
     .from(authorizationCollaborationScopes)
     .where(
       and(
         eq(authorizationCollaborationScopes.authorizationId, input.authorizationId),
-        eq(authorizationCollaborationScopes.userId, input.actorUserId),
-        inArray(authorizationCollaborationScopes.collaborationGrantId, input.access.applicableGrantIds)
+        eq(authorizationCollaborationScopes.userId, input.actorUserId)
       )
-    )
-    .limit(1);
-  return Boolean(selected);
+    );
+  return selected.map((scope) => scope.grantId);
 }
 
 export async function resolveIntegrationNoteAccess(input: {
@@ -559,9 +550,20 @@ export async function resolveIntegrationNoteAccess(input: {
   noteId: string;
   capability: CollaborationCapability;
 }) {
-  const access = await resolveNoteCollaborationAccess({ actorUserId: input.actorUserId, noteId: input.noteId });
+  const allowedGrantIds =
+    input.sharedAccessMode === 'specific'
+      ? await selectedIntegrationGrantIds({
+          authorizationId: input.authorizationId,
+          actorUserId: input.actorUserId,
+        })
+      : undefined;
+  const access = await resolveNoteCollaborationAccess({
+    actorUserId: input.actorUserId,
+    noteId: input.noteId,
+    allowedGrantIds,
+  });
   if (!access || !collaborationRoleAllows(access.role, input.capability)) return null;
-  if (!(await integrationScopeAllows({ ...input, access }))) return null;
+  if (access.source !== 'owner' && input.sharedAccessMode === 'none') return null;
 
   const [note] = await db
     .select({ folderId: notes.folderId, isApiEditable: notes.isApiEditable })
@@ -586,9 +588,20 @@ export async function resolveIntegrationFolderAccess(input: {
   folderId: string;
   capability: CollaborationCapability;
 }) {
-  const access = await resolveFolderCollaborationAccess({ actorUserId: input.actorUserId, folderId: input.folderId });
+  const allowedGrantIds =
+    input.sharedAccessMode === 'specific'
+      ? await selectedIntegrationGrantIds({
+          authorizationId: input.authorizationId,
+          actorUserId: input.actorUserId,
+        })
+      : undefined;
+  const access = await resolveFolderCollaborationAccess({
+    actorUserId: input.actorUserId,
+    folderId: input.folderId,
+    allowedGrantIds,
+  });
   if (!access || !collaborationRoleAllows(access.role, input.capability)) return null;
-  if (!(await integrationScopeAllows({ ...input, access }))) return null;
+  if (access.source !== 'owner' && input.sharedAccessMode === 'none') return null;
   const tree = await loadFolderAccessTree(access.resourceOwnerUserId);
   if (tree.privateFolderIds.has(input.folderId)) return null;
   if ((input.capability === 'edit' || input.capability === 'create') && tree.agentReadOnlyFolderIds.has(input.folderId))
@@ -599,6 +612,7 @@ export async function resolveIntegrationFolderAccess(input: {
 export async function resolveNoteCollaborationAccess(input: {
   actorUserId: string;
   noteId: string;
+  allowedGrantIds?: readonly string[];
 }): Promise<CollaborationAccess | null> {
   const [note] = await db
     .select()
@@ -628,7 +642,8 @@ export async function resolveNoteCollaborationAccess(input: {
         or(
           eq(collaborationGrants.noteId, note.id),
           ancestorIds.length > 0 ? inArray(collaborationGrants.folderId, ancestorIds) : undefined
-        )
+        ),
+        input.allowedGrantIds ? inArray(collaborationGrants.id, [...input.allowedGrantIds]) : undefined
       )
     );
 

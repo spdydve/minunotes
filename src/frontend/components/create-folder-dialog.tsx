@@ -29,7 +29,10 @@ export function CreateFolderDialog({
       const title = value.title.trim();
       if (!title) return;
       const result = await mutation.mutateAsync(title);
-      await qc.invalidateQueries({ queryKey: ['folders'] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['folders'] }),
+        ...(parentFolder ? [qc.invalidateQueries({ queryKey: ['folder-detail', parentFolder.id] })] : []),
+      ]);
       form.reset();
       setOpen(false);
       onCreated?.(result.folder);

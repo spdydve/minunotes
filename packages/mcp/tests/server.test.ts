@@ -6,6 +6,7 @@ function mockClient() {
     folders: {
       list: vi.fn(async () => ({ folders: [{ id: 'folder-1' }] })),
       create: vi.fn(async () => ({ folder: { id: 'folder-2' } })),
+      trash: vi.fn(async () => ({ ok: true, folderCount: 1, noteCount: 0 })),
     },
     notes: {
       search: vi.fn(async () => ({ notes: [{ id: 'note-1' }] })),
@@ -13,6 +14,7 @@ function mockClient() {
       create: vi.fn(async () => ({ note: { id: 'note-2' }, contentHash: 'hash' })),
       edit: vi.fn(async () => ({ note: { id: 'note-1' }, contentHash: 'next' })),
       move: vi.fn(async () => ({ targetFolderId: 'folder-2', notes: [{ id: 'note-1' }] })),
+      trash: vi.fn(async () => ({ ok: true })),
       searchLines: vi.fn(async () => ({ query: 'todo', matches: [] })),
       lines: vi.fn(async () => ({ noteId: 'note-1', lines: [] })),
       searchNoteLines: vi.fn(async () => ({ query: 'todo', matches: [] })),
@@ -66,7 +68,9 @@ describe('createNotesMcpServer', () => {
     expect(Object.keys(registered)).toEqual([
       'notes_list_folders',
       'notes_create_folder',
+      'notes_trash_folder',
       'notes_search',
+      'notes_trash_note',
       'notes_get_note',
       'notes_list_comments',
       'notes_create_comment',
@@ -96,7 +100,7 @@ describe('createNotesMcpServer', () => {
       'notes_read_note_tags',
       'notes_replace_note_tags',
     ]);
-    expect(Object.keys(registered).filter((name) => /trash|restore|permanent.*delete/i.test(name))).toEqual([]);
+    expect(Object.keys(registered).filter((name) => /restore|permanent.*delete/i.test(name))).toEqual([]);
     expect(registered.notes_list_folders.description).toContain('explicitly scoped shared folders');
     expect(registered.notes_list_folders.description).toContain('owner/grant ids');
     expect(registered.notes_search.description).toContain('explicitly scoped shared notes');
@@ -107,6 +111,8 @@ describe('createNotesMcpServer', () => {
     expect(registered.notes_move_notes.description).toContain('Shared-resource structure is owner-only');
     expect(registered.notes_list_folders.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(registered.notes_create_folder.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(registered.notes_trash_folder.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(registered.notes_trash_note.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(registered.notes_edit_note.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(registered.notes_move_notes.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(registered.notes_create_canvas.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
@@ -152,6 +158,17 @@ describe('createNotesMcpServer', () => {
       structuredContent: { result: { folder: { id: 'folder-2' } } },
       content: [{ type: 'text', text: expect.stringContaining('folder-2') }],
     });
+  });
+
+  it('moves explicitly confirmed notes and folders to Trash', async () => {
+    const client = mockClient();
+    const server = createNotesMcpServer(client as never);
+
+    await tools(server).notes_trash_note.handler({ noteId: 'note-1', confirm: true } as never);
+    await tools(server).notes_trash_folder.handler({ folderId: 'folder-1', confirm: true } as never);
+
+    expect(client.notes.trash).toHaveBeenCalledWith('note-1');
+    expect(client.folders.trash).toHaveBeenCalledWith('folder-1');
   });
 
   it('manages anchored Review comments', async () => {

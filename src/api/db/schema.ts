@@ -124,6 +124,7 @@ export const folders = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     parentFolderId: text('parent_folder_id'),
+    createdByUserId: text('created_by_user_id').references(() => user.id, { onDelete: 'set null' }),
     title: text('title').notNull(),
     isPrivate: integer('is_private', { mode: 'boolean' }).notNull().default(false),
     isAgentReadOnly: integer('is_agent_read_only', { mode: 'boolean' }).notNull().default(false),
@@ -136,6 +137,7 @@ export const folders = sqliteTable(
     index('folders_user_id_idx').on(table.userId),
     uniqueIndex('folders_id_user_id_idx').on(table.id, table.userId),
     index('folders_parent_folder_id_idx').on(table.parentFolderId),
+    index('folders_created_by_user_id_idx').on(table.createdByUserId),
     index('folders_user_deleted_at_idx').on(table.userId, table.deletedAt),
     index('folders_trash_batch_id_idx').on(table.trashBatchId),
     foreignKey({
@@ -370,6 +372,7 @@ export const notes = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    createdByUserId: text('created_by_user_id').references(() => user.id, { onDelete: 'set null' }),
     title: text('title').notNull().default('Untitled note'),
     content: text('content').notNull().default(''),
     documentType: text('document_type', { enum: ['markdown', 'canvas.default', 'canvas.mindmap'] })
@@ -390,10 +393,16 @@ export const notes = sqliteTable(
     index('notes_user_id_idx').on(table.userId),
     uniqueIndex('notes_id_user_id_idx').on(table.id, table.userId),
     index('notes_folder_id_idx').on(table.folderId),
+    index('notes_created_by_user_id_idx').on(table.createdByUserId),
     index('notes_type_idx').on(table.type),
     index('notes_document_type_idx').on(table.documentType),
     index('notes_user_deleted_at_idx').on(table.userId, table.deletedAt),
     index('notes_trash_batch_id_idx').on(table.trashBatchId),
+    foreignKey({
+      columns: [table.folderId, table.userId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'notes_folder_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -542,6 +551,16 @@ export const templateFolderAssignments = sqliteTable(
     index('template_folder_assignments_template_id_idx').on(table.templateId),
     index('template_folder_assignments_folder_id_idx').on(table.folderId),
     index('template_folder_assignments_user_id_idx').on(table.userId),
+    foreignKey({
+      columns: [table.templateId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'template_folder_assignments_template_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.folderId, table.userId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'template_folder_assignments_folder_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -567,6 +586,11 @@ export const noteEvents = sqliteTable(
     index('note_events_note_id_idx').on(table.noteId),
     index('note_events_user_id_idx').on(table.userId),
     index('note_events_created_at_idx').on(table.createdAt),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_events_note_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -602,6 +626,16 @@ export const noteVersions = sqliteTable(
     index('note_versions_user_note_created_at_idx').on(table.userId, table.noteId, table.createdAt),
     index('note_versions_note_created_at_idx').on(table.noteId, table.createdAt),
     index('note_versions_note_state_hash_idx').on(table.noteId, table.stateHash),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_versions_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.folderId, table.userId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'note_versions_folder_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -637,6 +671,12 @@ export const noteCommentThreads = sqliteTable(
   (table) => [
     index('note_comment_threads_user_note_updated_at_idx').on(table.userId, table.noteId, table.updatedAt),
     index('note_comment_threads_note_status_idx').on(table.noteId, table.status),
+    uniqueIndex('note_comment_threads_id_note_user_idx').on(table.id, table.noteId, table.userId),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_comment_threads_note_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -663,6 +703,22 @@ export const noteCommentMessages = sqliteTable(
   (table) => [
     index('note_comment_messages_thread_created_at_idx').on(table.threadId, table.createdAt),
     index('note_comment_messages_user_note_idx').on(table.userId, table.noteId),
+    uniqueIndex('note_comment_messages_id_thread_note_user_idx').on(
+      table.id,
+      table.threadId,
+      table.noteId,
+      table.userId
+    ),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_comment_messages_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.threadId, table.noteId, table.userId],
+      foreignColumns: [noteCommentThreads.id, noteCommentThreads.noteId, noteCommentThreads.userId],
+      name: 'note_comment_messages_thread_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -696,6 +752,26 @@ export const noteCommentMessageReactions = sqliteTable(
     ),
     index('note_comment_reactions_thread_idx').on(table.threadId),
     index('note_comment_reactions_user_note_idx').on(table.userId, table.noteId),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_comment_reactions_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.threadId, table.noteId, table.userId],
+      foreignColumns: [noteCommentThreads.id, noteCommentThreads.noteId, noteCommentThreads.userId],
+      name: 'note_comment_reactions_thread_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.messageId, table.threadId, table.noteId, table.userId],
+      foreignColumns: [
+        noteCommentMessages.id,
+        noteCommentMessages.threadId,
+        noteCommentMessages.noteId,
+        noteCommentMessages.userId,
+      ],
+      name: 'note_comment_reactions_message_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -723,6 +799,11 @@ export const noteShareLinks = sqliteTable(
     uniqueIndex('note_share_links_token_hash_idx').on(table.tokenHash),
     index('note_share_links_note_id_idx').on(table.noteId),
     index('note_share_links_user_id_idx').on(table.userId),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_share_links_note_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -750,6 +831,11 @@ export const folderShareLinks = sqliteTable(
     uniqueIndex('folder_share_links_token_hash_idx').on(table.tokenHash),
     index('folder_share_links_folder_id_idx').on(table.folderId),
     index('folder_share_links_user_id_idx').on(table.userId),
+    foreignKey({
+      columns: [table.folderId, table.userId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'folder_share_links_folder_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -768,6 +854,7 @@ export const tags = sqliteTable(
   (table) => [
     index('tags_user_id_idx').on(table.userId),
     uniqueIndex('tags_user_normalized_name_idx').on(table.userId, table.normalizedName),
+    uniqueIndex('tags_id_user_id_idx').on(table.id, table.userId),
   ]
 );
 
@@ -791,6 +878,16 @@ export const noteTags = sqliteTable(
     index('note_tags_note_id_idx').on(table.noteId),
     index('note_tags_tag_id_idx').on(table.tagId),
     uniqueIndex('note_tags_note_tag_idx').on(table.noteId, table.tagId),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_tags_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.tagId, table.userId],
+      foreignColumns: [tags.id, tags.userId],
+      name: 'note_tags_tag_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 
@@ -818,6 +915,16 @@ export const noteLinks = sqliteTable(
     index('note_links_source_note_id_idx').on(table.sourceNoteId),
     index('note_links_target_note_id_idx').on(table.targetNoteId),
     index('note_links_user_target_title_idx').on(table.userId, table.targetTitle),
+    foreignKey({
+      columns: [table.sourceNoteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_links_source_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.targetNoteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'note_links_target_owner_fk',
+    }),
   ]
 );
 
@@ -851,6 +958,16 @@ export const attachments = sqliteTable(
     index('attachments_user_id_idx').on(table.userId),
     index('attachments_note_id_idx').on(table.noteId),
     index('attachments_folder_id_idx').on(table.folderId),
+    foreignKey({
+      columns: [table.noteId, table.userId],
+      foreignColumns: [notes.id, notes.userId],
+      name: 'attachments_note_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.folderId, table.userId],
+      foreignColumns: [folders.id, folders.userId],
+      name: 'attachments_folder_owner_fk',
+    }).onDelete('cascade'),
   ]
 );
 

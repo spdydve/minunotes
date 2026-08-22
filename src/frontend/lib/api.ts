@@ -31,6 +31,7 @@ export type Folder = {
   title: string;
   isPrivate: boolean;
   isAgentReadOnly: boolean;
+  canTrash?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -134,6 +135,7 @@ export type Note = {
   updatedByActorType: 'user' | 'agent' | 'system' | null;
   updatedByActorId: string | null;
   updatedByActorUid?: string | null;
+  canTrash?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -142,6 +144,7 @@ export type PageResponse = { page: number; limit: number; hasMore: boolean };
 export type CollaborationAccess = {
   role: CollaborationRole | 'owner';
   source: 'owner' | 'note_grant' | 'folder_grant';
+  canTrash?: boolean;
 };
 export type NoteResponse = { note: Note; contentHash: string; access?: CollaborationAccess };
 export type MoveNotesResponse = { notes: NoteResponse[] };
@@ -331,15 +334,13 @@ export type LinksResponse = { noteId: string; links: NoteLink[] };
 export type Tag = { id: string; name: string; normalizedName: string; noteCount?: number };
 export type Attachment = {
   id: string;
-  userId: string;
   noteId: string;
-  folderId: string;
+  folderId: string | null;
   provider: string;
   filename: string;
   mimeType: string;
   size: number;
   contentHash: string;
-  storageKey: string;
   status: 'pending' | 'ready';
   createdAt: string;
   updatedAt: string;

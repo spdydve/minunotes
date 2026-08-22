@@ -25,7 +25,7 @@ Folder-level read-only blocks Create/Edit for All and Project-root scopes. Speci
 
 Shared content uses a separate `none | specific | all` mode and defaults to `none`. Specific mode selects active human collaboration grants; all mode includes current and future grants after an explicit warning. Effective access is the intersection of the current human role, credential capabilities, selected shared mode, owner safety policy, and note API-editability.
 
-Full note reads include privacy-safe role/source context. Discovery remains compact, and direct-note grants return null folder context. Shared-folder creation stores new content in the resource owner's corpus. Agents cannot reshare, change shared structure, move shared resources, administer public links, or use Trash. Revocation and downgrade apply immediately.
+Full note reads include privacy-safe role/source context. Discovery remains compact, and direct-note grants return null folder context. Shared-folder creation stores new content in the resource owner's corpus and attributes it to the authorizing user. Agents cannot move shared resources, reshare, administer public links, restore, permanently delete, or generally manage Trash. Edit-capable agents may move only eligible creator-owned content to the owner’s Trash. Revocation and downgrade apply immediately.
 
 Folder creation is separate. Only keys with folder-creation permission can call:
 
@@ -59,7 +59,7 @@ For a net-new note that does not depend on existing content, resolve the target 
 
 The harness API exposes active content only. Trashed notes, templates, and folder subtrees are omitted from folder lists, search, line search, tags, graph results, and attachment access. Direct requests for trashed IDs return not found.
 
-Harness and API-key clients cannot list Trash or trash, restore, or permanently delete content. Owners must use the authenticated MinuNotes web interface. A not-found response can also mean the item is outside the key's scope, so it does not prove permanent deletion.
+Harness and API-key clients cannot list Trash, restore, or permanently delete content. Focused note/folder Trash operations require explicit destructive intent, human Editor authority, credential edit capability, applicable shared scope, creator ownership, and owner policy. Direct-note grants, shared roots, mixed-creator subtrees, and owner-managed sharing configuration are denied. Owners use the authenticated MinuNotes web interface for restore and permanent deletion. A not-found response can also mean the item is outside the key's scope, so it does not prove permanent deletion.
 
 ## Safe editing flow
 

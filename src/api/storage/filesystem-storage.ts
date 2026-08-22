@@ -1,6 +1,6 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ObjectStorage, PutObjectInput, StoredObject } from './object-storage';
+import type { ObjectStorage, PutObjectInput, StoredObject, StoredObjectMetadata } from './object-storage';
 
 function safeJoin(root: string, key: string) {
   const normalizedRoot = path.resolve(root);
@@ -35,6 +35,21 @@ export class FilesystemObjectStorage implements ObjectStorage {
       ]);
       const meta = rawMeta ? (JSON.parse(rawMeta) as { contentType?: string }) : {};
       return { body: new Uint8Array(body), contentType: meta.contentType };
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  async getObjectMetadata(input: { key: string }): Promise<StoredObjectMetadata | null> {
+    const filePath = safeJoin(this.rootPath, input.key);
+    try {
+      const [file, rawMeta] = await Promise.all([
+        stat(filePath),
+        readFile(`${filePath}.meta.json`, 'utf8').catch(() => null),
+      ]);
+      const meta = rawMeta ? (JSON.parse(rawMeta) as { contentType?: string }) : {};
+      return { size: file.size, contentType: meta.contentType };
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null;
       throw error;

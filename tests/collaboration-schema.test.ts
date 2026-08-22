@@ -20,7 +20,7 @@ async function createDatabase() {
   const dir = await mkdtemp(path.join(tmpdir(), 'notes-collaboration-schema-'));
   tempDirs.push(dir);
   const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
-  await runMigrations(client, 0, 35);
+  await runMigrations(client, 0, 37);
   return client;
 }
 
@@ -104,6 +104,43 @@ describe('direct collaboration schema', () => {
       const result = await client.execute(`SELECT count(*) AS count FROM ${table}`);
       expect(result.rows[0]?.count).toBe(0);
     }
+    client.close();
+  });
+
+  it('backfills creator principals and detaches them when a collaborator account is deleted', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'notes-creator-attribution-migration-'));
+    tempDirs.push(dir);
+    const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
+    await runMigrations(client, 0, 36);
+    const now = Math.floor(Date.now() / 1000);
+    await client.executeMultiple(`
+      INSERT INTO user (id, name, email, email_verified, created_at, updated_at) VALUES
+        ('creator_owner', 'Owner', 'creator-owner@example.com', 1, ${now}, ${now}),
+        ('creator_collaborator', 'Collaborator', 'creator-collaborator@example.com', 1, ${now}, ${now});
+      INSERT INTO folders (id, user_id, parent_folder_id, title, is_private, is_agent_read_only, created_at, updated_at)
+        VALUES ('creator_folder', 'creator_owner', NULL, 'Folder', 0, 0, ${now}, ${now});
+      INSERT INTO notes (id, folder_id, user_id, title, content, created_at, updated_at)
+        VALUES ('creator_note', 'creator_folder', 'creator_owner', 'Note', '', ${now}, ${now});
+    `);
+
+    await runMigrations(client, 37, 37);
+    expect(
+      (await client.execute("SELECT created_by_user_id FROM folders WHERE id = 'creator_folder'")).rows[0]
+    ).toMatchObject({ created_by_user_id: 'creator_owner' });
+    expect(
+      (await client.execute("SELECT created_by_user_id FROM notes WHERE id = 'creator_note'")).rows[0]
+    ).toMatchObject({ created_by_user_id: 'creator_owner' });
+
+    await client.execute("UPDATE folders SET created_by_user_id = 'creator_collaborator' WHERE id = 'creator_folder'");
+    await client.execute("UPDATE notes SET created_by_user_id = 'creator_collaborator' WHERE id = 'creator_note'");
+    await client.execute("DELETE FROM user WHERE id = 'creator_collaborator'");
+    expect(
+      (await client.execute("SELECT user_id, created_by_user_id FROM folders WHERE id = 'creator_folder'")).rows[0]
+    ).toMatchObject({ user_id: 'creator_owner', created_by_user_id: null });
+    expect(
+      (await client.execute("SELECT user_id, created_by_user_id FROM notes WHERE id = 'creator_note'")).rows[0]
+    ).toMatchObject({ user_id: 'creator_owner', created_by_user_id: null });
+    expect((await client.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
     client.close();
   });
 
@@ -204,6 +241,180 @@ describe('direct collaboration schema', () => {
       ) VALUES (?, ?, ?, ?, ?)`,
       ['scope_wrong_user', 'auth_grantee', 'owner_a', 'grant_note', now]
     );
+    client.close();
+  });
+
+  it('rejects cross-tenant derived resource associations', async () => {
+    const client = await createDatabase();
+    const now = await seedResources(client);
+
+    await expectRejected(
+      client,
+      `INSERT INTO notes (id, folder_id, user_id, title, content, created_at, updated_at)
+       VALUES (?, ?, ?, 'Cross tenant', '', ?, ?)`,
+      ['note_cross', 'folder_a', 'owner_b', now, now]
+    );
+    await expectRejected(
+      client,
+      `INSERT INTO note_events (id, note_id, user_id, actor_type, event_type, summary, created_at)
+       VALUES (?, ?, ?, 'user', 'edit', 'Cross tenant', ?)`,
+      ['event_cross', 'note_a', 'owner_b', now]
+    );
+    await expectRejected(
+      client,
+      `INSERT INTO note_share_links (id, user_id, note_id, token_hash, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ['share_cross', 'owner_b', 'note_a', 'cross-token', now, now]
+    );
+    await expectRejected(
+      client,
+      `INSERT INTO folder_share_links (id, user_id, folder_id, token_hash, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ['folder_share_cross', 'owner_b', 'folder_a', 'cross-folder-token', now, now]
+    );
+
+    await client.execute({
+      sql: `INSERT INTO tags (id, user_id, name, normalized_name, created_at, updated_at)
+            VALUES (?, ?, 'Tag A', 'tag a', ?, ?)`,
+      args: ['tag_a', 'owner_a', now, now],
+    });
+    await expectRejected(
+      client,
+      `INSERT INTO note_tags (id, user_id, note_id, tag_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+      ['note_tag_cross', 'owner_b', 'note_b', 'tag_a', now]
+    );
+    await expectRejected(
+      client,
+      `INSERT INTO note_links (
+        id, user_id, source_note_id, target_note_id, target_title, link_type, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'Target', 'wikilink', ?, ?)`,
+      ['link_cross', 'owner_a', 'note_a', 'note_b', now, now]
+    );
+    await expectRejected(
+      client,
+      `INSERT INTO attachments (
+        id, user_id, note_id, folder_id, provider, filename, mime_type, size, content_hash, storage_key,
+        status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'filesystem', 'cross.png', 'image/png', 8, 'hash', 'cross', 'ready', ?, ?)`,
+      ['attachment_cross', 'owner_b', 'note_a', 'folder_b', now, now]
+    );
+
+    await client.executeMultiple(`
+      INSERT INTO notes (id, folder_id, user_id, title, content, created_at, updated_at)
+        VALUES ('note_target', 'folder_a', 'owner_a', 'Target', '', ${now}, ${now});
+      INSERT INTO note_links (
+        id, user_id, source_note_id, target_note_id, target_title, link_type, created_at, updated_at
+      ) VALUES ('link_valid', 'owner_a', 'note_a', 'note_target', 'Target', 'wikilink', ${now}, ${now});
+      DELETE FROM notes WHERE id = 'note_target';
+    `);
+    expect(
+      (await client.execute("SELECT target_note_id FROM note_links WHERE id = 'link_valid'")).rows[0]
+    ).toMatchObject({
+      target_note_id: null,
+    });
+
+    await client.execute({
+      sql: `INSERT INTO note_comment_threads (
+        id, note_id, user_id, status, anchor_type, anchor_from, anchor_to, quote, document_hash,
+        created_by_actor_type, created_at, updated_at
+      ) VALUES (?, ?, ?, 'open', 'range', 0, 1, 'A', 'hash', 'user', ?, ?)`,
+      args: ['thread_a', 'note_a', 'owner_a', now, now],
+    });
+    await expectRejected(
+      client,
+      `INSERT INTO note_comment_messages (
+        id, thread_id, note_id, user_id, actor_type, body, is_root, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'user', 'Cross tenant', 1, ?, ?)`,
+      ['message_cross', 'thread_a', 'note_a', 'owner_b', now, now]
+    );
+
+    expect((await client.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
+    client.close();
+  });
+
+  it('preserves valid derived rows while adding tenant constraints', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'notes-tenant-migration-'));
+    tempDirs.push(dir);
+    const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
+    await runMigrations(client, 0, 35);
+    const now = await seedResources(client);
+    await client.executeMultiple(`
+      INSERT INTO note_events (id, note_id, user_id, actor_type, event_type, summary, created_at)
+        VALUES ('event_a', 'note_a', 'owner_a', 'user', 'edit', 'Edited', ${now});
+      INSERT INTO note_versions (
+        id, user_id, note_id, title, content, document_type, folder_id, created_at_value,
+        is_api_editable, state_hash, reason, actor_type, created_at
+      ) VALUES (
+        'version_a', 'owner_a', 'note_a', 'Note A', '', 'markdown', 'folder_a', ${now},
+        1, 'state-hash', 'manual', 'user', ${now}
+      );
+      INSERT INTO note_comment_threads (
+        id, note_id, user_id, status, anchor_type, anchor_from, anchor_to, quote, document_hash,
+        created_by_actor_type, created_at, updated_at
+      ) VALUES ('thread_a', 'note_a', 'owner_a', 'open', 'range', 0, 1, 'A', 'hash', 'user', ${now}, ${now});
+      INSERT INTO note_comment_messages (
+        id, thread_id, note_id, user_id, actor_type, body, is_root, created_at, updated_at
+      ) VALUES ('message_a', 'thread_a', 'note_a', 'owner_a', 'user', 'Root', 1, ${now}, ${now});
+      INSERT INTO note_comment_message_reactions (
+        id, message_id, thread_id, note_id, user_id, actor_type, emoji, created_at
+      ) VALUES ('reaction_a', 'message_a', 'thread_a', 'note_a', 'owner_a', 'user', '👍', ${now});
+      INSERT INTO note_share_links (id, user_id, note_id, token_hash, created_at, updated_at)
+        VALUES ('share_a', 'owner_a', 'note_a', 'note-token', ${now}, ${now});
+      INSERT INTO folder_share_links (id, user_id, folder_id, token_hash, created_at, updated_at)
+        VALUES ('folder_share_a', 'owner_a', 'folder_a', 'folder-token', ${now}, ${now});
+      INSERT INTO tags (id, user_id, name, normalized_name, created_at, updated_at)
+        VALUES ('tag_a', 'owner_a', 'Tag A', 'tag a', ${now}, ${now});
+      INSERT INTO note_tags (id, user_id, note_id, tag_id, created_at)
+        VALUES ('note_tag_a', 'owner_a', 'note_a', 'tag_a', ${now});
+      INSERT INTO note_links (
+        id, user_id, source_note_id, target_note_id, target_title, link_type, created_at, updated_at
+      ) VALUES ('link_a', 'owner_a', 'note_a', 'note_a', 'Note A', 'wikilink', ${now}, ${now});
+      INSERT INTO attachments (
+        id, user_id, note_id, folder_id, provider, filename, mime_type, size, content_hash,
+        storage_key, status, created_at, updated_at
+      ) VALUES (
+        'attachment_a', 'owner_a', 'note_a', 'folder_a', 'filesystem', 'a.png', 'image/png', 8,
+        'hash', 'attachment-a', 'ready', ${now}, ${now}
+      );
+      INSERT INTO template_folder_assignments (id, template_id, folder_id, user_id, created_at)
+        VALUES ('template_assignment_a', 'note_a', 'folder_a', 'owner_a', ${now});
+    `);
+
+    await runMigrations(client, 36, 36);
+
+    for (const table of [
+      'note_events',
+      'note_versions',
+      'note_comment_threads',
+      'note_comment_messages',
+      'note_comment_message_reactions',
+      'note_share_links',
+      'folder_share_links',
+      'note_tags',
+      'note_links',
+      'attachments',
+      'template_folder_assignments',
+    ]) {
+      const result = await client.execute(`SELECT count(*) AS count FROM ${table}`);
+      expect(result.rows[0]?.count, table).toBe(1);
+    }
+    expect((await client.execute('PRAGMA foreign_key_check')).rows).toEqual([]);
+    client.close();
+  });
+
+  it('fails the tenant-integrity migration preflight when legacy rows cross tenants', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'notes-tenant-preflight-'));
+    tempDirs.push(dir);
+    const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
+    await runMigrations(client, 0, 35);
+    const now = await seedResources(client);
+    await client.execute({
+      sql: `INSERT INTO note_events (id, note_id, user_id, actor_type, event_type, summary, created_at)
+            VALUES (?, ?, ?, 'user', 'edit', 'Invalid legacy association', ?)`,
+      args: ['event_cross', 'note_a', 'owner_b', now],
+    });
+
+    await expect(runMigrations(client, 36, 36)).rejects.toThrow(/tenant_integrity_preflight_zero/i);
     client.close();
   });
 

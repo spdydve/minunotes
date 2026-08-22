@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 35; index += 1) {
+  for (let index = 0; index <= 37; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -21,6 +21,7 @@ async function setupHarnessApp(input: {
   canCreateFolders: boolean;
   canComment?: boolean;
   accessMode?: 'all' | 'top_level' | 'specific';
+  authentication?: 'apiKey' | 'oauth';
 }) {
   vi.resetModules();
   const dir = await mkdtemp(path.join(tmpdir(), 'notes-harness-folders-'));
@@ -72,11 +73,19 @@ async function setupHarnessApp(input: {
   await db.insert(schema.integrationAuthorizations).values(authorization);
   await db.insert(schema.apiKeys).values(apiKey);
 
+  const oauthAuthorization = {
+    ...authorization,
+    id: 'oauth_auth_test',
+    integrationAuthorizationId: authorization.id,
+    clientId: 'oauth_client_test',
+    scope: 'notes.read notes.create folders.create',
+  };
   const app = new Hono();
   app.use('*', async (c, next) => {
     c.set('user', user);
     c.set('session', null);
-    c.set('apiKey', apiKey);
+    c.set('apiKey', input.authentication === 'oauth' ? null : apiKey);
+    c.set('oauthAuthorization', input.authentication === 'oauth' ? oauthAuthorization : null);
     await next();
   });
   app.route('/api/harness', harnessRoutes);
@@ -177,6 +186,35 @@ describe('agent-created folder access', () => {
     });
 
     expect(response.status).toBe(403);
+  });
+
+  it('rejects OAuth subfolder creation outside the authorized parent scope', async () => {
+    const { app, db, schema, apiKey } = await setupHarnessApp({
+      canCreateFolders: true,
+      accessMode: 'specific',
+      authentication: 'oauth',
+    });
+    await db
+      .insert(schema.folders)
+      .values([folderRow('folder_allowed', 'Allowed'), folderRow('folder_forbidden', 'Forbidden')]);
+    await db
+      .insert(schema.authorizationFolderRules)
+      .values(permissionRow(apiKey.authorizationId, 'folder_allowed', { canCreateFolders: true }));
+
+    const denied = await app.request('/api/harness/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Unauthorized child', parentFolderId: 'folder_forbidden' }),
+    });
+    expect(denied.status).toBe(403);
+    expect((await db.select().from(schema.folders)).map((folder) => folder.title)).not.toContain('Unauthorized child');
+
+    const allowed = await app.request('/api/harness/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Authorized child', parentFolderId: 'folder_allowed' }),
+    });
+    expect(allowed.status).toBe(201);
   });
 
   it('rolls back folder creation when its specific-scope grant fails', async () => {

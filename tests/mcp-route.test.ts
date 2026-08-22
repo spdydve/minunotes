@@ -78,6 +78,8 @@ describe('hosted MCP route', () => {
     expect(toolNames).toEqual(
       expect.arrayContaining([
         'notes_move_notes',
+        'notes_trash_note',
+        'notes_trash_folder',
         'notes_create_canvas',
         'notes_create_canvas_from_syntax',
         'notes_replace_canvas',
@@ -91,7 +93,7 @@ describe('hosted MCP route', () => {
         'notes_replace_note_tags',
       ])
     );
-    expect(toolNames.filter((name: string) => /trash|restore|permanent.*delete/i.test(name))).toEqual([]);
+    expect(toolNames.filter((name: string) => /restore|permanent.*delete/i.test(name))).toEqual([]);
   });
 
   it('calls a new read tool through the hosted OAuth adapter', async () => {

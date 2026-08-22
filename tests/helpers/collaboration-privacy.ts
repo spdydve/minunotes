@@ -9,6 +9,10 @@ const FORBIDDEN_ID_FIELDS = new Set([
   'actorUserId',
   'authorizationId',
   'credentialId',
+  'updatedByActorId',
+  'actorId',
+  'storageKey',
+  'hiddenCanvasLinkCount',
 ]);
 
 export function expectPrivacySafeCollaborationDto(

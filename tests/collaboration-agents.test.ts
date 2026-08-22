@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 35; index += 1) {
+  for (let index = 0; index <= 37; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -230,10 +230,10 @@ describe('collaborator agent access', () => {
       userId: collaborator.id,
       integrationAuthorizationId: 'authorization',
       clientId: 'oauth_client',
-      scope: 'notes.read notes.edit',
+      scope: 'notes.read notes.create notes.edit',
       accessMode: 'all' as const,
       canRead: true,
-      canCreate: false,
+      canCreate: true,
       canEdit: true,
       canComment: false,
       canCreateFolders: false,
@@ -268,6 +268,13 @@ describe('collaborator agent access', () => {
     const selectedBody = (await selected.json()) as { contentHash: string };
     expect(
       (
+        await oauthApp.request('/harness/notes/shared_note/trash', {
+          method: 'POST',
+        })
+      ).status
+    ).toBe(404);
+    expect(
+      (
         await oauthApp.request('/harness/notes/shared_note/edit', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -296,6 +303,46 @@ describe('collaborator agent access', () => {
         })
       ).status
     ).toBe(200);
+    expect(
+      (
+        await oauthApp.request('/harness/notes/shared_note/trash', {
+          method: 'POST',
+        })
+      ).status
+    ).toBe(403);
+
+    await db.insert(schema.collaborationGrants).values({
+      id: 'oauth_folder_editor_grant',
+      ownerUserId: 'owner',
+      granteeUserId: collaborator.id,
+      noteId: null,
+      folderId: 'shared_folder',
+      role: 'editor',
+      createdByUserId: 'owner',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(schema.authorizationCollaborationScopes).values({
+      id: 'oauth_folder_scope',
+      authorizationId: 'authorization',
+      userId: collaborator.id,
+      collaborationGrantId: 'oauth_folder_editor_grant',
+      createdAt: now,
+    });
+    const oauthCreated = await oauthApp.request('/harness/notes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ folderId: 'shared_folder', title: 'OAuth created' }),
+    });
+    expect(oauthCreated.status).toBe(201);
+    const oauthCreatedBody = (await oauthCreated.json()) as { note: { id: string } };
+    expect(
+      (
+        await oauthApp.request(`/harness/notes/${oauthCreatedBody.note.id}/trash`, {
+          method: 'POST',
+        })
+      ).status
+    ).toBe(200);
 
     oauthAuthorization.canEdit = false;
     expect(
@@ -313,7 +360,7 @@ describe('collaborator agent access', () => {
       .where(eq(schema.authorizationCollaborationScopes.id, 'oauth_scope'));
     oauthAuthorization.sharedAccessMode = 'all';
     expect((await oauthApp.request('/harness/notes/shared_note')).status).toBe(200);
-    await db.delete(schema.collaborationGrants).where(eq(schema.collaborationGrants.id, 'shared_grant'));
+    await db.delete(schema.collaborationGrants).where(eq(schema.collaborationGrants.granteeUserId, collaborator.id));
     expect((await oauthApp.request('/harness/notes/shared_note')).status).toBe(404);
     libsql.close();
   });
@@ -459,11 +506,37 @@ describe('collaborator agent access', () => {
     const [storedCreated] = await db.select().from(schema.notes).where(eq(schema.notes.id, createdBody.note.id));
     expect(storedCreated).toMatchObject({
       userId: 'owner',
+      createdByUserId: 'collaborator',
       folderId: 'shared_folder',
       updatedByActorType: 'agent',
       updatedByActorId: 'api_key',
     });
+    expect((await app.request(`/harness/notes/${createdBody.note.id}/trash`, { method: 'POST' })).status).toBe(404);
     apiKey.canEdit = true;
+    const trashedCreated = await app.request(`/harness/notes/${createdBody.note.id}/trash`, { method: 'POST' });
+    expect(trashedCreated.status).toBe(200);
+    const [storedTrashedCreated] = await db.select().from(schema.notes).where(eq(schema.notes.id, createdBody.note.id));
+    expect(storedTrashedCreated).toMatchObject({ deletedAt: expect.any(Date), updatedByActorId: 'api_key' });
+    apiKey.canCreateFolders = true;
+    const createdFolder = await app.request('/harness/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentFolderId: 'shared_folder', title: 'Agent folder' }),
+    });
+    expect(createdFolder.status).toBe(201);
+    const createdFolderBody = (await createdFolder.json()) as { folder: { id: string } };
+    const [storedAgentFolder] = await db
+      .select()
+      .from(schema.folders)
+      .where(eq(schema.folders.id, createdFolderBody.folder.id));
+    expect(storedAgentFolder).toMatchObject({ userId: 'owner', createdByUserId: 'collaborator' });
+    expect(
+      (
+        await app.request(`/harness/folders/${createdFolderBody.folder.id}/trash`, {
+          method: 'POST',
+        })
+      ).status
+    ).toBe(200);
     const createdCanvas = await app.request('/harness/canvases', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

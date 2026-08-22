@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const tempDirs: string[] = [];
 
-async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, from = 0, through = 35) {
+async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, from = 0, through = 37) {
   for (let index = from; index <= through; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)

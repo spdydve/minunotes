@@ -87,7 +87,10 @@ describe('harness OpenAPI spec', () => {
     expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/canvas/nodes/{nodeId}/link');
     expect(spec.components.schemas.NoteLink?.properties?.linkType?.enum).toContain('canvas-note');
     expect(spec.components.schemas.Backlink?.properties?.linkType?.enum).toContain('canvas-note');
-    expect(Object.keys(spec.paths).some((path) => path.includes('/trash'))).toBe(false);
+    expect(spec.paths).toHaveProperty('/v1/harness/notes/{noteId}/trash');
+    expect(spec.paths).toHaveProperty('/v1/harness/folders/{folderId}/trash');
+    expect(spec.paths).not.toHaveProperty('/v1/harness/trash');
+    expect(Object.keys(spec.paths).some((path) => /restore|permanent-delete/.test(path))).toBe(false);
     expect(spec.paths).not.toHaveProperty('/v1/harness/notes/{noteId}.delete');
     expect(spec.paths).not.toHaveProperty('/v1/harness/folders/{folderId}.delete');
   });

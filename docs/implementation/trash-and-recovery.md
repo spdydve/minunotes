@@ -54,11 +54,12 @@ Trash listing, folder-batch inspection, restore, and purge routes require an aut
 
 Harness, OpenAPI, hosted MCP, local MCP, OAuth, and API-key clients:
 
-- can access only active content allowed by their existing folder scope;
+- can access only active content allowed by their existing human role, credential capabilities, and selected scope;
 - receive not-found responses for trashed notes and folders;
-- cannot list Trash or trash, restore, or permanently delete content.
+- may move an eligible creator-owned note or folder to the owner’s Trash only with edit capability and explicit destructive intent;
+- cannot list Trash, restore, or permanently delete content.
 
-This boundary prevents an integration token from becoming a recovery or destructive-administration credential.
+Direct-note grants, shared roots, mixed-creator subtrees, and resources with owner-managed sharing configuration cannot be trashed by collaborators or their agents. This boundary permits cleanup of collaborator-created content without turning an integration token into a recovery or destructive-administration credential.
 
 ## Attachments and permanent deletion
 

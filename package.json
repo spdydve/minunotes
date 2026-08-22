@@ -34,6 +34,7 @@
     "db:migrate:dev": "ENVIRONMENT=development tsx scripts/migrate.ts",
     "db:migrate:production": "ENVIRONMENT=production tsx scripts/migrate.ts",
     "db:verify-permissions": "tsx scripts/verify-permission-migration.ts",
+    "db:verify-tenants": "tsx scripts/verify-tenant-integrity.ts",
     "db:wipe:dev": "ENVIRONMENT=development tsx scripts/wipe-db.ts --yes",
     "db:studio": "drizzle-kit studio",
     "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",

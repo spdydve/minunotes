@@ -34,7 +34,7 @@ Private and trashed folders are unavailable regardless of the key. Agent-read-on
 
 Authenticated collaboration uses a separate `sharedAccessMode`: `none` (the default), `specific` selected active grants, or `all` current and future grants after an explicit user warning. Shared access never exceeds the collaborator's current Viewer/Commenter/Editor role and still intersects API-key capabilities, owner folder safety, and note API-editability. Revocation and downgrade apply immediately.
 
-A full note read may include privacy-safe role/source context, but never read a note solely to inspect permissions. Direct-note grants return `folderId: null`; never infer or probe for the hidden containing folder. Notes created in a shared folder belong to its owner. Agents cannot change shared structure, reshare, administer public links, move shared resources, or use Trash. Treat `403` and `404` as intentional boundaries and do not retry against unrelated folders, infer resource existence, or attempt permission escalation.
+A full note read may include privacy-safe role/source context, but never read a note solely to inspect permissions. Direct-note grants return `folderId: null`; never infer or probe for the hidden containing folder. Resources created in a shared folder belong to its owner and are attributed to the authorizing user. Agents cannot move shared resources, reshare, administer public links, restore, permanently delete, or generally manage Trash. An edit-capable agent may move only eligible resources created by its authorizing user to the owner’s Trash. Treat `403` and `404` as intentional boundaries and do not retry against unrelated folders, infer resource existence, or attempt permission escalation.
 
 ## Rich Markdown
 
@@ -46,7 +46,8 @@ A full note read may include privacy-safe role/source context, but never read a 
 
 - Harness folder lists, search, direct reads, line reads, tags, links, backlinks, and orphan results include active content only. Folder lists and discovery searches return compact metadata rather than owner fields or full note content.
 - A trashed note, template, or folder subtree is unavailable through `/v1/harness/*` and normally returns `404` when addressed by ID.
-- The harness API cannot list Trash or trash, restore, or permanently delete content. Those owner-only operations require the authenticated MinuNotes web interface.
+- The harness API cannot list Trash, restore, or permanently delete content. Focused `POST /notes/:noteId/trash` and `POST /folders/:folderId/trash` operations require human Editor access, credential edit capability, applicable shared scope, creator ownership, and owner policy. Direct-note grants, shared roots, mixed-creator subtrees, and owner-managed sharing configuration are denied.
+- Trash operations are destructive. Call them only after the user explicitly requested the deletion or approved the exact destructive change.
 - Do not interpret `404` as proof that content was permanently deleted; it may be outside the key's scope or recoverable in the owner's Trash.
 
 ## Safety and editing rules
@@ -310,6 +311,7 @@ curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 
 - `GET /v1/harness/folders?limit=25&cursor=...`
 - `POST /v1/harness/folders`
+- `POST /v1/harness/folders/:folderId/trash` (destructive; requires explicit user intent)
 - `GET /v1/harness/tags?limit=25&cursor=...`
 - `GET /v1/harness/notes/search?q=...&tag=...&limit=25&cursor=...`
 - `GET /v1/harness/notes/search-lines?q=...&folderId=...&context=2&limit=25&caseSensitive=false&cursor=...`
@@ -319,6 +321,7 @@ curl -s "${AUTH[@]}" "$API/v1/harness/notes/orphans"
 - `POST /v1/harness/canvases/from-syntax`
 - `GET /v1/harness/notes/orphans?limit=25&cursor=...`
 - `GET /v1/harness/notes/:noteId`
+- `POST /v1/harness/notes/:noteId/trash` (destructive; requires explicit user intent)
 - `GET /v1/harness/notes/:noteId/events?limit=25`
 - `GET /v1/harness/notes/:noteId/comments`
 - `POST /v1/harness/notes/:noteId/comments`

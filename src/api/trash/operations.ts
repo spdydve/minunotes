@@ -204,15 +204,21 @@ export async function listTrashedFolders(input: { userId: string; offset?: numbe
 
 function noteTrashEvent(
   note: Pick<typeof notes.$inferSelect, 'id' | 'userId' | 'content'>,
-  input: { eventType: 'trash' | 'restore_from_trash'; summary: string; createdAt: Date }
+  input: {
+    eventType: 'trash' | 'restore_from_trash';
+    summary: string;
+    createdAt: Date;
+    actorType?: 'user' | 'agent';
+    actorId?: string | null;
+  }
 ) {
   const contentHash = hashMarkdown(note.content);
   return {
     id: createId('note_event'),
     noteId: note.id,
     userId: note.userId,
-    actorType: 'user' as const,
-    actorId: null,
+    actorType: input.actorType ?? ('user' as const),
+    actorId: input.actorId ?? null,
     eventType: input.eventType,
     summary: input.summary,
     beforeHash: contentHash,
@@ -224,6 +230,8 @@ function noteTrashEvent(
 export async function trashFolder(input: {
   userId: string;
   folderId: string;
+  actorType?: 'user' | 'agent';
+  actorId?: string | null;
 }): Promise<TrashOperationResult<{ deletedAt: Date; folderCount: number; noteCount: number }>> {
   const tree = await loadFolderAccessTree(input.userId);
   const root = tree.byId.get(input.folderId);
@@ -250,7 +258,12 @@ export async function trashFolder(input: {
     if (noteIds.length > 0) {
       const changedNotes = await tx
         .update(notes)
-        .set({ deletedAt: now, trashBatchId: root.id, updatedByActorType: 'user', updatedByActorId: null })
+        .set({
+          deletedAt: now,
+          trashBatchId: root.id,
+          updatedByActorType: input.actorType ?? 'user',
+          updatedByActorId: input.actorId ?? null,
+        })
         .where(and(eq(notes.userId, input.userId), inArray(notes.id, noteIds), isNull(notes.deletedAt)))
         .returning({ id: notes.id });
       if (changedNotes.length !== noteIds.length) throw new Error('Note trash state changed');
@@ -264,13 +277,17 @@ export async function trashFolder(input: {
             isNull(noteShareLinks.revokedAt)
           )
         );
-      await tx
-        .insert(noteEvents)
-        .values(
-          activeNotes.map((note) =>
-            noteTrashEvent(note, { eventType: 'trash', summary: 'Moved note to Trash with folder', createdAt: now })
-          )
-        );
+      await tx.insert(noteEvents).values(
+        activeNotes.map((note) =>
+          noteTrashEvent(note, {
+            eventType: 'trash',
+            summary: 'Moved note to Trash with folder',
+            createdAt: now,
+            actorType: input.actorType,
+            actorId: input.actorId,
+          })
+        )
+      );
     }
     await tx
       .update(folderShareLinks)
@@ -578,6 +595,8 @@ class NoteTrashStateChangedError extends Error {}
 export async function trashNotes(input: {
   userId: string;
   noteIds: string[];
+  actorType?: 'user' | 'agent';
+  actorId?: string | null;
 }): Promise<TrashOperationResult<{ deletedAt: Date; noteCount: number }>> {
   const noteIds = [...new Set(input.noteIds)];
   if (noteIds.length === 0) return { ok: false, status: 404, error: 'No notes were found' };
@@ -593,7 +612,12 @@ export async function trashNotes(input: {
     await db.transaction(async (tx) => {
       const changed = await tx
         .update(notes)
-        .set({ deletedAt: now, trashBatchId: null, updatedByActorType: 'user', updatedByActorId: null })
+        .set({
+          deletedAt: now,
+          trashBatchId: null,
+          updatedByActorType: input.actorType ?? 'user',
+          updatedByActorId: input.actorId ?? null,
+        })
         .where(activeNoteWhere(input.userId, inArray(notes.id, noteIds)))
         .returning({ id: notes.id });
       if (changed.length !== noteIds.length) throw new NoteTrashStateChangedError();
@@ -608,13 +632,17 @@ export async function trashNotes(input: {
             isNull(noteShareLinks.revokedAt)
           )
         );
-      await tx
-        .insert(noteEvents)
-        .values(
-          current.map((note) =>
-            noteTrashEvent(note, { eventType: 'trash', summary: 'Moved note to Trash', createdAt: now })
-          )
-        );
+      await tx.insert(noteEvents).values(
+        current.map((note) =>
+          noteTrashEvent(note, {
+            eventType: 'trash',
+            summary: 'Moved note to Trash',
+            createdAt: now,
+            actorType: input.actorType,
+            actorId: input.actorId,
+          })
+        )
+      );
     });
   } catch (error) {
     if (error instanceof NoteTrashStateChangedError)
@@ -628,8 +656,15 @@ export async function trashNotes(input: {
 export async function trashNote(input: {
   userId: string;
   noteId: string;
+  actorType?: 'user' | 'agent';
+  actorId?: string | null;
 }): Promise<TrashOperationResult<{ deletedAt: Date }>> {
-  const result = await trashNotes({ userId: input.userId, noteIds: [input.noteId] });
+  const result = await trashNotes({
+    userId: input.userId,
+    noteIds: [input.noteId],
+    actorType: input.actorType,
+    actorId: input.actorId,
+  });
   if (!result.ok) return result.status === 404 ? { ok: false, status: 404, error: 'Note not found' } : result;
   return { ok: true, value: { deletedAt: result.value.deletedAt } };
 }

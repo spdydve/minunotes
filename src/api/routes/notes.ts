@@ -22,6 +22,8 @@ import {
 } from '../lib/collaboration-access';
 import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
 import { serializeCollaborationUserIdentity } from '../lib/collaboration-identity';
+import { omitCollaborationInternalFields, omitResourceCreator } from '../lib/collaboration-serialization';
+import { resolveNoteTrashEligibility, trashEligibilityStatus } from '../lib/collaboration-trash';
 import { createId } from '../lib/id';
 import { pageRows, parsePageRequest } from '../lib/pagination';
 import { buildShareUrl, generateShareToken, hashShareToken } from '../lib/share-tokens';
@@ -88,11 +90,17 @@ async function serializeDiscoveryNotes<T extends { id: string; folderId: string 
   const ownerIdentities = new Map(
     ownerRows.map((owner) => [owner.id, serializeCollaborationUserIdentity({ ...owner, currentUserId: actorUserId })])
   );
-  return visible.map(({ note, access }) => ({
-    ...(access.source === 'note_grant' ? { ...note, folderId: null, folderTitle: null } : note),
-    access: serializeCollaborationAccess(access),
-    owner: access.role === 'owner' ? null : (ownerIdentities.get(access.resourceOwnerUserId) ?? null),
-  }));
+  return visible.map(({ note, access }) => {
+    const safeNote =
+      access.role === 'owner'
+        ? omitResourceCreator(note)
+        : { ...omitCollaborationInternalFields(note), updatedByActorId: null };
+    return {
+      ...(access.source === 'note_grant' ? { ...safeNote, folderId: null, folderTitle: null } : safeNote),
+      access: serializeCollaborationAccess(access),
+      owner: access.role === 'owner' ? null : (ownerIdentities.get(access.resourceOwnerUserId) ?? null),
+    };
+  });
 }
 
 async function readCollaborativeDocument(actorUserId: string, noteId: string) {
@@ -111,13 +119,10 @@ async function readCollaborativeDocument(actorUserId: string, noteId: string) {
   };
 }
 
-function serializeCollaborativeNote<T extends { userId: string; updatedByActorId: string | null }>(
-  note: T,
-  access: CollaborationAccess
-) {
-  if (access.role === 'owner') return note;
-  const { userId: _userId, ...safeNote } = note;
-  return { ...safeNote, updatedByActorId: null };
+function serializeCollaborativeNote<T extends object>(note: T, access: CollaborationAccess) {
+  return access.role === 'owner'
+    ? omitResourceCreator(note)
+    : { ...omitCollaborationInternalFields(note), updatedByActorId: null };
 }
 
 async function withPublicActorUid<
@@ -343,10 +348,15 @@ noteRoutes.get('/:noteId', async (c) => {
   if (!result) return c.json({ error: 'Note not found' }, 404);
   const noteWithActor = await withPublicActorUid(result.note);
   const note = serializeCollaborativeNote(noteWithActor, result.access);
+  const trashEligibility = await resolveNoteTrashEligibility({
+    actorUserId: user.id,
+    noteId: result.note.id,
+    access: result.access,
+  });
   return c.json({
-    ...result,
     note: result.access.source === 'note_grant' ? { ...note, folderId: null } : note,
-    access: serializeCollaborationAccess(result.access),
+    contentHash: result.contentHash,
+    access: { ...serializeCollaborationAccess(result.access), canTrash: trashEligibility.allowed },
   });
 });
 
@@ -767,7 +777,26 @@ noteRoutes.post('/trash', async (c) => {
   const noteIds = [...new Set(body.noteIds)];
   if (noteIds.length > 100) return c.json({ error: 'No more than 100 notes may be trashed at once' }, 400);
 
-  const result = await trashNotes({ userId: user.id, noteIds });
+  const eligibility = await Promise.all(
+    noteIds.map((noteId) => resolveNoteTrashEligibility({ actorUserId: user.id, noteId }))
+  );
+  const denied = eligibility.find((item) => !item.allowed);
+  if (denied && !denied.allowed) {
+    const error = trashEligibilityStatus(denied);
+    return c.json(
+      { error: error?.status === 404 ? 'One or more notes were not found' : (error?.error ?? 'Forbidden') },
+      error?.status ?? 403
+    );
+  }
+  const ownerIds = new Set(eligibility.flatMap((item) => (item.allowed ? [item.resourceOwnerUserId] : [])));
+  if (ownerIds.size !== 1) return c.json({ error: 'Notes must belong to the same owner' }, 403);
+  const [resourceOwnerUserId] = ownerIds;
+  const result = await trashNotes({
+    userId: resourceOwnerUserId,
+    noteIds,
+    actorType: 'user',
+    actorId: user.id,
+  });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json({ ok: true, ...result.value });
 });
@@ -905,7 +934,21 @@ noteRoutes.delete('/:noteId', async (c) => {
   const user = getUser(c);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const result = await trashNote({ userId: user.id, noteId: c.req.param('noteId') });
+  const noteId = c.req.param('noteId');
+  const eligibility = await resolveNoteTrashEligibility({ actorUserId: user.id, noteId });
+  if (!eligibility.allowed) {
+    const error = trashEligibilityStatus(eligibility);
+    return c.json(
+      { error: error?.status === 404 ? 'Note not found' : (error?.error ?? 'Forbidden') },
+      error?.status ?? 403
+    );
+  }
+  const result = await trashNote({
+    userId: eligibility.resourceOwnerUserId,
+    noteId,
+    actorType: 'user',
+    actorId: user.id,
+  });
   if (!result.ok) return c.json({ error: result.error }, result.status);
   return c.json({ ok: true, ...result.value });
 });

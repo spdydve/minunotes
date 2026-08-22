@@ -4,7 +4,7 @@ export const harnessOpenApiSpec = {
     title: 'MinuNotes Harness API',
     version: '0.1.0',
     description:
-      'Agent-focused API for scoped active MinuNotes content, including explicitly enabled authenticated collaboration grants. Shared access is bounded by the human role, credential capabilities, selected shared mode, owner safety policy, and note API-editability. Trashed content is excluded, and owner-only sharing, structure, and Trash lifecycle operations are not exposed.',
+      'Agent-focused API for scoped active MinuNotes content, including explicitly enabled authenticated collaboration grants. Shared access is bounded by the human role, credential capabilities, selected shared mode, owner safety policy, and note API-editability. Trashed content is excluded. Creator-scoped move-to-Trash operations require edit access; Trash listing, restore, permanent deletion, and sharing administration are not exposed.',
   },
   servers: [{ url: '/' }],
   security: [{ ApiKeyAuth: [] }],
@@ -62,7 +62,7 @@ export const harnessOpenApiSpec = {
         operationId: 'createFolder',
         summary: 'Create a folder',
         description:
-          'Requires the API key to have folder-creation permission. Created folders are automatically scoped to the same key and returned as compact metadata.',
+          'Requires folder-creation permission. Creates an owned folder or a subfolder in an editable explicitly scoped shared folder. Shared resources remain in the owner corpus and are attributed to the authorizing user.',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateFolderRequest' } } },
@@ -75,6 +75,26 @@ export const harnessOpenApiSpec = {
           '400': { $ref: '#/components/responses/BadRequest' },
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/v1/harness/folders/{folderId}/trash': {
+      post: {
+        tags: ['Folders'],
+        operationId: 'trashFolder',
+        summary: 'Move an eligible folder subtree to Trash',
+        description:
+          'Destructive. Requires edit capability. Shared-folder Editors may move only a subtree created entirely by the authorizing user, excluding shared roots and owner-managed sharing configuration. Trash restore and permanent deletion remain owner-only.',
+        parameters: [{ $ref: '#/components/parameters/FolderId' }],
+        responses: {
+          '200': {
+            description: 'Folder moved to Trash',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/DeleteResponse' } } },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
         },
       },
     },
@@ -730,6 +750,26 @@ export const harnessOpenApiSpec = {
             },
           },
           '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { $ref: '#/components/responses/Conflict' },
+        },
+      },
+    },
+    '/v1/harness/notes/{noteId}/trash': {
+      post: {
+        tags: ['Notes'],
+        operationId: 'trashNote',
+        summary: 'Move an eligible note to Trash',
+        description:
+          'Destructive. Requires edit capability and API editability. Shared-folder Editors may move only notes created by the authorizing user. Direct-note grants and resources with owner-managed sharing configuration are denied. Trash restore and permanent deletion remain owner-only.',
+        parameters: [{ $ref: '#/components/parameters/NoteId' }],
+        responses: {
+          '200': {
+            description: 'Note moved to Trash',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/DeleteResponse' } } },
+          },
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
           '404': { $ref: '#/components/responses/NotFound' },
