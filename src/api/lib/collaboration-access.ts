@@ -408,7 +408,7 @@ export async function listDirectCollaborationsPage(input: {
   const limit = Math.min(50, Math.max(1, input.limit ?? 25));
   const collaborations = (await listDirectCollaborations(input.actorUserId))
     .filter((item) => item.type === input.type)
-    .toSorted((left, right) => {
+    .sort((left, right) => {
       const leftUpdatedAt = (left.type === 'note' ? left.note.updatedAt : left.folder.updatedAt).getTime();
       const rightUpdatedAt = (right.type === 'note' ? right.note.updatedAt : right.folder.updatedAt).getTime();
       return rightUpdatedAt - leftUpdatedAt || left.grantId.localeCompare(right.grantId);
