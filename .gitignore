@@ -1,6 +1,7 @@
 
 # sst
 .sst
+**/sst-env.d.ts
 
 node_modules
 dist
