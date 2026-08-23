@@ -2,7 +2,7 @@
 
 ## Status
 
-**Approved. Phase 1 is implemented and verified; Phase 2 has not started.**
+**Approved. Phases 1–2 are implemented and verified; Phase 3 has not started.**
 
 ## Goal
 
@@ -152,18 +152,18 @@ Expected MinuNotes files:
 
 Create a dedicated sibling repository at `../minuscule-docs`.
 
-- [ ] Initialize a pnpm Astro/Starlight project.
-- [ ] Configure `site: 'https://docs.minusculelabs.com'`.
-- [ ] Add shared Minuscule Labs styling, light/dark themes, social links, and accessible navigation.
-- [ ] Create the central project-directory homepage.
-- [ ] Create honest MinuEditor and MinuCanvas overview fallbacks.
-- [ ] Add a typed project manifest schema.
-- [ ] Add scripts to fetch project repositories at explicit refs.
-- [ ] Import only each manifest entry's configured public content path.
-- [ ] Rewrite or validate project-root-relative links for the mounted project prefix.
-- [ ] Copy verified public assets without crossing directory boundaries.
-- [ ] Record source repository and ref in generated build metadata.
-- [ ] Ignore generated assembled content.
+- [x] Initialize a pnpm Astro/Starlight project.
+- [x] Configure `site: 'https://docs.minusculelabs.com'`.
+- [x] Add shared Minuscule Labs styling, light/dark themes, social links, and accessible navigation.
+- [x] Create the central project-directory homepage.
+- [x] Create honest MinuEditor and MinuCanvas overview fallbacks.
+- [x] Add a typed project manifest schema.
+- [x] Add scripts to fetch project repositories at explicit refs.
+- [x] Import only each manifest entry's configured public content path.
+- [x] Rewrite or validate project-root-relative links for the mounted project prefix.
+- [x] Copy verified public assets without crossing directory boundaries.
+- [x] Record source repository and ref in generated build metadata.
+- [x] Ignore generated assembled content.
 
 Expected docs-site files:
 
