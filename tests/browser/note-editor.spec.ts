@@ -200,6 +200,16 @@ test('inserts a heading through the slash-command menu', async ({ page }) => {
   await editor.click();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
+  await page.evaluate(() => {
+    const samples: number[] = [];
+    (window as typeof window & { slashMenuXSamples?: number[] }).slashMenuXSamples = samples;
+    const sample = () => {
+      const menu = document.querySelector<HTMLElement>('.cm-tooltip-autocomplete');
+      if (menu) samples.push(menu.getBoundingClientRect().left);
+      window.requestAnimationFrame(sample);
+    };
+    window.requestAnimationFrame(sample);
+  });
   await page.keyboard.type('/');
 
   const slashMenu = page.locator('.cm-tooltip-autocomplete');
@@ -215,13 +225,21 @@ test('inserts a heading through the slash-command menu', async ({ page }) => {
       range.setEnd(text, 1);
       return range.getBoundingClientRect().left;
     });
-  await expect
-    .poll(async () => {
-      const slashMenuBox = await slashMenu.boundingBox();
-      if (!slashMenuBox) return Number.POSITIVE_INFINITY;
-      return Math.abs(slashMenuBox.x - slashCursorX);
-    })
-    .toBeLessThan(24);
+  const slashMenuCursorOffset = async () => {
+    const slashMenuBox = await slashMenu.boundingBox();
+    if (!slashMenuBox) return Number.POSITIVE_INFINITY;
+    return Math.abs(slashMenuBox.x - slashCursorX);
+  };
+  await expect.poll(slashMenuCursorOffset).toBeLessThan(24);
+
+  // CodeMirror may remeasure after the comment gutter updates; the menu must remain at the cursor.
+  await page.waitForTimeout(1_200);
+  expect(await slashMenuCursorOffset()).toBeLessThan(24);
+  const slashMenuXSamples = await page.evaluate(
+    () => (window as typeof window & { slashMenuXSamples?: number[] }).slashMenuXSamples ?? []
+  );
+  expect(slashMenuXSamples.length).toBeGreaterThan(0);
+  expect(Math.max(...slashMenuXSamples.map((x) => Math.abs(x - slashCursorX)))).toBeLessThan(24);
 
   await page.getByText('Heading 1', { exact: true }).click();
   await page.keyboard.type('Browser heading');

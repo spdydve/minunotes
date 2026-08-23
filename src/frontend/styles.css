@@ -350,6 +350,11 @@ select {
   --me-image-picker-input-bg: var(--notes-bg);
 }
 
+.notes-minu-editor .cm-tooltip.cm-tooltip-autocomplete {
+  /* biome-ignore lint/complexity/noImportantStyles: CodeMirror repeatedly writes an inline left value. */
+  left: var(--notes-autocomplete-left) !important;
+}
+
 .notes-minu-editor .me-inline-code,
 .notes-minu-renderer code:not(pre code) {
   font-size: 0.8125em;

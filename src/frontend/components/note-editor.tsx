@@ -284,19 +284,28 @@ export function NoteEditor({
               setEditorReady(true);
               editorViewRef.current = view;
               editorKeydownCleanupRef.current?.();
-              let autocompleteFrame = 0;
               const positionAutocompleteAtCursor = () => {
-                window.cancelAnimationFrame(autocompleteFrame);
-                autocompleteFrame = window.requestAnimationFrame(() => {
-                  autocompleteFrame = window.requestAnimationFrame(() => {
-                    const tooltip = view.dom.querySelector<HTMLElement>('.cm-tooltip-autocomplete');
-                    const cursor = view.coordsAtPos(view.state.selection.main.head, -1);
-                    if (!tooltip || !cursor) return;
-                    const width = tooltip.getBoundingClientRect().width;
-                    const left = Math.max(12, Math.min(cursor.left, window.innerWidth - width - 12));
-                    tooltip.style.left = `${left}px`;
-                  });
-                });
+                const tooltip = view.dom.querySelector<HTMLElement>('.cm-tooltip-autocomplete');
+                if (!tooltip) return;
+
+                const selection = view.contentDOM.ownerDocument.getSelection();
+                const range = selection?.rangeCount ? selection.getRangeAt(0) : undefined;
+                const selectionNode = range?.startContainer;
+                const caretRect =
+                  range?.collapsed && selectionNode && view.contentDOM.contains(selectionNode)
+                    ? range.getBoundingClientRect()
+                    : undefined;
+                const cursorLeft = caretRect?.height
+                  ? caretRect.left
+                  : view.coordsAtPos(view.state.selection.main.head, -1)?.left;
+                if (cursorLeft === undefined) return;
+
+                const width = tooltip.getBoundingClientRect().width;
+                const left = Math.max(12, Math.min(cursorLeft, window.innerWidth - width - 12));
+
+                // CodeMirror's document coordinate can temporarily resolve to the line-end gutter widget.
+                // The browser caret range remains stable while that widget and the tooltip are remeasured.
+                view.dom.style.setProperty('--notes-autocomplete-left', `${left}px`);
               };
               const autocompleteObserver = new MutationObserver(positionAutocompleteAtCursor);
               autocompleteObserver.observe(view.dom, { childList: true, subtree: true });
@@ -371,11 +380,11 @@ export function NoteEditor({
               view.contentDOM.addEventListener('keydown', handlePartialTaskEnter, { capture: true });
               view.contentDOM.addEventListener('copy', handleTaskCopy, { capture: true });
               editorKeydownCleanupRef.current = () => {
-                window.cancelAnimationFrame(autocompleteFrame);
                 autocompleteObserver.disconnect();
                 view.dom.removeEventListener('keyup', positionAutocompleteAtCursor);
                 window.removeEventListener('resize', positionAutocompleteAtCursor);
                 window.removeEventListener('scroll', positionAutocompleteAtCursor, true);
+                view.dom.style.removeProperty('--notes-autocomplete-left');
                 view.contentDOM.removeEventListener('keydown', handlePartialTaskEnter, { capture: true });
                 view.contentDOM.removeEventListener('copy', handleTaskCopy, { capture: true });
                 if (editorViewRef.current === view) editorViewRef.current = null;
