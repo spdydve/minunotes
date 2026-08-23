@@ -75,8 +75,10 @@ test('uses vertical primary navigation and groups secondary destinations under M
   await more.click();
   await page.getByRole('button', { name: 'Resources', exact: true }).click();
   await expect(page).toHaveURL('/resources');
-  await expect(more).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: 'Learn to build a calmer, connected workspace.' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Open MinuNotes' }).click();
+  await expect(page).toHaveURL('/');
   await more.click();
   await page.getByRole('button', { name: 'Integrations', exact: true }).click();
   await expect(page).toHaveURL('/integrations');

@@ -1,0 +1,36 @@
+---
+title: Permissions and private content
+description: Understand viewer, commenter, editor, private-folder, and integration boundaries.
+sidebar:
+  order: 3
+---
+MinuNotes keeps human collaboration, public sharing, and connected-agent access explicit. Grant only the access required for the task.
+
+## Collaboration roles
+
+- **Viewer** reads shared content.
+- **Commenter** reads and participates in Review discussions.
+- **Editor** can update eligible shared content.
+- **Owner** controls sharing, recovery, and other owner-only administration.
+
+Folder roles can cover descendants. A direct-note invitation covers only that note.
+
+## Public links
+
+Public links are anonymous and read-only. They are appropriate for material intended for anyone with the URL, not for confidential collaboration.
+
+## Private folders
+
+Private folders prevent connected agents from accessing their contents. Privacy inherited from a parent folder also applies to descendants.
+
+Human sharing and integration permissions are separate decisions; giving a person access does not silently grant the same access to their connected tools.
+
+## Agent read-only policy
+
+A folder can restrict agent modification even when a human owner or editor can still make changes. Use this for reference material that assistants may inspect but should not alter.
+
+## Integration scopes
+
+API keys and connected apps can be limited to all eligible content, selected project roots, or exact folders. Each selected folder can have Read, Create, Comment, and Edit capabilities.
+
+Review keys and connected apps periodically and revoke credentials that are no longer used.

@@ -768,6 +768,25 @@ select {
   font-size: 1.1rem;
   font-weight: 650;
 }
+.notes-mdx h3 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.notes-mdx a {
+  color: var(--notes-blue);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--notes-blue) 45%, transparent);
+  text-underline-offset: 0.18em;
+}
+.notes-mdx a:hover {
+  text-decoration-color: currentColor;
+}
+.notes-mdx blockquote {
+  margin: 1rem 0;
+  border-left: 3px solid var(--notes-border);
+  padding-left: 1rem;
+}
 .notes-mdx p,
 .notes-mdx li {
   color: var(--notes-muted);
@@ -807,4 +826,20 @@ select {
 .notes-mdx pre code {
   background: transparent;
   padding: 0;
+}
+.notes-mdx table {
+  display: block;
+  width: 100%;
+  margin: 1rem 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.notes-mdx th,
+.notes-mdx td {
+  border: 1px solid var(--notes-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.notes-mdx th {
+  background: var(--notes-panel-muted);
 }
