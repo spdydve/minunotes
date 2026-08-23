@@ -1,194 +1,292 @@
-# Public Resources and Getting Started Plan
+# Central Minuscule Labs Documentation Plan
 
 ## Status
 
-**Implemented and verified. Public guide-based onboarding is complete; stateful onboarding remains deferred.**
+**Approved. Phase 1 is implemented and verified; Phase 2 has not started.**
 
 ## Goal
 
-Make MinuNotes Resources readable without an account, reorganize them around user tasks, and add a clear getting-started path while retaining a distinct advanced section for agents and developers.
+Publish a unified Starlight site at `https://docs.minusculelabs.com` while keeping each project's public documentation beside the code and release it describes.
 
-Canonical URLs remain on the product domain:
+Target URLs:
 
-- Resource library: `https://notes.minusculelabs.com/resources`
-- Guides: `https://notes.minusculelabs.com/resources/<slug>`
+- `https://docs.minusculelabs.com/`
+- `https://docs.minusculelabs.com/minunotes/`
+- `https://docs.minusculelabs.com/minueditor/`
+- `https://docs.minusculelabs.com/minucanvas/`
 
-A future product page on `minusculelabs.com/minunotes` can link to this library without requiring a separate documentation deployment.
+## Core architecture
 
-## Product decisions
+### Product repositories own content
 
-### Public access
+Each product remains the source of truth for its public and private documentation:
 
-- `/resources` and `/resources/*` render without authentication.
-- Public resource routes do not load folders, notes, or other private account data.
-- Authenticated users can still reach Resources from the app navigation.
-- Public pages use a small dedicated header with MinuNotes branding, a Resources link, and a Sign in/Open MinuNotes action rather than the private app sidebar.
-- Unknown resource slugs return a useful not-found state with links back to Resources and Getting Started.
+```text
+minunotes/
+  docs/public/           # Published product and integration guides
+  docs/implementation/   # Private engineering documentation
 
-### Information architecture
+minueditor/
+  docs/public/
+  docs/implementation/
 
-Replace the current flat card grid with two clear tracks:
+minucanvas/
+  docs/public/
+  docs/implementation/
+```
 
-1. **Learn MinuNotes** — user-facing product guidance.
-2. **Build with MinuNotes** — agents, APIs, MCP, OpenAPI, and advanced integration testing.
+Public documentation changes with the feature PR that changes product behavior. Internal implementation, security, planning, and deployment documents are never imported into the public site.
 
-Feature **Getting started** as the primary call to action. Group the rest by task rather than by implementation detail.
+### `minuscule-docs` owns presentation and assembly
 
-Proposed user-facing catalog:
+A dedicated sibling repository owns:
 
-- **Start here**
-  - Getting started *(new)*
-- **Write**
-  - Markdown and editor *(existing, revise)*
-  - Slash commands *(existing, revise)*
-  - Images and attachments *(new)*
-  - Canvas notes *(new)*
-- **Organize**
-  - Folders and notes *(new)*
-  - Wikilinks and backlinks *(existing, revise)*
-  - Tags and note details *(existing, revise)*
-  - Search and navigation *(new)*
-- **Collaborate**
-  - Share notes and folders *(new)*
-  - Comments and Review *(new)*
-  - Permissions and private content *(new)*
-- **Protect and recover**
-  - Trash and version history *(new)*
+- Astro/Starlight configuration
+- Shared Minuscule Labs docs branding
+- Central project directory
+- Project switcher and global navigation
+- Content assembly tooling
+- Link/frontmatter validation
+- Deployment to `docs.minusculelabs.com`
 
-Proposed technical catalog:
+It does not become the manual source of truth for product guides.
 
-- Agent integrations *(existing)*
-- Skills *(existing)*
-- MCP *(existing)*
-- Harness API *(existing)*
-- OpenAPI *(existing)*
-- Manual integration testing *(existing; label Advanced)*
+## Version and release synchronization
 
-### Getting-started guide
+### MinuNotes
 
-Create one concise, task-based guide rather than a stateful product tour in this phase:
+- Build published docs from the exact Git SHA successfully deployed to production.
+- A successful production deployment triggers the docs assembly workflow with that SHA.
+- Editorial docs-only deployments may reuse the current production SHA.
 
-1. Sign in and understand the workspace.
-2. Create a folder and first note.
-3. Write using Markdown or slash commands.
-4. Connect notes with wikilinks and tags.
-5. Find content with search.
-6. Share or invite collaborators.
-7. Choose next steps: canvas, comments, integrations, or deeper organization.
+### Libraries
 
-The guide will use short steps, expected outcomes, and links to deeper resource pages. Screenshots can be added later through a documented image convention; the first pass will not depend on screenshots becoming stale.
+- Build MinuEditor and MinuCanvas documentation from their latest stable release tags.
+- Do not publish unreleased `main` behavior as current documentation.
+- Documentation versioning is deferred, but the source tag/SHA is retained in build metadata.
 
-### Resource presentation
+### Central manifest
 
-- Add typed metadata for section, audience, order, featured status, and related guides.
-- Present a featured Getting Started panel followed by grouped sections.
-- Add a compact resources navigation on guide pages, with the current guide highlighted.
-- Add related guides and previous/next links at the end of each guide.
-- Keep layouts flat, technical, responsive, and consistent with the existing light/dark themes.
-- Use descriptive page titles and descriptions for browser and social metadata where the SPA supports them.
-- Keep the explicit typed resource registry rather than introducing a second docs framework or frontmatter plugin in this phase.
+The docs repository maintains a machine-readable manifest similar to:
 
-## Implementation checklist
+```json
+{
+  "projects": [
+    {
+      "slug": "minunotes",
+      "repository": "spdydve/minunotes",
+      "contentPath": "docs/public",
+      "ref": "<production-sha>"
+    },
+    {
+      "slug": "minueditor",
+      "repository": "spdydve/minueditor",
+      "contentPath": "docs/public",
+      "ref": "<stable-tag>"
+    },
+    {
+      "slug": "minucanvas",
+      "repository": "spdydve/minucanvas",
+      "contentPath": "docs/public",
+      "ref": "<stable-tag>"
+    }
+  ]
+}
+```
 
-### 1. Public routing and shell
+The assembled Starlight content directory is generated during builds and ignored by Git. Public prose is never manually duplicated into both the product and central repositories.
 
-- [x] Add resource-route detection that is shared by `AppShell` and tests.
-- [x] Render resource routes outside the authenticated application shell.
-- [x] Create a reusable public resources shell/header.
-- [x] Preserve authenticated in-app navigation into and out of Resources.
-- [x] Ensure resource pages render before or without session resolution.
+## Public information architecture
 
-Files:
+```text
+/
+  Minuscule Labs project directory
 
-- Modify `src/frontend/components/app-shell.tsx`.
-- Create `src/frontend/components/public-resources-shell.tsx`.
-- Modify `src/frontend/routes/resources.tsx`.
-- Modify `src/frontend/routes/resources.$slug.tsx`.
-- Modify `src/frontend/styles.css` only for shared public-resource layout/MDX styles that Tailwind cannot express cleanly.
+/minunotes/
+/minunotes/getting-started/
+/minunotes/write/*
+/minunotes/organize/*
+/minunotes/collaborate/*
+/minunotes/recover/*
+/minunotes/integrations/*
 
-### 2. Resource registry and navigation
+/minueditor/
+/minueditor/getting-started/*
+/minueditor/configuration/*
+/minueditor/extensions/*
+/minueditor/api/*
 
-- [x] Extend resource metadata with stable section IDs, audience, order, featured status, and related slugs.
-- [x] Add section definitions and helpers for ordered/grouped resources.
-- [x] Validate that slugs and related links are unique and resolvable.
-- [x] Redesign the library as Start Here, Learn MinuNotes, and Build with MinuNotes sections.
-- [x] Add guide sidebar/mobile navigation and previous/next/related links.
+/minucanvas/
+/minucanvas/getting-started/*
+/minucanvas/configuration/*
+/minucanvas/api/*
+```
 
-Files:
+Only verified content is published. MinuEditor and MinuCanvas receive overview pages until their source repositories provide deeper public guides.
 
-- Modify `src/frontend/docs/resources/index.ts`.
-- Modify `src/frontend/components/resource-doc-layout.tsx`.
-- Modify `src/frontend/routes/resources.tsx`.
-- Create `tests/frontend-resources.test.ts`.
+## Phase 1 — Prepare MinuNotes public content
 
-### 3. Getting started and user guides
+Work remains on `feat/public-resources-onboarding`.
 
-- [x] Create the Getting Started guide.
-- [x] Create focused guides for currently undocumented product workflows.
-- [x] Revise existing user guides for public readers, consistent terminology, and cross-links.
-- [x] Keep API/developer details out of basic user guides unless linked as an advanced next step.
+- [x] Create `docs/public/minunotes/` with Starlight-compatible Markdown/MDX and assets.
+- [x] Move the 19 public guides written on this branch into task-based directories.
+- [x] Add valid Starlight frontmatter: title, description, sidebar order, and advanced labels where needed.
+- [x] Remove duplicated “Continue learning” sections where Starlight navigation already provides the path.
+- [x] Isolate Manual integration testing under Advanced integrations.
+- [x] Audit content for internal-only language, localhost assumptions, and implementation details.
+- [x] Preserve the task-oriented Getting Started guide.
+- [x] Document the transitional `/resources/<slug>` link convention for assembler mapping to `/minunotes/`.
+- [x] Keep `docs/implementation/`, runbooks, plans, and security reviews outside `docs/public/`.
+- [x] Add a public-doc validation script for frontmatter, links, duplicate slugs, and forbidden private paths.
 
-Files to create:
+Expected MinuNotes files:
 
-- `src/frontend/docs/resources/getting-started.mdx`
-- `src/frontend/docs/resources/folders-and-notes.mdx`
-- `src/frontend/docs/resources/images-and-attachments.mdx`
-- `src/frontend/docs/resources/canvas-notes.mdx`
-- `src/frontend/docs/resources/search-and-navigation.mdx`
-- `src/frontend/docs/resources/sharing-and-collaboration.mdx`
-- `src/frontend/docs/resources/comments-and-review.mdx`
-- `src/frontend/docs/resources/permissions-and-privacy.mdx`
-- `src/frontend/docs/resources/trash-and-version-history.mdx`
+- Create `docs/public/minunotes/index.mdx`.
+- Create `docs/public/minunotes/getting-started.mdx`.
+- Create directories for `write`, `organize`, `collaborate`, `recover`, and `integrations`.
+- Create `scripts/validate-public-docs.ts` or equivalent.
+- Add a `docs:validate` package script.
+- Add tests for content boundaries and links.
 
-Files to revise:
+## Phase 2 — Bootstrap `minuscule-docs`
 
-- `src/frontend/docs/resources/markdown-editor.mdx`
-- `src/frontend/docs/resources/slash-commands.mdx`
-- `src/frontend/docs/resources/wikilinks-backlinks.mdx`
-- `src/frontend/docs/resources/tags-details.mdx`
-- Existing technical MDX files only where public navigation, terminology, or related links require updates.
+Create a dedicated sibling repository at `../minuscule-docs`.
 
-### 4. Public entry points and metadata
+- [ ] Initialize a pnpm Astro/Starlight project.
+- [ ] Configure `site: 'https://docs.minusculelabs.com'`.
+- [ ] Add shared Minuscule Labs styling, light/dark themes, social links, and accessible navigation.
+- [ ] Create the central project-directory homepage.
+- [ ] Create honest MinuEditor and MinuCanvas overview fallbacks.
+- [ ] Add a typed project manifest schema.
+- [ ] Add scripts to fetch project repositories at explicit refs.
+- [ ] Import only each manifest entry's configured public content path.
+- [ ] Rewrite or validate project-root-relative links for the mounted project prefix.
+- [ ] Copy verified public assets without crossing directory boundaries.
+- [ ] Record source repository and ref in generated build metadata.
+- [ ] Ignore generated assembled content.
 
-- [x] Add a Resources link to the unauthenticated sign-in experience.
-- [x] Set resource-specific document titles and description metadata.
-- [x] Ensure public pages have clear Sign in/Open MinuNotes calls to action.
-- [x] Keep `minusculelabs.com/minunotes` out of this repository unless its source is later added; document it as an external follow-up.
+Expected docs-site files:
 
-Files:
+- `package.json`
+- `pnpm-lock.yaml`
+- `astro.config.mjs`
+- `tsconfig.json`
+- `src/content.config.ts`
+- `src/content/docs/index.mdx`
+- `src/styles/custom.css`
+- `projects.json`
+- `scripts/assemble-docs.ts`
+- `scripts/validate-docs.ts`
+- tests for manifest and assembly boundaries
+
+## Phase 3 — Central deployment
+
+Deploy independently from the `minuscule-docs` repository.
+
+- [ ] Add an SST `StaticSite` for `docs.minusculelabs.com`.
+- [ ] Use externally managed DNS with `dns: false`.
+- [ ] Require `DOCS_CERT_ARN` for non-local custom-domain deployment.
+- [ ] Document the CloudFront target and DNS record setup.
+- [ ] Add local, development, and production build/deploy scripts.
+- [ ] Ensure direct deep links, clean URLs, 404 pages, assets, sitemap, and canonical URLs work.
+- [ ] Add a CI workflow that assembles, validates, builds, and deploys.
+- [ ] Accept a product slug and source SHA/tag from trusted release dispatch events.
+- [ ] Prevent untrusted repository-dispatch payloads from deploying arbitrary refs.
+
+## Phase 4 — Product release integration
+
+### MinuNotes
+
+- [ ] Extend the successful production release workflow to dispatch the deployed SHA to `minuscule-docs`.
+- [ ] Keep docs deployment failure visible without rolling back an otherwise healthy application automatically.
+- [ ] Record the docs deployment URL/status in the release record.
+- [ ] Add a PR “Documentation impact” field or checklist.
+- [ ] Require `docs/public` updates for user-visible changes or an explicit “no docs change” explanation.
+
+### MinuEditor and MinuCanvas
+
+- [ ] Add the same dispatch only after their repositories have stable public-doc directories.
+- [ ] Dispatch stable release tags, not arbitrary branch heads.
+- [ ] Generate API references from TypeDoc or another source artifact later instead of copying signatures manually.
+
+## Phase 5 — Integrate central docs into MinuNotes
+
+After `docs.minusculelabs.com` is deployable:
+
+- [ ] Remove the custom public Resources shell, registry, metadata helper, and resource-only app styling introduced on this branch.
+- [ ] Remove duplicate in-app MDX after content is safely present under `docs/public/minunotes`.
+- [ ] Point the sign-in prompt to `https://docs.minusculelabs.com/minunotes/`.
+- [ ] Point authenticated Resources navigation to the same central site.
+- [ ] Preserve `/resources` and `/resources/:slug` as redirects.
+- [ ] Add a complete old-slug-to-new-path map.
+- [ ] Make the docs origin configurable with `VITE_DOCS_URL`, defaulting to the production docs origin.
+- [ ] Expose `VITE_DOCS_URL` through SST environments.
+
+Expected MinuNotes files:
 
 - Modify `src/frontend/routes/auth.tsx`.
-- Modify `src/frontend/routes/resources.tsx`.
-- Modify `src/frontend/routes/resources.$slug.tsx`.
-- Optionally create `src/frontend/lib/document-metadata.ts` if metadata behavior would otherwise be duplicated.
+- Modify resource navigation handling and legacy resource routes.
+- Modify `.env.example`.
+- Modify `sst.config.ts`.
+- Remove superseded custom public-resource components and helpers.
+- Update unit and browser tests.
 
-### 5. Verification
+## CI and safety checks
 
-- [x] Add browser coverage proving `/resources` and a guide load without an authenticated session or private API requests.
-- [x] Add browser coverage for the public header, Getting Started path, grouped catalog, guide navigation, and sign-in action.
-- [x] Confirm authenticated users can still navigate to Resources from the sidebar and return to notes.
-- [x] Add unit coverage for resource ordering, unique slugs, valid relationships, and public route detection.
-- [x] Check narrow/mobile and desktop layouts.
-- [x] Run Biome on changed files.
-- [x] Run `pnpm typecheck`.
-- [x] Run focused Vitest tests.
-- [x] Run focused Playwright resource/navigation tests.
-- [x] Run `pnpm build`.
+### Product repositories
 
-Test files:
+- [ ] Validate frontmatter and unique slugs.
+- [ ] Validate internal links and referenced assets.
+- [ ] Reject links into private implementation directories.
+- [ ] Reject accidental secrets and environment files from public content.
+- [ ] Ensure public docs changed, or were explicitly considered, for user-visible PRs.
 
-- Create `tests/frontend-resources.test.ts`.
-- Modify `tests/browser/navigation.spec.ts` or create `tests/browser/resources.spec.ts` if separation is clearer.
+### Central docs repository
+
+- [ ] Validate manifest entries and explicit refs.
+- [ ] Restrict imports to configured public content roots.
+- [ ] Fail on broken cross-project links.
+- [ ] Fail on duplicate mounted paths.
+- [ ] Confirm canonical URLs and sitemap use `docs.minusculelabs.com`.
+- [ ] Test representative direct links for every project.
+- [ ] Test mobile/desktop navigation and light/dark themes.
+- [ ] Confirm private project documentation is absent from build output.
+
+## Verification
+
+### MinuNotes
+
+- [ ] Run Biome on changed files.
+- [ ] Run `pnpm typecheck`.
+- [ ] Run public-doc validation tests.
+- [ ] Run focused navigation and redirect browser tests.
+- [ ] Run `pnpm build`.
+
+### `minuscule-docs`
+
+- [ ] Run formatter/linter.
+- [ ] Run Astro/Starlight type checks.
+- [ ] Run manifest and assembly tests.
+- [ ] Run link validation.
+- [ ] Run production build.
+- [ ] Inspect generated routes and sitemap.
 
 ## Explicitly deferred
 
-- Stateful first-login onboarding tours, checklists, or user progress storage.
-- A separate Astro/Starlight deployment.
-- Full-text documentation search; add once the guide count makes category navigation insufficient.
+- Detailed MinuEditor and MinuCanvas guides not yet owned by those repositories.
+- Multiple published documentation versions.
 - Localization.
-- Screenshot automation.
-- Changes to the external `minusculelabs.com` site.
+- Private/authenticated documentation.
+- Broad marketing content for `minusculelabs.com`.
+- Automated TypeDoc/OpenAPI page generation beyond preserving current verified references.
 
-## Approval question
+## Approval decisions
 
-Approve this as a **public guide-based onboarding phase**, with a stateful first-login product tour deferred. If you want an in-app onboarding checklist or walkthrough in this branch, that should be added as a separate workstream because it requires product-state and dismissal/progress decisions.
+Approve or change these defaults before implementation:
+
+1. **Content ownership:** public docs remain in each product repository under `docs/public`; no manually duplicated product prose in `minuscule-docs`.
+2. **Central ownership:** `minuscule-docs` owns Starlight presentation, assembly, validation, and deployment only.
+3. **Published refs:** MinuNotes uses the deployed production SHA; libraries use stable release tags.
+4. **Initial scope:** fully migrate MinuNotes; provide verified overview fallbacks for MinuEditor and MinuCanvas.
+5. **Rollout order:** deploy the central docs site before replacing MinuNotes Resources with redirects.
+6. **Remote setup:** implement the sibling repository locally first, then attach its GitHub remote when identified or created.

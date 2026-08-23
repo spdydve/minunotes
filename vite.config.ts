@@ -1,6 +1,8 @@
 import mdx from '@mdx-js/rollup';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import remarkFrontmatter from 'remark-frontmatter';
+import remarkMdxFrontmatter from 'remark-mdx-frontmatter';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 
@@ -23,7 +25,7 @@ export default defineConfig(async ({ mode }) => {
   console.log(`[vite] Proxy target: ${apiTarget}`);
 
   return {
-    plugins: [mdx(), react(), tailwindcss()],
+    plugins: [mdx({ remarkPlugins: [remarkFrontmatter, remarkMdxFrontmatter] }), react(), tailwindcss()],
     test: {
       exclude: ['**/node_modules/**', '**/dist/**', '**/.{git,cache,output,temp}/**', 'tests/browser/**'],
     },

@@ -76,6 +76,7 @@ export function ResourceDocLayout({ doc }: { doc: ResourceDoc }) {
             <p className="mb-2 text-[var(--notes-blue)] text-xs uppercase tracking-wide">
               {section?.title ?? 'Resources'} {doc.advanced ? '· Advanced' : ''}
             </p>
+            <h1>{doc.title}</h1>
             <Doc />
           </article>
 

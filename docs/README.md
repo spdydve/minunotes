@@ -17,6 +17,7 @@ Legacy `/api/*` routes have been removed from production.
 
 ## Sections
 
+- [Public documentation](./public/README.md)
 - [Guides](./guides/README.md)
 - [Skills](./skills/README.md)
 - [Evals](./evals/README.md)
