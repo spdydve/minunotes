@@ -59,7 +59,7 @@ A full note read may include privacy-safe role/source context, but never read a 
 - Prefer small, targeted edits.
 - Preserve markdown structure, headings, links, wikilinks, tags, and image URLs.
 - Check `documentType` before editing. Markdown patch edits only work for `markdown` notes.
-- For `canvas.default` and `canvas.mindmap`, use canvas JSON or Minu diagram syntax endpoints instead of markdown patch edits.
+- For generated `canvas.default` and `canvas.mindmap` documents, default to Minu diagram syntax instead of manually positioning JSON Canvas nodes. Use JSON Canvas only for exact imports or deterministic preservation of IDs, coordinates, links, and metadata.
 - For app-owned images, preserve normal URL markdown such as `/internal/attachments/.../content`.
 - Report the folder ID, note ID, and final changed markdown or section summary after edits.
 - Use note moves to organize agent-created notes only within folders the API key can edit/create in.
@@ -256,7 +256,9 @@ curl -s "${AUTH[@]}" \
 
 Message bodies are plain text and Markdown syntax is not rendered. Messages include grouped reaction counts and `reactedByCurrentActor`. Reactions accept one standard Unicode emoji, including joined and skin-tone emoji; `👍`, `❤️`, `😂`, `🎉`, `👀`, and `🚀` are the human UI's quick defaults. Every comment operation requires explicit Comment permission plus read access. Note edit permission and `isApiEditable` are not required for comments. Existing and new credentials have Comment disabled until the owner grants it. Message edits/deletes are author-only. Use the current document hash for creation and anchor updates; stale anchors return `409`. When a listed thread is `detached`, do not guess a replacement location. Comments are unavailable for canvases, templates, Trash, and public shares.
 
-Create canvases from JSON Canvas or Minu diagram syntax:
+Create canvases from JSON Canvas or Minu diagram syntax.
+
+For any net-new agent-composed conceptual diagram, flowchart, architecture diagram, or mind map, use the syntax endpoint by default. Use flow layout with `direction right` or `direction down` for workflows and directed graphs, and use `layout mindmap` only for a true tree. Keep node labels concise and plain text because canvas nodes do not render Markdown. Put the diagram title in the note or syntax title rather than a detached node. Reserve raw JSON Canvas for exact imports or user-requested IDs, positions, links, groups, styles, and metadata.
 
 ```bash
 curl -s "${AUTH[@]}" \
@@ -357,7 +359,7 @@ type DocumentEdit =
 
 Prefer `replace_text` when the target text is unique. Use `replace_range` only after reading lines/sections and when exact replacement is not practical.
 
-For canvases, prefer Minu diagram syntax for generated diagrams/mind maps and JSON Canvas for exact imports/replacements.
+For canvases, default to Minu diagram syntax for generated diagrams and mind maps. Do not hand-place an agent-composed diagram with JSON coordinates when syntax layout applies. Use JSON Canvas for exact imports and replacements that must preserve IDs, positions, links, groups, styles, or metadata. Syntax replacement is whole-document regeneration, so read the latest canvas and obtain approval before replacing a manually arranged or metadata-rich document.
 
 ## Error handling
 

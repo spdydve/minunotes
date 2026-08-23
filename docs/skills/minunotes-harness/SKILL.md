@@ -44,8 +44,18 @@ Discovery tools are cursor-paginated when their registered input exposes `cursor
 
 Do not read every search result automatically. Rank candidates by title, folder, document type, and matched context, then expand only the notes needed to answer the task.
 - Section edit: `minunotes_read_outline` → `minunotes_read_section` → targeted `replace_text` or `replace_range`.
-- Canvas create/update: use Minu diagram syntax for generated layouts and JSON Canvas for exact IDs, positions, links, and metadata.
+- Canvas create/update: default to `minunotes_create_canvas_from_syntax` for any agent-composed conceptual diagram, flowchart, architecture diagram, or mind map. Use raw JSON Canvas only for exact imports or when the user explicitly requires specific IDs, coordinates, links, or metadata.
 - Canvas replacement: `minunotes_read_note` → use `minunotes_replace_canvas` or `minunotes_replace_canvas_from_syntax` with `baseHash`.
+
+## Canvas generation default
+
+- Use Minu diagram syntax for net-new generated diagrams; do not hand-place nodes with JSON coordinates when the compiler can lay them out.
+- Use the default flow layout with `direction right` or `direction down` for workflows and directed graphs. Use `layout mindmap` only when the relationships form a true tree.
+- Keep node labels short and plain text. Canvas nodes do not render Markdown, so do not add heading markers, emphasis markers, or Markdown-only formatting.
+- Put the diagram title in the canvas note title or the syntax `diagram` title instead of creating a detached title node.
+- Prefer explicit card shapes and meaningful connections while avoiding repetitive edge labels.
+- Use JSON Canvas when importing an existing document or preserving exact IDs, positions, external URLs, internal note links, groups, styles, or host metadata.
+- Syntax replacement is whole-document regeneration. Read the latest canvas and obtain approval before replacing a manually arranged or metadata-rich canvas.
 - Canvas note link: `minunotes_read_note` → `minunotes_link_canvas_node_to_note` or `minunotes_unlink_canvas_node` with the latest `contentHash` as `baseHash`.
 - Tags/links: use tag and backlink/link tools before changing organization or wikilinks.
 - Review comments: read the note and current `contentHash` before creating or remapping an anchor. Anchors use zero-based Markdown offsets and an exact quote. Comment message bodies are plain text, not Markdown. List a thread before editing its messages; message edits/deletes are author-only, and reactions are actor-specific toggles.
@@ -130,8 +140,8 @@ Review tools require explicit Comment permission plus read scope for every opera
 - Capture `contentHash` before edits and pass it as `baseHash`.
 - Use exact, small edits.
 - Markdown patch edits only work for `documentType: "markdown"`.
-- For `canvas.default` and `canvas.mindmap`, use canvas JSON or Minu diagram syntax tools.
-- Syntax replacement regenerates the complete canvas and can replace node IDs, layout, links, and metadata. Use JSON Canvas for deterministic replacement.
+- For generated `canvas.default` and `canvas.mindmap` documents, use Minu diagram syntax by default. Use JSON Canvas only for exact imports or deterministic preservation of IDs, coordinates, links, and metadata.
+- Syntax replacement regenerates the complete canvas and can replace node IDs, layout, links, and metadata. Obtain approval before using it on a manually arranged or metadata-rich canvas.
 - Prefer focused canvas link/unlink tools over whole-document replacement when only an internal target changes.
 - Internal canvas note links and external URLs are independent. Link/unlink operations must preserve `node.url` and unrelated node metadata.
 - Preserve markdown structure, wikilinks, tags, and app-owned image URLs such as `/internal/attachments/.../content`.
