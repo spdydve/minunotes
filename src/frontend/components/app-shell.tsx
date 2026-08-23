@@ -6,12 +6,20 @@ import { ApiError, api } from '../lib/api';
 import { authClient } from '../lib/auth-client';
 import { buildAppNavigationModel, folderIdFromNavigationPath, noteIdFromNavigationPath } from '../lib/navigation';
 import { getStoredSidebarCollapsed, storeSidebarCollapsed } from '../lib/navigation-preferences';
+import { isPublicResourcePath } from '../lib/public-routes';
 import { applyNoteTheme, getStoredTheme } from '../lib/themes';
 import { AppNavigationBar } from './app-navigation-bar';
 import { FolderSidebar } from './folder-sidebar';
+import { PublicResourcesShell } from './public-resources-shell';
 import { SearchDialog } from './search-dialog';
 
 export function AppShell() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  if (isPublicResourcePath(pathname)) return <PublicResourcesShell />;
+  return <AuthenticatedAppShell />;
+}
+
+function AuthenticatedAppShell() {
   const location = useRouterState({ select: (state) => state.location });
   const pathname = location.pathname;
   const session = authClient.useSession();

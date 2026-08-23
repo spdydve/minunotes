@@ -1,0 +1,35 @@
+# Images and attachments
+
+Images can make a note easier to scan and understand. MinuNotes supports uploaded images and remote image URLs in Markdown notes.
+
+## Upload an image
+
+Type `/` on an empty line and choose **Image**. Select a local image to upload it to MinuNotes.
+
+You can also paste an image file into the editor. Uploaded images are stored as MinuNotes attachments and inserted using Markdown image syntax.
+
+## Use an image URL
+
+The Image command can insert a remote image URL, or you can write the syntax directly:
+
+```md
+![Diagram showing the publishing flow](https://example.com/diagram.png)
+```
+
+Use meaningful alt text so the note remains understandable when the image cannot be seen or loaded.
+
+## Keep attachment URLs intact
+
+Uploaded images use MinuNotes attachment URLs. Do not rewrite those URLs when editing raw Markdown or asking an agent to update a note.
+
+## Sharing images
+
+Images in shared notes follow the note's access boundary. Public share pages can display eligible attachments without exposing the rest of the workspace.
+
+Avoid using remote images for sensitive content because the remote host may receive a request when the image loads.
+
+## Related guides
+
+- [Markdown and editor](/resources/markdown-editor)
+- [Slash commands](/resources/slash-commands)
+- [Share notes and folders](/resources/sharing-and-collaboration)

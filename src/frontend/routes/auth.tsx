@@ -1,4 +1,4 @@
-import { createRoute, useSearch } from '@tanstack/react-router';
+import { createRoute, Link, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { authClient } from '../lib/auth-client';
@@ -142,6 +142,16 @@ function AuthView() {
             </Button>
           </form>
         )}
+        <p className="mt-5 border-slate-200 border-t pt-4 text-center text-slate-500 text-xs dark:border-slate-800">
+          New to MinuNotes?{' '}
+          <Link
+            to="/resources/$slug"
+            params={{ slug: 'getting-started' }}
+            className="text-slate-800 underline dark:text-slate-200"
+          >
+            Read the Getting Started guide
+          </Link>
+        </p>
       </div>
     </div>
   );

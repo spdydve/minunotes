@@ -1,96 +1,258 @@
 import type { ComponentType } from 'react';
 import AgentIntegrations from './agent-integrations.mdx';
+import CanvasNotes from './canvas-notes.mdx';
+import CommentsAndReview from './comments-and-review.mdx';
+import FoldersAndNotes from './folders-and-notes.mdx';
+import GettingStarted from './getting-started.mdx';
 import HarnessApi from './harness-api.mdx';
+import ImagesAndAttachments from './images-and-attachments.mdx';
 import MarkdownEditor from './markdown-editor.mdx';
 import Mcp from './mcp.mdx';
 import OAuthManualTesting from './oauth-manual-testing.mdx';
 import OpenApi from './openapi.mdx';
+import PermissionsAndPrivacy from './permissions-and-privacy.mdx';
+import SearchAndNavigation from './search-and-navigation.mdx';
+import SharingAndCollaboration from './sharing-and-collaboration.mdx';
 import Skills from './skills.mdx';
 import SlashCommands from './slash-commands.mdx';
 import TagsDetails from './tags-details.mdx';
+import TrashAndVersionHistory from './trash-and-version-history.mdx';
 import WikilinksBacklinks from './wikilinks-backlinks.mdx';
+
+export type ResourceAudience = 'user' | 'developer';
+export type ResourceSectionId = 'start' | 'write' | 'organize' | 'collaborate' | 'recover' | 'integrate';
 
 export type ResourceDoc = {
   slug: string;
   title: string;
   description: string;
-  category: string;
+  section: ResourceSectionId;
+  audience: ResourceAudience;
+  order: number;
+  featured?: boolean;
+  advanced?: boolean;
+  relatedSlugs?: readonly string[];
   component: ComponentType;
 };
 
-export const resourceDocs = [
+export const resourceSections = [
+  { id: 'start', title: 'Start here', description: 'Build your first MinuNotes workspace.' },
+  { id: 'write', title: 'Write', description: 'Create clear notes with Markdown, media, and canvases.' },
+  { id: 'organize', title: 'Organize', description: 'Keep ideas connected and easy to find.' },
+  { id: 'collaborate', title: 'Collaborate', description: 'Share knowledge and review work together.' },
+  { id: 'recover', title: 'Protect and recover', description: 'Understand privacy, history, and recovery.' },
+  { id: 'integrate', title: 'Agent and developer guides', description: 'Connect agents and developer tools safely.' },
+] as const satisfies readonly { id: ResourceSectionId; title: string; description: string }[];
+
+export const resourceDocs: readonly ResourceDoc[] = [
+  {
+    slug: 'getting-started',
+    title: 'Getting started',
+    description: 'Create your first folder and note, connect your ideas, and learn where to go next.',
+    section: 'start',
+    audience: 'user',
+    order: 10,
+    featured: true,
+    relatedSlugs: ['folders-and-notes', 'markdown-editor', 'sharing-and-collaboration'],
+    component: GettingStarted,
+  },
   {
     slug: 'markdown-editor',
     title: 'Markdown and editor',
-    description: 'Markdown basics, code, tables, images, and editor behavior.',
-    category: 'Writing',
+    description: 'Write with Markdown, rich blocks, code, tables, callouts, and diagrams.',
+    section: 'write',
+    audience: 'user',
+    order: 10,
+    relatedSlugs: ['slash-commands', 'images-and-attachments'],
     component: MarkdownEditor,
   },
   {
     slug: 'slash-commands',
     title: 'Slash commands',
-    description: 'Use slash commands to insert headings, lists, tables, images, wikilinks, and more.',
-    category: 'Writing',
+    description: 'Insert headings, lists, tables, images, wikilinks, and more without memorizing syntax.',
+    section: 'write',
+    audience: 'user',
+    order: 20,
+    relatedSlugs: ['markdown-editor', 'wikilinks-backlinks'],
     component: SlashCommands,
+  },
+  {
+    slug: 'images-and-attachments',
+    title: 'Images and attachments',
+    description: 'Upload images, use image URLs, and keep visual notes portable.',
+    section: 'write',
+    audience: 'user',
+    order: 30,
+    relatedSlugs: ['markdown-editor', 'slash-commands'],
+    component: ImagesAndAttachments,
+  },
+  {
+    slug: 'canvas-notes',
+    title: 'Canvas notes',
+    description: 'Arrange ideas visually with canvas and mind-map notes.',
+    section: 'write',
+    audience: 'user',
+    order: 40,
+    relatedSlugs: ['wikilinks-backlinks', 'folders-and-notes'],
+    component: CanvasNotes,
+  },
+  {
+    slug: 'folders-and-notes',
+    title: 'Folders and notes',
+    description: 'Build a simple hierarchy with folders, subfolders, and focused notes.',
+    section: 'organize',
+    audience: 'user',
+    order: 10,
+    relatedSlugs: ['getting-started', 'tags-details', 'search-and-navigation'],
+    component: FoldersAndNotes,
   },
   {
     slug: 'wikilinks-backlinks',
     title: 'Wikilinks and backlinks',
-    description: 'Connect notes with wikilinks and navigate references with backlinks and graph endpoints.',
-    category: 'Organization',
+    description: 'Connect related notes and see which notes reference the current idea.',
+    section: 'organize',
+    audience: 'user',
+    order: 20,
+    relatedSlugs: ['tags-details', 'canvas-notes'],
     component: WikilinksBacklinks,
   },
   {
     slug: 'tags-details',
     title: 'Tags and note details',
-    description: 'Edit note metadata and organize notes with lightweight reusable tags.',
-    category: 'Organization',
+    description: 'Use lightweight tags and built-in note metadata for cross-cutting organization.',
+    section: 'organize',
+    audience: 'user',
+    order: 30,
+    relatedSlugs: ['folders-and-notes', 'wikilinks-backlinks'],
     component: TagsDetails,
   },
   {
-    slug: 'skills',
-    title: 'Skills',
-    description: 'Use portable agent skills to work with MinuNotes through the harness API.',
-    category: 'Agents',
-    component: Skills,
+    slug: 'search-and-navigation',
+    title: 'Search and navigation',
+    description: 'Move through your workspace and quickly find the note you need.',
+    section: 'organize',
+    audience: 'user',
+    order: 40,
+    relatedSlugs: ['folders-and-notes', 'tags-details'],
+    component: SearchAndNavigation,
+  },
+  {
+    slug: 'sharing-and-collaboration',
+    title: 'Share notes and folders',
+    description: 'Invite collaborators or publish read-only links with the right boundary.',
+    section: 'collaborate',
+    audience: 'user',
+    order: 10,
+    relatedSlugs: ['comments-and-review', 'permissions-and-privacy'],
+    component: SharingAndCollaboration,
+  },
+  {
+    slug: 'comments-and-review',
+    title: 'Comments and Review',
+    description: 'Discuss selected text, reply in threads, and resolve completed conversations.',
+    section: 'collaborate',
+    audience: 'user',
+    order: 20,
+    relatedSlugs: ['sharing-and-collaboration', 'permissions-and-privacy'],
+    component: CommentsAndReview,
+  },
+  {
+    slug: 'permissions-and-privacy',
+    title: 'Permissions and private content',
+    description: 'Understand viewer, commenter, editor, private-folder, and integration boundaries.',
+    section: 'recover',
+    audience: 'user',
+    order: 10,
+    relatedSlugs: ['sharing-and-collaboration', 'agent-integrations'],
+    component: PermissionsAndPrivacy,
+  },
+  {
+    slug: 'trash-and-version-history',
+    title: 'Trash and version history',
+    description: 'Recover deleted content and restore earlier versions of a note.',
+    section: 'recover',
+    audience: 'user',
+    order: 20,
+    relatedSlugs: ['folders-and-notes', 'permissions-and-privacy'],
+    component: TrashAndVersionHistory,
   },
   {
     slug: 'agent-integrations',
     title: 'Agent integrations',
-    description: 'Choose between harness API, hosted MCP, local MCP, and OpenAPI paths.',
-    category: 'Overview',
+    description: 'Choose between the Harness API, hosted MCP, local MCP, and OpenAPI.',
+    section: 'integrate',
+    audience: 'developer',
+    order: 10,
+    relatedSlugs: ['skills', 'mcp', 'harness-api'],
     component: AgentIntegrations,
+  },
+  {
+    slug: 'skills',
+    title: 'Skills',
+    description: 'Use portable agent skills to work with MinuNotes through the Harness API.',
+    section: 'integrate',
+    audience: 'developer',
+    order: 20,
+    relatedSlugs: ['agent-integrations', 'harness-api'],
+    component: Skills,
+  },
+  {
+    slug: 'mcp',
+    title: 'MCP',
+    description: 'Connect through hosted Streamable HTTP MCP or a local stdio server.',
+    section: 'integrate',
+    audience: 'developer',
+    order: 30,
+    relatedSlugs: ['agent-integrations', 'skills'],
+    component: Mcp,
   },
   {
     slug: 'harness-api',
     title: 'Harness API',
-    description: 'Core agent-safe REST endpoints, scoped permissions, and edit workflow guidance.',
-    category: 'API',
+    description: 'Use agent-safe REST endpoints, scoped permissions, and concurrency-aware edits.',
+    section: 'integrate',
+    audience: 'developer',
+    order: 40,
+    relatedSlugs: ['openapi', 'skills'],
     component: HarnessApi,
   },
   {
     slug: 'openapi',
     title: 'OpenAPI',
-    description: 'Static OpenAPI documents for REST tool importers and action-style platforms.',
-    category: 'API',
+    description: 'Import static API documents into REST tool and action platforms.',
+    section: 'integrate',
+    audience: 'developer',
+    order: 50,
+    relatedSlugs: ['harness-api', 'agent-integrations'],
     component: OpenApi,
-  },
-  {
-    slug: 'mcp',
-    title: 'MCP',
-    description: 'Hosted Streamable HTTP MCP and local stdio MCP usage.',
-    category: 'Agents',
-    component: Mcp,
   },
   {
     slug: 'oauth-manual-testing',
     title: 'Manual integration testing',
-    description: 'Smoke-test API keys, MCP, and OAuth connected app flows.',
-    category: 'API',
+    description: 'Smoke-test API keys, MCP, and OAuth connected-app flows.',
+    section: 'integrate',
+    audience: 'developer',
+    order: 60,
+    advanced: true,
+    relatedSlugs: ['agent-integrations', 'mcp', 'openapi'],
     component: OAuthManualTesting,
   },
-] as const satisfies readonly ResourceDoc[];
+] as const;
 
 export function getResourceDoc(slug: string) {
   return resourceDocs.find((doc) => doc.slug === slug);
+}
+
+export function getResourceSection(sectionId: ResourceSectionId) {
+  return resourceSections.find((section) => section.id === sectionId);
+}
+
+export function getResourceDocsForSection(sectionId: ResourceSectionId) {
+  return resourceDocs.filter((doc) => doc.section === sectionId).sort((a, b) => a.order - b.order);
+}
+
+export function getAdjacentResourceDocs(slug: string) {
+  const currentIndex = resourceDocs.findIndex((doc) => doc.slug === slug);
+  if (currentIndex < 0) return { previous: undefined, next: undefined };
+  return { previous: resourceDocs[currentIndex - 1], next: resourceDocs[currentIndex + 1] };
 }
