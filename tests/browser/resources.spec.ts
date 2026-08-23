@@ -38,6 +38,15 @@ test('keeps guide navigation available on mobile', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Resource guides' })).toBeVisible();
 });
 
+test('links prospective users to Resources from sign in', async ({ page }) => {
+  await page.goto('/auth');
+
+  const resourcesLink = page.getByRole('link', { name: 'Explore features and guides →' });
+  await expect(resourcesLink).toBeVisible();
+  await resourcesLink.click();
+  await expect(page).toHaveURL('/resources');
+});
+
 test('provides useful navigation for an unknown resource', async ({ page }) => {
   await page.goto('/resources/not-a-guide');
 
