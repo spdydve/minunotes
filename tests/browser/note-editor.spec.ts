@@ -406,10 +406,17 @@ test('inserts an ID-backed wikilink selected from note suggestions', async ({ pa
   await page.getByText(browserFixture.target.title, { exact: true }).click();
   await api.expectSavedContent(`[[${browserFixture.target.id}|${browserFixture.target.title}]]`);
 
+  const main = page.locator('main');
+  await main.evaluate((element) => {
+    element.style.paddingTop = '2000px';
+    element.scrollTo({ top: element.scrollHeight });
+  });
+  await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await page
     .getByText(`[[${browserFixture.target.id}|${browserFixture.target.title}]]`, { exact: true })
     .click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
   await expect(page).toHaveURL(new RegExp(`/notes/${browserFixture.target.id}$`));
+  await expect.poll(() => main.evaluate((element) => element.scrollTop)).toBe(0);
 });
 
 test('refreshes wikilink suggestions while typing an open wikilink query', async ({ page }) => {

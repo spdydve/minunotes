@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, Outlet, useRouterState } from '@tanstack/react-router';
 import { PanelLeftOpen } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, api } from '../lib/api';
 import { authClient } from '../lib/auth-client';
 import { buildAppNavigationModel, folderIdFromNavigationPath, noteIdFromNavigationPath } from '../lib/navigation';
@@ -28,6 +28,7 @@ function AuthenticatedAppShell() {
   const isPublicShareRoute = pathname.startsWith('/share/');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(getStoredSidebarCollapsed);
+  const contentScrollRef = useRef<HTMLElement>(null);
   const navigationNoteId = noteIdFromNavigationPath(pathname);
   const navigationRouteFolderId = folderIdFromNavigationPath(pathname);
   const navigationEnabled = Boolean(session.data?.user && !isAuthRoute && !isInvitationRoute && !isPublicShareRoute);
@@ -84,6 +85,7 @@ function AuthenticatedAppShell() {
 
   useEffect(() => {
     setSidebarOpen(false);
+    contentScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [pathname]);
 
   useEffect(() => {
@@ -151,6 +153,7 @@ function AuthenticatedAppShell() {
           sidebarCollapsed={desktopSidebarCollapsed}
         />
         <main
+          ref={contentScrollRef}
           className={`min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 ${desktopSidebarCollapsed ? 'md:pl-20' : ''}`}
         >
           <Outlet />
