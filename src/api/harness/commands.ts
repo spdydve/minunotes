@@ -90,10 +90,10 @@ export function emptyCanvasDocument(documentType: DocumentType = 'canvas.default
 }
 
 export function compileDiagramSyntax(input: { syntax: string; documentType?: DocumentType }) {
-  const result = compileMinuDiagramSyntax(
-    input.syntax,
-    input.documentType === 'canvas.mindmap' ? { layout: 'mindmap' } : undefined
-  );
+  const result = compileMinuDiagramSyntax(input.syntax, {
+    strict: true,
+    ...(input.documentType === 'canvas.mindmap' ? { layout: 'mindmap' as const } : {}),
+  });
   const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
   if (errors.length > 0) return { ok: false as const, errors: result.diagnostics };
   const documentType: DocumentType =

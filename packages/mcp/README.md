@@ -118,11 +118,13 @@ Use Minu diagram syntax when an agent should generate a laid-out flow or mind ma
 ```txt
 diagram "Product plan" {
   layout mindmap
-  Product
+  Product [label: "Product plan", shape: card]
   Product > Research
   Product > Build
 }
 ```
+
+Declare styled nodes as `id [label: "Label", shape: card]`. Connect nodes with `A > B` or `A --> B`. The forms `node A ...` and `A -> B` are unsupported and return line-specific diagnostics instead of producing literal nodes.
 
 Syntax creation and replacement compile the source into JSON Canvas. Syntax replacement is whole-document generation and can regenerate node IDs, positions, links, and metadata. Use JSON Canvas for deterministic replacement, and use the focused node-link tools after syntax generation when nodes need internal MinuNotes links.
 
