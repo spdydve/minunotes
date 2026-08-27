@@ -1383,7 +1383,11 @@ export const harnessOpenApiSpec = {
           folderId: { type: 'string' },
           title: { type: 'string' },
           documentType: { type: 'string', enum: ['canvas.default', 'canvas.mindmap'] },
-          syntax: { type: 'string', description: 'Minu diagram syntax. Use `layout mindmap` for mind maps.' },
+          syntax: {
+            type: 'string',
+            description:
+              'Minu diagram syntax. Declare nodes as `A [label: "Label", shape: card]` and connections as `A > B` or `A --> B`. Do not use `node A ...` or `A -> B`. Use `layout mindmap` for mind maps.',
+          },
         },
       },
       ReplaceCanvasFromSyntaxRequest: {
@@ -1392,7 +1396,11 @@ export const harnessOpenApiSpec = {
         properties: {
           title: { type: 'string' },
           documentType: { type: 'string', enum: ['canvas.default', 'canvas.mindmap'] },
-          syntax: { type: 'string', description: 'Minu diagram syntax. Use `layout mindmap` for mind maps.' },
+          syntax: {
+            type: 'string',
+            description:
+              'Minu diagram syntax. Declare nodes as `A [label: "Label", shape: card]` and connections as `A > B` or `A --> B`. Do not use `node A ...` or `A -> B`. Use `layout mindmap` for mind maps.',
+          },
           baseHash: { type: 'string' },
         },
       },

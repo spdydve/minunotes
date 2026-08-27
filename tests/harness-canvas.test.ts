@@ -154,6 +154,96 @@ describe('harness canvas operations', () => {
     );
   });
 
+  it('rejects malformed syntax with line-specific diagnostics without creating a canvas', async () => {
+    const { app, db, schema, folder } = await setupHarnessApp();
+
+    const response = await app.request('/api/harness/canvases/from-syntax', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        folderId: folder.id,
+        syntax: `diagram "Feed flow" {
+  direction right
+  node upload "Bulk feed upload" shape card
+  s3 [label: "Load from S3", shape: card]
+  upload -> s3
+}`,
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error: string;
+      diagnostics: Array<{ severity: string; code?: string; line?: number; message: string }>;
+    };
+    expect(body.error).toBe('Diagram syntax has errors');
+    expect(body.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ severity: 'error', line: 3, code: 'unsupported_statement' }),
+        expect.objectContaining({ severity: 'error', line: 5, code: 'unsupported_operator' }),
+      ])
+    );
+    expect(await db.select().from(schema.notes)).toEqual([]);
+  });
+
+  it('compiles valid branching syntax without literal declaration or operator nodes', async () => {
+    const { app, folder } = await setupHarnessApp();
+
+    const response = await app.request('/api/harness/canvases/from-syntax', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        folderId: folder.id,
+        syntax: `diagram "Feed flow" {
+  direction right
+  upload [label: "Bulk feed upload", shape: card]
+  outcome [label: "Batch succeeded?", shape: diamond]
+  upload > outcome
+  outcome > success: yes
+  outcome > failed: no
+}`,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const created = (await response.json()) as { note: { id: string } };
+    const read = await app.request(`/api/harness/notes/${created.note.id}`);
+    const body = (await read.json()) as { note: { content: string } };
+    const canvas = JSON.parse(body.note.content) as {
+      nodes: Array<{ id: string; x: number; y: number }>;
+      edges: Array<{ fromNode: string; toNode: string }>;
+    };
+    expect(canvas.nodes.map((node) => node.id)).toEqual(
+      expect.arrayContaining(['upload', 'outcome', 'success', 'failed'])
+    );
+    expect(canvas.nodes).toHaveLength(4);
+    expect(canvas.edges).toHaveLength(3);
+    expect(canvas.nodes.find((node) => node.id === 'success')?.y).not.toBe(
+      canvas.nodes.find((node) => node.id === 'failed')?.y
+    );
+  });
+
+  it('does not replace an existing canvas when syntax is malformed', async () => {
+    const { app, db, schema, folder } = await setupHarnessApp();
+    const original = { nodes: [{ id: 'original', type: 'text', text: 'Original' }], edges: [] };
+    const create = await app.request('/api/harness/canvases', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ folderId: folder.id, title: 'Original canvas', canvas: original }),
+    });
+    const created = (await create.json()) as { note: { id: string } };
+
+    const replace = await app.request(`/api/harness/notes/${created.note.id}/canvas/from-syntax`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ syntax: 'original -> replacement' }),
+    });
+
+    expect(replace.status).toBe(400);
+    const [stored] = await db.select().from(schema.notes).where(eq(schema.notes.id, created.note.id));
+    expect(JSON.parse(stored.content)).toEqual(original);
+  });
+
   it('links, changes, and unlinks canvas nodes while preserving external URLs and metadata', async () => {
     const { app, folder } = await setupHarnessApp();
     const createTarget = async (title: string) => {

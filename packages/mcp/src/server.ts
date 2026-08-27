@@ -374,11 +374,16 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Create canvas from syntax',
       description:
-        'Create a generated canvas or mind map from Minu diagram syntax. The compiler assigns layout and node ids.',
+        'Create a generated canvas or mind map from Minu diagram syntax. Declare nodes as `id [label: "Label", shape: card]` and connections as `A > B` or `A --> B`; `node ...` and `->` are unsupported. The compiler assigns layout and node ids.',
       inputSchema: {
         folderId: z.string(),
         title: z.string().optional(),
-        syntax: z.string().min(1),
+        syntax: z
+          .string()
+          .min(1)
+          .describe(
+            'Minu diagram syntax. Use `A [label: "Label", shape: card]` and `A > B`; do not use `node A ...` or `A -> B`.'
+          ),
         documentType: canvasDocumentTypeSchema.optional(),
       },
       outputSchema: jsonObjectSchema,
@@ -413,12 +418,17 @@ export function createNotesMcpServer(client: NotesMcpClient) {
     {
       title: 'Replace canvas from syntax',
       description:
-        'Regenerate and replace a complete canvas from Minu diagram syntax using a base hash. This can replace node ids, layout, links, and metadata.',
+        'Regenerate and replace a complete canvas from Minu diagram syntax using a base hash. Declare nodes as `id [label: "Label", shape: card]` and connections as `A > B` or `A --> B`; `node ...` and `->` are unsupported. This can replace node ids, layout, links, and metadata.',
       inputSchema: {
         noteId: z.string(),
         baseHash: z.string().min(1),
         title: z.string().optional(),
-        syntax: z.string().min(1),
+        syntax: z
+          .string()
+          .min(1)
+          .describe(
+            'Minu diagram syntax. Use `A [label: "Label", shape: card]` and `A > B`; do not use `node A ...` or `A -> B`.'
+          ),
         documentType: canvasDocumentTypeSchema.optional(),
       },
       outputSchema: jsonObjectSchema,
