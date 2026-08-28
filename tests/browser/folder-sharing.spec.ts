@@ -50,8 +50,8 @@ test('moves selected notes from a folder list', async ({ page }) => {
   await expect(page.getByText('2 notes selected')).toBeVisible();
 
   await page.getByRole('button', { name: 'Move' }).click();
-  const dialog = page.getByRole('heading', { name: 'Move 2 notes' }).locator('..');
-  await expect(page.getByRole('heading', { name: 'Move 2 notes' })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Move 2 notes' });
+  await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: browserFixture.childFolder.title, exact: true }).click();
   await dialog.getByRole('button', { name: 'Move here' }).click();
 
