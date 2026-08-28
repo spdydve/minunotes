@@ -64,17 +64,39 @@ test('preserves and exposes a dirty local draft after an external update wins th
 
   await page.getByRole('button', { name: 'Review local draft' }).click();
   const draftDialog = page.getByRole('dialog', { name: 'Preserved local draft' });
-  await expect(draftDialog.getByLabel('Content')).toHaveValue('Start here. Local draft.');
+  await expect(draftDialog.getByLabel('Local draft content')).toHaveValue('Start here. Local draft.');
+  await expect(draftDialog.getByLabel('Latest saved content')).toHaveValue('Updated remotely.');
   await draftDialog.getByRole('button', { name: 'Close preserved draft' }).click();
 
-  await page.getByRole('button', { name: 'Reload' }).click();
+  await page.reload();
   await expect(editor).toContainText('Updated remotely.');
-  await expect(page.getByText('Your conflicting local draft is preserved until you dismiss it.')).toBeVisible();
+  await expect(
+    page.getByText('Your conflicting local draft is preserved in this tab until you explicitly discard it.')
+  ).toBeVisible();
+
+  await page.goto(`/notes/${browserFixture.target.id}`);
+  await expect(page.locator('.cm-content')).toContainText(browserFixture.target.content);
+  await page.goto(`/notes/${browserFixture.source.id}`);
+  await expect(
+    page.getByText('Your conflicting local draft is preserved in this tab until you explicitly discard it.')
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Review local draft' }).click();
-  await draftDialog.getByRole('button', { name: 'Copy content' }).click();
+  await draftDialog.getByRole('button', { name: 'Copy local content' }).click();
   await expect(draftDialog.getByRole('status')).toHaveText('Content copied.');
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Start here. Local draft.');
+  await draftDialog.getByRole('button', { name: 'Discard local draft…' }).click();
+  await expect(draftDialog.getByText('Permanently discard this local draft?')).toBeVisible();
+  await draftDialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(draftDialog.getByLabel('Local draft content')).toHaveValue('Start here. Local draft.');
+  await draftDialog.getByRole('button', { name: 'Discard local draft…' }).click();
+  await draftDialog.getByRole('button', { name: 'Discard local draft', exact: true }).click();
+
+  await expect(draftDialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Review local draft' })).toHaveCount(0);
+  expect(api.notes.get(browserFixture.source.id)?.content).toBe('Updated remotely.');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Review local draft' })).toHaveCount(0);
 });
 
 test('switches between live and source editing and autosaves raw markdown changes', async ({ page }) => {

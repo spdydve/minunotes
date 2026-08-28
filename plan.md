@@ -1,3 +1,46 @@
+# Active Plan — Preserve Conflicting Note Drafts
+
+## Status
+
+**Approved, implemented, and verified.**
+
+## Goal
+
+Prevent a user’s conflicting local note edits from being lost through modal dismissal, page refresh, or navigation while keeping stale server writes rejected by the existing content-hash protection.
+
+## Scope and files
+
+- [x] `src/frontend/routes/notes.$noteId.tsx`
+  - Persist a conflict draft for the current browser tab so refresh/navigation does not erase it.
+  - Restore a preserved draft when the note route hydrates.
+  - Replace the ambiguous `Dismiss` action with an explicitly destructive `Discard local draft…` flow.
+  - Make closing review non-destructive.
+  - Expand conflict review and show the local draft beside the latest saved server version.
+  - Clear preserved data only after explicit discard or when the server already contains the attempted draft.
+- [x] `tests/browser/note-editor.spec.ts`
+  - Extend the save-race regression test to cover side-by-side review.
+  - Verify closing review preserves the draft.
+  - Verify refresh/navigation restores the draft.
+  - Verify discard requires explicit confirmation and removes only the preserved draft.
+- [x] `docs/implementation/stale-document-detection.md`
+  - Document the revised preservation, review, and discard behavior.
+
+## Explicitly out of scope
+
+- Automatic three-way merging.
+- Real-time collaboration, WebSockets, or presence.
+- Backend/schema changes; stale writes already return `409 Conflict` correctly.
+- Automatically applying a local draft over the latest server version.
+
+## Verification
+
+- [x] Run `pnpm exec biome check --write src/frontend/routes/notes.$noteId.tsx tests/browser/note-editor.spec.ts`.
+- [x] Run the focused Playwright note-editor test.
+- [x] Run `pnpm typecheck`.
+- [x] Confirm through browser regression coverage that closing review does not discard text and only the explicit discard flow removes it.
+
+---
+
 # Central Minuscule Labs Documentation Plan
 
 ## Status

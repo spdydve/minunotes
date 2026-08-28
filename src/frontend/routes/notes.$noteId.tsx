@@ -25,6 +25,23 @@ import { internalNoteLinkTarget } from '../lib/link-policy';
 import { createConfiguredInternalNoteUrlPasteResolver } from '../lib/note-urls';
 import { rootRoute } from './__root';
 
+type ConflictDraft = { title: string; content: string };
+
+const conflictDraftStorageKey = (noteId: string) => `minunotes:conflict-draft:${noteId}`;
+
+const readConflictDraft = (noteId: string): ConflictDraft | null => {
+  try {
+    const value = window.sessionStorage.getItem(conflictDraftStorageKey(noteId));
+    if (!value) return null;
+    const parsed = JSON.parse(value) as Partial<ConflictDraft>;
+    return typeof parsed.title === 'string' && typeof parsed.content === 'string'
+      ? { title: parsed.title, content: parsed.content }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 function NoteView() {
   const { noteId } = noteRoute.useParams();
   const internalNoteUrlPasteResolver = useMemo(createConfiguredInternalNoteUrlPasteResolver, []);
@@ -55,8 +72,9 @@ function NoteView() {
   const [saveError, setSaveError] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
-  const [conflictDraft, setConflictDraft] = useState<{ title: string; content: string } | null>(null);
+  const [conflictDraft, setConflictDraft] = useState<ConflictDraft | null>(null);
   const [conflictDraftOpen, setConflictDraftOpen] = useState(false);
+  const [discardDraftOpen, setDiscardDraftOpen] = useState(false);
   const [draftCopyStatus, setDraftCopyStatus] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
@@ -97,8 +115,15 @@ function NoteView() {
     setSaveError(false);
     setImageUploadError(null);
     setIsStale(false);
-    setConflictDraft(null);
+    const preservedDraft = readConflictDraft(noteId);
+    if (preservedDraft && (preservedDraft.title !== data.note.title || preservedDraft.content !== data.note.content)) {
+      setConflictDraft(preservedDraft);
+    } else {
+      window.sessionStorage.removeItem(conflictDraftStorageKey(noteId));
+      setConflictDraft(null);
+    }
     setConflictDraftOpen(false);
+    setDiscardDraftOpen(false);
     setDraftCopyStatus(null);
     setReviewOpen(false);
     setCommentDialogOpen(false);
@@ -126,6 +151,28 @@ function NoteView() {
     applySavedNote(response);
   };
 
+  const preserveConflictDraft = (draft: ConflictDraft) => {
+    window.sessionStorage.setItem(conflictDraftStorageKey(noteId), JSON.stringify(draft));
+    setConflictDraft(draft);
+  };
+
+  const clearConflictDraft = () => {
+    window.sessionStorage.removeItem(conflictDraftStorageKey(noteId));
+    setConflictDraft(null);
+    setConflictDraftOpen(false);
+    setDiscardDraftOpen(false);
+    setDraftCopyStatus(null);
+  };
+
+  const updateConflictDraft = (update: (draft: ConflictDraft) => ConflictDraft) => {
+    setConflictDraft((current) => {
+      if (!current) return current;
+      const next = update(current);
+      window.sessionStorage.setItem(conflictDraftStorageKey(noteId), JSON.stringify(next));
+      return next;
+    });
+  };
+
   const save = useMutation({
     mutationFn: (next: { title: string; content: string }) =>
       api.saveNote(noteId, { ...next, baseHash: lastKnownHash.current ?? undefined }),
@@ -134,7 +181,7 @@ function NoteView() {
       setSaveError(true);
       if (!(error instanceof ApiError) || error.status !== 409) return;
 
-      setConflictDraft(attempted);
+      preserveConflictDraft(attempted);
       const latest = await api.note(noteId).catch(() => null);
       if (!latest) {
         setIsStale(true);
@@ -145,7 +192,7 @@ function NoteView() {
       qc.setQueryData(['note', noteId], latest);
 
       if (latest.note.title === attempted.title && latest.note.content === attempted.content) {
-        setConflictDraft(null);
+        clearConflictDraft();
         applySavedNote(latest);
         return;
       }
@@ -189,7 +236,7 @@ function NoteView() {
     onError: (error) => setCommentError(error instanceof Error ? error.message : 'Comment action failed'),
   });
   const blocker = useBlocker({
-    shouldBlockFn: () => isDirty || isSaving,
+    shouldBlockFn: () => !isStale && (isDirty || isSaving),
     enableBeforeUnload: false,
     withResolver: true,
   });
@@ -207,12 +254,12 @@ function NoteView() {
 
   const updateTitle = (value: string) => {
     setTitle(value);
-    if (isStale) setConflictDraft((draft) => (draft ? { ...draft, title: value } : { title: value, content }));
+    if (isStale) updateConflictDraft((draft) => ({ ...draft, title: value }));
   };
 
   const updateContent = (value: string) => {
     setContent(value);
-    if (isStale) setConflictDraft((draft) => (draft ? { ...draft, content: value } : { title, content: value }));
+    if (isStale) updateConflictDraft((draft) => ({ ...draft, content: value }));
   };
 
   const copyConflictDraft = async (field: 'title' | 'content') => {
@@ -285,7 +332,7 @@ function NoteView() {
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!isDirty && !save.isPending) return;
+      if (isStale || (!isDirty && !save.isPending)) return;
       e.preventDefault();
       e.returnValue = '';
     };
@@ -557,7 +604,7 @@ function NoteView() {
         </div>
       ) : conflictDraft ? (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-blue-900 text-sm dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
-          <span>Your conflicting local draft is preserved until you dismiss it.</span>
+          <span>Your conflicting local draft is preserved in this tab until you explicitly discard it.</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -569,9 +616,12 @@ function NoteView() {
             <button
               type="button"
               className="rounded px-2 py-1 font-medium text-xs hover:bg-blue-100 dark:hover:bg-blue-900"
-              onClick={() => setConflictDraft(null)}
+              onClick={() => {
+                setConflictDraftOpen(true);
+                setDiscardDraftOpen(true);
+              }}
             >
-              Dismiss
+              Discard local draft…
             </button>
           </div>
         </div>
@@ -777,7 +827,7 @@ function NoteView() {
     conflictDraftOpen && conflictDraft ? (
       <div className="notes-overlay fixed inset-0 z-[110] grid place-items-center p-4">
         <div
-          className="notes-card notes-modal-scroll max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
+          className="notes-card notes-modal-scroll max-h-[calc(100dvh-2rem)] w-full max-w-6xl overflow-y-auto rounded-lg p-4 shadow-sm sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-labelledby="conflict-draft-title"
@@ -788,11 +838,16 @@ function NoteView() {
                 Preserved local draft
               </h2>
               <p className="notes-muted mt-1 text-sm">
-                This is the version that conflicted with a newer server copy. Copy anything you need before dismissing
-                it.
+                Compare the preserved local draft with the latest saved version. Closing this review keeps the draft.
               </p>
             </div>
-            <ModalCloseButton label="Close preserved draft" onClick={() => setConflictDraftOpen(false)} />
+            <ModalCloseButton
+              label="Close preserved draft"
+              onClick={() => {
+                setConflictDraftOpen(false);
+                setDiscardDraftOpen(false);
+              }}
+            />
           </div>
           <label className="mt-4 block font-medium text-sm" htmlFor="conflict-draft-note-title">
             Title
@@ -806,23 +861,56 @@ function NoteView() {
             />
             <Button onClick={() => void copyConflictDraft('title')}>Copy title</Button>
           </div>
-          <label className="mt-4 block font-medium text-sm" htmlFor="conflict-draft-content">
-            {data.note.documentType.startsWith('canvas.') ? 'Canvas JSON' : 'Content'}
-          </label>
-          <textarea
-            id="conflict-draft-content"
-            className="notes-input mt-1 min-h-64 w-full resize-y rounded-md px-3 py-2 font-mono text-sm"
-            value={conflictDraft.content}
-            readOnly
-          />
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <label className="block font-medium text-sm" htmlFor="conflict-draft-content">
+                Local draft content
+              </label>
+              <textarea
+                id="conflict-draft-content"
+                className="notes-input mt-1 min-h-72 w-full resize-y rounded-md px-3 py-2 font-mono text-sm"
+                value={conflictDraft.content}
+                readOnly
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-sm" htmlFor="latest-saved-content">
+                Latest saved content
+              </label>
+              <textarea
+                id="latest-saved-content"
+                className="notes-input mt-1 min-h-72 w-full resize-y rounded-md px-3 py-2 font-mono text-sm"
+                value={data.note.content}
+                readOnly
+              />
+            </div>
+          </div>
           {draftCopyStatus ? (
             <p className="notes-muted mt-2 text-sm" role="status">
               {draftCopyStatus}
             </p>
           ) : null}
-          <div className="mt-4 flex justify-end gap-2">
-            <Button onClick={() => void copyConflictDraft('content')}>Copy content</Button>
-          </div>
+          {discardDraftOpen ? (
+            <div className="mt-4 rounded-md border border-red-300 bg-red-50 p-3 text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+              <p className="font-medium text-sm">Permanently discard this local draft?</p>
+              <p className="mt-1 text-xs">The latest saved server version will not be changed.</p>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setDiscardDraftOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={clearConflictDraft}>
+                  Discard local draft
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap justify-between gap-2">
+              <Button variant="secondary" onClick={() => setDiscardDraftOpen(true)}>
+                Discard local draft…
+              </Button>
+              <Button onClick={() => void copyConflictDraft('content')}>Copy local content</Button>
+            </div>
+          )}
         </div>
       </div>
     ) : null;

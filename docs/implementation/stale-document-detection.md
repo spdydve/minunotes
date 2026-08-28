@@ -6,10 +6,12 @@
 
 - Markdown and canvas saves send the editor’s latest known `contentHash` as `baseHash`.
 - Stale-status polling starts after asynchronous note hydration instead of silently remaining inactive.
-- A `409 Conflict` preserves the local title and content and shows the stale-note warning.
-- Users can review and copy the preserved title or content before reloading.
-- Reload applies current server content while retaining the conflicting local draft until the user dismisses it.
-- API and browser tests cover clean external updates, dirty save races, reload, and canvas saves.
+- A `409 Conflict` preserves the local title and content in tab-scoped session storage and shows the stale-note warning.
+- Users can compare the local draft with the latest saved content side by side and copy either local field.
+- Closing review, reloading, or navigating away does not discard the preserved draft.
+- Only an explicitly confirmed **Discard local draft** action clears it; that action never changes the saved server version.
+- A draft is also cleared when the server already contains the attempted title and content.
+- API and browser tests cover clean external updates, dirty save races, restoration, explicit discard, and canvas saves.
 
 ## Why
 
@@ -20,7 +22,7 @@ Together, those regressions allowed a local autosave to overwrite newer content 
 ## Impact
 
 - Prevents silent last-write-wins data loss when notes change elsewhere.
-- Keeps unsaved local work visible for the user to review before reloading.
+- Keeps conflicting local work recoverable within the current browser tab across review closure, reload, and navigation.
 - Restores stale-change detection for clean open notes.
 - Protects both Markdown and canvas documents through their shared save path.
 - Does not change API contracts, database schema, polling frequency, or deployment infrastructure.
@@ -168,6 +170,9 @@ Frontend behavior:
 - [x] Add reload action.
 - [x] Verify an external update triggers the banner and cannot overwrite a dirty local draft.
 - [x] Keep the conflicting local title and content available for review and copying after reload.
+- [x] Persist conflicting drafts in tab-scoped session storage across reload and navigation.
+- [x] Compare local and latest saved content side by side.
+- [x] Require explicit confirmation before discarding a local draft.
 
 ## Regression hardening
 
@@ -177,10 +182,12 @@ The hardened behavior now:
 
 - sends the latest known content hash with Markdown and canvas saves;
 - starts polling after the note content hash is loaded;
-- preserves a dirty local draft when an external update wins the race;
-- exposes preserved Markdown or canvas content for copying before and after reload;
+- preserves a dirty local draft in tab-scoped session storage when an external update wins the race;
+- restores that draft after review closure, reload, or navigation;
+- shows local and latest saved Markdown or canvas content side by side;
+- requires confirmed explicit discard without modifying the saved server version;
 - reloads current server content without leaving the route stuck in a loading state; and
-- has API and browser regression coverage for stale conflicts, clean-note polling, dirty drafts, reload, and canvas saves.
+- has API and browser regression coverage for stale conflicts, clean-note polling, restoration, discard, and canvas saves.
 
 ## Verification
 
