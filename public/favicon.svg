@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>MinuNotes</title>
   <rect width="64" height="64" rx="14" fill="#f6f6ef"/>
   <g fill="#020202">
     <rect x="5" y="12" width="11" height="11" rx="1.5"/>
