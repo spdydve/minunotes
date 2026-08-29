@@ -51,8 +51,8 @@ importers:
         specifier: github:spdydve/minucanvas#v0.7.3
         version: github.com/spdydve/minucanvas/7eb2b24256d4d40274eb712f51bcd92519505400(react-dom@19.2.6)(react@19.2.6)
       '@dpklabs/minueditor':
-        specifier: github:spdydve/minueditor#v0.13.2
-        version: github.com/spdydve/minueditor/3a657776420b097e85e334945196944f9f9eea88(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
+        specifier: github:spdydve/minueditor#v0.14.0
+        version: github.com/spdydve/minueditor/b512fb226c497cc9b3c1701c93abc46d4ad3d1b6(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6)
       '@hono/node-server':
         specifier: ^2.0.3
         version: 2.0.3(hono@4.12.21)
@@ -8248,7 +8248,6 @@ packages:
     id: github.com/spdydve/minucanvas/7eb2b24256d4d40274eb712f51bcd92519505400
     name: '@dpklabs/minucanvas'
     version: 0.7.3
-    prepare: true
     requiresBuild: true
     peerDependencies:
       react: '>=18.0.0'
@@ -8259,11 +8258,11 @@ packages:
       react-dom: 19.2.6(react@19.2.6)
     dev: false
 
-  github.com/spdydve/minueditor/3a657776420b097e85e334945196944f9f9eea88(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
-    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/3a657776420b097e85e334945196944f9f9eea88}
-    id: github.com/spdydve/minueditor/3a657776420b097e85e334945196944f9f9eea88
+  github.com/spdydve/minueditor/b512fb226c497cc9b3c1701c93abc46d4ad3d1b6(@codemirror/autocomplete@6.20.2)(@codemirror/commands@6.10.3)(@codemirror/lang-markdown@6.5.0)(@codemirror/language@6.12.3)(@codemirror/state@6.6.0)(@codemirror/view@6.43.0)(react-dom@19.2.6)(react@19.2.6):
+    resolution: {tarball: https://codeload.github.com/spdydve/minueditor/tar.gz/b512fb226c497cc9b3c1701c93abc46d4ad3d1b6}
+    id: github.com/spdydve/minueditor/b512fb226c497cc9b3c1701c93abc46d4ad3d1b6
     name: '@dpklabs/minueditor'
-    version: 0.13.2
+    version: 0.14.0
     prepare: true
     requiresBuild: true
     peerDependencies:
