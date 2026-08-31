@@ -1,6 +1,6 @@
 {
   "name": "minunotes",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "type": "module",
   "packageManager": "pnpm@8.15.3",
   "scripts": {
@@ -58,7 +58,7 @@
     "@codemirror/language": "^6.12.3",
     "@codemirror/legacy-modes": "^6.5.3",
     "@dpklabs/minucanvas": "github:spdydve/minucanvas#v0.7.3",
-    "@dpklabs/minueditor": "github:spdydve/minueditor#v0.14.0",
+    "@dpklabs/minueditor": "github:spdydve/minueditor#v0.14.2",
     "@hono/node-server": "^2.0.3",
     "@lezer/markdown": "^1.7.2",
     "@libsql/client": "latest",
