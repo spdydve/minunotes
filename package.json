@@ -39,6 +39,7 @@
     "db:wipe:dev": "ENVIRONMENT=development tsx scripts/wipe-db.ts --yes",
     "db:studio": "drizzle-kit studio",
     "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",
+    "benchmark:search": "tsx scripts/benchmark-search.ts",
     "export:mcp": "tsx scripts/export-mcp-package.ts",
     "oauth:smoke": "tsx scripts/oauth-smoke.ts",
     "postman:generate": "tsx scripts/generate-postman-collection.ts"

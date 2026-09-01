@@ -9,6 +9,7 @@ Reusable implementation notes for editor and harness features.
 - [Integration Authorization Release Runbook](./integration-authorization-release-runbook.md)
 - [Collaboration and Integration Security](./collaboration-security.md)
 - [Trash and Recovery](./trash-and-recovery.md)
+- [Search Performance](./search-performance.md)
 - [In-app Navigation](./in-app-navigation.md)
 - [External Agent Helpers Roadmap](./external-agent-helpers-roadmap.md)
 - [Stale Document Detection](./stale-document-detection.md)
