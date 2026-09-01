@@ -2,7 +2,7 @@
 
 ## Status
 
-**Approved. Phases 0–1 are implemented; Phase 1 is awaiting local review and Phase 2 has not started.**
+**Approved. Phases 0–1 are committed. Phase 2's FTS prototype and proposed design are awaiting local review; Phase 3 has not started.**
 
 ## Goal
 
@@ -85,18 +85,18 @@ Review the complete Phase 1 diff and before/after measurements before adding FTS
 
 ### Work
 
-- [ ] Verify the production libSQL/Turso environment supports the required FTS5 tokenizer and query behavior.
-- [ ] Compare standard token/prefix search with trigram-backed substring search against current MinuNotes expectations.
-- [ ] Decide and document handling for one- and two-character queries.
-- [ ] Define indexed fields and ranking weights: title highest, tags high, folder title/path medium, Markdown body normal.
-- [ ] Decide canvas behavior explicitly: extract user-visible node text rather than indexing raw canvas JSON, or document a deliberately limited first release.
-- [ ] Keep versions, comments, attachment binaries, and raw canvas metadata outside the initial index.
-- [ ] Define backfill, incremental synchronization, migration rollback, and index-rebuild behavior.
-- [ ] Threat-model authorization filtering so the index never exposes inaccessible titles, snippets, counts, or timing-sensitive metadata in responses.
+- [x] Verify local libSQL and the configured production Turso database expose FTS5; require a development-Turso migration check before rollout.
+- [x] Compare standard token/prefix search with trigram-backed substring search against current MinuNotes expectations.
+- [x] Decide and document handling for one- and two-character queries.
+- [x] Propose compact `unicode61` title/body indexing while retaining relational exact/prefix/substring ranking for title, tags, and folder metadata.
+- [x] Extract user-visible canvas node/edge text rather than indexing raw canvas JSON.
+- [x] Keep versions, comments, attachment binaries, and raw canvas metadata outside the initial index.
+- [x] Define bounded backfill, trigger-based incremental synchronization, migration rollback, and index-rebuild behavior.
+- [x] Require authorization and trash filtering before returning records, snippets, or counts from indexed candidates.
 
 ### Expected artifact
 
-- [ ] A short design decision added to this plan or `docs/implementation/` with measured prototype results and the exact schema/query strategy.
+- [x] `docs/implementation/search-performance.md` records measured prototype results and the proposed schema/query strategy.
 
 ### Review gate
 
@@ -154,6 +154,20 @@ Review migration safety, search semantics, storage growth, and benchmark evidenc
 ### Review gate
 
 Review independently from interactive search because this changes agent/harness behavior.
+
+## Deferred follow-up — Advanced search filters and result formats
+
+Begin only after indexed search and cross-note line search are complete and reviewed.
+
+- [ ] Label note results by Format using the existing `documentType`: Markdown, Canvas, or Mind map.
+- [ ] Add All/Markdown/Canvas/Mind map filtering, optionally grouping both canvas formats under Canvases initially.
+- [ ] Add Updated date presets and a timezone-safe custom range using inclusive start and exclusive end bounds.
+- [ ] Keep Created date filtering deferred until user need is established.
+- [ ] Apply format/date filters to joined note metadata rather than FTS text.
+- [ ] Include filters in API validation, query-cache keys, cursor scope, OpenAPI, benchmarks, and authorization/privacy coverage.
+- [ ] Add ordinary metadata indexes only when query-plan measurements justify them.
+
+Detailed constraints are recorded in `docs/implementation/search-performance.md`.
 
 ## Phase 5 — Re-evaluate authorization complexity without changing it yet
 
