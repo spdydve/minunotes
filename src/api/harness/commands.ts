@@ -26,6 +26,8 @@ import { hashMarkdown } from './hash';
 import { getLineRange, searchLines } from './line-search';
 import { encodeCursor, type PageInfo } from './pagination';
 
+export const MAX_SEARCH_QUERY_LENGTH = 200;
+
 export type NoteSearchCursor = {
   rank: number;
   updatedAt: string;
@@ -423,6 +425,7 @@ export async function searchDocuments(input: {
     .select({
       id: notes.id,
       folderId: notes.folderId,
+      userId: notes.userId,
       title: notes.title,
       documentType: notes.documentType,
       type: notes.type,

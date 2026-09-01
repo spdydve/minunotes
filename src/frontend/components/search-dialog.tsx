@@ -7,6 +7,8 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
 const OPEN_SEARCH_EVENT = 'minunotes:open-search';
+const SEARCH_DEBOUNCE_MS = 250;
+const MAX_SEARCH_QUERY_LENGTH = 200;
 const SEARCH_SCOPES: Array<{ value: DiscoveryScope; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'mine', label: 'Owned by me' },
@@ -33,6 +35,7 @@ type SearchResult = {
 export function SearchDialog() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [scope, setScope] = useState<DiscoveryScope>('all');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,10 +54,11 @@ export function SearchDialog() {
     enabled: open && !trimmed,
   });
   const search = useQuery({
-    queryKey: ['note-search', trimmed, scope],
-    queryFn: () => api.searchNotes(trimmed, 'note', 50, undefined, 1, scope),
-    enabled: open && trimmed.length > 0,
+    queryKey: ['note-search', debouncedQuery, scope],
+    queryFn: ({ signal }) => api.searchNotes(debouncedQuery, 'note', 20, undefined, 1, scope, signal),
+    enabled: open && debouncedQuery.length > 0,
   });
+  const searchIsPending = trimmed.length > 0 && trimmed !== debouncedQuery;
 
   const results = useMemo<SearchResult[]>(() => {
     const noteSubtitle = (note: NonNullable<typeof recent.data>['notes'][number] & { folderTitle?: string | null }) => {
@@ -92,7 +96,7 @@ export function SearchDialog() {
               subtitle: `Shared by ${item.owner.label} · ${ROLE_LABEL[item.role]}`,
               kind: 'folder' as const,
             }));
-    const noteResults = (search.data?.notes ?? []).map((note) => ({
+    const noteResults = (searchIsPending ? [] : (search.data?.notes ?? [])).map((note) => ({
       id: note.id,
       title: note.title,
       subtitle: noteSubtitle(note),
@@ -106,7 +110,24 @@ export function SearchDialog() {
       seen.add(key);
       return true;
     });
-  }, [folders.data?.folders, recent.data, scope, search.data?.notes, sharedFolders.data?.collaborations, trimmed]);
+  }, [
+    folders.data?.folders,
+    recent.data,
+    scope,
+    search.data?.notes,
+    searchIsPending,
+    sharedFolders.data?.collaborations,
+    trimmed,
+  ]);
+
+  useEffect(() => {
+    if (!open) {
+      setDebouncedQuery('');
+      return;
+    }
+    const timeout = window.setTimeout(() => setDebouncedQuery(trimmed), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [open, trimmed]);
 
   useEffect(() => {
     const requestOpen = () => {
@@ -164,7 +185,9 @@ export function SearchDialog() {
     }
   };
 
-  const isFetching = trimmed ? search.isFetching || (scope !== 'mine' && sharedFolders.isFetching) : recent.isFetching;
+  const isFetching = trimmed
+    ? searchIsPending || search.isFetching || (scope !== 'mine' && sharedFolders.isFetching)
+    : recent.isFetching;
 
   return (
     <Dialog
@@ -209,6 +232,7 @@ export function SearchDialog() {
               results[activeIndex] ? `search-result-${results[activeIndex].kind}-${results[activeIndex].id}` : undefined
             }
             value={query}
+            maxLength={MAX_SEARCH_QUERY_LENGTH}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleInputKeyDown}
           />

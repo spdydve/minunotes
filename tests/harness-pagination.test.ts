@@ -202,6 +202,10 @@ describe('harness cursor pagination', () => {
       `/api/harness/notes/search?q=different&tag=project&cursor=${encodeURIComponent(first.pageInfo.nextCursor ?? '')}`
     );
     expect(mismatched.status).toBe(400);
+
+    const oversizedSearch = await app.request(`/api/harness/notes/search?q=${'x'.repeat(201)}`);
+    expect(oversizedSearch.status).toBe(400);
+    await expect(oversizedSearch.json()).resolves.toEqual({ error: 'Query must be 200 characters or fewer' });
   });
 
   it('continues through more than two pages of matches in one note', async () => {

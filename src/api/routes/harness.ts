@@ -12,6 +12,7 @@ import {
   linkCanvasNodeToNote,
   listFolders,
   listNoteEvents,
+  MAX_SEARCH_QUERY_LENGTH,
   moveDocuments,
   type NoteSearchCursor,
   readDocument,
@@ -583,6 +584,8 @@ harnessRoutes.get('/notes/search', async (c) => {
 
   const q = c.req.query('q')?.trim();
   if (!q) return c.json({ notes: [], pageInfo: { hasMore: false, nextCursor: null } });
+  if (q.length > MAX_SEARCH_QUERY_LENGTH)
+    return c.json({ error: `Query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer` }, 400);
 
   const tag = c.req.query('tag')?.trim();
   const readableFolderIds = await getReadableFolderIds(c);
@@ -646,6 +649,8 @@ harnessRoutes.get('/notes/search-lines', async (c) => {
 
   const q = c.req.query('q')?.trim();
   if (!q) return c.json({ query: '', matches: [], pageInfo: { hasMore: false, nextCursor: null } });
+  if (q.length > MAX_SEARCH_QUERY_LENGTH)
+    return c.json({ error: `Query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer` }, 400);
 
   const readableFolderIds = await getReadableFolderIds(c);
   const integration = getIntegrationAuthorization(c);
@@ -1314,6 +1319,8 @@ harnessRoutes.get('/notes/:noteId/search-lines', async (c) => {
 
   const q = c.req.query('q')?.trim();
   if (!q) return c.json({ query: '', matches: [] });
+  if (q.length > MAX_SEARCH_QUERY_LENGTH)
+    return c.json({ error: `Query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer` }, 400);
 
   const result = await searchDocumentLines({
     documentId: c.req.param('noteId'),

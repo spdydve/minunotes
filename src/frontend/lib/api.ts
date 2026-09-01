@@ -788,10 +788,12 @@ export const api = {
     limit = 50,
     tag?: string,
     page = 1,
-    scope: DiscoveryScope = 'all'
+    scope: DiscoveryScope = 'all',
+    signal?: AbortSignal
   ) =>
     request<PageResponse & { notes: SearchNote[] }>(
-      `/notes/search?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}&scope=${encodeURIComponent(scope)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
+      `/notes/search?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}&scope=${encodeURIComponent(scope)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      { signal }
     ),
   uploadNoteImage: async (noteId: string, file: File) => {
     let phase = 'requesting signed upload URL';

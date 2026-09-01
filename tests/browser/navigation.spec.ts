@@ -301,6 +301,24 @@ test('scopes unified search and labels shared notes and folders', async ({ page 
   await expect(dialog.getByRole('option', { name: /Source Note Shared by Shared Owner · Commenter/ })).toBeVisible();
 });
 
+test('debounces interactive note searches and requests a compact first page', async ({ page }) => {
+  await mockBrowserApi(page);
+  const searchRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.endsWith('/notes/search')) searchRequests.push(request.url());
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Search notes' });
+  const input = dialog.getByRole('textbox', { name: 'Search notes or folders' });
+  await input.pressSequentially('Source', { delay: 20 });
+  await expect(dialog.getByRole('option', { name: new RegExp(browserFixture.source.title) })).toBeVisible();
+
+  expect(searchRequests).toHaveLength(1);
+  expect(new URL(searchRequests[0]).searchParams.get('limit')).toBe('20');
+});
+
 test('navigates keyboard-only search while the desktop sidebar is collapsed', async ({ page }) => {
   await mockBrowserApi(page);
   await page.goto('/');

@@ -61,14 +61,31 @@ The captured query plan includes:
 - correlated tag lookups; and
 - a temporary B-tree for ranking and ordering.
 
+## Phase 1 results
+
+Phase 1 batches discovery access resolution and removes per-result note and folder-tree reads. The same benchmark now records one logical database call for owned searches and four for mixed owned/shared searches, independent of the 20-result page size.
+
+| Notes | Case | Warm p50 | Warm p95 | DB calls | Results |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 100 | Common body, owned | 0.90 ms | 0.91 ms | 1 | 20 |
+| 100 | Common body, owned + shared | 1.37 ms | 1.41 ms | 4 | 20 |
+| 1,000 | Common body, owned | 3.65 ms | 3.81 ms | 1 | 20 |
+| 1,000 | Common body, owned + shared | 5.18 ms | 5.51 ms | 4 | 20 |
+| 10,000 | Exact title, owned | 36.16 ms | 36.65 ms | 1 | 1 |
+| 10,000 | Rare body, owned | 32.43 ms | 33.01 ms | 1 | 1 |
+| 10,000 | Common body, owned | 32.37 ms | 34.59 ms | 1 | 20 |
+| 10,000 | Common body, owned + shared | 44.05 ms | 45.02 ms | 4 | 20 |
+
+The N+1 cost is removed, but exact-title and rare-body latency still grows with total note volume. That remaining scan is the indexed-search problem addressed by Phases 2–3.
+
 ## Acceptance criteria
 
 ### Phase 1
 
-- Search database-call count is bounded independently of returned result count.
-- Target at most 5 logical calls for owned search and at most 8 for mixed owned/shared search in this fixture.
-- No p95 latency regression from the Phase 0 local baseline.
-- Existing privacy, collaboration, trash, and ranking behavior remains covered.
+- [x] Search database-call count is bounded independently of returned result count.
+- [x] Search uses at most 5 logical calls for owned search and at most 8 for mixed owned/shared search in this fixture.
+- [x] No p95 latency regression from the Phase 0 local baseline.
+- [x] Existing privacy, collaboration, trash, and ranking behavior remains covered.
 
 ### Indexed-search phase
 

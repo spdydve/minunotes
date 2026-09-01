@@ -143,6 +143,10 @@ describe('internal list pagination', () => {
       expect(body.limit).toBe(1);
       expect(typeof body.hasMore).toBe('boolean');
     }
+
+    const oversizedSearch = await app.request(`/api/notes/search?q=${'x'.repeat(201)}`);
+    expect(oversizedSearch.status).toBe(400);
+    await expect(oversizedSearch.json()).resolves.toEqual({ error: 'Query must be 200 characters or fewer' });
   });
 
   it('paginates compact top-level Trash collections', async () => {

@@ -2,7 +2,7 @@
 
 ## Status
 
-**Approved. Phase 0 is implemented and awaiting review; Phase 1 has not started.**
+**Approved. Phases 0–1 are implemented; Phase 1 is awaiting local review and Phase 2 has not started.**
 
 ## Goal
 
@@ -52,14 +52,14 @@ Review the benchmark shape, baseline evidence, and targets before Phase 1.
 
 ### Work
 
-- [ ] Replace per-result `resolveNoteCollaborationAccess` calls in search serialization with one bounded/batched access-resolution path.
-- [ ] Do not load note content merely to serialize search metadata.
-- [ ] Preserve direct-note grant behavior that hides folder context.
-- [ ] Preserve owner identity and effective collaboration-role output.
-- [ ] Debounce interactive search by approximately 250 ms.
-- [ ] Propagate React Query's abort signal through `api.searchNotes` to `fetch` so superseded searches are cancelled.
-- [ ] Reduce the initial dialog result limit from 50 to 20 unless baseline evidence supports another value.
-- [ ] Add a reasonable API query-length limit while preserving valid short searches.
+- [x] Replace per-result `resolveNoteCollaborationAccess` calls in search serialization with one bounded/batched access-resolution path.
+- [x] Do not load note content merely to serialize search metadata.
+- [x] Preserve direct-note grant behavior that hides folder context.
+- [x] Preserve owner identity and effective collaboration-role output.
+- [x] Debounce interactive search by approximately 250 ms.
+- [x] Propagate React Query's abort signal through `api.searchNotes` to `fetch` so superseded searches are cancelled.
+- [x] Reduce the initial dialog result limit from 50 to 20.
+- [x] Limit API search queries to 200 characters while preserving valid short searches.
 
 ### Expected files
 
@@ -71,11 +71,11 @@ Review the benchmark shape, baseline evidence, and targets before Phase 1.
 
 ### Verification
 
-- [ ] Owned, folder-shared, and direct-note-shared results remain privacy-safe.
-- [ ] Trashed notes and notes below trashed folders remain absent.
-- [ ] Query count remains bounded as the result limit increases.
-- [ ] Rapid typing issues only the final debounced request and aborts superseded in-flight requests.
-- [ ] Run Biome on changed files, `pnpm typecheck`, focused tests, and the Phase 0 benchmark.
+- [x] Owned, folder-shared, and direct-note-shared results remain privacy-safe.
+- [x] Trashed notes and notes below trashed folders remain absent.
+- [x] Query count is reduced from 41 to 1 for owned results and from 46 to 4 for mixed results in the benchmark fixture.
+- [x] Browser coverage verifies rapid typing issues only the final debounced request; superseded queries receive React Query's abort signal.
+- [x] Run Biome on changed files, `pnpm typecheck`, focused tests, focused browser tests, and the Phase 0 benchmark.
 
 ### Review gate
 
