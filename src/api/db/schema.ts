@@ -406,6 +406,17 @@ export const notes = sqliteTable(
   ]
 );
 
+export const noteSearchDocuments = sqliteTable(
+  'note_search_documents',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    noteId: text('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+  },
+  (table) => [uniqueIndex('note_search_documents_note_id_idx').on(table.noteId)]
+);
+
 export const collaborationGrants = sqliteTable(
   'collaboration_grants',
   {

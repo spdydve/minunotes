@@ -18,6 +18,7 @@ import {
 import { createId } from '../lib/id';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from '../notes/links';
 import { compactNoteSelection } from '../notes/listing';
+import { buildLiteralFtsPrefixQuery } from '../notes/search';
 import { normalizeTagName } from '../notes/tags';
 import { createNoteVersion, maybeCreateUserCheckpoint } from '../notes/versions';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
@@ -368,6 +369,13 @@ export async function searchDocuments(input: {
 
   const pattern = `%${query}%`;
   const prefixPattern = `${query}%`;
+  const ftsQuery = buildLiteralFtsPrefixQuery(query);
+  const indexedContentSearchMatch = sql<boolean>`${notes.id} in (
+    select indexed_document.note_id
+    from note_search_fts
+    inner join note_search_documents as indexed_document on indexed_document.id = note_search_fts.rowid
+    where note_search_fts match ${ftsQuery}
+  )`;
   const type = input.type ?? 'note';
   const tagName = input.tag ? normalizeTagName(input.tag) : '';
   if (input.tag && !tagName)
@@ -458,7 +466,7 @@ export async function searchDocuments(input: {
             ? inArray(notes.folderId, [...input.folderIds])
             : undefined,
         exactTagMatch,
-        or(like(notes.title, pattern), like(notes.content, pattern), folderTitleSearchMatch, tagSearchMatch),
+        or(like(notes.title, pattern), indexedContentSearchMatch, folderTitleSearchMatch, tagSearchMatch),
         afterCursor
       )
     )

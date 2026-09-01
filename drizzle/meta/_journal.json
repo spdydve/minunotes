@@ -267,6 +267,13 @@
       "when": 1787256439362,
       "tag": "0037_rare_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1788305784925,
+      "tag": "0038_brave_the_spike",
+      "breakpoints": true
     }
   ]
 }

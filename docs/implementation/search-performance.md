@@ -158,10 +158,68 @@ Folder and tag changes do not require FTS updates in this first design because t
 
 1. Validate FTS and JSON expressions against development Turso.
 2. Create mapping and FTS tables with triggers.
-3. Backfill in bounded batches and verify mapping/index counts.
+3. Run the server-side migration backfill and verify mapping/index counts before indexed reads are deployed.
 4. Deploy the indexed query only after backfill verification.
 5. Keep the old query available only as an explicit rollback release, not as an automatic production fallback that could restore unbounded scans.
 6. Roll back application reads before dropping index structures; index tables contain derived data only.
+
+## Phase 3 implementation
+
+Migration `0038_brave_the_spike.sql` implements the approved compact index:
+
+- `note_search_documents` provides stable integer FTS row IDs for text note IDs;
+- contentless `note_search_fts` indexes title and searchable body tokens without storing source Markdown again;
+- insert/update/delete triggers keep the index synchronized for every database write path;
+- Markdown indexes its full source text;
+- canvas notes index visible node text/labels and edge labels through guarded SQLite JSON extraction; and
+- malformed canvas JSON safely indexes the title with an empty body.
+
+Search now uses an uncorrelated FTS candidate subquery before applying the existing authorization, active-folder, trash, type, tag, ranking, and pagination conditions. Keeping the FTS lookup uncorrelated is important: an initial correlated implementation evaluated the virtual-table lookup per candidate note and was substantially slower than the original scan.
+
+The query plan now includes `SCAN note_search_fts VIRTUAL TABLE INDEX 0:M2` followed by the stable mapping primary-key lookup. Recursive folder/access checks and the temporary ranking B-tree remain visible and are intentionally deferred to the later authorization review.
+
+### Phase 3 benchmark
+
+10,000 notes with 2,048-byte Markdown bodies, seven warm iterations:
+
+| Case | Phase 1 p95 | Indexed p95 | DB calls |
+| --- | ---: | ---: | ---: |
+| Exact title, owned | 36.65 ms | 22.69 ms | 1 |
+| Prefix title, owned | 33.20 ms | 28.61 ms | 1 |
+| Rare body, owned | 33.01 ms | 23.64 ms | 1 |
+| Common body, owned | 34.59 ms | 35.96 ms | 1 |
+| Common body, owned + shared | 45.02 ms | 47.91 ms | 4 |
+
+Rare and title searches improve while common terms remain dominated by authorization, ranking, and returning a full candidate set. All approved 10,000-note cases remain below the 50 ms local p95 target. A separate 16 KB-body stress run remains well below the cost expected from scanning 163.84 MB of source bodies, though common-term p95 reaches 86.92 ms because every note contributes an FTS posting and still requires authorization/ranking.
+
+### Recovery command
+
+```bash
+pnpm search-index:rebuild
+pnpm search-index:rebuild --verify-only
+```
+
+The command rebuilds derived mapping/index records atomically, verifies source/mapping/index counts and FTS internal integrity, leaves note content untouched, and requires `--yes` for a remote rebuild. Production rollout must run verification after migration and observe actual Turso latency before declaring the production p95 target complete.
+
+### Search semantics
+
+Body search is now literal token/prefix search rather than arbitrary infix search. Title, folder, and tag substring behavior remains relational and unchanged. FTS operators supplied by users are escaped as literal text. Tests cover Markdown, punctuation, canvas extraction, malformed canvas JSON, inserts, updates, document-type changes, deletion, rebuild, body-prefix matching, rejected body infixes, and retained title infixes.
+
+## Deferred common-term optimization
+
+Common terms can legitimately match most indexed notes. FTS removes source-body scanning, but a broad posting list still leaves authorization checks, computed ranking, and temporary sorting proportional to the candidate set. The standard 10,000-note fixture remains within the approved target, so optimize this only after production measurement and the cross-note line-search phase.
+
+Evaluate the following in order:
+
+1. **Request-scoped access scope:** derive active owned folders, direct-note grants, and inherited shared-folder access once, then intersect FTS candidates with that scope instead of running correlated recursive hierarchy checks per candidate.
+2. **Early-stop ranking buckets:** query exact title, title prefix, title substring, tag, folder, and body buckets in priority order; deduplicate and stop after `limit + 1` authorized results rather than sorting every body match.
+3. **Production query plans and timing:** compare rare/common terms, owned/shared scopes, result limits, total application notes, and remote Turso latency before changing the authorization representation.
+4. **Tenant-aware FTS only if justified:** if global common-term posting lists become material, prototype an internal owner/tenant term that can intersect within FTS. Shared-owner scope and privacy behavior require explicit design review.
+5. **Caching last:** consider short-lived query caching only after access scopes have safe, stable cache keys and invalidation rules.
+
+Do not cap global FTS candidates before authorization: doing so could omit valid results when inaccessible candidates occupy the cap. Any ranking-bucket implementation must preserve deterministic cursor semantics and avoid leaking inaccessible counts, snippets, titles, or owner identifiers.
+
+This follow-up belongs with the Phase 5 authorization review because the highest-value optimization is simplifying discovery authorization without weakening authoritative point-operation checks.
 
 ## Deferred advanced search filters
 

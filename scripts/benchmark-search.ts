@@ -4,7 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { Hono } from 'hono';
 
-const LATEST_MIGRATION = 37;
+const LATEST_MIGRATION = 38;
 const DEFAULT_SIZES = [100, 1_000, 10_000];
 const DEFAULT_ITERATIONS = 7;
 const DEFAULT_CONTENT_BYTES = 2_048;
@@ -209,7 +209,16 @@ async function explainCurrentOwnedSearch(client: SqlClient) {
           WHERE EXISTS (SELECT 1 FROM folder_path WHERE parent_folder_id IS NULL)
             AND NOT EXISTS (SELECT 1 FROM folder_path WHERE deleted_at IS NOT NULL)
         )
-        AND (notes.title LIKE ? OR notes.content LIKE ? OR folders.title LIKE ?)
+        AND (
+          notes.title LIKE ?
+          OR notes.id IN (
+            SELECT indexed_document.note_id
+            FROM note_search_fts
+            INNER JOIN note_search_documents AS indexed_document ON indexed_document.id = note_search_fts.rowid
+            WHERE note_search_fts MATCH ?
+          )
+          OR folders.title LIKE ?
+        )
       ORDER BY search_rank, notes.updated_at DESC, notes.title, notes.id
       LIMIT 21`,
     args: [
@@ -222,7 +231,7 @@ async function explainCurrentOwnedSearch(client: SqlClient) {
       ACTOR_ID,
       ACTOR_ID,
       '%commonterm%',
-      '%commonterm%',
+      '"commonterm"*',
       '%commonterm%',
     ],
   });

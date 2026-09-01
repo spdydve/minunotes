@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 37; index += 1) {
+  for (let index = 0; index <= 38; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -143,6 +143,21 @@ describe('internal list pagination', () => {
       expect(body.limit).toBe(1);
       expect(typeof body.hasMore).toBe('boolean');
     }
+
+    const prefixBodySearch = (await (await app.request('/api/notes/search?q=priv&page=1&limit=10')).json()) as {
+      notes: Array<{ id: string }>;
+    };
+    expect(prefixBodySearch.notes.map((item) => item.id).sort()).toEqual(['note_a', 'note_b']);
+
+    const bodyInfixSearch = (await (await app.request('/api/notes/search?q=rivat&page=1&limit=10')).json()) as {
+      notes: Array<{ id: string }>;
+    };
+    expect(bodyInfixSearch.notes).toEqual([]);
+
+    const titleInfixSearch = (await (await app.request('/api/notes/search?q=lph&page=1&limit=10')).json()) as {
+      notes: Array<{ id: string }>;
+    };
+    expect(titleInfixSearch.notes.map((item) => item.id)).toEqual(['note_a']);
 
     const oversizedSearch = await app.request(`/api/notes/search?q=${'x'.repeat(201)}`);
     expect(oversizedSearch.status).toBe(400);

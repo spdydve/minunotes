@@ -2,7 +2,7 @@
 
 ## Status
 
-**Approved. Phases 0–1 are committed. Phase 2's FTS prototype and proposed design are awaiting local review; Phase 3 has not started.**
+**Approved. Phases 0–2 are committed. Phase 3 is implemented and awaiting local review; Phase 4 has not started.**
 
 ## Goal
 
@@ -106,14 +106,14 @@ Explicit approval of tokenizer semantics, indexed content, storage cost, and syn
 
 ### Work
 
-- [ ] Add the approved FTS migration and deterministic backfill.
-- [ ] Keep the index synchronized for create, title/content update, restore, and permanent deletion operations.
-- [ ] Reindex folder/tag-derived searchable text when those values change, if included in the approved design.
-- [ ] Add an idempotent index verification/rebuild command for recovery.
-- [ ] Retrieve ranked candidate IDs through FTS, then apply current authorization and active/trash rules before returning compact metadata.
-- [ ] Preserve exact-title and prefix-title ranking expectations where practical and document any approved semantic change.
-- [ ] Keep the current search endpoint contract stable.
-- [ ] Retain a safe rollout/rollback path; do not silently fall back to an unbounded body scan in production.
+- [x] Add migration `0038_brave_the_spike.sql` with deterministic server-side backfill.
+- [x] Keep the index synchronized for create, title/content/document-type update, restore, and permanent deletion operations through database triggers.
+- [x] Retain relational folder/tag search, so those changes require no FTS reindex in the approved design.
+- [x] Add idempotent verification and atomic rebuild behavior through `scripts/rebuild-search-index.ts`.
+- [x] Retrieve title/body candidates through an uncorrelated FTS subquery, then apply current authorization and active/trash rules before returning compact metadata.
+- [x] Preserve exact-title and prefix-title ranking while documenting the approved body token/prefix semantic change.
+- [x] Keep the current search endpoint contract stable.
+- [x] Retain an explicit release rollback path without silently falling back to an unbounded body scan.
 
 ### Expected files
 
@@ -125,12 +125,12 @@ Explicit approval of tokenizer semantics, indexed content, storage cost, and syn
 
 ### Verification
 
-- [ ] Migration tests cover empty and populated databases.
-- [ ] Backfill and rebuild produce identical searchable records.
-- [ ] Create, edit, restore, trash/restore, and permanent deletion tests prove index consistency.
-- [ ] Existing collaboration, integration authorization, trash, pagination, and search tests pass unchanged or with reviewed expectation updates.
-- [ ] 1,000- and 10,000-note benchmarks meet approved thresholds.
-- [ ] Run Biome on changed files, `pnpm typecheck`, focused tests, full `pnpm test`, and `pnpm build`.
+- [x] Fresh migration-runner and populated-database tests cover empty and populated databases.
+- [x] Backfill and rebuild produce equivalent searchable records and matching source/mapping/index counts.
+- [x] Trigger and existing version/trash tests cover create, update, restore, trash/restore, document-type changes, malformed canvas content, and permanent deletion behavior.
+- [x] Existing collaboration, integration authorization, trash, pagination, and search tests pass with explicit body-prefix/body-infix expectations.
+- [x] 1,000- and 10,000-note benchmarks meet the approved 50 ms local p95 threshold for the standard 2 KB fixture.
+- [x] Run Biome on changed files, `pnpm typecheck`, focused tests, all 403 unit/integration tests, `pnpm build`, and an atomic migration-runner smoke test.
 
 ### Review gate
 
@@ -173,9 +173,13 @@ Detailed constraints are recorded in `docs/implementation/search-performance.md`
 
 ### Work
 
-- [ ] Profile recursive CTE and folder-tree costs after FTS has reduced candidate volume.
+- [ ] Profile recursive CTE, folder-tree, global FTS posting-list, and temporary ranking-sort costs after FTS has reduced source-body work.
 - [ ] Identify checks duplicated between discovery SQL and result serialization.
-- [ ] Compare three options with measured evidence: request-scoped accessible folder IDs, flattened/materialized folder state, and the current recursive model.
+- [ ] Compare request-scoped accessible folder/note IDs, flattened/materialized folder state, and the current recursive model with measured evidence.
+- [ ] Prototype deterministic early-stop ranking buckets that preserve cursor semantics and deduplicate notes across exact-title, prefix, substring, tag, folder, and body matches.
+- [ ] Evaluate tenant-aware FTS filtering only if production measurements show global common-term posting lists are material; include shared-owner and privacy analysis.
+- [ ] Do not cap candidates before authorization or expose inaccessible counts, snippets, titles, or owner identifiers.
+- [ ] Consider caching only after access scopes have safe keys and invalidation rules.
 - [ ] Document which checks are authoritative for point operations versus discovery operations.
 - [ ] Propose simplifications only when existing authorization tests prove equivalent behavior.
 
