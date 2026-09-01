@@ -350,6 +350,11 @@ select {
   --me-image-picker-input-bg: var(--notes-bg);
 }
 
+/* CodeMirror does not include a block widget's vertical margins in its click-position map. */
+.notes-minu-editor .me-mermaid-block {
+  margin-block: 0;
+}
+
 .notes-minu-editor .cm-tooltip.cm-tooltip-autocomplete {
   /* biome-ignore lint/complexity/noImportantStyles: CodeMirror repeatedly writes an inline left value. */
   left: var(--notes-autocomplete-left) !important;
