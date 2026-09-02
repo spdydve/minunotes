@@ -1,3 +1,80 @@
+# Active Plan — Graph Discovery Performance
+
+## Status
+
+**Approved for Phase 0 measurement. No production behavior changes are approved yet.**
+
+## Goal
+
+Make orphan, outgoing-link, and backlink discovery scale predictably with note and link volume while preserving authorization, private-folder, Trash, unresolved-link, folder-masking, ordering, pagination, and API response behavior.
+
+## Delivery strategy
+
+Each phase is independently reviewed before committing or continuing. Establish evidence first; do not add pagination, limits, indexes, or authorization changes until the baseline identifies a material bottleneck.
+
+## Expected files
+
+- `plan.md`
+- `scripts/benchmark-graph-discovery.ts`
+- `package.json`
+- `docs/implementation/graph-discovery-performance.md`
+- `docs/implementation/README.md`
+- `src/api/notes/links.ts` only after benchmark review
+- `src/api/routes/notes.ts` and `src/api/routes/harness.ts` only if result shaping or batching changes
+- `src/api/lib/collaboration-access.ts` only if existing batch access helpers cannot preserve current behavior
+- Focused tests under `tests/` for any approved production change
+- Drizzle schema and a new migration only if query-plan evidence justifies an index
+
+## Phase 0 — Reproducible baseline
+
+### Work
+
+- [x] Add deterministic 100-, 1,000-, and 10,000-note graph fixtures with configurable sparse/dense authored links.
+- [x] Measure owner and collaborator orphan discovery separately.
+- [x] Measure outgoing links and backlinks at small and 1,000-link per-note counts.
+- [x] Record warm median/p95 latency, logical database calls, response/result counts, and query plans.
+- [x] Identify full candidate loading, large `IN` sets, recursive authorization, in-memory filtering, per-result access checks, and unbounded link payloads as the current costs.
+
+### Verification
+
+- [x] Run dense and sparse benchmark profiles and confirm deterministic result counts.
+- [x] Run Biome and `pnpm typecheck` for benchmark/documentation changes.
+- [x] Verify timings and call counts through production internal note routes; use representative SQL only for `EXPLAIN QUERY PLAN` output.
+
+### Review gate
+
+Review baseline methodology and evidence before changing production graph discovery.
+
+## Phase 1 — Bound orphan discovery
+
+- [ ] Replace full candidate loading and in-memory orphan filtering only if Phase 0 shows material growth.
+- [ ] Authorize candidate notes and incoming source notes before pagination or `hasMore` decisions.
+- [ ] Preserve the current definition: a note is orphaned when no accessible active source note links to it.
+- [ ] Preserve title/ID order, internal page behavior, harness cursor behavior, integration scopes, and direct-note folder masking.
+- [ ] Add sparse/dense, inaccessible-source, Trash, private-folder, shared-grant, and pagination-boundary tests.
+
+## Phase 2 — Bound links and backlinks
+
+- [ ] Batch target/source access checks if per-link resolution is material.
+- [ ] Add limits or pagination only through an explicit compatibility review.
+- [ ] Preserve unresolved wikilink titles, hidden canvas target labels, inaccessible-target nulling, inaccessible-source exclusion, and source-folder masking.
+- [ ] Add high-link-count and mixed-access tests.
+
+## Phase 3 — Remaining shared-folder detail work
+
+- [ ] Profile serial ancestor reads and per-child trash eligibility after graph work.
+- [ ] Batch only if the measured page-load cost remains material after the recently merged page-load improvements.
+
+## Safety boundaries
+
+- [ ] Never limit link candidates before authorization when doing so could omit accessible results.
+- [ ] Never expose inaccessible note IDs, titles, labels, folders, owners, counts, or pagination effects.
+- [ ] Keep point-operation authorization authoritative; discovery results are not reusable capabilities.
+- [ ] Do not weaken active-folder hierarchy, Trash, integration scope, or selected-grant checks.
+- [ ] Keep ordinary offset and harness cursor contracts unchanged unless separately approved.
+
+---
+
 # Active Plan — Search Performance and Indexing
 
 ## Status
