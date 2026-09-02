@@ -1,4 +1,4 @@
-import { relations, sql } from 'drizzle-orm';
+import { desc, relations, sql } from 'drizzle-orm';
 import { check, foreignKey, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const user = sqliteTable('user', {
@@ -397,6 +397,13 @@ export const notes = sqliteTable(
     index('notes_type_idx').on(table.type),
     index('notes_document_type_idx').on(table.documentType),
     index('notes_user_deleted_at_idx').on(table.userId, table.deletedAt),
+    index('notes_user_active_updated_title_id_idx').on(
+      table.userId,
+      table.deletedAt,
+      desc(table.updatedAt),
+      table.title,
+      table.id
+    ),
     index('notes_trash_batch_id_idx').on(table.trashBatchId),
     foreignKey({
       columns: [table.folderId, table.userId],
@@ -404,6 +411,17 @@ export const notes = sqliteTable(
       name: 'notes_folder_owner_fk',
     }).onDelete('cascade'),
   ]
+);
+
+export const noteSearchDocuments = sqliteTable(
+  'note_search_documents',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    noteId: text('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+  },
+  (table) => [uniqueIndex('note_search_documents_note_id_idx').on(table.noteId)]
 );
 
 export const collaborationGrants = sqliteTable(

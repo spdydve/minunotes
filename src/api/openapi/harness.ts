@@ -106,7 +106,7 @@ export const harnessOpenApiSpec = {
         description:
           'Searches active owned and explicitly scoped shared notes. Returns compact metadata with privacy-safe role/source context but without note content. Direct-note grants return null folder context. Use the read-note, lines, or section endpoints to expand a selected note.',
         parameters: [
-          { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
+          { name: 'q', in: 'query', required: true, schema: { type: 'string', maxLength: 200 } },
           { name: 'tag', in: 'query', schema: { type: 'string' } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
           { name: 'cursor', in: 'query', schema: { type: 'string' } },
@@ -148,7 +148,7 @@ export const harnessOpenApiSpec = {
         description:
           'Returns cursor-paginated matching lines and requested context. Cross-note matches omit repeated hashes and size metadata; use the note read endpoint for full content and the current hash.',
         parameters: [
-          { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
+          { name: 'q', in: 'query', required: true, schema: { type: 'string', maxLength: 200 } },
           { name: 'folderId', in: 'query', schema: { type: 'string' } },
           { name: 'context', in: 'query', schema: { type: 'integer', minimum: 0, maximum: 5 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
@@ -603,7 +603,7 @@ export const harnessOpenApiSpec = {
         summary: 'Search matching lines in one note',
         parameters: [
           { $ref: '#/components/parameters/NoteId' },
-          { name: 'q', in: 'query', required: true, schema: { type: 'string' } },
+          { name: 'q', in: 'query', required: true, schema: { type: 'string', maxLength: 200 } },
           { name: 'context', in: 'query', schema: { type: 'integer', minimum: 0 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1 } },
           { name: 'caseSensitive', in: 'query', schema: { type: 'boolean' } },

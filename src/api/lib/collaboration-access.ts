@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNull, or, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { authorizationCollaborationScopes, collaborationGrants, folders, notes, user } from '../db/schema';
+import { filterActiveFolderHierarchy } from '../trash/policy';
 import { publicCollaborationAccessKey, serializeCollaborationUserIdentity } from './collaboration-identity';
 import { isDescendantOrSelf, loadFolderAccessTree } from './folder-access';
 
@@ -607,6 +608,124 @@ export async function resolveIntegrationFolderAccess(input: {
   if ((input.capability === 'edit' || input.capability === 'create') && tree.agentReadOnlyFolderIds.has(input.folderId))
     return null;
   return access;
+}
+
+export async function resolveNoteCollaborationAccessBatch(input: {
+  actorUserId: string;
+  resources: ReadonlyArray<{ id: string; folderId: string; userId: string }>;
+  allowedGrantIds?: readonly string[];
+  excludePrivateFolders?: boolean;
+}) {
+  const accessByNoteId = new Map<string, CollaborationAccess>();
+  if (input.resources.length === 0) return accessByNoteId;
+
+  const resourcesRequiringFolders = input.excludePrivateFolders
+    ? input.resources
+    : input.resources.filter((resource) => resource.userId !== input.actorUserId);
+  const ownerIds = [...new Set(resourcesRequiringFolders.map((resource) => resource.userId))];
+  if (ownerIds.length === 0) {
+    for (const resource of input.resources) accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+    return accessByNoteId;
+  }
+
+  const [activeFolderRows, grantRows] = await Promise.all([
+    db
+      .select({
+        id: folders.id,
+        userId: folders.userId,
+        parentFolderId: folders.parentFolderId,
+        isPrivate: folders.isPrivate,
+      })
+      .from(folders)
+      .where(and(inArray(folders.userId, ownerIds), isNull(folders.deletedAt))),
+    db
+      .select({
+        id: collaborationGrants.id,
+        ownerUserId: collaborationGrants.ownerUserId,
+        role: collaborationGrants.role,
+        noteId: collaborationGrants.noteId,
+        folderId: collaborationGrants.folderId,
+      })
+      .from(collaborationGrants)
+      .where(
+        and(
+          eq(collaborationGrants.granteeUserId, input.actorUserId),
+          inArray(collaborationGrants.ownerUserId, ownerIds),
+          input.allowedGrantIds
+            ? input.allowedGrantIds.length > 0
+              ? inArray(collaborationGrants.id, [...input.allowedGrantIds])
+              : sql`0`
+            : undefined
+        )
+      ),
+  ]);
+  const foldersByOwner = new Map<string, typeof activeFolderRows>();
+  for (const ownerId of ownerIds) {
+    foldersByOwner.set(
+      ownerId,
+      filterActiveFolderHierarchy(activeFolderRows.filter((folder) => folder.userId === ownerId))
+    );
+  }
+  const grantsByOwner = new Map<string, typeof grantRows>();
+  for (const grant of grantRows)
+    grantsByOwner.set(grant.ownerUserId, [...(grantsByOwner.get(grant.ownerUserId) ?? []), grant]);
+
+  for (const resource of input.resources) {
+    if (resource.userId === input.actorUserId && !input.excludePrivateFolders) {
+      accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+      continue;
+    }
+    const ownerFolders = foldersByOwner.get(resource.userId) ?? [];
+    const byId = new Map(ownerFolders.map((folder) => [folder.id, folder]));
+    if (!byId.has(resource.folderId)) continue;
+    const ancestorFolders = ownerFolders.filter((folder) => isDescendantOrSelf(resource.folderId, folder.id, byId));
+    if (input.excludePrivateFolders && ancestorFolders.some((folder) => folder.isPrivate)) continue;
+    if (resource.userId === input.actorUserId) {
+      accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+      continue;
+    }
+    const ancestorIds = new Set(ancestorFolders.map((folder) => folder.id));
+    const grants = (grantsByOwner.get(resource.userId) ?? []).filter(
+      (grant) => grant.noteId === resource.id || (grant.folderId !== null && ancestorIds.has(grant.folderId))
+    );
+    const access = accessFromGrants({
+      actorUserId: input.actorUserId,
+      resourceOwnerUserId: resource.userId,
+      grants,
+    });
+    if (access) accessByNoteId.set(resource.id, access);
+  }
+
+  return accessByNoteId;
+}
+
+export async function resolveIntegrationReadAccessBatch(input: {
+  actorUserId: string;
+  authorizationId: string;
+  sharedAccessMode: SharedAccessMode;
+  resources: ReadonlyArray<{ id: string; folderId: string; userId: string }>;
+}) {
+  const allowedGrantIds =
+    input.sharedAccessMode === 'specific'
+      ? await selectedIntegrationGrantIds({
+          authorizationId: input.authorizationId,
+          actorUserId: input.actorUserId,
+        })
+      : undefined;
+  const accessByNoteId = await resolveNoteCollaborationAccessBatch({
+    actorUserId: input.actorUserId,
+    resources: input.resources,
+    allowedGrantIds,
+    excludePrivateFolders: true,
+  });
+  for (const [noteId, access] of accessByNoteId) {
+    if (
+      !collaborationRoleAllows(access.role, 'read') ||
+      (access.source !== 'owner' && input.sharedAccessMode === 'none')
+    )
+      accessByNoteId.delete(noteId);
+  }
+  return accessByNoteId;
 }
 
 export async function resolveNoteCollaborationAccess(input: {

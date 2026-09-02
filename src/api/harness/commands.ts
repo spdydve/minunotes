@@ -18,6 +18,7 @@ import {
 import { createId } from '../lib/id';
 import { reindexNoteLinks, resolveUnresolvedNoteLinks } from '../notes/links';
 import { compactNoteSelection } from '../notes/listing';
+import { buildLiteralFtsPrefixQuery } from '../notes/search';
 import { normalizeTagName } from '../notes/tags';
 import { createNoteVersion, maybeCreateUserCheckpoint } from '../notes/versions';
 import { activeFolderWhere, activeNoteWhere } from '../trash/policy';
@@ -25,6 +26,8 @@ import { applyDocumentEdits, type DocumentEdit } from './edits';
 import { hashMarkdown } from './hash';
 import { getLineRange, searchLines } from './line-search';
 import { encodeCursor, type PageInfo } from './pagination';
+
+export const MAX_SEARCH_QUERY_LENGTH = 200;
 
 export type NoteSearchCursor = {
   rank: number;
@@ -229,12 +232,20 @@ export async function searchAllDocumentLines(input: {
 }) {
   const query = input.query.trim();
   if (!query)
-    return { ok: true, value: { query, matches: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
+    return {
+      ok: true,
+      value: { query, matches: [], accessResources: [], pageInfo: { hasMore: false, nextCursor: null } },
+    } as const;
   if (!input.integrationAccess && input.folderIds && input.folderIds.size === 0)
-    return { ok: true, value: { query, matches: [], pageInfo: { hasMore: false, nextCursor: null } } } as const;
+    return {
+      ok: true,
+      value: { query, matches: [], accessResources: [], pageInfo: { hasMore: false, nextCursor: null } },
+    } as const;
 
   const pattern = `%${query}%`;
-  const searchMatch = or(like(notes.title, pattern), like(notes.content, pattern));
+  const contentSearchMatch = input.caseSensitive
+    ? sql<boolean>`instr(${notes.content}, ${query}) > 0`
+    : like(notes.content, pattern);
   const where = input.integrationAccess
     ? integrationAccessibleNoteWhere(
         {
@@ -244,90 +255,113 @@ export async function searchAllDocumentLines(input: {
           ownedFolderIds: input.folderIds ?? new Set(),
         },
         input.folderId ? and(eq(notes.userId, input.userId), eq(notes.folderId, input.folderId)) : undefined,
-        searchMatch
+        contentSearchMatch
       )
     : input.folderId
-      ? activeNoteWhere(input.userId, eq(notes.folderId, input.folderId), searchMatch)
-      : activeNoteWhere(input.userId, searchMatch);
+      ? activeNoteWhere(input.userId, eq(notes.folderId, input.folderId), contentSearchMatch)
+      : activeNoteWhere(input.userId, contentSearchMatch);
   const cursor = input.cursor;
-  const cursorDate = cursor ? new Date(cursor.noteUpdatedAt) : null;
-  const afterCursor =
-    cursor && cursorDate
-      ? or(
-          eq(notes.id, cursor.noteId),
-          lt(notes.updatedAt, cursorDate),
-          and(eq(notes.updatedAt, cursorDate), gt(notes.title, cursor.title)),
-          and(eq(notes.updatedAt, cursorDate), eq(notes.title, cursor.title), gt(notes.id, cursor.noteId))
-        )
-      : undefined;
-  const rows = await db
-    .select({
-      id: notes.id,
-      folderId: notes.folderId,
-      title: notes.title,
-      content: notes.content,
-      updatedAt: notes.updatedAt,
-    })
-    .from(notes)
-    .where(
-      and(
-        where,
-        input.integrationAccess
-          ? undefined
-          : input.folderIds
-            ? inArray(notes.folderId, [...input.folderIds])
-            : undefined,
-        afterCursor
-      )
-    )
-    .orderBy(desc(notes.updatedAt), asc(notes.title), asc(notes.id));
   const limit = Math.max(1, Math.min(input.limit ?? 25, 100));
+  const noteBatchSize = 25;
   const matches: Array<
     ReturnType<typeof searchLines>['matches'][number] & {
       noteId: string;
       title: string;
       folderId: string;
+      userId: string;
       noteUpdatedAt: string;
     }
   > = [];
+  let notePosition = cursor
+    ? { updatedAt: new Date(cursor.noteUpdatedAt), title: cursor.title, id: cursor.noteId }
+    : null;
+  let includePositionNote = Boolean(cursor);
 
-  for (const note of rows) {
-    const noteUpdatedAt = note.updatedAt.toISOString();
-    const sameNote = cursor && note.id === cursor.noteId;
-    const noteIsAfterCursor = cursor
-      ? note.updatedAt < new Date(cursor.noteUpdatedAt) ||
-        (noteUpdatedAt === cursor.noteUpdatedAt &&
-          (note.title > cursor.title || (note.title === cursor.title && note.id > cursor.noteId)))
-      : true;
-    if (cursor && !sameNote && !noteIsAfterCursor) continue;
+  while (matches.length < limit + 1) {
+    const afterNotePosition = notePosition
+      ? or(
+          includePositionNote ? eq(notes.id, notePosition.id) : undefined,
+          lt(notes.updatedAt, notePosition.updatedAt),
+          and(eq(notes.updatedAt, notePosition.updatedAt), gt(notes.title, notePosition.title)),
+          and(
+            eq(notes.updatedAt, notePosition.updatedAt),
+            eq(notes.title, notePosition.title),
+            gt(notes.id, notePosition.id)
+          )
+        )
+      : undefined;
+    const rows = await db
+      .select({
+        id: notes.id,
+        folderId: notes.folderId,
+        userId: notes.userId,
+        title: notes.title,
+        content: notes.content,
+        updatedAt: notes.updatedAt,
+      })
+      .from(notes)
+      .where(
+        and(
+          where,
+          input.integrationAccess
+            ? undefined
+            : input.folderIds
+              ? inArray(notes.folderId, [...input.folderIds])
+              : undefined,
+          afterNotePosition
+        )
+      )
+      .orderBy(desc(notes.updatedAt), asc(notes.title), asc(notes.id))
+      .limit(noteBatchSize);
+    if (rows.length === 0) break;
 
-    const result = searchLines(note.content, {
-      query,
-      context: input.context,
-      limit: limit + 1,
-      caseSensitive: input.caseSensitive,
-      after: sameNote ? { line: cursor.line, column: cursor.column } : undefined,
-    });
-    matches.push(
-      ...result.matches.map((match) => ({
-        ...match,
-        noteId: note.id,
-        title: note.title,
-        folderId: note.folderId,
-        noteUpdatedAt,
-      }))
-    );
-    if (matches.length >= limit + 1) break;
+    for (const note of rows) {
+      const noteUpdatedAt = note.updatedAt.toISOString();
+      const sameNote = Boolean(cursor && note.id === cursor.noteId);
+      const result = searchLines(note.content, {
+        query,
+        context: input.context,
+        limit: limit + 1 - matches.length,
+        caseSensitive: input.caseSensitive,
+        after: sameNote && cursor ? { line: cursor.line, column: cursor.column } : undefined,
+      });
+      matches.push(
+        ...result.matches.map((match) => ({
+          ...match,
+          noteId: note.id,
+          title: note.title,
+          folderId: note.folderId,
+          userId: note.userId,
+          noteUpdatedAt,
+        }))
+      );
+      if (matches.length >= limit + 1) break;
+    }
+
+    if (matches.length >= limit + 1 || rows.length < noteBatchSize) break;
+    const lastNote = rows.at(-1);
+    if (!lastNote) break;
+    notePosition = { updatedAt: lastNote.updatedAt, title: lastNote.title, id: lastNote.id };
+    includePositionNote = false;
   }
 
   const hasMore = matches.length > limit;
   const visibleMatches = hasMore ? matches.slice(0, limit) : matches;
   const last = visibleMatches[visibleMatches.length - 1];
+  const accessResources = [
+    ...new Map(
+      visibleMatches.map((match) => [
+        match.noteId,
+        { id: match.noteId, folderId: match.folderId, userId: match.userId },
+      ])
+    ).values(),
+  ];
   return {
     ok: true,
     value: {
       query,
-      matches: visibleMatches.map(({ noteUpdatedAt: _noteUpdatedAt, ...match }) => match),
+      matches: visibleMatches.map(({ noteUpdatedAt: _noteUpdatedAt, userId: _userId, ...match }) => match),
+      accessResources,
       pageInfo: {
         hasMore,
         nextCursor:
@@ -366,6 +400,13 @@ export async function searchDocuments(input: {
 
   const pattern = `%${query}%`;
   const prefixPattern = `${query}%`;
+  const ftsQuery = buildLiteralFtsPrefixQuery(query);
+  const indexedContentSearchMatch = sql<boolean>`${notes.id} in (
+    select indexed_document.note_id
+    from note_search_fts
+    inner join note_search_documents as indexed_document on indexed_document.id = note_search_fts.rowid
+    where note_search_fts match ${ftsQuery}
+  )`;
   const type = input.type ?? 'note';
   const tagName = input.tag ? normalizeTagName(input.tag) : '';
   if (input.tag && !tagName)
@@ -423,6 +464,7 @@ export async function searchDocuments(input: {
     .select({
       id: notes.id,
       folderId: notes.folderId,
+      userId: notes.userId,
       title: notes.title,
       documentType: notes.documentType,
       type: notes.type,
@@ -455,7 +497,7 @@ export async function searchDocuments(input: {
             ? inArray(notes.folderId, [...input.folderIds])
             : undefined,
         exactTagMatch,
-        or(like(notes.title, pattern), like(notes.content, pattern), folderTitleSearchMatch, tagSearchMatch),
+        or(like(notes.title, pattern), indexedContentSearchMatch, folderTitleSearchMatch, tagSearchMatch),
         afterCursor
       )
     )
