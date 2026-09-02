@@ -2,7 +2,7 @@
 
 ## Status
 
-**Approved. Phases 0–2 are committed. Phase 3 is implemented and awaiting local review; Phase 4 has not started.**
+**Approved. Phases 0–4 are committed and reviewed. Phase 5 measurement and design are awaiting a separately approved implementation plan.**
 
 ## Goal
 
@@ -140,16 +140,19 @@ Review migration safety, search semantics, storage growth, and benchmark evidenc
 
 ### Work
 
-- [ ] Reuse indexed candidates for `searchAllDocumentLines` rather than selecting every matching body up front.
-- [ ] Fetch candidate content in bounded batches and stop when the requested match limit is satisfied.
-- [ ] Preserve line numbers, columns, context, case-sensitivity behavior, cursor behavior, and privacy-safe metadata.
+- [x] Preserve arbitrary substring semantics with bounded relational body candidates instead of using token-only FTS candidates that could create false negatives.
+- [x] Fetch at most 25 candidate note bodies per call and stop when `limit + 1` matches are satisfied.
+- [x] Add an ordered active-note index so common matches can stop without sorting/loading every candidate body.
+- [x] Batch integration access metadata for harness note and line results while preserving private-folder, selected-grant, role, and direct-note masking rules.
+- [x] Preserve line numbers, columns, context, case-sensitivity behavior, cursor behavior, and privacy-safe metadata.
 
 ### Verification
 
-- [ ] Existing line-search and harness pagination tests pass.
-- [ ] Add common-term and large-note stress coverage.
-- [ ] Confirm memory and transferred content stay bounded by candidate batch size.
-- [ ] Run Biome, `pnpm typecheck`, focused tests, and benchmarks.
+- [x] Existing line-search, integration authorization, privacy, and harness pagination tests pass.
+- [x] Add common-term, rare-term, title-only, and 10,000-note benchmark coverage.
+- [x] Add cursor coverage across more than one 25-note candidate batch.
+- [x] Confirm selected content stays bounded by candidate batch size and common-term p95 drops from 63.57 ms to 0.88 ms locally.
+- [x] Run final Biome, `pnpm typecheck`, all 404 unit/integration tests, production build, focused authorization tests, and atomic migration-runner smoke verification.
 
 ### Review gate
 

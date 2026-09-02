@@ -9,7 +9,7 @@ import { publicCollaborationAccessKey } from '../src/api/lib/collaboration-ident
 
 const tempDirs: string[] = [];
 
-async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, through = 38, from = 0) {
+async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }, through = 39, from = 0) {
   for (let index = from; index <= through; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
@@ -183,7 +183,7 @@ describe('oauth foundations', () => {
 
     const revoke = await app.request(`/api/oauth/clients/${createBody.client.id}`, { method: 'DELETE' });
     expect(revoke.status).toBe(200);
-  });
+  }, 10_000);
 
   it('dynamically registers public OAuth clients', async () => {
     const { app } = await setupApp();

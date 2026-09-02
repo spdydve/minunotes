@@ -205,6 +205,36 @@ The command rebuilds derived mapping/index records atomically, verifies source/m
 
 Body search is now literal token/prefix search rather than arbitrary infix search. Title, folder, and tag substring behavior remains relational and unchanged. FTS operators supplied by users are escaped as literal text. Tests cover Markdown, punctuation, canvas extraction, malformed canvas JSON, inserts, updates, document-type changes, deletion, rebuild, body-prefix matching, rejected body infixes, and retained title infixes.
 
+## Phase 4 cross-note line search
+
+Cross-note line search intentionally does not use the token/prefix FTS index as its sole candidate source. The harness contract supports exact substring and case-sensitive line matching; using `unicode61` candidates would create false negatives for body infixes and case-sensitive searches.
+
+Instead, Phase 4 preserves line semantics while bounding database transfer and memory:
+
+- query only body candidates because title-only matches can never produce a matching line;
+- fetch at most 25 candidate note bodies per database call;
+- scan each bounded batch in deterministic updated/title/id order;
+- stop after `limit + 1` line matches;
+- continue with a keyset note position when case-sensitive filtering or sparse matches require another batch;
+- use case-sensitive SQL `instr` candidates when requested and retain JavaScript verification for exact line/column/context output; and
+- add an ordered `(user_id, deleted_at, updated_at DESC, title, id)` note index so common terms can stop after recent matching candidates instead of sorting every matching note.
+
+Integration access metadata is also resolved in one batch for harness note and line searches. The batch path preserves selected-grant scopes, effective roles, private-folder exclusion, and direct-note folder masking while removing per-result note/folder-tree reads.
+
+### Phase 4 benchmark
+
+10,000 notes with 2,048-byte bodies and a 25-match line limit:
+
+| Case | Before p95 | Bounded p95 | DB calls | Result |
+| --- | ---: | ---: | ---: | ---: |
+| Common body line | 63.57 ms | 0.88 ms | 2 | 25 matches |
+| Rare body line | 33.40 ms | 25.32 ms | 1 | 1 match |
+| Title-only candidate | 92.06 ms | 17.96 ms | 1 | 0 matches |
+
+The common case uses two bounded calls because the endpoint retrieves one lookahead match to determine `hasMore`. Rare/absent substring searches must still inspect source bodies because a compact token index cannot preserve arbitrary substring semantics; their memory and response transfer are bounded even when SQL must scan more rows internally.
+
+Cursor coverage verifies 30 matching notes across the 25-note batch boundary without duplicates, omissions, or order changes.
+
 ## Deferred common-term optimization
 
 Common terms can legitimately match most indexed notes. FTS removes source-body scanning, but a broad posting list still leaves authorization checks, computed ranking, and temporary sorting proportional to the candidate set. The standard 10,000-note fixture remains within the approved target, so optimize this only after production measurement and the cross-note line-search phase.

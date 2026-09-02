@@ -20,7 +20,7 @@ async function createDatabase() {
   const dir = await mkdtemp(path.join(tmpdir(), 'notes-collaboration-schema-'));
   tempDirs.push(dir);
   const client = createClient({ url: `file:${path.join(dir, 'test.db')}` });
-  await runMigrations(client, 0, 38);
+  await runMigrations(client, 0, 39);
   return client;
 }
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { Hono } from 'hono';
 
-const LATEST_MIGRATION = 38;
+const LATEST_MIGRATION = 39;
 const DEFAULT_SIZES = [100, 1_000, 10_000];
 const DEFAULT_ITERATIONS = 7;
 const DEFAULT_CONTENT_BYTES = 2_048;
@@ -123,6 +123,8 @@ function instrumentClient(client: SqlClient, counter: Counter) {
 }
 
 type SearchCase = { name: string; query: string; scope: 'mine' | 'all' };
+type LineSearchCase = { name: string; query: string; limit: number };
+type LineSearchRunner = typeof import('../src/api/harness/commands').searchAllDocumentLines;
 
 async function measureSearch(app: Hono, counter: Counter, searchCase: SearchCase, iterations: number) {
   const requestPath = `/notes/search?q=${encodeURIComponent(searchCase.query)}&scope=${searchCase.scope}&limit=20`;
@@ -168,6 +170,48 @@ async function measureSearch(app: Hono, counter: Counter, searchCase: SearchCase
     databaseCalls: Math.max(...samples.map((sample) => sample.calls)),
     responseBytes: Math.max(...samples.map((sample) => sample.bytes)),
     results: Math.max(...samples.map((sample) => sample.results)),
+  };
+}
+
+async function measureLineSearch(
+  searchLines: LineSearchRunner,
+  counter: Counter,
+  searchCase: LineSearchCase,
+  iterations: number
+) {
+  const samples: Array<{ milliseconds: number; calls: number; matches: number }> = [];
+  for (let iteration = 0; iteration <= iterations; iteration += 1) {
+    counter.calls = 0;
+    const startedAt = performance.now();
+    const result = await searchLines({
+      userId: ACTOR_ID,
+      query: searchCase.query,
+      limit: searchCase.limit,
+    });
+    const milliseconds = performance.now() - startedAt;
+    if (!result.ok) throw new Error(`${searchCase.name} failed`);
+    samples.push({ milliseconds, calls: counter.calls, matches: result.value.matches.length });
+  }
+  const first = samples[0];
+  const warm = samples.slice(1);
+  return {
+    case: searchCase.name,
+    query: searchCase.query,
+    firstMs: Number(first.milliseconds.toFixed(2)),
+    warmMedianMs: Number(
+      percentile(
+        warm.map((sample) => sample.milliseconds),
+        0.5
+      ).toFixed(2)
+    ),
+    warmP95Ms: Number(
+      percentile(
+        warm.map((sample) => sample.milliseconds),
+        0.95
+      ).toFixed(2)
+    ),
+    databaseCalls: Math.max(...samples.map((sample) => sample.calls)),
+    matches: Math.max(...samples.map((sample) => sample.matches)),
   };
 }
 
@@ -246,9 +290,10 @@ async function main() {
   process.env.TURSO_DB_URL = `file:${path.join(directory, 'benchmark.db')}`;
 
   try {
-    const [{ libsql }, { noteRoutes }] = await Promise.all([
+    const [{ libsql }, { noteRoutes }, { searchAllDocumentLines }] = await Promise.all([
       import('../src/api/db/client'),
       import('../src/api/routes/notes'),
+      import('../src/api/harness/commands'),
     ]);
     const client = libsql as unknown as SqlClient & { executeMultiple: (sql: string) => Promise<unknown> };
     await applyMigrations(client);
@@ -281,6 +326,11 @@ async function main() {
       { name: 'common-body-owned', query: 'commonterm', scope: 'mine' },
       { name: 'common-body-owned-and-shared', query: 'commonterm', scope: 'all' },
     ];
+    const lineSearchCases: LineSearchCase[] = [
+      { name: 'line-common-body', query: 'commonterm', limit: 25 },
+      { name: 'line-rare-body', query: 'raretoken000002', limit: 25 },
+      { name: 'line-title-only', query: 'Project benchmark note', limit: 25 },
+    ];
 
     for (const size of sizes) {
       await seedNotes(client, seeded, size, contentBytes);
@@ -291,7 +341,12 @@ async function main() {
         await client.execute('PRAGMA shrink_memory');
         cases.push(await measureSearch(app, counter, searchCase, iterations));
       }
-      reports.push({ notes: size, contentBytesPerNote: contentBytes, cases });
+      const lineCases = [];
+      for (const searchCase of lineSearchCases) {
+        await client.execute('PRAGMA shrink_memory');
+        lineCases.push(await measureLineSearch(searchAllDocumentLines, counter, searchCase, iterations));
+      }
+      reports.push({ notes: size, contentBytesPerNote: contentBytes, cases, lineCases });
     }
 
     counter.calls = 0;

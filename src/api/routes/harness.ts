@@ -41,6 +41,7 @@ import {
   integrationAccessibleFolderWhere,
   resolveIntegrationFolderAccess,
   resolveIntegrationNoteAccess,
+  resolveIntegrationReadAccessBatch,
 } from '../lib/collaboration-access';
 import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
 import { omitResourceCreator } from '../lib/collaboration-serialization';
@@ -622,23 +623,23 @@ harnessRoutes.get('/notes/search', async (c) => {
           }
         : undefined,
   });
-  const visibleDocuments = await Promise.all(
-    result.value.documents.map(async (note) => {
-      const summarized = summarizeHarnessNote(note);
-      if (!integration?.authorizationId) return summarized;
-      const access = await resolveIntegrationNoteAccess({
+  const accessByNoteId = integration?.authorizationId
+    ? await resolveIntegrationReadAccessBatch({
         actorUserId: user.id,
         authorizationId: integration.authorizationId,
         sharedAccessMode: integration.sharedAccessMode,
-        noteId: note.id,
-        capability: 'read',
-      });
-      if (!access) return null;
-      return access.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized;
-    })
-  );
+        resources: result.value.documents,
+      })
+    : null;
+  const visibleDocuments = result.value.documents.flatMap((note) => {
+    const summarized = summarizeHarnessNote(note);
+    if (!accessByNoteId) return [summarized];
+    const access = accessByNoteId.get(note.id);
+    if (!access) return [];
+    return [access.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized];
+  });
   return c.json({
-    notes: visibleDocuments.filter((note): note is NonNullable<typeof note> => note !== null),
+    notes: visibleDocuments,
     pageInfo: result.value.pageInfo,
   });
 });
@@ -693,24 +694,22 @@ harnessRoutes.get('/notes/search-lines', async (c) => {
           }
         : undefined,
   });
-  const matches = await Promise.all(
-    result.value.matches.map(async (match) => {
-      if (!integration?.authorizationId) return match;
-      const access = await resolveIntegrationNoteAccess({
+  const { accessResources, ...publicResult } = result.value;
+  const accessByNoteId = integration?.authorizationId
+    ? await resolveIntegrationReadAccessBatch({
         actorUserId: user.id,
         authorizationId: integration.authorizationId,
         sharedAccessMode: integration.sharedAccessMode,
-        noteId: match.noteId,
-        capability: 'read',
-      });
-      if (!access) return null;
-      return access.source === 'note_grant' ? { ...match, folderId: null } : match;
-    })
-  );
-  return c.json({
-    ...result.value,
-    matches: matches.filter((match): match is NonNullable<typeof match> => match !== null),
+        resources: accessResources,
+      })
+    : null;
+  const matches = result.value.matches.flatMap((match) => {
+    if (!accessByNoteId) return [match];
+    const access = accessByNoteId.get(match.noteId);
+    if (!access) return [];
+    return [access.source === 'note_grant' ? { ...match, folderId: null } : match];
   });
+  return c.json({ ...publicResult, matches });
 });
 
 harnessRoutes.post('/notes', async (c) => {

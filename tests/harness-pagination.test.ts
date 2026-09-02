@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const tempDirs: string[] = [];
 
 async function runMigrations(libsql: { executeMultiple: (sql: string) => Promise<unknown> }) {
-  for (let index = 0; index <= 38; index += 1) {
+  for (let index = 0; index <= 39; index += 1) {
     const [file] = await Array.fromAsync(
       (await import('node:fs/promises')).glob(`drizzle/${String(index).padStart(4, '0')}_*.sql`)
     );
@@ -206,6 +206,41 @@ describe('harness cursor pagination', () => {
     const oversizedSearch = await app.request(`/api/harness/notes/search?q=${'x'.repeat(201)}`);
     expect(oversizedSearch.status).toBe(400);
     await expect(oversizedSearch.json()).resolves.toEqual({ error: 'Query must be 200 characters or fewer' });
+  });
+
+  it('paginates line matches across bounded note batches without losing order', async () => {
+    const { app, db, schema, now } = await setup();
+    const notesFolder = folder('folder_batched_lines', 'Batched lines', now);
+    await db.insert(schema.folders).values(notesFolder);
+    await db
+      .insert(schema.notes)
+      .values(
+        Array.from({ length: 30 }, (_, index) =>
+          note(
+            `note_batch_${String(index).padStart(2, '0')}`,
+            notesFolder.id,
+            `Batch ${String(index).padStart(2, '0')}`,
+            `batch hit ${index}`,
+            now
+          )
+        )
+      );
+
+    const firstResponse = await app.request('/api/harness/notes/search-lines?q=batch%20hit&limit=25');
+    const first = (await firstResponse.json()) as PageBody<{ matches: Array<{ noteId: string }> }>;
+    expect(first.matches.map((match) => match.noteId)).toEqual(
+      Array.from({ length: 25 }, (_, index) => `note_batch_${String(index).padStart(2, '0')}`)
+    );
+    expect(first.pageInfo.hasMore).toBe(true);
+
+    const secondResponse = await app.request(
+      `/api/harness/notes/search-lines?q=batch%20hit&limit=25&cursor=${encodeURIComponent(first.pageInfo.nextCursor ?? '')}`
+    );
+    const second = (await secondResponse.json()) as PageBody<{ matches: Array<{ noteId: string }> }>;
+    expect(second.matches.map((match) => match.noteId)).toEqual(
+      Array.from({ length: 5 }, (_, index) => `note_batch_${String(index + 25).padStart(2, '0')}`)
+    );
+    expect(second.pageInfo).toEqual({ hasMore: false, nextCursor: null });
   });
 
   it('continues through more than two pages of matches in one note', async () => {

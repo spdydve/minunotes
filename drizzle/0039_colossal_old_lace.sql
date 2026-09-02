@@ -1,0 +1,1 @@
+CREATE INDEX `notes_user_active_updated_title_id_idx` ON `notes` (`user_id`,`deleted_at`,"updated_at" desc,`title`,`id`);

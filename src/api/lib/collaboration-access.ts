@@ -613,22 +613,28 @@ export async function resolveIntegrationFolderAccess(input: {
 export async function resolveNoteCollaborationAccessBatch(input: {
   actorUserId: string;
   resources: ReadonlyArray<{ id: string; folderId: string; userId: string }>;
+  allowedGrantIds?: readonly string[];
+  excludePrivateFolders?: boolean;
 }) {
   const accessByNoteId = new Map<string, CollaborationAccess>();
-  const sharedResources = input.resources.filter((resource) => resource.userId !== input.actorUserId);
+  if (input.resources.length === 0) return accessByNoteId;
 
-  for (const resource of input.resources) {
-    if (resource.userId === input.actorUserId) accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+  const resourcesRequiringFolders = input.excludePrivateFolders
+    ? input.resources
+    : input.resources.filter((resource) => resource.userId !== input.actorUserId);
+  const ownerIds = [...new Set(resourcesRequiringFolders.map((resource) => resource.userId))];
+  if (ownerIds.length === 0) {
+    for (const resource of input.resources) accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+    return accessByNoteId;
   }
-  if (sharedResources.length === 0) return accessByNoteId;
 
-  const ownerIds = [...new Set(sharedResources.map((resource) => resource.userId))];
   const [activeFolderRows, grantRows] = await Promise.all([
     db
       .select({
         id: folders.id,
         userId: folders.userId,
         parentFolderId: folders.parentFolderId,
+        isPrivate: folders.isPrivate,
       })
       .from(folders)
       .where(and(inArray(folders.userId, ownerIds), isNull(folders.deletedAt))),
@@ -644,7 +650,12 @@ export async function resolveNoteCollaborationAccessBatch(input: {
       .where(
         and(
           eq(collaborationGrants.granteeUserId, input.actorUserId),
-          inArray(collaborationGrants.ownerUserId, ownerIds)
+          inArray(collaborationGrants.ownerUserId, ownerIds),
+          input.allowedGrantIds
+            ? input.allowedGrantIds.length > 0
+              ? inArray(collaborationGrants.id, [...input.allowedGrantIds])
+              : sql`0`
+            : undefined
         )
       ),
   ]);
@@ -659,13 +670,21 @@ export async function resolveNoteCollaborationAccessBatch(input: {
   for (const grant of grantRows)
     grantsByOwner.set(grant.ownerUserId, [...(grantsByOwner.get(grant.ownerUserId) ?? []), grant]);
 
-  for (const resource of sharedResources) {
+  for (const resource of input.resources) {
+    if (resource.userId === input.actorUserId && !input.excludePrivateFolders) {
+      accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+      continue;
+    }
     const ownerFolders = foldersByOwner.get(resource.userId) ?? [];
     const byId = new Map(ownerFolders.map((folder) => [folder.id, folder]));
     if (!byId.has(resource.folderId)) continue;
-    const ancestorIds = new Set(
-      ownerFolders.filter((folder) => isDescendantOrSelf(resource.folderId, folder.id, byId)).map((folder) => folder.id)
-    );
+    const ancestorFolders = ownerFolders.filter((folder) => isDescendantOrSelf(resource.folderId, folder.id, byId));
+    if (input.excludePrivateFolders && ancestorFolders.some((folder) => folder.isPrivate)) continue;
+    if (resource.userId === input.actorUserId) {
+      accessByNoteId.set(resource.id, ownerAccess(input.actorUserId));
+      continue;
+    }
+    const ancestorIds = new Set(ancestorFolders.map((folder) => folder.id));
     const grants = (grantsByOwner.get(resource.userId) ?? []).filter(
       (grant) => grant.noteId === resource.id || (grant.folderId !== null && ancestorIds.has(grant.folderId))
     );
@@ -677,6 +696,35 @@ export async function resolveNoteCollaborationAccessBatch(input: {
     if (access) accessByNoteId.set(resource.id, access);
   }
 
+  return accessByNoteId;
+}
+
+export async function resolveIntegrationReadAccessBatch(input: {
+  actorUserId: string;
+  authorizationId: string;
+  sharedAccessMode: SharedAccessMode;
+  resources: ReadonlyArray<{ id: string; folderId: string; userId: string }>;
+}) {
+  const allowedGrantIds =
+    input.sharedAccessMode === 'specific'
+      ? await selectedIntegrationGrantIds({
+          authorizationId: input.authorizationId,
+          actorUserId: input.actorUserId,
+        })
+      : undefined;
+  const accessByNoteId = await resolveNoteCollaborationAccessBatch({
+    actorUserId: input.actorUserId,
+    resources: input.resources,
+    allowedGrantIds,
+    excludePrivateFolders: true,
+  });
+  for (const [noteId, access] of accessByNoteId) {
+    if (
+      !collaborationRoleAllows(access.role, 'read') ||
+      (access.source !== 'owner' && input.sharedAccessMode === 'none')
+    )
+      accessByNoteId.delete(noteId);
+  }
   return accessByNoteId;
 }
 
