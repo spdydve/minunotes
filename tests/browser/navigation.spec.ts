@@ -234,6 +234,26 @@ test('uses Templates as the parent while editing a template', async ({ page }) =
   await expect(page).toHaveURL('/templates');
 });
 
+test('renders existing templates without waiting for the shared folder list', async ({ page }) => {
+  await mockBrowserApi(page);
+  let releaseFolders = () => {};
+  const foldersReleased = new Promise<void>((resolve) => {
+    releaseFolders = resolve;
+  });
+  await page.route('**/internal/folders', async (route) => {
+    await foldersReleased;
+    await route.fallback();
+  });
+
+  try {
+    await page.goto('/templates');
+    await expect(page.getByRole('heading', { name: 'Templates', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: browserFixture.template.title, exact: true })).toBeVisible();
+  } finally {
+    releaseFolders();
+  }
+});
+
 test('shows route-aware mobile navigation and active folder context', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockBrowserApi(page);
