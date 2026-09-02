@@ -273,17 +273,28 @@ folderRoutes.get('/:folderId/detail', async (c) => {
     .select()
     .from(folders)
     .where(activeFolderWhere(access.resourceOwnerUserId, eq(folders.parentFolderId, folderId)));
-  const folderEligibilities = new Map(
-    await Promise.all(
-      [folder, ...childFolders].map(
-        async (candidate) =>
-          [candidate.id, await resolveFolderTrashEligibility({ actorUserId: user.id, folderId: candidate.id })] as const
-      )
-    )
-  );
+  const trashableFolderIds =
+    access.role === 'owner'
+      ? new Set([folder.id, ...childFolders.map((child) => child.id)])
+      : new Set(
+          (
+            await Promise.all(
+              [folder, ...childFolders].map(async (candidate) => ({
+                id: candidate.id,
+                eligibility: await resolveFolderTrashEligibility({
+                  actorUserId: user.id,
+                  folderId: candidate.id,
+                  access: candidate.id === folder.id ? access : undefined,
+                }),
+              }))
+            )
+          )
+            .filter(({ eligibility }) => eligibility.allowed)
+            .map(({ id }) => id)
+        );
   const serializeFolder = (value: typeof folders.$inferSelect) => ({
     ...omitCollaborationInternalFields(value),
-    canTrash: folderEligibilities.get(value.id)?.allowed ?? false,
+    canTrash: trashableFolderIds.has(value.id),
   });
   return c.json({
     folder: serializeFolder(ancestors.length > 0 ? folder : { ...folder, parentFolderId: null }),

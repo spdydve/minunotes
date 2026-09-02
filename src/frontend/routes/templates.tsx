@@ -19,7 +19,14 @@ function TemplatesView() {
   });
   const create = useMutation({
     mutationFn: async () => {
-      const folder = folders.data?.folders[0] ?? (await api.folders()).folders[0];
+      const folder =
+        folders.data?.folders[0] ??
+        (
+          await qc.fetchQuery({
+            queryKey: ['folders'],
+            queryFn: api.folders,
+          })
+        ).folders[0];
       if (!folder) throw new Error('Create a folder before creating templates.');
       return api.createNote(folder.id, { title: 'Untitled template', type: 'template' });
     },
@@ -30,8 +37,8 @@ function TemplatesView() {
     },
   });
 
-  if (folders.isLoading || templates.isLoading) return <p className="notes-muted text-sm">Loading templates...</p>;
-  if (!folders.data?.folders.length)
+  if (templates.isLoading) return <p className="notes-muted text-sm">Loading templates...</p>;
+  if (folders.isSuccess && !folders.data.folders.length)
     return (
       <section className="grid min-h-[60vh] place-items-center">
         <EmptyState title="Create a folder first">

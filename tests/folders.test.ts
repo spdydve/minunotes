@@ -49,7 +49,7 @@ async function setupFolderApp() {
   });
   app.route('/api/folders', folderRoutes);
 
-  return { app, db, schema, user };
+  return { app, db, libsql, schema, user };
 }
 
 afterEach(async () => {
@@ -141,6 +141,44 @@ describe('folder hierarchy', () => {
       body: JSON.stringify({ title: 'Too deep', parentFolderId: folderIds.at(-1) }),
     });
     expect(tooDeepResponse.status).toBe(400);
+  });
+
+  it('keeps owner folder-detail access checks bounded as child folders grow', async () => {
+    const { app, db, libsql, schema, user } = await setupFolderApp();
+    const parent = await createFolder(app, 'Parent');
+    const now = new Date();
+    await db.insert(schema.folders).values(
+      Array.from({ length: 30 }, (_, index) => ({
+        id: `folder_child_${index}`,
+        userId: user.id,
+        createdByUserId: user.id,
+        parentFolderId: parent.id,
+        title: `Child ${index}`,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    );
+
+    const client = libsql as unknown as {
+      execute: (...args: unknown[]) => Promise<unknown>;
+    };
+    const execute = client.execute.bind(client);
+    let databaseCalls = 0;
+    client.execute = async (...args: unknown[]) => {
+      databaseCalls += 1;
+      return execute(...args);
+    };
+
+    const response = await app.request(`/api/folders/${parent.id}/detail`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      folder: { canTrash: boolean };
+      childFolders: Array<{ canTrash: boolean }>;
+    };
+    expect(body.folder.canTrash).toBe(true);
+    expect(body.childFolders).toHaveLength(30);
+    expect(body.childFolders.every((folder) => folder.canTrash)).toBe(true);
+    expect(databaseCalls).toBeLessThanOrEqual(5);
   });
 
   it('toggles private folders and moves folder subtrees to Trash', async () => {
