@@ -28,6 +28,7 @@ import { hashMarkdown } from '../harness/hash';
 import {
   compareTitleIdPositions,
   decodeCursor,
+  encodeCursor,
   InvalidCursorError,
   isTitleIdPosition,
   paginateItems,
@@ -840,48 +841,47 @@ harnessRoutes.get('/notes/orphans', async (c) => {
           ownedFolderIds: readableFolderIds ?? new Set(),
         }
       : undefined;
-  const rows = await listOrphanNotes({ userId: user.id, integrationAccess });
-  const visible = integrationAccess
-    ? rows
-    : readableFolderIds
-      ? rows.filter((note) => readableFolderIds.has(note.folderId))
-      : rows;
-  visible.sort((left, right) =>
-    compareTitleIdPositions({ title: left.title, id: left.id }, { title: right.title, id: right.id })
-  );
   const scope = paginationScope(
     'orphans',
     user.id,
     readableFolderIds ? [...readableFolderIds].sort().join(',') : 'owner'
   );
   try {
-    const page = paginateItems(
-      visible,
-      parsePageLimit(c.req.query('limit')),
-      c.req.query('cursor'),
-      scope,
-      (note) => ({ title: note.title, id: note.id }),
-      compareTitleIdPositions,
-      isTitleIdPosition
-    );
-    const notes = await Promise.all(
-      page.items.map(async (note) => {
-        const summarized = summarizeHarnessNote(note);
-        if (!integration?.authorizationId) return summarized;
-        const access = await resolveIntegrationNoteAccess({
-          actorUserId: user.id,
-          authorizationId: integration.authorizationId,
-          sharedAccessMode: integration.sharedAccessMode,
-          noteId: note.id,
-          capability: 'read',
-        });
-        if (!access) return null;
-        return access.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized;
-      })
-    );
+    const limit = parsePageLimit(c.req.query('limit'));
+    const cursor = decodeCursor(c.req.query('cursor'), scope, isTitleIdPosition);
+    const rows = await listOrphanNotes({
+      userId: user.id,
+      integrationAccess,
+      folderIds: integrationAccess ? undefined : (readableFolderIds ?? undefined),
+      after: cursor,
+      limit: limit + 1,
+    });
+    const hasMore = rows.length > limit;
+    const pageCandidates = hasMore ? rows.slice(0, limit) : rows;
+    const lastCandidate = pageCandidates.at(-1);
+    const accessByNoteId =
+      integration?.authorizationId && pageCandidates.length > 0
+        ? await resolveIntegrationReadAccessBatch({
+            actorUserId: user.id,
+            authorizationId: integration.authorizationId,
+            sharedAccessMode: integration.sharedAccessMode,
+            resources: pageCandidates,
+          })
+        : null;
+    const visibleNotes = pageCandidates.flatMap((note) => {
+      const summarized = summarizeHarnessNote(note);
+      if (!accessByNoteId) return [summarized];
+      const access = accessByNoteId.get(note.id);
+      if (!access) return [];
+      return [access.source === 'note_grant' ? { ...summarized, folderId: null, folderTitle: null } : summarized];
+    });
     return c.json({
-      notes: notes.filter((note): note is NonNullable<typeof note> => note !== null),
-      pageInfo: page.pageInfo,
+      notes: visibleNotes,
+      pageInfo: {
+        hasMore,
+        nextCursor:
+          hasMore && lastCandidate ? encodeCursor(scope, { title: lastCandidate.title, id: lastCandidate.id }) : null,
+      },
     });
   } catch (error) {
     if (error instanceof InvalidCursorError) return c.json({ error: error.message }, 400);

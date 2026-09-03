@@ -74,7 +74,7 @@ Representative plans also show:
 - a temporary B-tree for candidate title ordering; and
 - a full `note_links` scan for the incoming-link phase in this fixture.
 
-Phase 1 is justified: move the accessible incoming-link anti-join and pagination into SQL, then batch only the metadata needed to mask direct-note folder access.
+Phase 1 is justified. The first implementation should bound candidate and incoming-link work while keeping the existing authorization predicates authoritative, then batch only the metadata needed to mask direct-note folder access.
 
 ### Links and backlinks have bounded calls but unbounded payloads
 
@@ -106,3 +106,32 @@ The implementation must:
 ## Phase 0 conclusion
 
 Proceed with a separately reviewed orphan-discovery optimization. Defer production link/backlink pagination until response-size compatibility and harness behavior are designed explicitly.
+
+## Phase 1 bounded orphan discovery
+
+Phase 1 avoids a broad authorization refactor. Instead of loading every candidate and placing every candidate ID in one incoming-link query, it:
+
+- reads an initial batch of at most 250 compact candidate notes;
+- checks incoming links only for that bounded candidate set;
+- scans orphan results until the requested offset or cursor and `limit + 1` are satisfied;
+- increases later candidate batches to at most 1,000 rows when dense links require continued scanning;
+- preserves the existing candidate and incoming-source authorization predicates;
+- applies folder-scope filtering before harness cursor pagination; and
+- resolves result access metadata in one batch for direct-note folder masking.
+
+The adaptive batch keeps sparse first-page reads small while avoiding excessive database round trips when many early candidates have incoming links. At no point does the application load all 10,000 candidate notes or construct a 10,000-ID `IN` list.
+
+### Phase 1 results at 10,000 notes
+
+| Profile | Scope | Before median | After median | Before p95 | After p95 | Before calls | After calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Sparse, 10-link fanout | Owner | 89.11 ms | 16.71 ms | 103.66 ms | 28.77 ms | 42 | 2 |
+| Sparse, 10-link fanout | Collaborator | 100.56 ms | 23.51 ms | 123.05 ms | 23.91 ms | 62 | 4 |
+| Dense, 1,000-link fanout | Owner | 90.47 ms | 42.18 ms | 104.96 ms | 54.36 ms | 42 | 4 |
+| Dense, 1,000-link fanout | Collaborator | 101.92 ms | 58.50 ms | 129.46 ms | 59.04 ms | 62 | 6 |
+
+Sparse first-page database calls no longer grow with the 20 returned notes. Dense fixtures need one additional candidate/incoming pair because the first 1,001 title-ordered notes are linked, but still avoid loading the remaining graph.
+
+Offset pagination may scan preceding orphan candidates again for later pages; this preserves the existing internal API contract. Harness cursor pagination starts directly after the prior title/ID position.
+
+Focused tests cover internal offset and harness cursor pagination after more than 250 linked candidates, along with existing inaccessible-source, selected-grant, folder-masking, collaboration, and Trash behavior.

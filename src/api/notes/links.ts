@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { getMinuNotesNodeLink } from '../../shared/canvas-links';
 import { NOTE_ID_PATTERN, normalizeWikilinkTitle, parseWikilinks } from '../../shared/wikilinks';
 import { db } from '../db/client';
@@ -308,61 +308,111 @@ export async function listOrphanNotes(input: {
     sharedAccessMode: SharedAccessMode;
     ownedFolderIds: ReadonlySet<string>;
   };
+  folderIds?: ReadonlySet<string>;
+  after?: { title: string; id: string } | null;
+  offset?: number;
+  limit?: number;
 }) {
-  const candidates = await db
-    .select({
-      id: notes.id,
-      folderId: notes.folderId,
-      title: notes.title,
-      documentType: notes.documentType,
-      type: notes.type,
-      createdAt: notes.createdAt,
-      updatedAt: notes.updatedAt,
-    })
-    .from(notes)
-    .where(
-      input.integrationAccess
-        ? integrationAccessibleNoteWhere(
-            {
-              actorUserId: input.userId,
-              authorizationId: input.integrationAccess.authorizationId,
-              sharedAccessMode: input.integrationAccess.sharedAccessMode,
-              ownedFolderIds: input.integrationAccess.ownedFolderIds,
-            },
-            eq(notes.type, 'note')
-          )
-        : input.actorUserId
-          ? collaborationAccessibleNoteWhere(input.actorUserId, 'read', eq(notes.type, 'note'))
-          : activeNoteWhere(input.userId, eq(notes.type, 'note'))
-    )
-    .orderBy(notes.title);
-  if (candidates.length === 0) return candidates;
+  if (input.folderIds && input.folderIds.size === 0) return [];
 
-  const incoming = await db
-    .select({ targetNoteId: noteLinks.targetNoteId })
-    .from(noteLinks)
-    .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
-    .where(
-      and(
-        input.actorUserId || input.integrationAccess ? undefined : eq(noteLinks.userId, input.userId),
-        inArray(
-          noteLinks.targetNoteId,
-          candidates.map((note) => note.id)
-        ),
-        input.integrationAccess
-          ? integrationAccessibleNoteWhere({
-              actorUserId: input.userId,
-              authorizationId: input.integrationAccess.authorizationId,
-              sharedAccessMode: input.integrationAccess.sharedAccessMode,
-              ownedFolderIds: input.integrationAccess.ownedFolderIds,
-            })
-          : input.actorUserId
-            ? collaborationAccessibleNoteWhere(input.actorUserId)
-            : activeNoteWhere(input.userId)
+  let candidateBatchSize = 250;
+  const requestedLimit = input.limit === undefined ? Number.POSITIVE_INFINITY : Math.max(0, input.limit);
+  if (requestedLimit === 0) return [];
+  let remainingOffset = Math.max(0, input.offset ?? 0);
+  let candidatePosition = input.after ?? null;
+  const orphans: Array<{
+    id: string;
+    folderId: string;
+    userId: string;
+    title: string;
+    documentType: (typeof notes.$inferSelect)['documentType'];
+    type: (typeof notes.$inferSelect)['type'];
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+
+  while (orphans.length < requestedLimit) {
+    const candidates = await db
+      .select({
+        id: notes.id,
+        folderId: notes.folderId,
+        userId: notes.userId,
+        title: notes.title,
+        documentType: notes.documentType,
+        type: notes.type,
+        createdAt: notes.createdAt,
+        updatedAt: notes.updatedAt,
+      })
+      .from(notes)
+      .where(
+        and(
+          input.integrationAccess
+            ? integrationAccessibleNoteWhere(
+                {
+                  actorUserId: input.userId,
+                  authorizationId: input.integrationAccess.authorizationId,
+                  sharedAccessMode: input.integrationAccess.sharedAccessMode,
+                  ownedFolderIds: input.integrationAccess.ownedFolderIds,
+                },
+                eq(notes.type, 'note')
+              )
+            : input.actorUserId
+              ? collaborationAccessibleNoteWhere(input.actorUserId, 'read', eq(notes.type, 'note'))
+              : activeNoteWhere(input.userId, eq(notes.type, 'note')),
+          input.folderIds ? inArray(notes.folderId, [...input.folderIds]) : undefined,
+          candidatePosition
+            ? or(
+                gt(notes.title, candidatePosition.title),
+                and(eq(notes.title, candidatePosition.title), gt(notes.id, candidatePosition.id))
+              )
+            : undefined
+        )
       )
-    );
-  const linkedIds = new Set(incoming.map((link) => link.targetNoteId));
-  return candidates.filter((note) => !linkedIds.has(note.id));
+      .orderBy(asc(notes.title), asc(notes.id))
+      .limit(candidateBatchSize);
+    if (candidates.length === 0) break;
+
+    const incoming = await db
+      .select({ targetNoteId: noteLinks.targetNoteId })
+      .from(noteLinks)
+      .innerJoin(notes, eq(noteLinks.sourceNoteId, notes.id))
+      .where(
+        and(
+          input.actorUserId || input.integrationAccess ? undefined : eq(noteLinks.userId, input.userId),
+          inArray(
+            noteLinks.targetNoteId,
+            candidates.map((note) => note.id)
+          ),
+          input.integrationAccess
+            ? integrationAccessibleNoteWhere({
+                actorUserId: input.userId,
+                authorizationId: input.integrationAccess.authorizationId,
+                sharedAccessMode: input.integrationAccess.sharedAccessMode,
+                ownedFolderIds: input.integrationAccess.ownedFolderIds,
+              })
+            : input.actorUserId
+              ? collaborationAccessibleNoteWhere(input.actorUserId)
+              : activeNoteWhere(input.userId)
+        )
+      );
+    const linkedIds = new Set(incoming.map((link) => link.targetNoteId));
+    for (const candidate of candidates) {
+      if (linkedIds.has(candidate.id)) continue;
+      if (remainingOffset > 0) {
+        remainingOffset -= 1;
+        continue;
+      }
+      orphans.push(candidate);
+      if (orphans.length >= requestedLimit) break;
+    }
+
+    const lastCandidate = candidates.at(-1);
+    if (!lastCandidate || candidates.length < candidateBatchSize) break;
+    candidatePosition = { title: lastCandidate.title, id: lastCandidate.id };
+    candidateBatchSize = 1_000;
+  }
+
+  return orphans;
 }
 
 export async function listBacklinks(input: { userId: string; noteId: string; actorUserId?: string }) {

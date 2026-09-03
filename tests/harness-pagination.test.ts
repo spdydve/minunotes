@@ -208,6 +208,60 @@ describe('harness cursor pagination', () => {
     await expect(oversizedSearch.json()).resolves.toEqual({ error: 'Query must be 200 characters or fewer' });
   });
 
+  it('paginates orphans across bounded candidate batches without losing order', async () => {
+    const { app, db, schema, now } = await setup();
+    const notesFolder = folder('folder_batched_orphans', 'Batched orphans', now);
+    await db.insert(schema.folders).values(notesFolder);
+    const linkedNotes = Array.from({ length: 255 }, (_, index) =>
+      note(
+        `note_linked_${String(index).padStart(3, '0')}`,
+        notesFolder.id,
+        `Linked ${String(index).padStart(3, '0')}`,
+        '',
+        now
+      )
+    );
+    const orphanNotes = Array.from({ length: 10 }, (_, index) =>
+      note(
+        `note_orphan_${String(index).padStart(3, '0')}`,
+        notesFolder.id,
+        `Orphan ${String(index).padStart(3, '0')}`,
+        '',
+        now
+      )
+    );
+    await db.insert(schema.notes).values([...linkedNotes, ...orphanNotes]);
+    await db.insert(schema.noteLinks).values(
+      linkedNotes.map((target, index) => ({
+        id: `link_${String(index).padStart(3, '0')}`,
+        userId: 'user_pagination',
+        sourceNoteId: linkedNotes[0].id,
+        targetNoteId: target.id,
+        targetTitle: target.title,
+        label: null,
+        linkType: 'wikilink' as const,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    );
+
+    const firstResponse = await app.request('/api/harness/notes/orphans?limit=5');
+    const first = (await firstResponse.json()) as PageBody<{ notes: Array<{ id: string }> }>;
+    expect(first.notes.map((item) => item.id)).toEqual(
+      Array.from({ length: 5 }, (_, index) => `note_orphan_${String(index).padStart(3, '0')}`)
+    );
+    expect(first.pageInfo.hasMore).toBe(true);
+
+    const secondResponse = await app.request(
+      `/api/harness/notes/orphans?limit=5&cursor=${encodeURIComponent(first.pageInfo.nextCursor ?? '')}`
+    );
+    const second = (await secondResponse.json()) as PageBody<{ notes: Array<{ id: string }> }>;
+    expect(second.notes.map((item) => item.id)).toEqual(
+      Array.from({ length: 5 }, (_, index) => `note_orphan_${String(index + 5).padStart(3, '0')}`)
+    );
+    expect(second.pageInfo).toEqual({ hasMore: false, nextCursor: null });
+  });
+
   it('paginates line matches across bounded note batches without losing order', async () => {
     const { app, db, schema, now } = await setup();
     const notesFolder = folder('folder_batched_lines', 'Batched lines', now);

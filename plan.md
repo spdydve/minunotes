@@ -47,11 +47,13 @@ Review baseline methodology and evidence before changing production graph discov
 
 ## Phase 1 — Bound orphan discovery
 
-- [ ] Replace full candidate loading and in-memory orphan filtering only if Phase 0 shows material growth.
-- [ ] Authorize candidate notes and incoming source notes before pagination or `hasMore` decisions.
-- [ ] Preserve the current definition: a note is orphaned when no accessible active source note links to it.
-- [ ] Preserve title/ID order, internal page behavior, harness cursor behavior, integration scopes, and direct-note folder masking.
-- [ ] Add sparse/dense, inaccessible-source, Trash, private-folder, shared-grant, and pagination-boundary tests.
+- [x] Replace full candidate loading with adaptive bounded batches after Phase 0 showed material near-linear growth.
+- [x] Authorize candidate notes and incoming source notes before pagination or `hasMore` decisions.
+- [x] Preserve the current definition: a note is orphaned when no accessible active source note links to it.
+- [x] Preserve title/ID order, internal page behavior, harness cursor behavior, integration scopes, and direct-note folder masking.
+- [x] Add internal offset and harness cursor coverage beyond the 250-candidate boundary; retain existing inaccessible-source, Trash, private-folder, and shared-grant tests.
+- [x] Reduce 10,000-note sparse first-page p95 from 103.66 ms to 28.77 ms for owners and from 123.05 ms to 23.91 ms for collaborators.
+- [x] Run Biome, typecheck, focused graph/collaboration tests, and sparse/dense benchmarks.
 
 ## Phase 2 — Bound links and backlinks
 
