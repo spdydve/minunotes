@@ -8,6 +8,7 @@ const LATEST_MIGRATION = 39;
 const DEFAULT_SIZES = [100, 1_000, 10_000];
 const DEFAULT_ITERATIONS = 7;
 const DEFAULT_LINK_FANOUT = 1_000;
+const DEFAULT_CHILD_FOLDERS = 100;
 const OWNER_ID = 'user_graph_benchmark_owner';
 const COLLABORATOR_ID = 'user_graph_benchmark_collaborator';
 const FOLDER_ID = 'folder_graph_benchmark';
@@ -81,7 +82,7 @@ async function seedPrincipals(client: SqlClient) {
       id, owner_user_id, grantee_user_id, folder_id, role, created_by_user_id, created_at, updated_at
     ) VALUES (
       'grant_graph_benchmark', '${OWNER_ID}', '${COLLABORATOR_ID}', '${FOLDER_ID}',
-      'viewer', '${OWNER_ID}', 1735689600, 1735689600
+      'editor', '${OWNER_ID}', 1735689600, 1735689600
     );
 
     INSERT INTO integration_authorizations (
@@ -98,6 +99,21 @@ async function seedPrincipals(client: SqlClient) {
       'GRAPHKEY', 'hash', 'salt', 1735689600, 1735689600
     );
   `);
+}
+
+async function seedChildFolders(client: SqlClient, count: number) {
+  const statements = Array.from({ length: count }, (_, index) => {
+    const padded = String(index).padStart(4, '0');
+    return {
+      sql: `INSERT INTO folders (
+        id, user_id, parent_folder_id, title, is_private, is_agent_read_only,
+        created_by_user_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 0, 0, ?, 1735689600, 1735689600)`,
+      args: [`folder_graph_child_${padded}`, OWNER_ID, FOLDER_ID, `Graph child ${padded}`, COLLABORATOR_ID],
+    };
+  });
+  for (let start = 0; start < statements.length; start += 250)
+    await client.batch(statements.slice(start, start + 250), 'write');
 }
 
 async function seedNotes(client: SqlClient, from: number, to: number) {
@@ -174,7 +190,7 @@ async function measureRoute(input: {
   path: string;
   actorUserId: string;
   iterations: number;
-  resultKey: 'notes' | 'links' | 'backlinks';
+  resultKey: 'notes' | 'links' | 'backlinks' | 'childFolders';
 }): Promise<Measurement> {
   const samples: Array<{ milliseconds: number; calls: number; bytes: number; results: number }> = [];
   for (let iteration = 0; iteration <= input.iterations; iteration += 1) {
@@ -248,18 +264,21 @@ async function main() {
   const sizes = sizesArgument();
   const iterations = integerArgument('iterations', DEFAULT_ITERATIONS);
   const requestedFanout = integerArgument('link-fanout', DEFAULT_LINK_FANOUT);
+  const childFolderCount = integerArgument('child-folders', DEFAULT_CHILD_FOLDERS);
   const directory = await mkdtemp(path.join(tmpdir(), 'minunotes-graph-benchmark-'));
   process.env.TURSO_DB_URL = `file:${path.join(directory, 'benchmark.db')}`;
 
   try {
-    const [{ libsql }, { noteRoutes }, { harnessRoutes }] = await Promise.all([
+    const [{ libsql }, { noteRoutes }, { harnessRoutes }, { folderRoutes }] = await Promise.all([
       import('../src/api/db/client'),
       import('../src/api/routes/notes'),
       import('../src/api/routes/harness'),
+      import('../src/api/routes/folders'),
     ]);
     const client = libsql as unknown as SqlClient;
     await applyMigrations(client);
     await seedPrincipals(client);
+    await seedChildFolders(client, childFolderCount);
 
     const app = new Hono();
     app.use('*', async (context, next) => {
@@ -304,6 +323,7 @@ async function main() {
     });
     app.route('/notes', noteRoutes);
     app.route('/harness', harnessRoutes);
+    app.route('/folders', folderRoutes);
 
     const counter = { calls: 0 };
     instrumentClient(client, counter);
@@ -364,12 +384,18 @@ async function main() {
           actorUserId: OWNER_ID,
           resultKey: 'backlinks' as const,
         },
+        {
+          name: 'shared-folder-detail',
+          path: `/folders/${FOLDER_ID}/detail`,
+          actorUserId: COLLABORATOR_ID,
+          resultKey: 'childFolders' as const,
+        },
       ];
       for (const definition of definitions) {
         await client.execute('PRAGMA shrink_memory');
         cases.push(await measureRoute({ app, counter, iterations, ...definition }));
       }
-      reports.push({ notes: size, authoredLinkFanout: linkFanout, cases });
+      reports.push({ notes: size, authoredLinkFanout: linkFanout, childFolders: childFolderCount, cases });
     }
 
     counter.calls = 0;

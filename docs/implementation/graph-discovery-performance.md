@@ -160,3 +160,37 @@ The harness now:
 Chunking avoids SQL variable-limit failures for unusually large link sets. Database calls can grow by one compact resource query per 500 unique linked notes, but no longer grow by roughly three calls per result.
 
 The response contract remains unchanged and unpaginated. A 999-link response is still roughly 262–293 KB, so pagination remains a separate compatibility decision rather than being bundled into this optimization. Regression coverage includes existing mixed-access privacy cases and a new 501-result boundary crossing two access-resource chunks.
+
+## Phase 3 shared-folder detail
+
+Shared folder detail previously resolved trash eligibility independently for the selected folder and every immediate child. Each child could reload its access grants, the complete active folder tree, subtree notes, and owner-managed sharing state.
+
+A viewer baseline demonstrated the amplification even though viewer eligibility exits before the expensive creator/sharing checks:
+
+| Child folders | Before median | Before p95 | Before calls |
+| ---: | ---: | ---: | ---: |
+| 10 | 7.25 ms | 7.43 ms | 46 |
+| 100 | 226.86 ms | 263.12 ms | 406 |
+| 500 | 4,836.26 ms | 5,062.63 ms | 2,006 |
+
+Phase 3 adds batch folder collaboration access and batch folder trash eligibility. The batch path:
+
+- loads active folder hierarchy and applicable grants once;
+- computes effective inherited access for all displayed folders in memory;
+- rejects folders not created by the collaborator or containing owner-created descendants;
+- loads active notes only for relevant candidate subtrees in 500-folder chunks;
+- loads active owner-managed grants, invitations, and public links once;
+- preserves sharing-conflict behavior for any folder or note in each subtree; and
+- returns only the set of candidate folder IDs that may be moved to Trash.
+
+The post-change benchmark uses an editor—the more expensive path that performs creator and sharing validation:
+
+| Child folders | After median | After p95 | After calls |
+| ---: | ---: | ---: | ---: |
+| 10 | 1.75 ms | 2.27 ms | 13 |
+| 100 | 6.86 ms | 7.42 ms | 13 |
+| 500 | 67.69 ms | 68.97 ms | 13 |
+
+With 500 children and 10,000 unrelated notes in the parent folder, p95 is 69.91 ms because note loading is restricted to candidate child subtrees. The response itself is about 138 KB at that width, so further improvement would require a separate child-folder pagination contract rather than more per-item authorization work.
+
+Existing creator-scoped Trash tests remain authoritative for mutation. Detail-specific regression assertions verify that owner-managed sharing and owner-created descendants set `canTrash: false`. The endpoint response shape is unchanged.

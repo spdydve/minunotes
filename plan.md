@@ -66,8 +66,12 @@ Review baseline methodology and evidence before changing production graph discov
 
 ## Phase 3 — Remaining shared-folder detail work
 
-- [ ] Profile serial ancestor reads and per-child trash eligibility after graph work.
-- [ ] Batch only if the measured page-load cost remains material after the recently merged page-load improvements.
+- [x] Profile serial ancestor reads and per-child trash eligibility after graph work.
+- [x] Confirm per-child trash eligibility is material: 500 viewer-visible children required 2,006 calls and approximately 5.06 seconds p95 locally.
+- [x] Add batch folder collaboration access and creator-scoped Trash eligibility without changing mutation authorization.
+- [x] Preserve owner-managed sharing conflicts, inherited roles, active hierarchy, mixed-creator subtree checks, and `canTrash` response behavior.
+- [x] Reduce 500-child editor detail to 13 calls and 68.97 ms p95; retain approximately 69.91 ms p95 with 10,000 unrelated parent-folder notes.
+- [x] Keep child-folder pagination deferred because it requires a separate response-contract and frontend review.
 
 ## Safety boundaries
 
