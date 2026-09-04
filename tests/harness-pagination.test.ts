@@ -208,6 +208,58 @@ describe('harness cursor pagination', () => {
     await expect(oversizedSearch.json()).resolves.toEqual({ error: 'Query must be 200 characters or fewer' });
   });
 
+  it('preserves outgoing links and backlinks across batched access checks', async () => {
+    const { app, db, schema, now } = await setup();
+    const notesFolder = folder('folder_batched_links', 'Batched links', now);
+    await db.insert(schema.folders).values(notesFolder);
+    const linkedNotes = Array.from({ length: 502 }, (_, index) =>
+      note(
+        `note_access_${String(index).padStart(3, '0')}`,
+        notesFolder.id,
+        `Access ${String(index).padStart(3, '0')}`,
+        '',
+        now
+      )
+    );
+    await db.insert(schema.notes).values(linkedNotes);
+    await db.insert(schema.noteLinks).values([
+      ...linkedNotes.slice(1).map((target, index) => ({
+        id: `link_out_${String(index).padStart(3, '0')}`,
+        userId: 'user_pagination',
+        sourceNoteId: linkedNotes[0].id,
+        targetNoteId: target.id,
+        targetTitle: target.title,
+        label: null,
+        linkType: 'wikilink' as const,
+        createdAt: now,
+        updatedAt: now,
+      })),
+      ...linkedNotes.slice(1).map((source, index) => ({
+        id: `link_back_${String(index).padStart(3, '0')}`,
+        userId: 'user_pagination',
+        sourceNoteId: source.id,
+        targetNoteId: linkedNotes[0].id,
+        targetTitle: linkedNotes[0].title,
+        label: null,
+        linkType: 'wikilink' as const,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    ]);
+
+    const outgoing = (await (await app.request(`/api/harness/notes/${linkedNotes[0].id}/links`)).json()) as {
+      links: Array<{ targetNoteId: string | null }>;
+    };
+    expect(outgoing.links).toHaveLength(501);
+    expect(outgoing.links.every((link) => link.targetNoteId !== null)).toBe(true);
+
+    const backlinks = (await (await app.request(`/api/harness/notes/${linkedNotes[0].id}/backlinks`)).json()) as {
+      backlinks: Array<{ sourceNoteId: string; sourceFolderId: string | null }>;
+    };
+    expect(backlinks.backlinks).toHaveLength(501);
+    expect(backlinks.backlinks.every((link) => link.sourceFolderId === notesFolder.id)).toBe(true);
+  });
+
   it('paginates orphans across bounded candidate batches without losing order', async () => {
     const { app, db, schema, now } = await setup();
     const notesFolder = folder('folder_batched_orphans', 'Batched orphans', now);

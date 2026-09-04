@@ -11,6 +11,8 @@ const DEFAULT_LINK_FANOUT = 1_000;
 const OWNER_ID = 'user_graph_benchmark_owner';
 const COLLABORATOR_ID = 'user_graph_benchmark_collaborator';
 const FOLDER_ID = 'folder_graph_benchmark';
+const AUTHORIZATION_ID = 'authorization_graph_benchmark';
+const API_KEY_ID = 'agent_key_graph_benchmark';
 const SOURCE_NOTE_ID = 'note_graph_benchmark_000000';
 const BACKLINK_TARGET_ID = 'note_graph_benchmark_000001';
 
@@ -80,6 +82,20 @@ async function seedPrincipals(client: SqlClient) {
     ) VALUES (
       'grant_graph_benchmark', '${OWNER_ID}', '${COLLABORATOR_ID}', '${FOLDER_ID}',
       'viewer', '${OWNER_ID}', 1735689600, 1735689600
+    );
+
+    INSERT INTO integration_authorizations (
+      id, user_id, access_mode, can_read, can_create, can_edit, can_comment, can_create_folders,
+      shared_access_mode, created_at, updated_at
+    ) VALUES (
+      '${AUTHORIZATION_ID}', '${OWNER_ID}', 'all', 1, 0, 0, 0, 0, 'none', 1735689600, 1735689600
+    );
+
+    INSERT INTO api_keys (
+      id, user_id, authorization_id, name, uid, hash, salt, created_at, updated_at
+    ) VALUES (
+      '${API_KEY_ID}', '${OWNER_ID}', '${AUTHORIZATION_ID}', 'Graph benchmark',
+      'GRAPHKEY', 'hash', 'salt', 1735689600, 1735689600
     );
   `);
 }
@@ -236,9 +252,10 @@ async function main() {
   process.env.TURSO_DB_URL = `file:${path.join(directory, 'benchmark.db')}`;
 
   try {
-    const [{ libsql }, { noteRoutes }] = await Promise.all([
+    const [{ libsql }, { noteRoutes }, { harnessRoutes }] = await Promise.all([
       import('../src/api/db/client'),
       import('../src/api/routes/notes'),
+      import('../src/api/routes/harness'),
     ]);
     const client = libsql as unknown as SqlClient;
     await applyMigrations(client);
@@ -257,9 +274,36 @@ async function main() {
         updatedAt: new Date(1735689600000),
       });
       context.set('session', null);
+      context.set(
+        'apiKey',
+        id === OWNER_ID
+          ? {
+              id: API_KEY_ID,
+              userId: OWNER_ID,
+              authorizationId: AUTHORIZATION_ID,
+              name: 'Graph benchmark',
+              uid: 'GRAPHKEY',
+              hash: 'hash',
+              salt: 'salt',
+              accessMode: 'all',
+              canRead: true,
+              canCreate: false,
+              canEdit: false,
+              canComment: false,
+              canCreateFolders: false,
+              sharedAccessMode: 'none',
+              createdAt: new Date(1735689600000),
+              updatedAt: new Date(1735689600000),
+              lastUsedAt: null,
+              revokedAt: null,
+            }
+          : null
+      );
+      context.set('oauthAuthorization', null);
       await next();
     });
     app.route('/notes', noteRoutes);
+    app.route('/harness', harnessRoutes);
 
     const counter = { calls: 0 };
     instrumentClient(client, counter);
@@ -306,6 +350,18 @@ async function main() {
           name: 'backlinks-collaborator-high-fanout',
           path: `/notes/${BACKLINK_TARGET_ID}/backlinks`,
           actorUserId: COLLABORATOR_ID,
+          resultKey: 'backlinks' as const,
+        },
+        {
+          name: 'harness-outgoing-owner-high-fanout',
+          path: `/harness/notes/${SOURCE_NOTE_ID}/links`,
+          actorUserId: OWNER_ID,
+          resultKey: 'links' as const,
+        },
+        {
+          name: 'harness-backlinks-owner-high-fanout',
+          path: `/harness/notes/${BACKLINK_TARGET_ID}/backlinks`,
+          actorUserId: OWNER_ID,
           resultKey: 'backlinks' as const,
         },
       ];

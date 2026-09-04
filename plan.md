@@ -57,10 +57,12 @@ Review baseline methodology and evidence before changing production graph discov
 
 ## Phase 2 — Bound links and backlinks
 
-- [ ] Batch target/source access checks if per-link resolution is material.
-- [ ] Add limits or pagination only through an explicit compatibility review.
-- [ ] Preserve unresolved wikilink titles, hidden canvas target labels, inaccessible-target nulling, inaccessible-source exclusion, and source-folder masking.
-- [ ] Add high-link-count and mixed-access tests.
+- [x] Batch harness target/source access checks after measuring roughly 3,000 calls for 999 links.
+- [x] Keep limits and pagination deferred to an explicit compatibility review; response shapes remain unchanged.
+- [x] Preserve unresolved wikilink titles, hidden canvas target labels, inaccessible-target nulling, inaccessible-source exclusion, and source-folder masking.
+- [x] Add a 501-result access-chunk boundary test and retain existing mixed-access privacy coverage.
+- [x] Reduce 999-link harness outgoing p95 from 363.62 ms to 17.66 ms and backlink p95 from 321.87 ms to 15.55 ms.
+- [x] Reduce logical calls from about 3,000 to 11–12, plus one compact resource query for each additional 500 unique IDs.
 
 ## Phase 3 — Remaining shared-folder detail work
 

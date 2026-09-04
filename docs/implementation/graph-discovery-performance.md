@@ -135,3 +135,28 @@ Sparse first-page database calls no longer grow with the 20 returned notes. Dens
 Offset pagination may scan preceding orphan candidates again for later pages; this preserves the existing internal API contract. Harness cursor pagination starts directly after the prior title/ID position.
 
 Focused tests cover internal offset and harness cursor pagination after more than 250 linked candidates, along with existing inaccessible-source, selected-grant, folder-masking, collaboration, and Trash behavior.
+
+## Phase 2 batched harness link access
+
+The internal note routes already authorize outgoing targets and backlink sources in bounded database calls. Harness routes previously applied integration-specific access by calling the complete point-read path once per returned link.
+
+At 999 links this produced approximately three database calls per result:
+
+| Case | Before median | After median | Before p95 | After p95 | Before calls | After calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Harness outgoing links | 340.53 ms | 16.63 ms | 363.62 ms | 17.66 ms | 3,003 | 12 |
+| Harness backlinks | 313.77 ms | 15.27 ms | 321.87 ms | 15.55 ms | 3,002 | 11 |
+
+The harness now:
+
+- deduplicates linked note IDs;
+- loads compact note ownership/folder resources in chunks of at most 500 IDs;
+- applies the existing integration discovery SQL before retaining a resource;
+- resolves collaboration role and direct-note versus folder-grant source in one batch;
+- nulls inaccessible outgoing targets without revealing canvas target metadata;
+- excludes inaccessible backlink sources; and
+- continues masking backlink source folders for direct-note grants.
+
+Chunking avoids SQL variable-limit failures for unusually large link sets. Database calls can grow by one compact resource query per 500 unique linked notes, but no longer grow by roughly three calls per result.
+
+The response contract remains unchanged and unpaginated. A 999-link response is still roughly 262–293 KB, so pagination remains a separate compatibility decision rather than being bundled into this optimization. Regression coverage includes existing mixed-access privacy cases and a new 501-result boundary crossing two access-resource chunks.

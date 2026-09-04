@@ -1,7 +1,14 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
-import { type ApiKey, authorizationFolderRules, folders, type Note, type OAuthAuthorization } from '../db/schema';
+import {
+  type ApiKey,
+  authorizationFolderRules,
+  folders,
+  type Note,
+  notes,
+  type OAuthAuthorization,
+} from '../db/schema';
 import {
   canvasDocumentFromSyntax,
   createDocument,
@@ -39,10 +46,13 @@ import { findSection, parseSections } from '../harness/sections';
 import type { auth } from '../lib/auth';
 import {
   type CollaborationAccess,
+  collaborationAccessibleNoteWhere,
   integrationAccessibleFolderWhere,
+  integrationAccessibleNoteWhere,
   resolveIntegrationFolderAccess,
   resolveIntegrationNoteAccess,
   resolveIntegrationReadAccessBatch,
+  resolveNoteCollaborationAccessBatch,
 } from '../lib/collaboration-access';
 import { createCollaborationActorSerializer } from '../lib/collaboration-actor-identity';
 import { omitResourceCreator } from '../lib/collaboration-serialization';
@@ -202,6 +212,48 @@ async function readHarnessDocument(
     role: access.role,
     source: access.source,
   };
+}
+
+async function resolveHarnessLinkedNoteAccessBatch(c: Context<{ Variables: Variables }>, noteIds: readonly string[]) {
+  const user = getUser(c);
+  if (!user || noteIds.length === 0) return new Map<string, CollaborationAccess>();
+  const integration = getIntegrationAuthorization(c);
+  if (integration && (!integration.authorizationId || !capabilitiesAllow(integration.actor, 'read')))
+    return new Map<string, CollaborationAccess>();
+
+  const readableFolderIds = integration ? await getReadableFolderIds(c) : null;
+  const uniqueNoteIds = [...new Set(noteIds)];
+  const resources: Array<{ id: string; folderId: string; userId: string }> = [];
+  for (let start = 0; start < uniqueNoteIds.length; start += 500) {
+    const idBatch = uniqueNoteIds.slice(start, start + 500);
+    resources.push(
+      ...(await db
+        .select({ id: notes.id, folderId: notes.folderId, userId: notes.userId })
+        .from(notes)
+        .where(
+          integration?.authorizationId
+            ? integrationAccessibleNoteWhere(
+                {
+                  actorUserId: user.id,
+                  authorizationId: integration.authorizationId,
+                  sharedAccessMode: integration.sharedAccessMode,
+                  ownedFolderIds: readableFolderIds ?? new Set(),
+                },
+                inArray(notes.id, idBatch)
+              )
+            : collaborationAccessibleNoteWhere(user.id, 'read', inArray(notes.id, idBatch))
+        ))
+    );
+  }
+
+  return integration?.authorizationId
+    ? resolveIntegrationReadAccessBatch({
+        actorUserId: user.id,
+        authorizationId: integration.authorizationId,
+        sharedAccessMode: integration.sharedAccessMode,
+        resources,
+      })
+    : resolveNoteCollaborationAccessBatch({ actorUserId: user.id, resources });
 }
 
 async function resolveHarnessFolder(
@@ -1253,16 +1305,18 @@ harnessRoutes.get('/notes/:noteId/links', async (c) => {
 
   const links = await listOutgoingLinks({ userId: current.resourceOwnerUserId, noteId });
   if (!links) return c.json({ error: 'Note not found' }, 404);
-  const visibleLinks = await Promise.all(
-    links.map(async (link) => {
-      if (!link.targetNoteId || (await readHarnessDocument(c, link.targetNoteId, 'read'))) return link;
-      return {
-        ...link,
-        targetNoteId: null,
-        targetTitle: link.linkType === 'wikilink' ? link.targetTitle : link.label?.trim() || 'Linked note',
-      };
-    })
+  const accessByNoteId = await resolveHarnessLinkedNoteAccessBatch(
+    c,
+    links.map((link) => link.targetNoteId).filter((id): id is string => Boolean(id))
   );
+  const visibleLinks = links.map((link) => {
+    if (!link.targetNoteId || accessByNoteId.has(link.targetNoteId)) return link;
+    return {
+      ...link,
+      targetNoteId: null,
+      targetTitle: link.linkType === 'wikilink' ? link.targetTitle : link.label?.trim() || 'Linked note',
+    };
+  });
   return c.json({ noteId, links: visibleLinks });
 });
 
@@ -1279,17 +1333,16 @@ harnessRoutes.get('/notes/:noteId/backlinks', async (c) => {
 
   const backlinks = await listBacklinks({ userId: current.resourceOwnerUserId, noteId });
   if (!backlinks) return c.json({ error: 'Note not found' }, 404);
-  const visibleBacklinks = await Promise.all(
-    backlinks.map(async (backlink) => {
-      const source = await readHarnessDocument(c, backlink.sourceNoteId, 'read');
-      if (!source) return null;
-      return source.source === 'note_grant' ? { ...backlink, sourceFolderId: null } : backlink;
-    })
+  const accessByNoteId = await resolveHarnessLinkedNoteAccessBatch(
+    c,
+    backlinks.map((backlink) => backlink.sourceNoteId)
   );
-  return c.json({
-    noteId,
-    backlinks: visibleBacklinks.filter((backlink): backlink is NonNullable<typeof backlink> => backlink !== null),
+  const visibleBacklinks = backlinks.flatMap((backlink) => {
+    const access = accessByNoteId.get(backlink.sourceNoteId);
+    if (!access) return [];
+    return [access.source === 'note_grant' ? { ...backlink, sourceFolderId: null } : backlink];
   });
+  return c.json({ noteId, backlinks: visibleBacklinks });
 });
 
 harnessRoutes.get('/notes/:noteId/lines', async (c) => {
