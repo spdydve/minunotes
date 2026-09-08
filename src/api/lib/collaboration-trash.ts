@@ -6,6 +6,7 @@ import {
   type CollaborationAccess,
   collaborationRoleAllows,
   resolveFolderCollaborationAccess,
+  resolveFolderCollaborationAccessBatch,
   resolveNoteCollaborationAccess,
 } from './collaboration-access';
 import { isDescendantOrSelf, loadFolderAccessTree } from './folder-access';
@@ -177,6 +178,117 @@ export async function listTrashableNoteIds(input: {
     ...publicLinkRows.map((row) => row.noteId),
   ]);
   return new Set(candidates.filter((noteId) => !blocked.has(noteId)));
+}
+
+export async function listTrashableFolderIds(input: {
+  actorUserId: string;
+  resources: ReadonlyArray<{ id: string; userId: string }>;
+}) {
+  const resources = [...new Map(input.resources.map((resource) => [resource.id, resource])).values()];
+  if (resources.length === 0) return new Set<string>();
+  if (resources.every((resource) => resource.userId === input.actorUserId))
+    return new Set(resources.map((resource) => resource.id));
+
+  const ownerIds = [...new Set(resources.map((resource) => resource.userId))];
+  if (ownerIds.length !== 1) return new Set<string>();
+  const ownerUserId = ownerIds[0];
+  const [tree, accessByFolderId] = await Promise.all([
+    loadFolderAccessTree(ownerUserId),
+    resolveFolderCollaborationAccessBatch({ actorUserId: input.actorUserId, resources }),
+  ]);
+  const eligibleResources = resources.filter((resource) => {
+    const access = accessByFolderId.get(resource.id);
+    const folder = tree.byId.get(resource.id);
+    return access && collaborationRoleAllows(access.role, 'edit') && folder?.createdByUserId === input.actorUserId;
+  });
+  if (eligibleResources.length === 0) return new Set<string>();
+
+  const eligibleSubtrees = eligibleResources.flatMap((resource) => {
+    const subtreeFolders = tree.folders.filter((folder) => isDescendantOrSelf(folder.id, resource.id, tree.byId));
+    return subtreeFolders.some((folder) => folder.createdByUserId !== input.actorUserId)
+      ? []
+      : [{ resource, subtreeFolders }];
+  });
+  if (eligibleSubtrees.length === 0) return new Set<string>();
+
+  const relevantFolderIds = [
+    ...new Set(eligibleSubtrees.flatMap(({ subtreeFolders }) => subtreeFolders.map((folder) => folder.id))),
+  ];
+  const activeNotes: Array<{ id: string; folderId: string; createdByUserId: string | null }> = [];
+  for (let start = 0; start < relevantFolderIds.length; start += 500) {
+    activeNotes.push(
+      ...(await db
+        .select({ id: notes.id, folderId: notes.folderId, createdByUserId: notes.createdByUserId })
+        .from(notes)
+        .where(
+          and(
+            eq(notes.userId, ownerUserId),
+            isNull(notes.deletedAt),
+            inArray(notes.folderId, relevantFolderIds.slice(start, start + 500))
+          )
+        ))
+    );
+  }
+
+  const now = new Date();
+  const [grantRows, invitationRows, notePublicLinkRows, folderPublicLinkRows] = await Promise.all([
+    db
+      .select({ folderId: collaborationGrants.folderId, noteId: collaborationGrants.noteId })
+      .from(collaborationGrants)
+      .where(eq(collaborationGrants.ownerUserId, ownerUserId)),
+    db
+      .select({ folderId: collaborationInvitations.folderId, noteId: collaborationInvitations.noteId })
+      .from(collaborationInvitations)
+      .where(
+        and(
+          eq(collaborationInvitations.ownerUserId, ownerUserId),
+          isNull(collaborationInvitations.acceptedAt),
+          isNull(collaborationInvitations.revokedAt)
+        )
+      ),
+    db
+      .select({ noteId: noteShareLinks.noteId })
+      .from(noteShareLinks)
+      .where(
+        and(
+          eq(noteShareLinks.userId, ownerUserId),
+          isNull(noteShareLinks.revokedAt),
+          or(isNull(noteShareLinks.expiresAt), gt(noteShareLinks.expiresAt, now))
+        )
+      ),
+    db
+      .select({ folderId: folderShareLinks.folderId })
+      .from(folderShareLinks)
+      .where(
+        and(
+          eq(folderShareLinks.userId, ownerUserId),
+          isNull(folderShareLinks.revokedAt),
+          or(isNull(folderShareLinks.expiresAt), gt(folderShareLinks.expiresAt, now))
+        )
+      ),
+  ]);
+  const sharedFolderIds = new Set([
+    ...grantRows.flatMap((row) => (row.folderId ? [row.folderId] : [])),
+    ...invitationRows.flatMap((row) => (row.folderId ? [row.folderId] : [])),
+    ...folderPublicLinkRows.map((row) => row.folderId),
+  ]);
+  const sharedNoteIds = new Set([
+    ...grantRows.flatMap((row) => (row.noteId ? [row.noteId] : [])),
+    ...invitationRows.flatMap((row) => (row.noteId ? [row.noteId] : [])),
+    ...notePublicLinkRows.map((row) => row.noteId),
+  ]);
+  const trashableIds = new Set<string>();
+
+  for (const { resource, subtreeFolders } of eligibleSubtrees) {
+    const subtreeFolderIds = new Set(subtreeFolders.map((folder) => folder.id));
+    const subtreeNotes = activeNotes.filter((note) => subtreeFolderIds.has(note.folderId));
+    if (subtreeNotes.some((note) => note.createdByUserId !== input.actorUserId)) continue;
+    if (subtreeFolders.some((folder) => sharedFolderIds.has(folder.id))) continue;
+    if (subtreeNotes.some((note) => sharedNoteIds.has(note.id))) continue;
+    trashableIds.add(resource.id);
+  }
+
+  return trashableIds;
 }
 
 export async function resolveNoteTrashEligibility(input: {

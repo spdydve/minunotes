@@ -11,6 +11,7 @@ import {
 } from '../lib/collaboration-access';
 import { omitCollaborationInternalFields, omitResourceCreator } from '../lib/collaboration-serialization';
 import {
+  listTrashableFolderIds,
   listTrashableNoteIds,
   resolveFolderTrashEligibility,
   trashEligibilityStatus,
@@ -276,22 +277,10 @@ folderRoutes.get('/:folderId/detail', async (c) => {
   const trashableFolderIds =
     access.role === 'owner'
       ? new Set([folder.id, ...childFolders.map((child) => child.id)])
-      : new Set(
-          (
-            await Promise.all(
-              [folder, ...childFolders].map(async (candidate) => ({
-                id: candidate.id,
-                eligibility: await resolveFolderTrashEligibility({
-                  actorUserId: user.id,
-                  folderId: candidate.id,
-                  access: candidate.id === folder.id ? access : undefined,
-                }),
-              }))
-            )
-          )
-            .filter(({ eligibility }) => eligibility.allowed)
-            .map(({ id }) => id)
-        );
+      : await listTrashableFolderIds({
+          actorUserId: user.id,
+          resources: [folder, ...childFolders].map((candidate) => ({ id: candidate.id, userId: candidate.userId })),
+        });
   const serializeFolder = (value: typeof folders.$inferSelect) => ({
     ...omitCollaborationInternalFields(value),
     canTrash: trashableFolderIds.has(value.id),

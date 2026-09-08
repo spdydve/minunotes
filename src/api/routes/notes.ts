@@ -307,13 +307,19 @@ noteRoutes.get('/orphans', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parsePageRequest(c.req.query('page'), c.req.query('limit'));
-  const rows = await listOrphanNotes({ userId: user.id, actorUserId: user.id });
-  const result = pageRows(rows.slice(page.offset, page.offset + page.limit + 1), page);
-  const visibleNotes = await Promise.all(
-    result.items.map(async (note) => {
-      const access = await resolveNoteCollaborationAccess({ actorUserId: user.id, noteId: note.id });
-      return access?.source === 'note_grant' ? { ...note, folderId: null } : note;
-    })
+  const rows = await listOrphanNotes({
+    userId: user.id,
+    actorUserId: user.id,
+    offset: page.offset,
+    limit: page.limit + 1,
+  });
+  const result = pageRows(rows, page);
+  const accessByNoteId = await resolveNoteCollaborationAccessBatch({
+    actorUserId: user.id,
+    resources: result.items,
+  });
+  const visibleNotes = result.items.map(({ userId: _resourceOwnerUserId, ...note }) =>
+    accessByNoteId.get(note.id)?.source === 'note_grant' ? { ...note, folderId: null } : note
   );
   return c.json({ notes: visibleNotes, page: result.page, limit: result.limit, hasMore: result.hasMore });
 });

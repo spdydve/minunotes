@@ -1334,6 +1334,13 @@ describe('collaborator management', () => {
       createdAt: now,
       updatedAt: now,
     });
+    const conflictDetail = (await (
+      await app.request('/folders/folder/detail', { headers: { 'x-test-user': collaborator.id } })
+    ).json()) as { childFolders: Array<{ id: string; canTrash: boolean }> };
+    expect(conflictDetail.childFolders).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: createdFolderBody.folder.id, canTrash: false })])
+    );
+
     const folderSharingConflict = await app.request(`/folders/${createdFolderBody.folder.id}`, {
       method: 'DELETE',
       headers: { 'x-test-user': collaborator.id },
@@ -1354,6 +1361,13 @@ describe('collaborator management', () => {
       createdAt: now,
       updatedAt: now,
     });
+    const mixedCreatorDetail = (await (
+      await app.request('/folders/folder/detail', { headers: { 'x-test-user': collaborator.id } })
+    ).json()) as { childFolders: Array<{ id: string; canTrash: boolean }> };
+    expect(mixedCreatorDetail.childFolders).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: createdFolderBody.folder.id, canTrash: false })])
+    );
+
     const mixedCreatorFolder = await app.request(`/folders/${createdFolderBody.folder.id}`, {
       method: 'DELETE',
       headers: { 'x-test-user': collaborator.id },

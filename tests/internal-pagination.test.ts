@@ -110,6 +110,46 @@ describe('internal list pagination', () => {
     expect(second).toMatchObject({ page: 2, limit: 2, hasMore: false });
   });
 
+  it('paginates orphans after scanning more than one candidate batch', async () => {
+    const { app, db, schema, now } = await setup();
+    const linkedNotes = Array.from({ length: 255 }, (_, index) =>
+      note(`note_linked_${String(index).padStart(3, '0')}`, `Linked ${String(index).padStart(3, '0')}`, now)
+    );
+    const orphanNotes = Array.from({ length: 10 }, (_, index) =>
+      note(`note_orphan_${String(index).padStart(3, '0')}`, `Orphan ${String(index).padStart(3, '0')}`, now)
+    );
+    await db.insert(schema.notes).values([...linkedNotes, ...orphanNotes]);
+    await db.insert(schema.noteLinks).values(
+      linkedNotes.map((target, index) => ({
+        id: `link_${String(index).padStart(3, '0')}`,
+        userId: 'user_internal_page',
+        sourceNoteId: linkedNotes[0].id,
+        targetNoteId: target.id,
+        targetTitle: target.title,
+        label: null,
+        linkType: 'wikilink' as const,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    );
+
+    const first = (await (await app.request('/api/notes/orphans?page=1&limit=5')).json()) as PageResponse<{
+      notes: Array<{ id: string }>;
+    }>;
+    expect(first.notes.map((item) => item.id)).toEqual(
+      Array.from({ length: 5 }, (_, index) => `note_orphan_${String(index).padStart(3, '0')}`)
+    );
+    expect(first.hasMore).toBe(true);
+
+    const second = (await (await app.request('/api/notes/orphans?page=2&limit=5')).json()) as PageResponse<{
+      notes: Array<{ id: string }>;
+    }>;
+    expect(second.notes.map((item) => item.id)).toEqual(
+      Array.from({ length: 5 }, (_, index) => `note_orphan_${String(index + 5).padStart(3, '0')}`)
+    );
+    expect(second.hasMore).toBe(false);
+  });
+
   it('paginates compact search, recent, template, and orphan responses', async () => {
     const { app, db, schema, now } = await setup();
     await db

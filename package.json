@@ -40,6 +40,7 @@
     "db:studio": "drizzle-kit studio",
     "attachments:cleanup": "tsx scripts/cleanup-attachments.ts",
     "benchmark:search": "tsx scripts/benchmark-search.ts",
+    "benchmark:graph": "tsx scripts/benchmark-graph-discovery.ts",
     "prototype:search-fts": "tsx scripts/prototype-search-fts.ts",
     "search-index:rebuild": "tsx scripts/rebuild-search-index.ts",
     "export:mcp": "tsx scripts/export-mcp-package.ts",
